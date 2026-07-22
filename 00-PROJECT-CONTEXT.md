@@ -206,7 +206,20 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-22 (**Phase 2 complete: activity capture + offline layer**)
+- **Last updated:** 2026-07-22 (**Phase 3 complete: agenda + exception engine**)
+- **Phase 3 delivered:** all §8 exceptions + D47 (next-week-not-planned, org-
+  configurable deadline weekday) + D50 (no champion) + D52 (display not
+  verified) as **security_invoker SQL views** (RLS-scoped per caller, org
+  thresholds in `organizations.settings` jsonb); `exception_snapshots` +
+  `private.scan_exceptions()` on hourly pg_cron (D13); Agenda UI with
+  grouped week view, plan-a-visit with **required objective** (D48), and
+  mark-done via the LWW outbox; **planned-vs-actual capture linking** (D46:
+  selecting an account with an open agenda item offers link-and-complete —
+  verified in DB: was_planned + planned_action_id + agenda completion in one
+  save); Requires Attention on Home fed by the exceptions view. **Gate
+  passed**: pgTAP suite 07 (27 tests — every exception fires on fixtures and
+  clears on resolution, snapshot open/close, RLS scoping); 85 DB tests total.
+- **Phase 2 (2026-07-22): activity capture + offline layer complete**
 - **Phase 2 delivered:** Next.js 16 PWA (mobile-first) with the D55 interfaces
   (`LocalStore`/`SyncEngine`/`BlobStore`/`PushChannel`, Dexie behind them, ESLint
   bans direct Dexie imports); durable outbox with client-UUID idempotent replay

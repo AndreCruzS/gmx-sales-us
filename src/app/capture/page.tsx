@@ -16,13 +16,19 @@ import {
   type ActivityType,
   type VisitObjective,
 } from "@/lib/domain/enums";
-import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
+import {
+  getOfflineLayer,
+  type CachedAccount,
+  type CachedAgendaItem,
+} from "@/lib/offline";
 
 export default function CapturePage() {
   const { profile } = useOffline();
   const router = useRouter();
 
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
+  const [agenda, setAgenda] = useState<CachedAgendaItem[]>([]);
+  const [linkPlanned, setLinkPlanned] = useState(true);
   const [accountQuery, setAccountQuery] = useState("");
   const [accountId, setAccountId] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -37,7 +43,9 @@ export default function CapturePage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void getOfflineLayer().local.getAccounts().then(setAccounts);
+    const layer = getOfflineLayer();
+    void layer.local.getAccounts().then(setAccounts);
+    void layer.local.getAgenda().then(setAgenda);
   }, []);
 
   const filtered = useMemo(() => {
@@ -47,6 +55,18 @@ export default function CapturePage() {
   }, [accounts, accountQuery]);
 
   const selected = accounts.find((a) => a.id === accountId) ?? null;
+
+  // D46 planned-vs-actual: if the cached agenda (today + tomorrow, D56) holds
+  // an open item for this account, offer to record this activity AS that
+  // planned visit — linking it and completing the agenda item.
+  const plannedItem = useMemo(
+    () =>
+      accountId
+        ? (agenda.find((i) => i.account_id === accountId && !i.completed_at) ??
+          null)
+        : null,
+    [agenda, accountId],
+  );
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,6 +86,7 @@ export default function CapturePage() {
     setError(null);
 
     const id = crypto.randomUUID();
+    const linked = linkPlanned ? plannedItem : null;
     const payload = {
       id,
       org_id: profile.orgId,
@@ -73,8 +94,11 @@ export default function CapturePage() {
       primary_account_id: accountId,
       owner_id: profile.membershipId,
       occurred_at: new Date().toISOString(),
-      was_planned: false,
-      objective: objective || null,
+      // D46: planned_done when linked to an agenda item; unplanned otherwise.
+      // planned_not_done is derived by the exception engine, never stored.
+      was_planned: Boolean(linked),
+      planned_action_id: linked?.id ?? null,
+      objective: objective || (linked?.objective as typeof objective) || null,
       objective_detail: objectiveDetail.trim() || null,
       what_happened: note.trim() || null,
       key_information: keyInfo.trim() || null,
@@ -92,6 +116,18 @@ export default function CapturePage() {
         baseVersion: null,
         blobRef: null,
       });
+      // Recording the planned visit completes its agenda item — the loop
+      // closes through the same LWW-guarded outbox path.
+      if (linked) {
+        await layer.sync.enqueue({
+          clientId: linked.id,
+          entityType: "next_action",
+          op: "update",
+          payload: { id: linked.id, completed_at: new Date().toISOString() },
+          baseVersion: linked.updated_at,
+          blobRef: null,
+        });
+      }
       // Optimistic read-model write so the capture is immediately visible.
       await layer.local.putLocalActivity({
         id,
@@ -160,6 +196,27 @@ export default function CapturePage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* D46: planned vs actual — link this capture to the planned visit */}
+      {plannedItem && (
+        <label className="flex items-center gap-3 rounded-xl border border-amber-500/50 bg-amber-500/5 px-4 py-3">
+          <input
+            type="checkbox"
+            checked={linkPlanned}
+            onChange={(e) => setLinkPlanned(e.target.checked)}
+            className="h-5 w-5 accent-amber-500"
+          />
+          <span className="text-sm">
+            <span className="font-medium">This was the planned visit:</span>{" "}
+            {plannedItem.action}
+            {plannedItem.objective && (
+              <span className="ml-1 opacity-60">
+                ({plannedItem.objective.replaceAll("_", " ")})
+              </span>
+            )}
+          </span>
+        </label>
       )}
 
       {/* The D45 core: one note… */}
