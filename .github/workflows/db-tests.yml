@@ -1,0 +1,26 @@
+name: db-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pgtap:
+    name: Migrations + RLS test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Starts local Postgres, applies supabase/migrations, runs supabase/seed.sql
+      - name: Start database
+        run: supabase db start
+
+      # pgTAP suites in supabase/tests — the Phase 1 gate:
+      # cross-tenant leakage, visibility matrix, constraints, stage trigger
+      - name: Run pgTAP suites
+        run: supabase test db

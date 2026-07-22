@@ -1,0 +1,17 @@
+# Secrets — never commit (service-role key + DB password live here)
+.env
+.env.*
+!.env.example
+
+# Google OAuth client secrets
+client_secret*.json
+
+# Dependencies
+node_modules/
+
+# Supabase local dev
+supabase/.branches/
+supabase/.temp/
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
