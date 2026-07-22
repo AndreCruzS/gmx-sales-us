@@ -220,7 +220,7 @@ Then update this file at the end of each working session:
   `supabase/README.md` — pending review, none contradicts D1–D62.
 - **Next up:** **Phase 2 — Activity capture + offline layer** (capture UI with
   D45 one-note default, `LocalStore`/`SyncEngine`/`BlobStore`/`PushChannel`
-  interfaces, outbox, error tray). Before Phase 2: confirm the proposed enum
-  values (supabase/README.md §9) and the live-project region (project
-  `aydctoyhgzwkdofrvemu` is us-east-1; infra decision says colocate west US).
-  Q2/Q3 still open, still non-blocking.
+  interfaces, outbox, error tray). Live project recreated 2026-07-22 in
+  **us-west-1** (`eliaqtsxlunbnrcjdcef`) per the colocation decision; all 13
+  migrations applied and in sync. Before Phase 2: confirm the proposed enum
+  values (supabase/README.md §9). Q2/Q3 still open, still non-blocking.
