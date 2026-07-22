@@ -1,4 +1,4 @@
-name: db-tests
+name: ci
 
 on:
   push:
@@ -6,6 +6,25 @@ on:
   pull_request:
 
 jobs:
+  app:
+    name: Lint + offline-layer gate tests + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Phase 2 gate: airplane-mode exactly-once, double-fire no-dupes,
+      # stale-edit-to-error-tray (src/lib/offline/__tests__)
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+
   pgtap:
     name: Migrations + RLS test suite
     runs-on: ubuntu-latest

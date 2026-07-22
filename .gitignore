@@ -9,6 +9,10 @@ client_secret*.json
 # Dependencies
 node_modules/
 
+# Next.js build output
+.next/
+*.tsbuildinfo
+
 # Supabase local dev
 supabase/.branches/
 supabase/.temp/
