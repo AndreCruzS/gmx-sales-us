@@ -207,7 +207,23 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-22 (**Phase 3 complete: agenda + exception engine**)
+- **Last updated:** 2026-07-22 (**Phase 4 complete: voice debrief**)
+- **Phase 4 delivered:** debrief pipeline per spec §5 — MediaRecorder capture
+  (format validated at capture, iOS-first mime order) riding the existing D59
+  blob outbox; `/api/voice/process` transcribes via AI Gateway
+  (`openai/gpt-4o-mini-transcribe`, Gemini audio fallback — the D-stack STT
+  requirement with zero keys, D63) and extracts a structured draft
+  (`anthropic/claude-sonnet-4.6` + zod schema; hallucinated enums/dates
+  rejected at parse). **Typed-debrief path** (transcript, no audio) covers
+  D45's "enriched later by AI" and made the loop E2E-verifiable. Review gate
+  (D9) verified live: drafting created ZERO records; Send fanned out through
+  the standard outbox (D10) — activity + linked next actions + capture → SENT.
+  **Outbox v3**: auto-increment `seq` PK (multiple ops per entity, guaranteed
+  FIFO so FK parents replay first) + compensation on multi-op fan-out; a
+  constraint-rejected op landed in the error tray with payload preserved,
+  exactly as D62 demands. 18 vitest + 85 pgTAP tests green. Audio-path
+  transcription needs one manual phone test (mic; Q13 field territory).
+- **Phase 3 (2026-07-22): agenda + exception engine complete**
 - **Phase 3 delivered:** all §8 exceptions + D47 (next-week-not-planned, org-
   configurable deadline weekday) + D50 (no champion) + D52 (display not
   verified) as **security_invoker SQL views** (RLS-scoped per caller, org

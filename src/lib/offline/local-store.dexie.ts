@@ -17,16 +17,25 @@ class OfflineDb extends Dexie {
   agenda!: Table<CachedAgendaItem, string>;
   activities!: Table<CachedActivity, string>;
   meta!: Table<{ key: string; value: string }, string>;
-  outbox!: Table<OutboxRecord, string>;
+  outbox!: Table<OutboxRecord, number>;
 
   constructor(name: string) {
     super(name);
+    // v2: outbox keyed by auto-increment seq (FIFO order; multiple ops per
+    // entity). Dexie cannot change a store's primary key across versions, so
+    // the store is dropped and recreated (v1 existed only on dev machines).
     this.version(1).stores({
       accounts: "id, name, territory_id",
       agenda: "id, due_date, account_id",
       activities: "id, occurred_at, primary_account_id",
       meta: "key",
       outbox: "clientId, status, createdAt",
+    });
+    this.version(2)
+      .stores({ outbox: null })
+      .upgrade(() => undefined);
+    this.version(3).stores({
+      outbox: "++seq, clientId, status, createdAt",
     });
   }
 }
@@ -98,24 +107,22 @@ export class DexieLocalStore implements LocalStore {
     await this.db.meta.put({ key, value });
   }
 
-  async enqueue(rec: OutboxRecord): Promise<void> {
-    await this.db.outbox.add(rec);
+  async enqueue(rec: OutboxRecord): Promise<number> {
+    return this.db.outbox.add(rec);
   }
 
   async nextPending(): Promise<OutboxRecord | null> {
-    // FIFO drain (D58).
+    // FIFO drain (D58): seq is monotonic, so FK parents (activity) always
+    // replay before their children (next actions referencing it).
     const pending = await this.db.outbox
       .where("status")
       .equals("pending")
-      .sortBy("createdAt");
+      .sortBy("seq");
     return pending[0] ?? null;
   }
 
-  async updateOutbox(
-    clientId: string,
-    patch: Partial<OutboxRecord>,
-  ): Promise<void> {
-    await this.db.outbox.update(clientId, patch);
+  async updateOutbox(seq: number, patch: Partial<OutboxRecord>): Promise<void> {
+    await this.db.outbox.update(seq, patch);
   }
 
   async countByStatus(): Promise<Record<OutboxStatus, number>> {
@@ -132,11 +139,11 @@ export class DexieLocalStore implements LocalStore {
   }
 
   listRejected(): Promise<OutboxRecord[]> {
-    return this.db.outbox.where("status").equals("rejected").sortBy("createdAt");
+    return this.db.outbox.where("status").equals("rejected").sortBy("seq");
   }
 
-  async deleteOutbox(clientId: string): Promise<void> {
-    await this.db.outbox.delete(clientId);
+  async deleteOutbox(seq: number): Promise<void> {
+    await this.db.outbox.delete(seq);
   }
 
   async wipe(): Promise<void> {

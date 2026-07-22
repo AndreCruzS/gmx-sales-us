@@ -16,9 +16,9 @@ export default function TrayPage() {
     void getOfflineLayer().local.listRejected().then(setRejected);
   }, [status.rejected]);
 
-  async function discard(clientId: string) {
-    await getOfflineLayer().local.deleteOutbox(clientId);
-    setRejected((prev) => prev.filter((r) => r.clientId !== clientId));
+  async function discard(seq: number) {
+    await getOfflineLayer().local.deleteOutbox(seq);
+    setRejected((prev) => prev.filter((r) => r.seq !== seq));
   }
 
   return (
@@ -35,7 +35,7 @@ export default function TrayPage() {
         <ul className="flex flex-col gap-3">
           {rejected.map((r) => (
             <li
-              key={r.clientId}
+              key={r.seq}
               className="rounded-xl border border-red-500/40 p-4 text-sm"
             >
               <div className="flex items-center justify-between">
@@ -57,7 +57,7 @@ export default function TrayPage() {
               </details>
               <div className="mt-3 flex gap-2">
                 <button
-                  onClick={() => discard(r.clientId)}
+                  onClick={() => discard(r.seq as number)}
                   className="rounded-lg border border-black/15 px-3 py-1.5 text-xs font-medium dark:border-white/20"
                 >
                   Discard

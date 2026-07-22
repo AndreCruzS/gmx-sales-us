@@ -32,7 +32,7 @@ export class OutboxSyncEngine implements SyncEngine {
     private backend: SyncBackend,
   ) {}
 
-  async enqueue(rec: NewOutboxRecord): Promise<void> {
+  async enqueue(rec: NewOutboxRecord): Promise<number> {
     // Zod at the outbox boundary — a payload that can't validate must fail at
     // capture time (fixable), not at replay time (stranded).
     const schema = outboxPayloadSchemas[`${rec.entityType}:${rec.op}`];
@@ -41,7 +41,7 @@ export class OutboxSyncEngine implements SyncEngine {
       throw new Error("update ops require baseVersion (D61 LWW guard)");
     }
 
-    await this.local.enqueue({
+    const seq = await this.local.enqueue({
       ...rec,
       status: "pending",
       attempts: 0,
@@ -49,6 +49,7 @@ export class OutboxSyncEngine implements SyncEngine {
       createdAt: new Date().toISOString(),
     });
     await this.notify();
+    return seq;
   }
 
   drain(): Promise<void> {
@@ -80,7 +81,8 @@ export class OutboxSyncEngine implements SyncEngine {
 
   /** @returns false when the record stays pending (retryable failure). */
   private async pushOne(rec: OutboxRecord): Promise<boolean> {
-    await this.local.updateOutbox(rec.clientId, {
+    const seq = rec.seq as number;
+    await this.local.updateOutbox(seq, {
       status: "syncing",
       attempts: rec.attempts + 1,
     });
@@ -108,7 +110,7 @@ export class OutboxSyncEngine implements SyncEngine {
         }
       }
 
-      await this.local.updateOutbox(rec.clientId, {
+      await this.local.updateOutbox(seq, {
         status: "synced",
         lastError: null,
       });
@@ -117,14 +119,14 @@ export class OutboxSyncEngine implements SyncEngine {
       if (err instanceof SyncRejectionError) {
         // D62: invalid at replay (RLS, constraint, stale) → error tray,
         // never silently dropped.
-        await this.local.updateOutbox(rec.clientId, {
+        await this.local.updateOutbox(seq, {
           status: "rejected",
           lastError: err.message,
         });
         return true; // continue draining the rest of the queue
       }
       // Network/5xx: keep pending for the next trigger.
-      await this.local.updateOutbox(rec.clientId, {
+      await this.local.updateOutbox(seq, {
         status: "pending",
         lastError: err instanceof Error ? err.message : String(err),
       });

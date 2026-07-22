@@ -60,7 +60,13 @@ export default function HomePage() {
         >
           + Register Commercial Activity
         </Link>
-        <div className="grid grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <Link
+            href="/debriefs"
+            className="rounded-xl border border-amber-500/60 px-4 py-3 text-center font-medium"
+          >
+            🎤 Voice debrief
+          </Link>
           <Link
             href="/agenda"
             className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"

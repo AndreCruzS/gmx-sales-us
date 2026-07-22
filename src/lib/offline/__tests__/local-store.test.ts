@@ -27,12 +27,22 @@ beforeEach(() => {
 });
 
 describe("outbox durability", () => {
-  it("drains FIFO by createdAt", async () => {
-    await store.enqueue(outboxRecord({ createdAt: "2026-07-22T10:00:00Z" }));
-    const first = outboxRecord({ createdAt: "2026-07-22T09:00:00Z" });
+  it("drains FIFO by enqueue order (seq), so FK parents replay first", async () => {
+    const first = outboxRecord();
     await store.enqueue(first);
+    await store.enqueue(outboxRecord());
     const next = await store.nextPending();
     expect(next?.clientId).toBe(first.clientId);
+  });
+
+  it("allows multiple ops for the same entity (create then update)", async () => {
+    const id = crypto.randomUUID();
+    await store.enqueue(outboxRecord({ clientId: id, op: "create" }));
+    await store.enqueue(
+      outboxRecord({ clientId: id, op: "update", baseVersion: "v1" }),
+    );
+    const counts = await store.countByStatus();
+    expect(counts.pending).toBe(2);
   });
 
   it("counts by status for the always-visible badge (D58)", async () => {

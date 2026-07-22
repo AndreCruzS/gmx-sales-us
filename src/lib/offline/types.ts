@@ -6,9 +6,12 @@ import type { EntityType } from "@/lib/domain/schemas";
 
 export type OutboxStatus = "pending" | "syncing" | "synced" | "rejected";
 
-// D57 outbox record. clientId == payload.id: the client-minted UUID is both
-// the primary key the server upserts on and the idempotency key.
+// D57 outbox record. clientId == payload.id: the client-minted UUID the server
+// upserts on (the idempotency key). The outbox's own key is `seq` — an
+// auto-increment that guarantees FIFO drain order (FK parents before children)
+// and allows multiple ops (create then update) for the same entity.
 export interface OutboxRecord {
+  seq?: number; // assigned by the store on enqueue
   clientId: string;
   entityType: EntityType;
   op: "create" | "update";
@@ -79,12 +82,12 @@ export interface LocalStore {
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
   // outbox
-  enqueue(rec: OutboxRecord): Promise<void>;
+  enqueue(rec: OutboxRecord): Promise<number>; // returns seq
   nextPending(): Promise<OutboxRecord | null>;
-  updateOutbox(clientId: string, patch: Partial<OutboxRecord>): Promise<void>;
+  updateOutbox(seq: number, patch: Partial<OutboxRecord>): Promise<void>;
   countByStatus(): Promise<Record<OutboxStatus, number>>;
   listRejected(): Promise<OutboxRecord[]>;
-  deleteOutbox(clientId: string): Promise<void>;
+  deleteOutbox(seq: number): Promise<void>;
   /** D60: full wipe on logout and org switch. */
   wipe(): Promise<void>;
 }
@@ -148,7 +151,8 @@ export interface SyncStatus {
 }
 
 export interface SyncEngine {
-  enqueue(rec: NewOutboxRecord): Promise<void>;
+  /** Returns the outbox seq (for compensation on multi-op flows). */
+  enqueue(rec: NewOutboxRecord): Promise<number>;
   drain(): Promise<void>;
   pull(): Promise<void>;
   /** Wires foreground/online/interval triggers (D58 — never Background Sync). */

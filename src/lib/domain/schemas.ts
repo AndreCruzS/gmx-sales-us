@@ -62,11 +62,36 @@ export const nextActionUpdateSchema = z.object({
 });
 export type NextActionUpdate = z.infer<typeof nextActionUpdateSchema>;
 
+// Voice debrief (D9/D10): the capture row lands with status UPLOADED because
+// the blob upload precedes the row upsert in the same drain pass (D59).
+export const voiceCaptureCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  owner_id: uuid,
+  audio_path: z.string().nullish(), // null = typed debrief (no audio)
+  duration_seconds: z.number().int().nonnegative().nullish(),
+  transcript: z.string().nullish(), // set directly on the typed path
+  status: z.enum(["PENDING", "UPLOADED"]),
+  language: z.string().nullish(),
+});
+export type VoiceCaptureCreate = z.infer<typeof voiceCaptureCreateSchema>;
+
+// Review outcomes (the D9 gate) travel as LWW-guarded updates.
+export const voiceCaptureUpdateSchema = z.object({
+  id: uuid,
+  status: z.enum(["REVIEWED", "SENT", "DISCARDED"]).optional(),
+  reviewed_at: isoTimestamp.nullish(),
+  sent_at: isoTimestamp.nullish(),
+  activity_id: uuid.nullish(),
+});
+export type VoiceCaptureUpdate = z.infer<typeof voiceCaptureUpdateSchema>;
+
 export const ENTITY_TABLES = {
   activity: "activities",
   next_action: "next_actions",
   activity_account: "activity_accounts",
   activity_contact: "activity_contacts",
+  voice_capture: "voice_captures",
 } as const;
 export type EntityType = keyof typeof ENTITY_TABLES;
 
@@ -74,4 +99,6 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "activity:create": activityCreateSchema,
   "next_action:create": nextActionCreateSchema,
   "next_action:update": nextActionUpdateSchema,
+  "voice_capture:create": voiceCaptureCreateSchema,
+  "voice_capture:update": voiceCaptureUpdateSchema,
 };
