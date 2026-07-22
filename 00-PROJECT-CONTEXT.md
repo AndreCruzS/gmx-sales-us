@@ -206,7 +206,22 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-22 (**Phase 1 complete: schema + RLS**)
+- **Last updated:** 2026-07-22 (**Phase 2 complete: activity capture + offline layer**)
+- **Phase 2 delivered:** Next.js 16 PWA (mobile-first) with the D55 interfaces
+  (`LocalStore`/`SyncEngine`/`BlobStore`/`PushChannel`, Dexie behind them, ESLint
+  bans direct Dexie imports); durable outbox with client-UUID idempotent replay
+  (D57); LWW stale-write rejection into a first-class error tray (D61/D62);
+  foreground-only sync triggers + always-visible "N unsynced" badge (D58);
+  signed URLs minted at sync time, blobs purged after upload (D59); cache wipe
+  on logout/org switch + cached-profile offline cold start (D60/D56); D45
+  capture UI (one note + follow-up flag, full form optional); org_id JWT claim
+  hook + `set_active_org` RPC (D18/D23/D24). **Gate passed**: 12 vitest tests
+  (airplane-mode exactly-once, double-fire no-dupes, stale-edit-to-tray) + live
+  browser verification against the local stack in dev AND production builds
+  (offline cold start included). 58 pgTAP tests still green. Known caveats:
+  service-worker shell can be one deploy stale when offline immediately after
+  a deploy; Q13 (real iOS field reliability) remains a field-test question.
+- **Phase 1 (2026-07-22): schema + RLS complete**
 - **Completed:** everything previously listed, plus **Phase 1 Postgres DDL** —
   13 migrations under `supabase/migrations/` (enums + `lead_source` domain, all
   tables incl. email/candidate tables, D7/D8/D50 constraints, opportunity stage

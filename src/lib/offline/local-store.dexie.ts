@@ -41,16 +41,30 @@ export class DexieLocalStore implements LocalStore {
   async putWorkingSet(ws: WorkingSet): Promise<void> {
     await this.db.transaction(
       "rw",
-      [this.db.accounts, this.db.agenda, this.db.activities, this.db.meta],
+      [
+        this.db.accounts,
+        this.db.agenda,
+        this.db.activities,
+        this.db.meta,
+        this.db.outbox,
+      ],
       async () => {
         // Pull replaces the bounded working set (D56 — working set, not the
-        // territory); locally-captured pending activities are preserved.
+        // territory). Locally-captured activities are preserved ONLY while
+        // their outbox record is still in flight (pending/syncing/rejected) —
+        // once synced, the server copy is the truth and the optimistic mirror
+        // must not shadow it.
+        const inflight = new Set(
+          (await this.db.outbox.toArray())
+            .filter((o) => o.status !== "synced")
+            .map((o) => o.clientId),
+        );
         await this.db.accounts.clear();
         await this.db.accounts.bulkPut(ws.accounts);
         await this.db.agenda.clear();
         await this.db.agenda.bulkPut(ws.agenda);
         const pendingLocal = await this.db.activities
-          .filter((a) => a.pendingSync === true)
+          .filter((a) => a.pendingSync === true && inflight.has(a.id))
           .toArray();
         await this.db.activities.clear();
         await this.db.activities.bulkPut([...ws.activities, ...pendingLocal]);

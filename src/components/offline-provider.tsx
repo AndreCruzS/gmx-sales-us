@@ -56,41 +56,78 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let stopped = false;
+    let booted = false;
 
     async function boot() {
+      if (booted || stopped) return;
       const supabase = getSupabaseBrowserClient();
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session || stopped) return;
-
-      const orgId = orgIdFromAccessToken(session.access_token);
-      if (!orgId) return; // no active membership — nothing to sync
-
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("id")
-        .eq("user_id", session.user.id)
-        .eq("org_id", orgId)
-        .eq("status", "active")
-        .single();
-      if (!membership || stopped) return;
-
-      setProfile({
-        userId: session.user.id,
-        orgId,
-        membershipId: membership.id,
-        email: session.user.email ?? "",
-      });
+      booted = true;
 
       const layer = getOfflineLayer();
+      let resolved: Profile | null = null;
+
+      const orgId = orgIdFromAccessToken(session.access_token);
+      if (orgId) {
+        const { data: membership } = await supabase
+          .from("memberships")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .eq("org_id", orgId)
+          .eq("status", "active")
+          .single();
+        if (membership) {
+          resolved = {
+            userId: session.user.id,
+            orgId,
+            membershipId: membership.id,
+            email: session.user.email ?? "",
+          };
+          // Cache for offline cold starts — the profile is part of the D56
+          // working set: capture must work with no network at all.
+          await layer.local.setMeta("profile", JSON.stringify(resolved));
+        }
+      }
+
+      if (!resolved) {
+        // Offline (or transient failure): fall back to the cached profile so
+        // an airplane-mode cold start can still capture. The cache was wiped
+        // on logout/org switch (D60), so it can only belong to this session's
+        // tenant boundary.
+        const cached = await layer.local.getMeta("profile");
+        if (cached) {
+          const parsed = JSON.parse(cached) as Profile;
+          if (parsed.userId === session.user.id) resolved = parsed;
+        }
+      }
+
+      if (!resolved || stopped) return;
+      setProfile(resolved);
       unsubscribe = layer.sync.subscribe(setStatus);
       layer.sync.start();
     }
 
+    // Boot when a session exists now, AND when one appears later — the
+    // provider mounts on the login page before sign-in, and client-side
+    // navigation never remounts it.
     void boot();
+    const supabase = getSupabaseBrowserClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") void boot();
+      if (event === "SIGNED_OUT") {
+        booted = false;
+        setProfile(null);
+      }
+    });
+
     return () => {
       stopped = true;
+      subscription.unsubscribe();
       unsubscribe?.();
     };
   }, []);

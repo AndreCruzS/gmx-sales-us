@@ -64,20 +64,30 @@ describe("working set (D56)", () => {
     pulledAt: new Date().toISOString(),
   };
 
-  it("replaces the cached read models on pull but keeps pending local writes", async () => {
-    await store.putLocalActivity({
-      id: crypto.randomUUID(),
-      activity_type: "PHONE_CALL",
-      primary_account_id: crypto.randomUUID(),
-      occurred_at: new Date().toISOString(),
-      what_happened: "offline capture",
-      follow_up_required: false,
-      pendingSync: true,
-    });
+  it("replaces the cached read models on pull but keeps in-flight local writes", async () => {
+    const inflightId = crypto.randomUUID();
+    const syncedId = crypto.randomUUID();
+    for (const [id, status] of [
+      [inflightId, "pending"],
+      [syncedId, "synced"],
+    ] as const) {
+      await store.enqueue(outboxRecord({ clientId: id, status }));
+      await store.putLocalActivity({
+        id,
+        activity_type: "PHONE_CALL",
+        primary_account_id: crypto.randomUUID(),
+        occurred_at: new Date().toISOString(),
+        what_happened: "offline capture",
+        follow_up_required: false,
+        pendingSync: true,
+      });
+    }
     await store.putWorkingSet(ws);
     expect(await store.getAccounts()).toHaveLength(1);
     const activities = await store.getRecentActivities();
-    expect(activities).toHaveLength(1); // the pending local write survived
+    // The in-flight write survived; the already-synced optimistic mirror was
+    // dropped in favour of the server truth from the pull.
+    expect(activities.map((a) => a.id)).toEqual([inflightId]);
     expect(activities[0].pendingSync).toBe(true);
   });
 });

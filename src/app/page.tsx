@@ -20,7 +20,8 @@ export default function HomePage() {
     void getOfflineLayer()
       .local.getRecentActivities()
       .then((a) => setRecent(a.slice(0, 5)));
-  }, [profile, status.pending]);
+    // re-read after every pull (lastPulledAt) and every queue change (pending)
+  }, [profile, status.pending, status.lastPulledAt]);
 
   async function logout() {
     // D60: wipe the local cache before the session goes away.
