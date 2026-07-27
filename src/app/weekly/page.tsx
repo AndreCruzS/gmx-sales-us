@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { humanize } from "@/lib/domain/enums";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ActivityRow {
@@ -43,7 +44,7 @@ function renderNarrative(text: string) {
     if (!trimmed) return null;
     if (/^-{3,}$/.test(trimmed)) {
       return (
-        <hr key={i} className="my-3 border-black/10 dark:border-white/10" />
+        <hr key={i} className="my-3" style={{ borderColor: "var(--rule)" }} />
       );
     }
     if (trimmed.startsWith("## ")) {
@@ -123,25 +124,37 @@ export default function WeeklyReviewPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Weekly review</h1>
-        <button
-          onClick={generate}
-          disabled={busy}
-          className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-        >
-          {busy ? "Writing…" : narrative ? "Regenerate" : "Generate"}
+    <div className="stack pt-2">
+      <section>
+        <button onClick={generate} disabled={busy} className="btn-primary">
+          {busy
+            ? "Writing your week up…"
+            : narrative
+              ? "Write it again"
+              : "Write my week up"}
         </button>
-      </div>
+        {!narrative && !busy && (
+          <p className="t-meta mt-2 px-1">
+            You don&apos;t write a report — the week is already recorded. The
+            system drafts it; you check it against the detail below.
+          </p>
+        )}
+      </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {note && <p className="text-sm opacity-60">{note}</p>}
+      {error && (
+        <p className="t-sub px-1" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
+      {note && <p className="t-sub px-1">{note}</p>}
 
       {narrative && (
-        <section className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+        <section className="card card-pad">
           {renderNarrative(narrative)}
-          <p className="mt-4 border-t border-black/5 pt-2 text-xs opacity-50 dark:border-white/10">
+          <p
+            className="t-meta mt-4 pt-2"
+            style={{ borderTop: "1px solid var(--rule)" }}
+          >
             Drafted from your recorded activity — check it against the detail
             below before sending it on.
           </p>
@@ -149,31 +162,42 @@ export default function WeeklyReviewPage() {
       )}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Last 7 days ({activities.length})
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">Last 7 days</h2>
+          <span className="t-meta">{activities.length}</span>
+        </div>
         {activities.length === 0 ? (
-          <p className="text-sm opacity-60">Nothing recorded in the last week.</p>
+          <p className="t-sub px-1">Nothing recorded in the last week.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="list">
             {activities.map((a, i) => (
-              <li
-                key={i}
-                className="rounded-xl border border-black/10 px-4 py-3 text-sm dark:border-white/15"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{a.account_name}</span>
-                  <span className="shrink-0 text-xs opacity-60">
-                    {new Date(a.occurred_at).toLocaleDateString()}
+              <li key={i} className="row">
+                <span className="row-lead flex-col leading-none">
+                  <span className="text-[15px] font-bold">
+                    {new Date(a.occurred_at).getDate()}
                   </span>
-                </div>
-                <div className="mt-0.5 text-xs opacity-60">
-                  {a.activity_type.replaceAll("_", " ")}
-                  {a.was_planned ? " · planned" : " · unplanned"}
-                </div>
-                {a.what_happened && (
-                  <p className="mt-1 opacity-80">{a.what_happened}</p>
-                )}
+                  <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
+                    {new Date(a.occurred_at).toLocaleString("en-US", {
+                      month: "short",
+                    })}
+                  </span>
+                </span>
+                <span className="row-body">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="t-title truncate">{a.account_name}</span>
+                    {a.was_planned && (
+                      <span className="tag tag-accent shrink-0">planned</span>
+                    )}
+                  </span>
+                  <span className="t-sub block">
+                    {humanize(a.activity_type)}
+                  </span>
+                  {a.what_happened && (
+                    <span className="t-sub line-clamp-2 block">
+                      {a.what_happened}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -181,30 +205,42 @@ export default function WeeklyReviewPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Coming up ({upcoming.length})
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">Coming up</h2>
+          <span className="t-meta">{upcoming.length}</span>
+        </div>
         {upcoming.length === 0 ? (
-          <p className="text-sm opacity-60">
-            Nothing scheduled — next week needs planning by Friday.
+          <p className="t-sub px-1">
+            Nothing planned — next week should be on the plan by Friday.
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="list">
             {upcoming.map((u) => (
-              <li
-                key={u.next_action_id}
-                className="rounded-xl border border-black/10 px-4 py-3 text-sm dark:border-white/15"
-              >
-                <div className="font-medium">{u.action}</div>
-                <div className="mt-0.5 flex flex-wrap gap-2 text-xs opacity-60">
-                  {u.account_name && <span>{u.account_name}</span>}
-                  <span>{u.due_date}</span>
-                  {u.objective && (
-                    <span className="rounded-full bg-amber-500/15 px-2 font-medium text-amber-700 dark:text-amber-400">
-                      {u.objective.replaceAll("_", " ")}
-                    </span>
-                  )}
-                </div>
+              <li key={u.next_action_id} className="row">
+                <span className="row-lead flex-col leading-none">
+                  <span className="text-[15px] font-bold">
+                    {Number(u.due_date.slice(8, 10))}
+                  </span>
+                  <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
+                    {new Date(`${u.due_date}T00:00:00`).toLocaleString(
+                      "en-US",
+                      { month: "short" },
+                    )}
+                  </span>
+                </span>
+                <span className="row-body">
+                  <span className="t-title block truncate">{u.action}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {u.account_name && (
+                      <span className="t-sub">{u.account_name}</span>
+                    )}
+                    {u.objective && (
+                      <span className="tag tag-accent">
+                        {humanize(u.objective)}
+                      </span>
+                    )}
+                  </span>
+                </span>
               </li>
             ))}
           </ul>

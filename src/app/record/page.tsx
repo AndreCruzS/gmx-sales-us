@@ -1,0 +1,517 @@
+"use client";
+
+// Record — the one place a rep tells the system what happened. Voice or
+// typed is a mode, not a destination.
+//
+// Three paths out of one screen, chosen by what the rep gives us:
+//   · voice        → queued, drafted by the system, confirmed in Review (D9)
+//   · note + account → saved as the activity directly (D45: one note + flag),
+//                      linking the planned visit when there is one (D46)
+//   · note alone   → same drafting path as voice, confirmed in Review
+//
+// Everything works offline: blobs and writes ride the outbox (D57/D59).
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useOffline } from "@/components/offline-provider";
+import { CheckIcon, MicrophoneIcon } from "@/components/icons";
+import {
+  ACTIVITY_OUTCOMES,
+  ACTIVITY_TYPES,
+  VISIT_OBJECTIVES,
+  humanize,
+  type ActivityOutcome,
+  type ActivityType,
+  type VisitObjective,
+} from "@/lib/domain/enums";
+import {
+  getOfflineLayer,
+  type CachedAccount,
+  type CachedAgendaItem,
+} from "@/lib/offline";
+
+const MIME_CANDIDATES = [
+  "audio/mp4", // iOS Safari — validate at capture, not upload (offline doc §6)
+  "audio/webm;codecs=opus",
+  "audio/webm",
+];
+
+export default function RecordPage() {
+  const { profile } = useOffline();
+  const router = useRouter();
+
+  const [accounts, setAccounts] = useState<CachedAccount[]>([]);
+  const [agenda, setAgenda] = useState<CachedAgendaItem[]>([]);
+  const [accountQuery, setAccountQuery] = useState("");
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [pickingAccount, setPickingAccount] = useState(false);
+  const [linkPlanned, setLinkPlanned] = useState(true);
+  const [note, setNote] = useState("");
+  const [followUp, setFollowUp] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [activityType, setActivityType] = useState<ActivityType>("DEALER_VISIT");
+  const [objective, setObjective] = useState<VisitObjective | "">("");
+  const [objectiveDetail, setObjectiveDetail] = useState("");
+  const [outcomes, setOutcomes] = useState<ActivityOutcome[]>([]);
+  const [keyInfo, setKeyInfo] = useState("");
+
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [queuedVoice, setQueuedVoice] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // deferred so state lands from callbacks, never synchronously in the effect
+    const t = setTimeout(() => {
+      const layer = getOfflineLayer();
+      void layer.local.getAccounts().then(setAccounts);
+      void layer.local.getAgenda().then(setAgenda);
+      // "Log a visit here" on an account page lands with ?account=<id>
+      const preset = new URLSearchParams(window.location.search).get("account");
+      if (preset) setAccountId(preset);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = accountQuery.trim().toLowerCase();
+    if (!q) return accounts.slice(0, 6);
+    return accounts.filter((a) => a.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [accounts, accountQuery]);
+
+  const selected = accounts.find((a) => a.id === accountId) ?? null;
+
+  // D46: if the cached agenda holds an open item for this account, offer to
+  // record this as that planned visit — linking and completing it.
+  const plannedItem = useMemo(
+    () =>
+      accountId
+        ? (agenda.find((i) => i.account_id === accountId && !i.completed_at) ??
+          null)
+        : null,
+    [agenda, accountId],
+  );
+
+  // ── Voice: queued the moment recording stops ─────────────────────────────
+
+  async function startRecording() {
+    setError(null);
+    setQueuedVoice(false);
+    const mime = MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m));
+    if (!mime) {
+      setError("This device can't record audio — type your note instead.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: mime });
+        if (blob.size === 0) {
+          setError("Nothing was recorded — try again, or type your note.");
+          return;
+        }
+        if (!profile) return;
+        const id = crypto.randomUUID();
+        const ext = mime.startsWith("audio/mp4") ? "m4a" : "webm";
+        const audioPath = `${profile.orgId}/${profile.userId}/${id}.${ext}`;
+        const layer = getOfflineLayer();
+        await layer.blobs.put(`voice::${audioPath}`, blob);
+        await layer.sync.enqueue({
+          clientId: id,
+          entityType: "voice_capture",
+          op: "create",
+          payload: {
+            id,
+            org_id: profile.orgId,
+            owner_id: profile.membershipId,
+            audio_path: audioPath,
+            duration_seconds: seconds,
+            transcript: null,
+            status: "UPLOADED", // the blob uploads before the row lands (D59)
+            language: null, // server falls back to membership.debrief_language
+          },
+          baseVersion: null,
+          blobRef: `voice::${audioPath}`,
+        });
+        void layer.sync.drain();
+        setQueuedVoice(true);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+      setRecording(true);
+    } catch {
+      setError("Microphone unavailable — type your note instead.");
+    }
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop();
+    if (timerRef.current) clearInterval(timerRef.current);
+    setRecording(false);
+  }
+
+  // ── Typed: direct save with an account, drafted without one ──────────────
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!profile) {
+      setError("You're signed out.");
+      return;
+    }
+    if (!note.trim()) {
+      setError("Say what happened — one line is enough.");
+      return;
+    }
+    if (accountId && objective === "OTHER" && !objectiveDetail.trim()) {
+      setError("A word on what the objective was.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const layer = getOfflineLayer();
+
+    try {
+      if (!accountId) {
+        // No account: same drafting path as voice — the system proposes the
+        // account and details, the rep confirms in Review.
+        const id = crypto.randomUUID();
+        await layer.sync.enqueue({
+          clientId: id,
+          entityType: "voice_capture",
+          op: "create",
+          payload: {
+            id,
+            org_id: profile.orgId,
+            owner_id: profile.membershipId,
+            audio_path: null,
+            duration_seconds: null,
+            transcript: note.trim(),
+            status: "UPLOADED",
+            language: null,
+          },
+          baseVersion: null,
+          blobRef: null,
+        });
+        void layer.sync.drain();
+        router.push("/review");
+        return;
+      }
+
+      const id = crypto.randomUUID();
+      const linked = linkPlanned ? plannedItem : null;
+      await layer.sync.enqueue({
+        clientId: id,
+        entityType: "activity",
+        op: "create",
+        payload: {
+          id,
+          org_id: profile.orgId,
+          activity_type: activityType,
+          primary_account_id: accountId,
+          owner_id: profile.membershipId,
+          occurred_at: new Date().toISOString(),
+          // D46: planned_done when linked to an agenda item.
+          was_planned: Boolean(linked),
+          planned_action_id: linked?.id ?? null,
+          objective: objective || (linked?.objective as typeof objective) || null,
+          objective_detail: objectiveDetail.trim() || null,
+          what_happened: note.trim(),
+          key_information: keyInfo.trim() || null,
+          outcomes,
+          follow_up_required: followUp,
+        },
+        baseVersion: null,
+        blobRef: null,
+      });
+      // Recording the planned visit completes its agenda item.
+      if (linked) {
+        await layer.sync.enqueue({
+          clientId: linked.id,
+          entityType: "next_action",
+          op: "update",
+          payload: { id: linked.id, completed_at: new Date().toISOString() },
+          baseVersion: linked.updated_at, // D61: stale completion → Review
+          blobRef: null,
+        });
+      }
+      await layer.local.putLocalActivity({
+        id,
+        activity_type: activityType,
+        primary_account_id: accountId,
+        occurred_at: new Date().toISOString(),
+        what_happened: note.trim(),
+        follow_up_required: followUp,
+        pendingSync: true,
+      });
+      void layer.sync.drain();
+      router.push("/");
+    } catch (err) {
+      setBusy(false);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="stack pt-2">
+      {/* Voice first: a rep in a truck taps once, talks, taps again. Done. */}
+      <section className="card card-pad flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={recording ? stopRecording : startRecording}
+          className="btn-primary"
+          style={
+            recording
+              ? { background: "var(--danger)", maxWidth: "none" }
+              : { maxWidth: "none" }
+          }
+        >
+          <MicrophoneIcon size={19} />
+          {recording ? `Stop · ${seconds}s` : "Tap and talk"}
+        </button>
+        {queuedVoice ? (
+          <p className="t-sub flex items-center gap-1.5">
+            <CheckIcon size={14} style={{ color: "var(--accent)" }} />
+            Saved. It gets written up for you — confirm it in{" "}
+            <Link href="/review" className="t-action">
+              Review
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="t-meta">
+            Talk like you&apos;d brief a colleague. Works with no signal — it
+            uploads when you&apos;re back in coverage.
+          </p>
+        )}
+      </section>
+
+      {/* …or type it */}
+      <section className="stack-tight flex flex-col gap-3">
+        <textarea
+          placeholder="…or type it. One line is enough."
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          className="field"
+        />
+
+        {/* Account: optional. With it the note saves directly; without it the
+            system drafts the details and Review is the safety net. */}
+        {selected ? (
+          <div className="row">
+            <span className="row-body">
+              <span className="t-title block truncate">{selected.name}</span>
+              <span className="t-sub block truncate">
+                {humanize(selected.account_type)}
+                {selected.city ? ` · ${selected.city}` : ""}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="btn-quiet shrink-0"
+              onClick={() => {
+                setAccountId(null);
+                setPickingAccount(true);
+              }}
+            >
+              Change
+            </button>
+          </div>
+        ) : pickingAccount ? (
+          <div className="card overflow-hidden">
+            <input
+              autoFocus
+              placeholder="Which account?"
+              value={accountQuery}
+              onChange={(e) => setAccountQuery(e.target.value)}
+              className="field"
+              style={{ borderRadius: 0, border: 0 }}
+            />
+            <ul>
+              {filtered.map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountId(a.id);
+                      setPickingAccount(false);
+                      setAccountQuery("");
+                    }}
+                    className="flex w-full items-baseline gap-2 px-4 py-3 text-left"
+                    style={{ borderTop: "1px solid var(--rule)" }}
+                  >
+                    <span className="t-title">{a.name}</span>
+                    <span className="t-meta">{humanize(a.account_type)}</span>
+                  </button>
+                </li>
+              ))}
+              {filtered.length === 0 && (
+                <p className="t-sub px-4 py-3">
+                  No saved accounts match — leave it off and the system will
+                  figure out the account from your note.
+                </p>
+              )}
+            </ul>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPickingAccount(true)}
+            className="btn-secondary"
+          >
+            Attach the account (optional)
+          </button>
+        )}
+
+        {/* D46: planned vs actual */}
+        {plannedItem && (
+          <label className="row cursor-pointer">
+            <input
+              type="checkbox"
+              checked={linkPlanned}
+              onChange={(e) => setLinkPlanned(e.target.checked)}
+              className="h-5 w-5 shrink-0 accent-[var(--accent)]"
+            />
+            <span className="row-body t-sub">
+              <span className="t-title block">This was the planned visit</span>
+              {plannedItem.action}
+            </span>
+          </label>
+        )}
+
+        <label className="row cursor-pointer">
+          <input
+            type="checkbox"
+            checked={followUp}
+            onChange={(e) => setFollowUp(e.target.checked)}
+            className="h-5 w-5 shrink-0 accent-[var(--accent)]"
+          />
+          <span className="t-title">Needs a follow-up</span>
+        </label>
+
+        {selected && (
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            className="t-action text-left"
+          >
+            {showMore ? "Hide the detail" : "Add detail (optional)"}
+          </button>
+        )}
+
+        {selected && showMore && (
+          <div className="card card-pad flex flex-col gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="t-meta">What kind of contact</span>
+              <select
+                value={activityType}
+                onChange={(e) =>
+                  setActivityType(e.target.value as ActivityType)
+                }
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+              >
+                {ACTIVITY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {humanize(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="t-meta">What you went there to do</span>
+              <select
+                value={objective}
+                onChange={(e) =>
+                  setObjective(e.target.value as VisitObjective | "")
+                }
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+              >
+                <option value="">—</option>
+                {VISIT_OBJECTIVES.map((o) => (
+                  <option key={o} value={o}>
+                    {humanize(o)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {objective === "OTHER" && (
+              <input
+                placeholder="What was the objective?"
+                value={objectiveDetail}
+                onChange={(e) => setObjectiveDetail(e.target.value)}
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+              />
+            )}
+
+            <fieldset className="flex flex-col gap-1.5">
+              <span className="t-meta">What came out of it</span>
+              <div className="flex flex-wrap gap-1.5">
+                {ACTIVITY_OUTCOMES.map((o) => {
+                  const on = outcomes.includes(o);
+                  return (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() =>
+                        setOutcomes((prev) =>
+                          on ? prev.filter((x) => x !== o) : [...prev, o],
+                        )
+                      }
+                      className={on ? "tag tag-solid" : "tag"}
+                    >
+                      {humanize(o)}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <textarea
+              placeholder="Anything worth remembering — pricing, staff changes, competitors…"
+              value={keyInfo}
+              onChange={(e) => setKeyInfo(e.target.value)}
+              rows={2}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            />
+          </div>
+        )}
+
+        {error && (
+          <p className="t-sub" style={{ color: "var(--danger)" }}>
+            {error}
+          </p>
+        )}
+
+        {note.trim() && (
+          <>
+            <button type="submit" disabled={busy} className="btn-primary">
+              {selected ? `Save to ${selected.name}` : "Save note"}
+            </button>
+            <p className="t-meta">
+              {selected
+                ? "Saves straight to the account — offline too."
+                : "No account attached — it gets written up and waits for your OK in Review."}
+            </p>
+          </>
+        )}
+      </section>
+    </form>
+  );
+}

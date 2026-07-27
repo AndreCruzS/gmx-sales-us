@@ -1,16 +1,45 @@
 "use client";
 
-// Home is operational, never a table dump (spec §9): quick actions first —
-// Register Commercial Activity is the primary action (D45).
+// Today — the whole day on one screen, in the order a rep asks about it:
+// what's overdue, what's on for today, what the system flagged, what's coming.
+// The agenda is an ADVANCE COMMITMENT measured against reality (D46); visits
+// are planned with a required objective (D48). Online reads the fortnight from
+// the server; offline falls back to the cached today+tomorrow set (D56).
+// Mark-done rides the LWW-guarded outbox, so it works offline too.
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { AlertIcon, ChevronRightIcon, FileIcon } from "@/components/icons";
-import { humanize } from "@/lib/domain/enums";
-import { getOfflineLayer, wipeLocalData, type CachedActivity } from "@/lib/offline";
+import {
+  AlertIcon,
+  CheckIcon,
+  ChevronRightIcon,
+} from "@/components/icons";
+import {
+  VISIT_OBJECTIVES,
+  humanize,
+  type VisitObjective,
+} from "@/lib/domain/enums";
+import {
+  getOfflineLayer,
+  wipeLocalData,
+  type CachedAccount,
+  type CachedActivity,
+} from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+interface AgendaRow {
+  id: string;
+  action: string;
+  due_date: string;
+  completed_at: string | null;
+  account_id: string | null;
+  opportunity_id: string | null;
+  objective: string | null;
+  updated_at: string;
+  accountName?: string;
+}
 
 interface ExceptionRow {
   exception_type: string;
@@ -20,24 +49,108 @@ interface ExceptionRow {
   detail: string | null;
 }
 
-export default function HomePage() {
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function DateChip({ date, danger }: { date: string; danger?: boolean }) {
+  return (
+    <span
+      className="row-lead flex-col leading-none"
+      style={
+        danger
+          ? { background: "var(--danger-tint)", color: "var(--danger)" }
+          : undefined
+      }
+    >
+      <span className="text-[15px] font-bold">
+        {Number(date.slice(8, 10))}
+      </span>
+      <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
+        {new Date(`${date}T00:00:00`).toLocaleString("en-US", {
+          month: "short",
+        })}
+      </span>
+    </span>
+  );
+}
+
+export default function TodayPage() {
   const { profile, status } = useOffline();
   const router = useRouter();
-  const [recent, setRecent] = useState<CachedActivity[]>([]);
+  const [items, setItems] = useState<AgendaRow[]>([]);
+  const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [attention, setAttention] = useState<ExceptionRow[]>([]);
+  const [recent, setRecent] = useState<CachedActivity[]>([]);
+  const [offlineView, setOfflineView] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [planAccount, setPlanAccount] = useState("");
+  const [planAction, setPlanAction] = useState("");
+  const [planDate, setPlanDate] = useState(isoDate(new Date()));
+  const [planObjective, setPlanObjective] = useState<VisitObjective | "">("");
+  const [planObjectiveDetail, setPlanObjectiveDetail] = useState("");
+  const [dayRefs, setDayRefs] = useState(() => ({ today: "", tomorrow: "" }));
+
+  const load = useCallback(async () => {
+    const layer = getOfflineLayer();
+    setDayRefs({
+      today: isoDate(new Date()),
+      tomorrow: isoDate(new Date(Date.now() + 86_400_000)),
+    });
+    void layer.local.getAccounts().then(setAccounts);
+    void layer.local
+      .getRecentActivities()
+      .then((a) => setRecent(a.slice(0, 3)));
+    try {
+      const weekAhead = new Date();
+      weekAhead.setDate(weekAhead.getDate() + 14);
+      const { data, error } = await getSupabaseBrowserClient()
+        .from("next_actions")
+        .select(
+          "id, action, due_date, completed_at, account_id, opportunity_id, objective, updated_at, accounts(name)",
+        )
+        .is("completed_at", null)
+        .lte("due_date", isoDate(weekAhead))
+        .order("due_date");
+      if (error) throw new Error(error.message);
+      setOfflineView(false);
+      // PostgREST returns the FK embed as an object; supabase-js without
+      // generated types infers an array — hence the unknown hop.
+      setItems(
+        (
+          data as unknown as (AgendaRow & {
+            accounts: { name: string } | null;
+          })[]
+        ).map((r) => ({ ...r, accountName: r.accounts?.name })),
+      );
+    } catch {
+      // Offline: the cached working set covers today + tomorrow (D56).
+      const cached = await layer.local.getAgenda();
+      const accts = await layer.local.getAccounts();
+      const byId = new Map(accts.map((a) => [a.id, a.name]));
+      setOfflineView(true);
+      setItems(
+        cached
+          .filter((c) => !c.completed_at)
+          .map((c) => ({
+            ...c,
+            updated_at: c.updated_at,
+            accountName: c.account_id ? byId.get(c.account_id) : undefined,
+          })),
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
+  }, [load, status.pending, status.lastPulledAt]);
 
   useEffect(() => {
     if (!profile) return;
-    void getOfflineLayer()
-      .local.getRecentActivities()
-      .then((a) => setRecent(a.slice(0, 5)));
-    // re-read after every pull (lastPulledAt) and every queue change (pending)
-  }, [profile, status.pending, status.lastPulledAt]);
-
-  useEffect(() => {
-    if (!profile) return;
-    // Requires Attention (spec §3 home + §14): management by exception. The
-    // security_invoker views scope this to the caller's RLS visibility.
+    // Management by exception (spec §3/§14): RLS scopes to the caller.
     void getSupabaseBrowserClient()
       .from("exceptions")
       .select("exception_type, subject_type, subject_id, title, detail")
@@ -45,6 +158,85 @@ export default function HomePage() {
       .limit(8)
       .then(({ data }) => setAttention((data as ExceptionRow[]) ?? []));
   }, [profile, status.lastPulledAt]);
+
+  async function markDone(item: AgendaRow) {
+    setError(null);
+    try {
+      const layer = getOfflineLayer();
+      await layer.sync.enqueue({
+        clientId: item.id,
+        entityType: "next_action",
+        op: "update",
+        payload: { id: item.id, completed_at: new Date().toISOString() },
+        baseVersion: item.updated_at, // D61: stale completion → Review
+        blobRef: null,
+      });
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      void layer.sync.drain();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function planVisit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!profile) return;
+    // D48: every visit is intentional — the objective is set when planned.
+    if (!planObjective) {
+      setError("Every visit has a purpose — pick it.");
+      return;
+    }
+    if (planObjective === "OTHER" && !planObjectiveDetail.trim()) {
+      setError("A word on what the purpose is.");
+      return;
+    }
+    if (!planAccount || !planAction.trim()) {
+      setError("The account and what you'll do there are needed.");
+      return;
+    }
+    setError(null);
+    const id = crypto.randomUUID();
+    const layer = getOfflineLayer();
+    await layer.sync.enqueue({
+      clientId: id,
+      entityType: "next_action",
+      op: "create",
+      payload: {
+        id,
+        org_id: profile.orgId,
+        action: planAction.trim(),
+        owner_id: profile.membershipId,
+        due_date: planDate,
+        account_id: planAccount,
+        objective: planObjective,
+        objective_detail: planObjectiveDetail.trim() || null,
+      },
+      baseVersion: null,
+      blobRef: null,
+    });
+    const acctName = accounts.find((a) => a.id === planAccount)?.name;
+    setItems((prev) =>
+      [
+        ...prev,
+        {
+          id,
+          action: planAction.trim(),
+          due_date: planDate,
+          completed_at: null,
+          account_id: planAccount,
+          opportunity_id: null,
+          objective: planObjective,
+          updated_at: new Date().toISOString(),
+          accountName: acctName,
+        },
+      ].sort((a, b) => a.due_date.localeCompare(b.due_date)),
+    );
+    setShowPlan(false);
+    setPlanAction("");
+    setPlanObjective("");
+    setPlanObjectiveDetail("");
+    void layer.sync.drain();
+  }
 
   async function logout() {
     // D60: wipe the local cache before the session goes away.
@@ -54,28 +246,182 @@ export default function HomePage() {
     router.refresh();
   }
 
+  const groups = useMemo(() => {
+    const { today, tomorrow } = dayRefs;
+    const buckets: Record<string, AgendaRow[]> = {
+      Overdue: [],
+      Today: [],
+      Tomorrow: [],
+      "Later this week": [],
+    };
+    for (const i of items) {
+      if (i.due_date < today) buckets.Overdue.push(i);
+      else if (i.due_date === today) buckets.Today.push(i);
+      else if (i.due_date === tomorrow) buckets.Tomorrow.push(i);
+      else buckets["Later this week"].push(i);
+    }
+    return buckets;
+  }, [items, dayRefs]);
+
+  const nothingPlanned = items.length === 0;
+
   return (
     <div className="stack pt-2">
       <section>
-        {/* Navigation lives in the tab bar and the screen title in the nav
-            bar; Home leads with what a rep opens it to see. */}
-        <div className="grid grid-cols-2 gap-2">
-          <Link href="/weekly" className="btn-secondary">
-            <FileIcon size={17} style={{ color: "var(--ink-secondary)" }} />
-            Weekly review
-          </Link>
-          <Link href="/tray" className="btn-secondary">
-            <AlertIcon size={17} style={{ color: "var(--ink-secondary)" }} />
-            Error tray
-            {status.rejected > 0 ? ` (${status.rejected})` : ""}
-          </Link>
-        </div>
+        <button
+          onClick={() => setShowPlan((v) => !v)}
+          className={showPlan ? "btn-secondary w-full" : "btn-primary"}
+        >
+          {showPlan ? "Close" : "Plan a visit"}
+        </button>
+
+        {offlineView && (
+          <p className="tag tag-accent mt-3">
+            No signal — showing today and tomorrow from this device
+          </p>
+        )}
+
+        {showPlan && (
+          <form
+            onSubmit={planVisit}
+            className="card card-pad mt-3 flex flex-col gap-2"
+          >
+            <select
+              value={planAccount}
+              onChange={(e) => setPlanAccount(e.target.value)}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            >
+              <option value="">Which account?</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="What will you do there?"
+              value={planAction}
+              onChange={(e) => setPlanAction(e.target.value)}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            />
+            <input
+              type="date"
+              value={planDate}
+              onChange={(e) => setPlanDate(e.target.value)}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            />
+            <select
+              value={planObjective}
+              onChange={(e) =>
+                setPlanObjective(e.target.value as VisitObjective | "")
+              }
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            >
+              <option value="">Why are you going?</option>
+              {VISIT_OBJECTIVES.map((o) => (
+                <option key={o} value={o}>
+                  {humanize(o)}
+                </option>
+              ))}
+            </select>
+            {planObjective === "OTHER" && (
+              <input
+                placeholder="What's the purpose?"
+                value={planObjectiveDetail}
+                onChange={(e) => setPlanObjectiveDetail(e.target.value)}
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+              />
+            )}
+            <button type="submit" className="btn-primary mt-1">
+              Put it on the plan
+            </button>
+          </form>
+        )}
+
+        {error && (
+          <p className="t-sub mt-2" style={{ color: "var(--danger)" }}>
+            {error}
+          </p>
+        )}
+
+        {nothingPlanned && (
+          <p className="t-sub mt-3 px-1">
+            Nothing planned. Next week should be on the plan by Friday — the
+            system notices when it isn&apos;t.
+          </p>
+        )}
       </section>
+
+      {(["Overdue", "Today", "Tomorrow"] as const).map((label) =>
+        groups[label].length === 0 ? null : (
+          <section key={label}>
+            <div className="section-head">
+              <h2
+                className="t-section"
+                style={
+                  label === "Overdue" ? { color: "var(--danger)" } : undefined
+                }
+              >
+                {label}
+              </h2>
+              <span className="t-meta">{groups[label].length}</span>
+            </div>
+            <ul className="list">
+              {groups[label].map((i) => (
+                <li key={i.id} className="row">
+                  <DateChip date={i.due_date} danger={label === "Overdue"} />
+                  {/* the row opens the account it's about; Done stays its own
+                      target on the right */}
+                  {i.account_id ? (
+                    <Link
+                      href={`/accounts/${i.account_id}`}
+                      className="row-body min-w-0"
+                    >
+                      <span className="t-title block truncate">{i.action}</span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {i.accountName && (
+                          <span className="t-sub">{i.accountName}</span>
+                        )}
+                        {i.objective && (
+                          <span className="tag tag-accent">
+                            {humanize(i.objective)}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  ) : (
+                    <span className="row-body min-w-0">
+                      <span className="t-title block truncate">{i.action}</span>
+                      {i.objective && (
+                        <span className="tag tag-accent mt-1">
+                          {humanize(i.objective)}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => markDone(i)}
+                    className="btn-quiet flex shrink-0 items-center gap-1.5"
+                  >
+                    <CheckIcon size={14} />
+                    Done
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ),
+      )}
 
       {attention.length > 0 && (
         <section>
           <div className="section-head">
-            <h2 className="t-section">Requires attention</h2>
+            <h2 className="t-section">Needs your attention</h2>
             <span className="tag tag-danger">{attention.length}</span>
           </div>
           <ul className="list">
@@ -97,8 +443,6 @@ export default function HomePage() {
                   </span>
                 </>
               );
-              // account-subject exceptions open the account they're about;
-              // the rest are informational until their own screens exist
               return (
                 <li key={`${e.exception_type}-${e.subject_id}`}>
                   {e.subject_type === "account" ? (
@@ -119,41 +463,54 @@ export default function HomePage() {
         </section>
       )}
 
-      <section>
-        <div className="section-head">
-          <h2 className="t-section">Recent activity</h2>
-          <Link href="/weekly" className="t-action">
-            See week
-          </Link>
-        </div>
-        {recent.length === 0 ? (
-          <p className="t-sub px-1">
-            Nothing yet. Your captures land here the moment you save them —
-            online or not.
-          </p>
-        ) : (
+      {groups["Later this week"].length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">Later this week</h2>
+            <span className="t-meta">{groups["Later this week"].length}</span>
+          </div>
+          <ul className="list">
+            {groups["Later this week"].map((i) => (
+              <li key={i.id} className="row">
+                <DateChip date={i.due_date} />
+                <span className="row-body min-w-0">
+                  <span className="t-title block truncate">{i.action}</span>
+                  {i.accountName && (
+                    <span className="t-sub block">{i.accountName}</span>
+                  )}
+                </span>
+                <button
+                  onClick={() => markDone(i)}
+                  className="btn-quiet flex shrink-0 items-center gap-1.5"
+                >
+                  <CheckIcon size={14} />
+                  Done
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">Just recorded</h2>
+            <Link href="/weekly" className="t-action">
+              The week
+            </Link>
+          </div>
           <ul className="list">
             {recent.map((a) => (
               <li key={a.id} className="row">
-                {/* the lead slot carries the date — the kit's date-tag pattern,
-                    but with information rather than decoration */}
-                <span className="row-lead flex-col leading-none">
-                  <span className="text-[15px] font-bold">
-                    {new Date(a.occurred_at).getDate()}
-                  </span>
-                  <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
-                    {new Date(a.occurred_at).toLocaleString("en-US", {
-                      month: "short",
-                    })}
-                  </span>
-                </span>
+                <DateChip date={a.occurred_at.slice(0, 10)} />
                 <span className="row-body">
                   <span className="flex items-center gap-2">
                     <span className="t-title truncate">
                       {humanize(a.activity_type)}
                     </span>
                     {a.pendingSync && (
-                      <span className="tag tag-accent">to sync</span>
+                      <span className="tag tag-accent">waiting for signal</span>
                     )}
                   </span>
                   {a.what_happened && (
@@ -165,8 +522,8 @@ export default function HomePage() {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
 
       {profile && (
         <section className="flex items-center justify-between">

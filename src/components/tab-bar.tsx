@@ -1,26 +1,27 @@
 "use client";
 
-// Bottom tab bar — layout per the prototyping kit's Tab bar (a 56px row over
-// the home-indicator safe area), colour per the GMX kit.
+// Bottom tab bar — five destinations drawn from the rep's day, not from the
+// system's modules: my day, my accounts, record what happened, things waiting
+// on me, how it's going.
 //
-// Capture sits in the centre as an elevated action because it is the one flow
+// Record sits in the centre as the elevated action because it is the one flow
 // that must never be more than a tap away (D45): a rep in a truck opens the
-// app and records, from whatever screen they were on.
+// app and talks, from whatever screen they were on.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CalendarIcon,
+  BuildingIcon,
   ChartIcon,
+  CheckIcon,
   HomeIcon,
   MicrophoneIcon,
-  PlusIcon,
 } from "./icons";
 
 const TABS = [
-  { href: "/", label: "Home", Icon: HomeIcon },
-  { href: "/agenda", label: "Agenda", Icon: CalendarIcon },
-  { href: "/debriefs", label: "Debrief", Icon: MicrophoneIcon },
+  { href: "/", label: "Today", Icon: HomeIcon },
+  { href: "/accounts", label: "Accounts", Icon: BuildingIcon },
+  { href: "/review", label: "Review", Icon: CheckIcon },
   { href: "/dashboard", label: "Insights", Icon: ChartIcon },
 ];
 
@@ -31,7 +32,7 @@ export function TabBar() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const [home, agenda, debrief, insights] = TABS;
+  const [today, accounts, review, insights] = TABS;
 
   return (
     <nav className="tabbar" aria-label="Primary">
@@ -41,7 +42,7 @@ export function TabBar() {
         Commercial OS
       </Link>
 
-      {[home, agenda].map(({ href, label, Icon }) => (
+      {[today, accounts].map(({ href, label, Icon }) => (
         <Link
           key={href}
           href={href}
@@ -55,18 +56,18 @@ export function TabBar() {
       ))}
 
       <Link
-        href="/capture"
+        href="/record"
         className="tab tab-capture"
-        data-active={isActive("/capture")}
-        aria-label="Register activity"
+        data-active={isActive("/record")}
+        aria-label="Record what happened"
       >
         <span className="tab-fab">
-          <PlusIcon size={22} />
+          <MicrophoneIcon size={20} />
         </span>
-        Capture
+        Record
       </Link>
 
-      {[debrief, insights].map(({ href, label, Icon }) => (
+      {[review, insights].map(({ href, label, Icon }) => (
         <Link
           key={href}
           href={href}

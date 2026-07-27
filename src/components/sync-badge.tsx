@@ -12,7 +12,7 @@ export function SyncBadge() {
 
   if (status.rejected > 0) {
     return (
-      <Link href="/tray" className="sync-chip" data-state="attention">
+      <Link href="/review" className="sync-chip" data-state="attention">
         <span className="sync-dot" />
         {status.rejected} need{status.rejected === 1 ? "s" : ""} you
       </Link>

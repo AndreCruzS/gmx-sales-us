@@ -308,7 +308,7 @@ export default function AccountPage() {
           </p>
         )}
 
-        <Link href="/capture" className="btn-primary mt-4">
+        <Link href={`/record?account=${id}`} className="btn-primary mt-4">
           Log a visit here
         </Link>
       </section>
@@ -361,9 +361,9 @@ export default function AccountPage() {
       {actions.length > 0 && (
         <section>
           <div className="section-head">
-            <h2 className="t-section">Open next actions</h2>
-            <Link href="/agenda" className="t-action">
-              Agenda
+            <h2 className="t-section">What&apos;s owed here</h2>
+            <Link href="/" className="t-action">
+              Today
             </Link>
           </div>
           <ul className="list">

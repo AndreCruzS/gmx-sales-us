@@ -14,17 +14,15 @@ import { SyncBadge } from "./sync-badge";
 
 const TITLES: Record<string, string> = {
   "/": "Today",
-  "/agenda": "Agenda",
-  "/capture": "Register activity",
-  "/debriefs": "Voice debrief",
-  "/dashboard": "Dashboard",
+  "/accounts": "Accounts",
+  "/record": "Record",
+  "/review": "Review",
+  "/dashboard": "Insights",
   "/weekly": "Weekly review",
-  "/tray": "Needs attention",
-  "/search": "Search",
 };
 
 // The tab-bar destinations — these are roots, so they carry no back button.
-const ROOTS = new Set(["/", "/agenda", "/debriefs", "/dashboard"]);
+const ROOTS = new Set(["/", "/accounts", "/record", "/review", "/dashboard"]);
 
 export function NavBar() {
   const pathname = usePathname();
@@ -57,8 +55,9 @@ export function NavBar() {
         <h1 className="navbar-title">{title}</h1>
 
         <div className="navbar-actions">
-          {pathname !== "/search" && (
-            <Link href="/search" className="navbar-icon" aria-label="Search">
+          {/* search lives on the Accounts tab now — the icon is a shortcut */}
+          {!pathname.startsWith("/accounts") && (
+            <Link href="/accounts" className="navbar-icon" aria-label="Find an account">
               <SearchIcon size={19} />
             </Link>
           )}
