@@ -3,7 +3,14 @@
 // minted UUIDs (D57) — `id` is the idempotency key.
 
 import { z } from "zod";
-import { ACTIVITY_OUTCOMES, ACTIVITY_TYPES, VISIT_OBJECTIVES } from "./enums";
+import {
+  ACCOUNT_TYPES,
+  ACTIVITY_OUTCOMES,
+  ACTIVITY_TYPES,
+  LEAD_SOURCES_ALL,
+  REFERRAL_LEAD_SOURCES,
+  VISIT_OBJECTIVES,
+} from "./enums";
 
 // Postgres accepts any 8-4-4-4-12 hex uuid (our seed fixtures use stylized
 // ones); Zod's z.uuid() enforces RFC version/variant nibbles — too strict.
@@ -86,12 +93,79 @@ export const voiceCaptureUpdateSchema = z.object({
 });
 export type VoiceCaptureUpdate = z.infer<typeof voiceCaptureUpdateSchema>;
 
+// Unified contact intake (D39): a card snap creates a candidate row; the
+// extraction fills `extracted` server-side; the rep's confirmation becomes the
+// contact (and sometimes the account) through this same outbox.
+export const contactCandidateCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  created_by: uuid,
+  source: z.enum(["MANUAL", "BUSINESS_CARD"]), // voice/email arrive server-side
+  raw_ref: z.string().nullish(),
+  status: z.literal("PENDING"),
+});
+export type ContactCandidateCreate = z.infer<
+  typeof contactCandidateCreateSchema
+>;
+
+export const contactCandidateUpdateSchema = z.object({
+  id: uuid,
+  status: z.enum(["CONFIRMED", "MERGED", "DISCARDED"]),
+  matched_contact_id: uuid.nullish(),
+  matched_account_id: uuid.nullish(),
+  resolved_at: isoTimestamp.nullish(),
+});
+export type ContactCandidateUpdate = z.infer<
+  typeof contactCandidateUpdateSchema
+>;
+
+export const contactCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  account_id: uuid,
+  name: z.string().min(1),
+  job_title: z.string().nullish(),
+  email: z.string().nullish(),
+  phone: z.string().nullish(),
+});
+export type ContactCreate = z.infer<typeof contactCreateSchema>;
+
+// Quick-create from a card (D43): forces lead-source attribution at first
+// contact. Mirrors the DB checks so a bad payload fails at capture, not replay:
+// OTHER needs source_detail (D8); referral sources need the referring account (D7).
+export const accountCreateSchema = z
+  .object({
+    id: uuid,
+    org_id: uuid,
+    name: z.string().min(1),
+    account_type: z.enum(ACCOUNT_TYPES),
+    city: z.string().nullish(),
+    territory_id: uuid,
+    owner_id: uuid,
+    lead_source: z.enum(LEAD_SOURCES_ALL),
+    source_detail: z.string().nullish(),
+    referring_account_id: uuid.nullish(),
+  })
+  .refine((a) => a.lead_source !== "OTHER" || Boolean(a.source_detail), {
+    message: "OTHER lead source needs a word on where it came from (D8)",
+  })
+  .refine(
+    (a) =>
+      !(REFERRAL_LEAD_SOURCES as readonly string[]).includes(a.lead_source) ||
+      Boolean(a.referring_account_id),
+    { message: "referral lead sources need the referring account (D7)" },
+  );
+export type AccountCreate = z.infer<typeof accountCreateSchema>;
+
 export const ENTITY_TABLES = {
   activity: "activities",
   next_action: "next_actions",
   activity_account: "activity_accounts",
   activity_contact: "activity_contacts",
   voice_capture: "voice_captures",
+  contact_candidate: "contact_candidates",
+  contact: "contacts",
+  account: "accounts",
 } as const;
 export type EntityType = keyof typeof ENTITY_TABLES;
 
@@ -101,4 +175,8 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "next_action:update": nextActionUpdateSchema,
   "voice_capture:create": voiceCaptureCreateSchema,
   "voice_capture:update": voiceCaptureUpdateSchema,
+  "contact_candidate:create": contactCandidateCreateSchema,
+  "contact_candidate:update": contactCandidateUpdateSchema,
+  "contact:create": contactCreateSchema,
+  "account:create": accountCreateSchema,
 };

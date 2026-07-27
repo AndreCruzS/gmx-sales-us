@@ -41,6 +41,16 @@ export const VISIT_OBJECTIVES = [
 ] as const;
 export type VisitObjective = (typeof VISIT_OBJECTIVES)[number];
 
+export const ACCOUNT_TYPES = [
+  "DISTRIBUTOR",
+  "DEALER",
+  "CONTRACTOR",
+  "ARCHITECT",
+  "BUILDER",
+  "OTHER",
+] as const;
+export type AccountType = (typeof ACCOUNT_TYPES)[number];
+
 // Spec §2 mobile sheet: these five surface first; the rest behind "more".
 export const LEAD_SOURCES_PRIMARY = [
   "REFERRAL_DEALER",

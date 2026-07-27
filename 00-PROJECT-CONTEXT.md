@@ -208,7 +208,22 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-27 (**Phase 5 complete; UI pass brought forward**)
+- **Last updated:** 2026-07-27 (**IA restructure + business card reader**)
+- **IA restructure (client-directed):** navigation rebuilt around the rep's
+  day — Today (agenda+exceptions merged) · Accounts (browsable territory,
+  inline search) · Record (centre: voice / typed note / card snap) · Review
+  (one inbox: drafts to OK, new contacts, sync conflicts) · Insights. Old
+  module routes redirect. Weekly review restyled; copy pass in rep language.
+- **Business card reader delivered (D41–D44):** camera capture in Record →
+  offline blob queue (`cards` bucket) → `/api/cards/process` vision extraction
+  via the gateway (per-field confidence, handwritten notes kept) → company
+  match (D43) + email dedupe (D40 rung 1) + PK_CLASS inference (D44) → Review
+  sheet with low-confidence flags, attach-or-create account (create forces
+  lead-source attribution, D7/D8 mirrored in Zod), confirm/merge/discard
+  through the outbox. Verified end-to-end on the local stack: snapped card →
+  extracted → new CONTRACTOR account + contact + CONFIRMED candidate in DB.
+  Known cut: referral lead sources are excluded from the card quick-create
+  (they require the referring account, D7) — attach flow covers those.
 - **UI pass (out of plan order, at the client's request):** design language
   adapted from the Figma prototyping kit (tinted cards, no hairline borders,
   section rhythm, pill tags, 14/12/10 type scale); colour from the **GMX Group

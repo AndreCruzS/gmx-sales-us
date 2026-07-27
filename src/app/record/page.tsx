@@ -15,7 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { CheckIcon, MicrophoneIcon } from "@/components/icons";
+import { CheckIcon, FileIcon, MicrophoneIcon } from "@/components/icons";
 import {
   ACTIVITY_OUTCOMES,
   ACTIVITY_TYPES,
@@ -59,12 +59,14 @@ export default function RecordPage() {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [queuedVoice, setQueuedVoice] = useState(false);
+  const [queuedCards, setQueuedCards] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cardInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // deferred so state lands from callbacks, never synchronously in the effect
@@ -160,6 +162,45 @@ export default function RecordPage() {
     recorderRef.current?.stop();
     if (timerRef.current) clearInterval(timerRef.current);
     setRecording(false);
+  }
+
+  // ── Business cards: snapped now, read later, confirmed in Review ─────────
+  // (D41–D43: the photo queues offline exactly like audio; the vision read
+  // happens server-side; nothing becomes a contact without the rep's OK.)
+
+  async function snapCards(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // same card can be retaken
+    if (!files.length || !profile) return;
+    setError(null);
+    try {
+      const layer = getOfflineLayer();
+      for (const file of files) {
+        const id = crypto.randomUUID();
+        const ext = file.type === "image/png" ? "png" : "jpg";
+        const path = `${profile.orgId}/cards/${id}.${ext}`;
+        await layer.blobs.put(`cards::${path}`, file);
+        await layer.sync.enqueue({
+          clientId: id,
+          entityType: "contact_candidate",
+          op: "create",
+          payload: {
+            id,
+            org_id: profile.orgId,
+            created_by: profile.membershipId,
+            source: "BUSINESS_CARD",
+            raw_ref: path,
+            status: "PENDING",
+          },
+          baseVersion: null,
+          blobRef: `cards::${path}`,
+        });
+      }
+      void layer.sync.drain();
+      setQueuedCards((n) => n + files.length);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   // ── Typed: direct save with an account, drafted without one ──────────────
@@ -293,6 +334,38 @@ export default function RecordPage() {
           <p className="t-meta">
             Talk like you&apos;d brief a colleague. Works with no signal — it
             uploads when you&apos;re back in coverage.
+          </p>
+        )}
+
+        {/* Got a card in hand? It rides the same offline queue as audio. */}
+        <input
+          ref={cardInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          onChange={snapCards}
+          className="hidden"
+          aria-label="Photograph a business card"
+        />
+        <button
+          type="button"
+          onClick={() => cardInputRef.current?.click()}
+          className="btn-secondary"
+        >
+          <FileIcon size={17} style={{ color: "var(--ink-secondary)" }} />
+          Snap a business card
+        </button>
+        {queuedCards > 0 && (
+          <p className="t-sub flex items-center gap-1.5">
+            <CheckIcon size={14} style={{ color: "var(--accent)" }} />
+            {queuedCards === 1 ? "1 card" : `${queuedCards} cards`} saved — the
+            contact details get read off{" "}
+            {queuedCards === 1 ? "it" : "them"} and wait for your OK in{" "}
+            <Link href="/review" className="t-action">
+              Review
+            </Link>
+            .
           </p>
         )}
       </section>

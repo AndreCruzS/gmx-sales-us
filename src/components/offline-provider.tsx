@@ -19,6 +19,10 @@ export interface Profile {
   orgId: string;
   membershipId: string;
   email: string;
+  // Needed to create accounts in the field (accounts.territory_id is NOT NULL);
+  // null for managers/admins without a territory. Older cached profiles lack
+  // the key — treat undefined as null.
+  territoryId?: string | null;
 }
 
 interface OfflineContextValue {
@@ -74,7 +78,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       if (orgId) {
         const { data: membership } = await supabase
           .from("memberships")
-          .select("id")
+          .select("id, territory_id")
           .eq("user_id", session.user.id)
           .eq("org_id", orgId)
           .eq("status", "active")
@@ -85,6 +89,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
             orgId,
             membershipId: membership.id,
             email: session.user.email ?? "",
+            territoryId: membership.territory_id ?? null,
           };
           // Cache for offline cold starts — the profile is part of the D56
           // working set: capture must work with no network at all.
