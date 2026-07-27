@@ -1,18 +1,318 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Design tokens.
+
+   Layout language adapted from the Mobile Apps Prototyping Kit (Figma):
+   tinted cards on a plain page, fills + radius instead of hairline borders,
+   a 14/12/10 type scale, and a 12/16/20 radius scale.
+
+   The palette stays GMX's: amber is the action colour, surfaces are warm
+   neutrals. Chart ink (--data-1) is validated separately against these exact
+   surfaces — see the dataviz validator.
+   ───────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #fafaf8;
-  --foreground: #1a1a1a;
+  --surface-page: #ffffff;
+  --surface-card: #f5f5f1;
+  --surface-sunken: #ecebe5;
+  --surface-accent: #fdf0dc;
+
+  --ink-primary: #1a1a17;
+  --ink-secondary: #64635c;
+  --ink-muted: #8f8e86;
+
+  --accent: #f59e0b;        /* fills — always paired with near-black text */
+  --accent-ink: #9a6206;    /* accent text/icons on light surfaces */
+  --accent-line: #e8a33d;
+
+  --danger: #c0392f;
+  --danger-tint: #fbeae8;
+  --success-ink: #1d6b3f;
+  --success-tint: #e4f2e9;
+
+  --data-1: #2a78d6;
+
+  --r-control: 12px;
+  --r-card: 16px;
+  --r-cta: 20px;
+
+  --gutter: 16px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #111110;
-    --foreground: #ededeb;
+    --surface-page: #131311;
+    --surface-card: #1e1e1b;
+    --surface-sunken: #2a2a26;
+    --surface-accent: #34291a;
+
+    --ink-primary: #f4f3ee;
+    --ink-secondary: #a8a79e;
+    --ink-muted: #83827a;
+
+    --accent: #f59e0b;
+    --accent-ink: #f0b44b;
+    --accent-line: #7a5417;
+
+    --danger: #ef7a70;
+    --danger-tint: #3a201d;
+    --success-ink: #6cc08c;
+    --success-tint: #1b2f22;
+
+    --data-1: #3987e5;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--surface-page);
+  color: var(--ink-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Type roles ─────────────────────────────────────────────────────────── */
+
+.t-section {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.t-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.t-sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-secondary);
+}
+.t-meta {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--ink-muted);
+}
+.t-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+/* ── Surfaces ───────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface-card);
+  border-radius: var(--r-card);
+}
+.card-pad {
+  padding: 16px;
+}
+
+/* A row in a list: leading visual, content, trailing affordance. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--surface-card);
+  border-radius: var(--r-card);
+  text-align: left;
+}
+.row-lead {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-control);
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+  font-size: 15px;
+}
+.row-body {
+  flex: 1 0 0;
+  min-width: 0;
+}
+.row-chevron {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+/* Section: header (with optional action) + content, 40px apart vertically. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-inline-start: 4px;
+  margin-bottom: 12px;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 20px;
+  border-radius: var(--r-cta);
+  background: var(--accent);
+  color: #17150f;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.btn-primary:active {
+  transform: scale(0.99);
+}
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-quiet {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--r-control);
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  color: var(--ink-primary);
+  font-size: 15px;
+}
+.field::placeholder {
+  color: var(--ink-muted);
+}
+.field:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.row:focus-visible,
+.tag:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+/* Pill tag — 10px uppercase, tinted by role. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: var(--r-control);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+}
+.tag-accent {
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+}
+.tag-solid {
+  background: var(--accent);
+  color: #17150f;
+}
+.tag-danger {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+.tag-success {
+  background: var(--success-tint);
+  color: var(--success-ink);
+}
+
+/* ── Signature: the sync chip ───────────────────────────────────────────────
+   This app's promise is that a capture made in a dead-signal back room is
+   safe. D58 requires the state to be visible at all times, so it gets the
+   one piece of deliberate expression: a live dot that pulses only while
+   work is actually queued. */
+
+.sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-card);
+  color: var(--ink-secondary);
+}
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--success-ink);
+  flex-shrink: 0;
+}
+.sync-chip[data-state="pending"] {
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+}
+.sync-chip[data-state="pending"] .sync-dot {
+  background: var(--accent-ink);
+  animation: sync-pulse 1.6s ease-in-out infinite;
+}
+.sync-chip[data-state="attention"] {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+.sync-chip[data-state="attention"] .sync-dot {
+  background: var(--danger);
+}
+
+@keyframes sync-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-chip[data-state="pending"] .sync-dot {
+    animation: none;
+  }
+  .btn-primary:active {
+    transform: none;
+  }
 }

@@ -200,114 +200,149 @@ export default function AgendaPage() {
   }, [items, dayRefs]);
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Agenda</h1>
-        <button
-          onClick={() => setShowPlan((v) => !v)}
-          className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
-        >
-          {showPlan ? "Close" : "+ Plan a visit"}
-        </button>
-      </div>
-
-      {offlineView && (
-        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs">
-          Offline — showing your cached today + tomorrow agenda.
-        </p>
-      )}
-
-      {showPlan && (
-        <form
-          onSubmit={planVisit}
-          className="flex flex-col gap-3 rounded-xl border border-black/10 p-4 dark:border-white/15"
-        >
-          <select
-            value={planAccount}
-            onChange={(e) => setPlanAccount(e.target.value)}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-          >
-            <option value="">Account…</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="What will you do there?"
-            value={planAction}
-            onChange={(e) => setPlanAction(e.target.value)}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-          />
-          <input
-            type="date"
-            value={planDate}
-            onChange={(e) => setPlanDate(e.target.value)}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-          />
-          <select
-            value={planObjective}
-            onChange={(e) => setPlanObjective(e.target.value as VisitObjective | "")}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-          >
-            <option value="">Objective (required — D48)…</option>
-            {VISIT_OBJECTIVES.map((o) => (
-              <option key={o} value={o}>
-                {o.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
-          {planObjective === "OTHER" && (
-            <input
-              placeholder="What is the objective?"
-              value={planObjectiveDetail}
-              onChange={(e) => setPlanObjectiveDetail(e.target.value)}
-              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-            />
-          )}
-          <button
-            type="submit"
-            className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-black"
-          >
-            Add to agenda
+    <div className="stack pt-2">
+      <section>
+        <div className="section-head">
+          <h1 className="t-section">Agenda</h1>
+          <button onClick={() => setShowPlan((v) => !v)} className="t-action">
+            {showPlan ? "Close" : "+ Plan a visit"}
           </button>
-        </form>
-      )}
+        </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+        {offlineView && (
+          <p className="tag tag-accent mb-3">
+            Offline — today and tomorrow only
+          </p>
+        )}
+
+        {showPlan && (
+          <form onSubmit={planVisit} className="card card-pad mb-4 flex flex-col gap-2">
+            <select
+              value={planAccount}
+              onChange={(e) => setPlanAccount(e.target.value)}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            >
+              <option value="">Which account?</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="What will you do there?"
+              value={planAction}
+              onChange={(e) => setPlanAction(e.target.value)}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            />
+            <input
+              type="date"
+              value={planDate}
+              onChange={(e) => setPlanDate(e.target.value)}
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            />
+            <select
+              value={planObjective}
+              onChange={(e) =>
+                setPlanObjective(e.target.value as VisitObjective | "")
+              }
+              className="field"
+              style={{ background: "var(--surface-page)" }}
+            >
+              <option value="">Objective — every visit has one</option>
+              {VISIT_OBJECTIVES.map((o) => (
+                <option key={o} value={o}>
+                  {o.replaceAll("_", " ").toLowerCase()}
+                </option>
+              ))}
+            </select>
+            {planObjective === "OTHER" && (
+              <input
+                placeholder="What is the objective?"
+                value={planObjectiveDetail}
+                onChange={(e) => setPlanObjectiveDetail(e.target.value)}
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+              />
+            )}
+            <button type="submit" className="btn-primary mt-1">
+              Add to agenda
+            </button>
+          </form>
+        )}
+
+        {error && (
+          <p className="t-sub mb-2" style={{ color: "var(--danger)" }}>
+            {error}
+          </p>
+        )}
+
+        {items.length === 0 && (
+          <p className="t-sub px-1">
+            Nothing scheduled. Next week needs planning by Friday — the system
+            notices when it isn&apos;t.
+          </p>
+        )}
+      </section>
 
       {Object.entries(groups).map(([label, rows]) =>
         rows.length === 0 ? null : (
           <section key={label}>
-            <h2
-              className={`mb-2 text-sm font-semibold uppercase tracking-wide ${
-                label === "Overdue" ? "text-red-600" : "opacity-60"
-              }`}
-            >
-              {label}
-            </h2>
-            <ul className="flex flex-col gap-2">
+            <div className="section-head">
+              <h2
+                className="t-section"
+                style={
+                  label === "Overdue" ? { color: "var(--danger)" } : undefined
+                }
+              >
+                {label}
+              </h2>
+              <span className="t-meta">{rows.length}</span>
+            </div>
+            <ul className="list">
               {rows.map((i) => (
-                <li
-                  key={i.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-4 py-3 text-sm dark:border-white/15"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium">{i.action}</div>
-                    <div className="mt-0.5 flex flex-wrap gap-2 text-xs opacity-60">
-                      {i.accountName && <span>{i.accountName}</span>}
-                      <span>{i.due_date}</span>
+                <li key={i.id} className="row">
+                  <span
+                    className="row-lead flex-col leading-none"
+                    style={
+                      label === "Overdue"
+                        ? {
+                            background: "var(--danger-tint)",
+                            color: "var(--danger)",
+                          }
+                        : undefined
+                    }
+                  >
+                    <span className="text-[15px] font-bold">
+                      {Number(i.due_date.slice(8, 10))}
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
+                      {new Date(`${i.due_date}T00:00:00`).toLocaleString(
+                        "en-US",
+                        { month: "short" },
+                      )}
+                    </span>
+                  </span>
+                  <span className="row-body">
+                    <span className="t-title block truncate">{i.action}</span>
+                    {/* the lead chip already carries the date — don't repeat it */}
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {i.accountName && (
+                        <span className="t-sub">{i.accountName}</span>
+                      )}
                       {i.objective && (
-                        <span className="rounded-full bg-amber-500/15 px-2 font-medium text-amber-700 dark:text-amber-400">
+                        <span className="tag tag-accent">
                           {i.objective.replaceAll("_", " ")}
                         </span>
                       )}
-                    </div>
-                  </div>
+                    </span>
+                  </span>
                   <button
                     onClick={() => markDone(i)}
-                    className="shrink-0 rounded-lg border border-black/15 px-3 py-1.5 text-xs font-medium dark:border-white/20"
+                    className="btn-quiet shrink-0"
                   >
                     Done
                   </button>
@@ -316,13 +351,6 @@ export default function AgendaPage() {
             </ul>
           </section>
         ),
-      )}
-
-      {items.length === 0 && (
-        <p className="text-sm opacity-60">
-          Nothing scheduled. Plan next week by Friday — the system notices when
-          you don&apos;t.
-        </p>
       )}
     </div>
   );

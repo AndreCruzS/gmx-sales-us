@@ -51,71 +51,64 @@ export default function HomePage() {
     router.refresh();
   }
 
+  const shortcuts = [
+    { href: "/debriefs", label: "Voice debrief" },
+    { href: "/agenda", label: "Agenda" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/weekly", label: "Weekly review" },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-3">
-        <Link
-          href="/capture"
-          className="rounded-2xl bg-amber-500 px-5 py-4 text-center text-lg font-semibold text-black shadow-sm active:scale-[0.99]"
-        >
-          + Register Commercial Activity
+    <div className="stack pt-2">
+      <section>
+        <Link href="/capture" className="btn-primary">
+          Register activity
         </Link>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <Link
-            href="/debriefs"
-            className="rounded-xl border border-amber-500/60 px-4 py-3 text-center font-medium"
-          >
-            🎤 Voice debrief
-          </Link>
-          <Link
-            href="/agenda"
-            className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
-          >
-            Agenda
-          </Link>
-          <Link
-            href="/dashboard"
-            className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/weekly"
-            className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
-          >
-            Weekly review
-          </Link>
-          <Link
-            href="/tray"
-            className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
-          >
-            Tray{status.rejected > 0 ? ` (${status.rejected})` : ""}
-          </Link>
-          <button
-            onClick={logout}
-            className="rounded-xl border border-black/10 px-4 py-3 font-medium dark:border-white/15"
-          >
-            Log out
-          </button>
+        <p className="t-meta mt-2 text-center">
+          One note is enough — works with no signal.
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {shortcuts.map((s) => (
+            <Link key={s.href} href={s.href} className="btn-secondary">
+              {s.label}
+            </Link>
+          ))}
         </div>
       </section>
 
       {attention.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-red-600">
-            Requires attention
-          </h2>
-          <ul className="flex flex-col gap-2">
+          <div className="section-head">
+            <h2 className="t-section">Requires attention</h2>
+            <span className="tag tag-danger">{attention.length}</span>
+          </div>
+          <ul className="list">
             {attention.map((e) => (
-              <li
-                key={`${e.exception_type}-${e.subject_id}`}
-                className="rounded-xl border border-red-500/30 px-4 py-3 text-sm"
-              >
-                <div className="font-medium">{e.title}</div>
-                <div className="mt-0.5 text-xs opacity-70">
-                  {e.exception_type.replaceAll("_", " ").toLowerCase()}
-                  {e.detail ? ` — ${e.detail}` : ""}
-                </div>
+              <li key={`${e.exception_type}-${e.subject_id}`} className="row">
+                {/* CSS dot, not a glyph — swapped for a Hue icon once the
+                    library is reachable */}
+                <span
+                  className="row-lead"
+                  style={{ background: "var(--danger-tint)" }}
+                  aria-hidden="true"
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      background: "var(--danger)",
+                    }}
+                  />
+                </span>
+                <span className="row-body">
+                  <span className="t-title block truncate">{e.title}</span>
+                  <span className="t-sub block">
+                    {e.exception_type.replaceAll("_", " ").toLowerCase()}
+                    {e.detail ? ` — ${e.detail}` : ""}
+                  </span>
+                </span>
               </li>
             ))}
           </ul>
@@ -123,33 +116,48 @@ export default function HomePage() {
       )}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Recent activity
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">Recent activity</h2>
+          <Link href="/weekly" className="t-action">
+            See week
+          </Link>
+        </div>
         {recent.length === 0 ? (
-          <p className="text-sm opacity-60">
-            Nothing yet — your captures appear here, online or offline.
+          <p className="t-sub px-1">
+            Nothing yet. Your captures land here the moment you save them —
+            online or not.
           </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="list">
             {recent.map((a) => (
-              <li
-                key={a.id}
-                className="rounded-xl border border-black/10 px-4 py-3 text-sm dark:border-white/15"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">
-                    {a.activity_type.replaceAll("_", " ")}
+              <li key={a.id} className="row">
+                {/* the lead slot carries the date — the kit's date-tag pattern,
+                    but with information rather than decoration */}
+                <span className="row-lead flex-col leading-none">
+                  <span className="text-[15px] font-bold">
+                    {new Date(a.occurred_at).getDate()}
                   </span>
-                  {a.pendingSync && (
-                    <span className="text-xs font-medium text-amber-600">
-                      unsynced
+                  <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
+                    {new Date(a.occurred_at).toLocaleString("en-US", {
+                      month: "short",
+                    })}
+                  </span>
+                </span>
+                <span className="row-body">
+                  <span className="flex items-center gap-2">
+                    <span className="t-title truncate capitalize">
+                      {a.activity_type.replaceAll("_", " ").toLowerCase()}
+                    </span>
+                    {a.pendingSync && (
+                      <span className="tag tag-accent">to sync</span>
+                    )}
+                  </span>
+                  {a.what_happened && (
+                    <span className="t-sub line-clamp-2 block">
+                      {a.what_happened}
                     </span>
                   )}
-                </div>
-                {a.what_happened && (
-                  <p className="mt-1 line-clamp-2 opacity-70">{a.what_happened}</p>
-                )}
+                </span>
               </li>
             ))}
           </ul>
@@ -157,9 +165,12 @@ export default function HomePage() {
       </section>
 
       {profile && (
-        <p className="text-center text-xs opacity-50">
-          Signed in as {profile.email}
-        </p>
+        <section className="flex items-center justify-between">
+          <span className="t-meta truncate">{profile.email}</span>
+          <button onClick={logout} className="btn-quiet">
+            Log out
+          </button>
+        </section>
       )}
     </div>
   );

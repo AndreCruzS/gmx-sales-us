@@ -331,11 +331,14 @@ export default function DashboardPage() {
                   </td>
                   <td className="py-2 text-right tabular-nums">
                     {r.overdue_next_actions > 0 ? (
-                      <span className="font-medium text-red-600">
-                        ⚠ {r.overdue_next_actions}
+                      <span
+                        className="font-semibold"
+                        style={{ color: "var(--danger)" }}
+                      >
+                        {r.overdue_next_actions}
                       </span>
                     ) : (
-                      <span className="opacity-40">0</span>
+                      <span style={{ color: "var(--ink-muted)" }}>0</span>
                     )}
                   </td>
                 </tr>

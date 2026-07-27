@@ -191,7 +191,7 @@ export default function DebriefsPage() {
               : "bg-amber-500 text-black"
           }`}
         >
-          {recording ? `■ Stop (${seconds}s)` : "● Record debrief"}
+          {recording ? `Stop recording · ${seconds}s` : "Record debrief"}
         </button>
         <form onSubmit={submitTyped} className="flex flex-col gap-2">
           <textarea
@@ -562,9 +562,10 @@ function ReviewSheet({
                   onClick={() =>
                     setActions((prev) => prev.filter((_, j) => j !== i))
                   }
-                  className="text-red-600"
+                  className="btn-quiet shrink-0"
+                  aria-label={`Remove next action: ${na.action || "untitled"}`}
                 >
-                  ✕
+                  Remove
                 </button>
               </div>
             ))}
