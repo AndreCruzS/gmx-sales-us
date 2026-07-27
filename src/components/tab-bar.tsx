@@ -35,6 +35,12 @@ export function TabBar() {
 
   return (
     <nav className="tabbar" aria-label="Primary">
+      {/* the app name belongs in the rail on desktop; on mobile the nav bar
+          carries the screen name instead and this stays hidden */}
+      <Link href="/" className="tabbar-brand">
+        Commercial OS
+      </Link>
+
       {[home, agenda].map(({ href, label, Icon }) => (
         <Link
           key={href}

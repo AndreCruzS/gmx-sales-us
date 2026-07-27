@@ -38,27 +38,32 @@ export function NavBar() {
   const isRoot = ROOTS.has(pathname);
 
   return (
+    // the bar spans full width so content scrolls under a continuous blur;
+    // the inner column matches the content box so the title and the sync chip
+    // line up with what's below them
     <header className="navbar">
-      {!isRoot && (
-        <button
-          onClick={() => router.back()}
-          className="navbar-back"
-          aria-label="Go back"
-        >
-          {/* the Hue library ships one chevron; left is its mirror */}
-          <ChevronRightIcon size={20} style={{ transform: "scaleX(-1)" }} />
-        </button>
-      )}
-
-      <h1 className="navbar-title">{title}</h1>
-
-      <div className="navbar-actions">
-        {pathname !== "/search" && (
-          <Link href="/search" className="navbar-icon" aria-label="Search">
-            <SearchIcon size={19} />
-          </Link>
+      <div className="navbar-inner">
+        {!isRoot && (
+          <button
+            onClick={() => router.back()}
+            className="navbar-back"
+            aria-label="Go back"
+          >
+            {/* the Hue library ships one chevron; left is its mirror */}
+            <ChevronRightIcon size={20} style={{ transform: "scaleX(-1)" }} />
+          </button>
         )}
-        <SyncBadge />
+
+        <h1 className="navbar-title">{title}</h1>
+
+        <div className="navbar-actions">
+          {pathname !== "/search" && (
+            <Link href="/search" className="navbar-icon" aria-label="Search">
+              <SearchIcon size={19} />
+            </Link>
+          )}
+          <SyncBadge />
+        </div>
       </div>
     </header>
   );

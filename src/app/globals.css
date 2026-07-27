@@ -42,6 +42,8 @@
   --r-cta: 20px;
 
   --tabbar-h: 62px;
+  --rail-w: 232px;   /* desktop left rail */
+  --content-w: 1040px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -265,13 +267,18 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
+  background: color-mix(in srgb, var(--surface-page) 88%, transparent);
+  backdrop-filter: blur(20px);
+}
+.navbar-inner {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: 32rem; /* matches main's max-w-lg */
+  margin-inline: auto;
   min-height: 56px;
   padding: 8px 16px;
-  background: color-mix(in srgb, var(--surface-page) 88%, transparent);
-  backdrop-filter: blur(20px);
 }
 .navbar-title {
   flex: 1 0 0;
@@ -457,5 +464,109 @@ body {
   .btn-primary:active {
     animation: none;
     transform: none;
+  }
+}
+
+/* ── Desktop ───────────────────────────────────────────────────────────────
+   Reps live on phones (D2), but managers read the dashboard and weekly review
+   at a desk (spec §9). Past 1024px the bottom bar becomes a left rail — a
+   full-width tab bar with five icons flung across 1440px reads as broken —
+   and the content column widens so tables stop scrolling sideways next to
+   empty space. */
+
+.tabbar-brand {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .tabbar {
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: var(--rail-w);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 18px 12px;
+    border-top: 0;
+    border-right: 1px solid var(--rule);
+    background: var(--surface-page);
+    backdrop-filter: none;
+  }
+
+  .tabbar-brand {
+    display: block;
+    order: -2; /* ahead of the Capture action, which is order -1 */
+    padding: 4px 12px 18px;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--ink-primary);
+  }
+
+  .tab {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: var(--r-control);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-secondary);
+  }
+  .tab:hover {
+    background: var(--surface-card);
+  }
+  .tab[data-active="true"] {
+    background: var(--surface-accent);
+    color: var(--accent-ink);
+  }
+
+  /* Capture leads the rail, the way a compose action does */
+  .tab-capture {
+    order: -1;
+    margin-bottom: 10px;
+    height: 44px;
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .tab-capture:hover {
+    background: var(--accent);
+    filter: brightness(1.05);
+  }
+  .tab-capture .tab-fab {
+    width: 22px;
+    height: 22px;
+    margin-top: 0;
+    background: transparent;
+    color: var(--on-accent);
+    box-shadow: none;
+  }
+
+  /* same box as main, so the sync chip lines up with the content edge */
+  .navbar {
+    margin-inline-start: var(--rail-w);
+  }
+  .navbar-inner {
+    max-width: var(--content-w);
+    margin-inline: 0;
+    padding-inline: 32px;
+    min-height: 64px;
+  }
+
+  main {
+    margin-inline-start: var(--rail-w);
+    max-width: var(--content-w) !important;
+    padding-inline: 32px !important;
+    padding-bottom: 64px !important;
+  }
+
+  /* a call to action stretched across a desktop column reads as a banner,
+     not a button */
+  .btn-primary {
+    max-width: 340px;
   }
 }
