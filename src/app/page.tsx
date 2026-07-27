@@ -74,6 +74,18 @@ export default function HomePage() {
             Agenda
           </Link>
           <Link
+            href="/dashboard"
+            className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/weekly"
+            className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
+          >
+            Weekly review
+          </Link>
+          <Link
             href="/tray"
             className="rounded-xl border border-black/10 px-4 py-3 text-center font-medium dark:border-white/15"
           >

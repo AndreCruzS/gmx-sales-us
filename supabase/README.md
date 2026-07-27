@@ -30,6 +30,10 @@ CI runs the same two commands on every push/PR (`.github/workflows/db-tests.yml`
 | `…001000_rls_policies` | default-deny RLS on every table |
 | `…001100_storage` | voice/cards/email buckets + storage RLS (D21/D38/D42) |
 | `…001200_indexes` | RLS/agenda/dedupe indexes |
+| `…001300_grants` | base privileges (RLS still decides the rows) |
+| `…001400_auth_hook` | `org_id` JWT claim hook + `set_active_org` (D18/D23/D24) |
+| `…001500_agenda_exceptions` | 11 exception views, snapshots, pg_cron scan (§8, D47/D50/D52) |
+| `…001600_dashboards` | dashboard + weekly-review views; `opportunity_stage_events` (proposed D64) |
 
 ## Implementation decisions made in this phase
 
@@ -75,3 +79,6 @@ here for review (details in `docs/superpowers/plans/2026-07-22-phase1-schema-rls
 | `03_visibility` | rep own-rows + territory; no peer visibility; manager chain; admin org-wide; support read/write for assigned reps only (D53) |
 | `04_constraints` | D7/D8 on accounts + opportunities; domain rejection; relationship self-ref/dupes; one champion (D50); org-scoped uniques; D48 objective detail; manager-cycle guard |
 | `05_stage_trigger` | deferred gate: insert w/o next action fails; same-txn pair passes; missing current_status fails; advance w/o open action fails; WON/LOST exempt |
+| `06_auth_hook` | org claim stamped from active membership; fallbacks; suspended memberships get no claim; `set_active_org` authorization |
+| `07_exceptions` | every exception fires on a fixture and clears when resolved; snapshot open/close; RLS scoping |
+| `08_dashboards` | stage events on create/advance only; log is client-read-only; pipeline/weighted/flow/planned-vs-actual/scorecard/territory aggregates; rep vs manager vs admin scoping; no cross-tenant rows |

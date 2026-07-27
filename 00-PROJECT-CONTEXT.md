@@ -157,6 +157,7 @@ routine**. → RESOLVED via Brazilian leadership audio (see §10 of the spec, D4
 | D60 | Local cache security: rep's own working set only; `navigator.storage.persist()`; **wipe DB on logout and org switch** (D23/D24 boundary); PWA caches **no email bodies/attachments** offline (unencrypted at rest) | Cached data is a lost-device leak vector living outside RLS; the cache must not become a cross-tenant back door | ✅ Locked |
 | D61 | Conflict policy: appends never conflict; scalar edits = **LWW on server `updated_at`**, stale writes **rejected to the error tray**, not clobbered | Append-heavy model doesn't warrant CRDTs; a manager reschedule must not be silently stomped by an offline rep edit | ✅ Locked |
 | D62 | Outbox replays **through Supabase** (D3), so RLS + constraints re-check on replay; writes invalid at replay (reassigned territory, suspended membership) land in the **error tray**, never silently dropped | Keeps Vercel out of the offline hot path and the tenant/hierarchy boundary authoritative at replay | ✅ Locked |
+| D64 | **`opportunity_stage_events`**: append-only, trigger-written stage-transition log; no client may insert/update/delete it (RLS grants SELECT only). Powers the "opportunities advanced" metric required by both source documents | Stage transitions are unrecoverable from `updated_at`, which moves on any edit — without the log the headline metric would be a guess. Append-only + trigger-written means it adds no state a human maintains, so the Phase 5 gate ("pure derivation, no separate manual reporting") holds in substance | ⚠️ **Proposed** 2026-07-27 — surfaced rather than deviating silently; alternative is to drop the metric |
 | D63 | **AI runtime = Vercel AI Gateway** (OIDC auth, `provider/model` string routing via the AI SDK). Per-org attribution via gateway `user`/`tags`; failover via `order`/`models`. Amends the AI-credential half of D20: no per-org AI keys needed day one — `org_integrations`/Vault remains for Workspace creds and optional BYOK if a tenant requires their own provider keys | Keeps the stack's provider-agnostic promise with zero key management, adds failover + cost tracking per feature/tenant. Decided 2026-07-22 (user-directed); verified working in-project | ✅ Locked |
 
 ---
@@ -207,7 +208,24 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-22 (**Phase 4 complete: voice debrief**)
+- **Last updated:** 2026-07-27 (**Phase 5 complete: dashboards + weekly review**)
+- **Phase 5 delivered:** management dashboard and weekly commercial review as
+  **derived SQL views** (spec §15/§16, PDF §4) — `dashboard_pipeline`
+  (incl. weighted), `dashboard_activity`, `dashboard_network_growth`,
+  `dashboard_relationship_growth`, `dashboard_stage_flow`,
+  `dashboard_planned_vs_actual` (D46), `dashboard_rep_scorecard`,
+  `dashboard_territory`, and three `weekly_review_*` views. All
+  `security_invoker`, so one page serves rep / manager / admin off the same
+  RLS — verified live: manager João saw exactly his 3-person chain, a rep sees
+  only themselves, zero cross-tenant rows. `/api/weekly-review` narrates the
+  week through the AI Gateway **reading as the caller** (RLS shapes the input)
+  and stores nothing. **Proposed D64** adds the one new table:
+  `opportunity_stage_events`, append-only + trigger-written, client-read-only —
+  needed because "opportunities advanced" is unrecoverable from `updated_at`.
+  24 new pgTAP tests (109 total across 8 suites) + 18 vitest, all green.
+  Dashboard chart palette validated against the app's real surfaces with the
+  dataviz validator (single-hue bar; passes light and dark).
+- **Phase 4 (2026-07-22): voice debrief complete**
 - **Phase 4 delivered:** debrief pipeline per spec §5 — MediaRecorder capture
   (format validated at capture, iOS-first mime order) riding the existing D59
   blob outbox; `/api/voice/process` transcribes via AI Gateway
