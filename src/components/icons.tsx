@@ -32,6 +32,25 @@ export function AlertIcon(props: IconProps) {
   );
 }
 
+export function BuildingIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 22 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path d="M6.5 19H21M18.7871 14.8392C20.0093 14.8392 21 13.4044 21 11.6345C21 9.86451 20.0093 8.42969 18.7871 8.42969C17.565 8.42969 16.5742 9.86451 16.5742 11.6345C16.5742 13.4044 17.565 14.8392 18.7871 14.8392ZM18.7871 14.8392V19M5 5H8.5M5 9H8.5M5 13H8.5M12 19L12 5.8C12 4.11984 12 3.27976 11.673 2.63803C11.3854 2.07354 10.9265 1.6146 10.362 1.32698C9.72024 1 8.88016 1 7.2 1L5.8 1C4.11984 1 3.27976 1 2.63803 1.32698C2.07354 1.6146 1.6146 2.07354 1.32698 2.63803C1 3.27976 1 4.11984 1 5.8L1 19H12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export function CalendarIcon(props: IconProps) {
   return (
     <svg
@@ -85,6 +104,25 @@ export function CheckIcon(props: IconProps) {
     >
       {props.title ? <title>{props.title}</title> : null}
       <path d="M1 6.5L6.33333 12L17 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 14 8"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path d="M1 1L7 7L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -180,6 +218,25 @@ export function PlusIcon(props: IconProps) {
     >
       {props.title ? <title>{props.title}</title> : null}
       <path d="M1 8H8M8 8H15M8 8V1M8 8V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path d="M19 19L16 16M18 9.5C18 14.1944 14.1944 18 9.5 18C4.80558 18 1 14.1944 1 9.5C1 4.80558 4.80558 1 9.5 1C14.1944 1 18 4.80558 18 9.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }

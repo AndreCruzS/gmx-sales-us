@@ -56,9 +56,8 @@ export default function HomePage() {
   return (
     <div className="stack pt-2">
       <section>
-        {/* Navigation lives in the tab bar; Home leads with the two things a
-            rep opens it to see. */}
-        <h1 className="t-section mb-3 px-1">Today</h1>
+        {/* Navigation lives in the tab bar and the screen title in the nav
+            bar; Home leads with what a rep opens it to see. */}
         <div className="grid grid-cols-2 gap-2">
           <Link href="/weekly" className="btn-secondary">
             <FileIcon size={17} style={{ color: "var(--ink-secondary)" }} />

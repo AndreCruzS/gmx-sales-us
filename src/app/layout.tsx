@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
 
 // Inter matches the kit's type and holds up at 11-12px, which is where most
@@ -11,7 +10,7 @@ const inter = Inter({
   variable: "--font-inter",
 });
 import { OfflineProvider } from "@/components/offline-provider";
-import { SyncBadge } from "@/components/sync-badge";
+import { NavBar } from "@/components/nav-bar";
 import { SwRegister } from "@/components/sw-register";
 import { TabBar } from "@/components/tab-bar";
 
@@ -44,21 +43,7 @@ export default function RootLayout({
         style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
         <OfflineProvider>
-          <header
-            className="sticky top-0 z-10 flex items-center justify-between px-4 py-3"
-            style={{
-              background: "color-mix(in srgb, var(--surface-page) 88%, transparent)",
-              backdropFilter: "blur(20px)",
-            }}
-          >
-            <Link
-              href="/"
-              className="text-[15px] font-extrabold tracking-tight"
-            >
-              Commercial OS
-            </Link>
-            <SyncBadge />
-          </header>
+          <NavBar />
           <main
             className="mx-auto w-full max-w-lg px-4 pt-2"
             style={{

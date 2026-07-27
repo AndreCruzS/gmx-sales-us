@@ -201,15 +201,13 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-7">
-      {/* --data-1 is a global token, validated against the GMX surfaces */}
-      <div className="section-head">
-        <h1 className="t-section">Dashboard</h1>
-        <Link href="/weekly" className="t-action">
-          Weekly review
-        </Link>
-      </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* title lives in the nav bar; --data-1 is a global token validated
+          against the GMX surfaces */}
+      {error && (
+        <p className="t-sub" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
 
       {/* Commercial overview — headline numbers are tiles, not charts */}
       <section className="grid grid-cols-2 gap-3">
@@ -294,9 +292,12 @@ export default function DashboardPage() {
 
       {/* Sales representative rollup — many attributes per rep: a table */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-60">
-          By representative
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">By representative</h2>
+          <Link href="/weekly" className="t-action">
+            Weekly review
+          </Link>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[34rem] text-sm">
             <thead>

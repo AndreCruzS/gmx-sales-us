@@ -259,6 +259,94 @@ body {
   color: var(--success-ink);
 }
 
+/* ── Top nav bar (kit layout: 56px row) ─────────────────────────────────── */
+
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--surface-page) 88%, transparent);
+  backdrop-filter: blur(20px);
+}
+.navbar-title {
+  flex: 1 0 0;
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.navbar-back,
+.navbar-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-inline-start: -6px;
+  border-radius: 999px;
+  color: var(--ink-primary);
+  flex-shrink: 0;
+}
+.navbar-icon {
+  margin-inline-start: 0;
+  color: var(--ink-secondary);
+}
+.navbar-back:active,
+.navbar-icon:active {
+  background: var(--surface-card);
+}
+.navbar-back:focus-visible,
+.navbar-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Search ─────────────────────────────────────────────────────────────── */
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  color: var(--ink-muted);
+}
+.search-field input {
+  flex: 1 0 0;
+  min-width: 0;
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: 16px; /* 16px keeps iOS from zooming the viewport on focus */
+  border: 0;
+  outline: none;
+  appearance: none;
+}
+.search-field input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.search-field input::placeholder {
+  color: var(--ink-muted);
+}
+.search-field:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ── Bottom tab bar (kit layout: 56px row + home-indicator safe area) ────── */
 
 .tabbar {

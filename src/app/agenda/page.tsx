@@ -203,12 +203,13 @@ export default function AgendaPage() {
   return (
     <div className="stack pt-2">
       <section>
-        <div className="section-head">
-          <h1 className="t-section">Agenda</h1>
-          <button onClick={() => setShowPlan((v) => !v)} className="t-action">
-            {showPlan ? "Close" : "+ Plan a visit"}
-          </button>
-        </div>
+        {/* the screen title lives in the nav bar */}
+        <button
+          onClick={() => setShowPlan((v) => !v)}
+          className={showPlan ? "btn-secondary w-full" : "btn-primary"}
+        >
+          {showPlan ? "Close" : "Plan a visit"}
+        </button>
 
         {offlineView && (
           <p className="tag tag-accent mb-3">
@@ -217,7 +218,7 @@ export default function AgendaPage() {
         )}
 
         {showPlan && (
-          <form onSubmit={planVisit} className="card card-pad mb-4 flex flex-col gap-2">
+          <form onSubmit={planVisit} className="card card-pad mt-3 flex flex-col gap-2">
             <select
               value={planAccount}
               onChange={(e) => setPlanAccount(e.target.value)}
