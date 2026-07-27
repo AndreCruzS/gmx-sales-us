@@ -32,7 +32,9 @@ export function NavBar() {
 
   if (pathname === "/login") return null;
 
-  const title = TITLES[pathname] ?? "Commercial OS";
+  const title =
+    TITLES[pathname] ??
+    (pathname.startsWith("/accounts/") ? "Account" : "Commercial OS");
   const isRoot = ROOTS.has(pathname);
 
   return (

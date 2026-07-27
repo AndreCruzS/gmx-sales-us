@@ -11,7 +11,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { BuildingIcon, CalendarIcon, SearchIcon } from "@/components/icons";
+import {
+  BuildingIcon,
+  CalendarIcon,
+  ChevronRightIcon,
+  SearchIcon,
+} from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
 import {
   getOfflineLayer,
@@ -156,21 +161,25 @@ export default function SearchPage() {
           </div>
           <ul className="list">
             {results.accounts.map((a, i) => (
-              <li key={a.id} className="row">
-                <span className="row-lead">
-                  <BuildingIcon size={18} />
-                </span>
-                <span className="row-body">
-                  <span className="t-title block truncate">{a.name}</span>
-                  <span className="t-sub block truncate">
-                    {humanize(a.account_type)}
-                    {a.city ? ` · ${a.city}` : ""}
-                    {a.has_display_wall ? " · display wall" : ""}
+              <li key={a.id}>
+                <Link href={`/accounts/${a.id}`} className="row">
+                  <span className="row-lead">
+                    <BuildingIcon size={18} />
                   </span>
-                </span>
-                {i >= results.cachedCount && (
-                  <span className="tag">online</span>
-                )}
+                  <span className="row-body">
+                    <span className="t-title block truncate">{a.name}</span>
+                    <span className="t-sub block truncate">
+                      {humanize(a.account_type)}
+                      {a.city ? ` · ${a.city}` : ""}
+                      {a.has_display_wall ? " · display wall" : ""}
+                    </span>
+                  </span>
+                  {i >= results.cachedCount && <span className="tag">online</span>}
+                  <ChevronRightIcon
+                    size={14}
+                    style={{ color: "var(--ink-muted)" }}
+                  />
+                </Link>
               </li>
             ))}
           </ul>

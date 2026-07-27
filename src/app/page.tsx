@@ -7,13 +7,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { AlertIcon, FileIcon } from "@/components/icons";
+import { AlertIcon, ChevronRightIcon, FileIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
 import { getOfflineLayer, wipeLocalData, type CachedActivity } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ExceptionRow {
   exception_type: string;
+  subject_type: string;
   subject_id: string;
   title: string | null;
   detail: string | null;
@@ -39,7 +40,7 @@ export default function HomePage() {
     // security_invoker views scope this to the caller's RLS visibility.
     void getSupabaseBrowserClient()
       .from("exceptions")
-      .select("exception_type, subject_id, title, detail")
+      .select("exception_type, subject_type, subject_id, title, detail")
       .order("since", { ascending: true })
       .limit(8)
       .then(({ data }) => setAttention((data as ExceptionRow[]) ?? []));
@@ -78,23 +79,42 @@ export default function HomePage() {
             <span className="tag tag-danger">{attention.length}</span>
           </div>
           <ul className="list">
-            {attention.map((e) => (
-              <li key={`${e.exception_type}-${e.subject_id}`} className="row">
-                <span
-                  className="row-lead"
-                  style={{ background: "var(--danger-tint)" }}
-                >
-                  <AlertIcon size={18} style={{ color: "var(--danger)" }} />
-                </span>
-                <span className="row-body">
-                  <span className="t-title block truncate">{e.title}</span>
-                  <span className="t-sub block">
-                    {humanize(e.exception_type)}
-                    {e.detail ? ` — ${e.detail}` : ""}
+            {attention.map((e) => {
+              const body = (
+                <>
+                  <span
+                    className="row-lead"
+                    style={{ background: "var(--danger-tint)" }}
+                  >
+                    <AlertIcon size={18} style={{ color: "var(--danger)" }} />
                   </span>
-                </span>
-              </li>
-            ))}
+                  <span className="row-body">
+                    <span className="t-title block truncate">{e.title}</span>
+                    <span className="t-sub block">
+                      {humanize(e.exception_type)}
+                      {e.detail ? ` — ${e.detail}` : ""}
+                    </span>
+                  </span>
+                </>
+              );
+              // account-subject exceptions open the account they're about;
+              // the rest are informational until their own screens exist
+              return (
+                <li key={`${e.exception_type}-${e.subject_id}`}>
+                  {e.subject_type === "account" ? (
+                    <Link href={`/accounts/${e.subject_id}`} className="row">
+                      {body}
+                      <ChevronRightIcon
+                        size={14}
+                        style={{ color: "var(--ink-muted)" }}
+                      />
+                    </Link>
+                  ) : (
+                    <div className="row">{body}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

@@ -208,7 +208,22 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-27 (**Phase 5 complete: dashboards + weekly review**)
+- **Last updated:** 2026-07-27 (**Phase 5 complete; UI pass brought forward**)
+- **UI pass (out of plan order, at the client's request):** design language
+  adapted from the Figma prototyping kit (tinted cards, no hairline borders,
+  section rhythm, pill tags, 14/12/10 type scale); colour from the **GMX Group
+  visual kit** (primary `#3B82F6`, cool greys, Inter); 13 Hue icons exported
+  and committed with `npm run icons`; **bottom tab bar** (Home · Agenda ·
+  Capture · Debrief · Insights) with capture as the elevated centre action
+  (D45); **top nav bar** with screen titles, back, and search; **offline-first
+  search** over the cached working set (D56); **account page** (spec §12) with
+  champion (D50), display-wall status (D52), banner roll-up (D49), grouped
+  commercial network (D4) and account history — verified working offline in a
+  production build. Chart ink re-validated against the new surfaces; the GMX
+  dark accent `#6BA1FA` sits above the dark data band, so marks keep
+  `#3B82F6`. Service worker now registers in **production only** (in dev it
+  served a cached shell against fresh CSS and looked like a broken design).
+- **Phase 5 delivered:** management dashboard and weekly commercial review as
 - **Phase 5 delivered:** management dashboard and weekly commercial review as
   **derived SQL views** (spec §15/§16, PDF §4) — `dashboard_pipeline`
   (incl. weighted), `dashboard_activity`, `dashboard_network_growth`,
