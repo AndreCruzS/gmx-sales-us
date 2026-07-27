@@ -7,6 +7,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import {
+  AlertIcon,
+  CalendarIcon,
+  ChartIcon,
+  FileIcon,
+  MicrophoneIcon,
+} from "@/components/icons";
 import { getOfflineLayer, wipeLocalData, type CachedActivity } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -52,10 +59,10 @@ export default function HomePage() {
   }
 
   const shortcuts = [
-    { href: "/debriefs", label: "Voice debrief" },
-    { href: "/agenda", label: "Agenda" },
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/weekly", label: "Weekly review" },
+    { href: "/debriefs", label: "Voice debrief", Icon: MicrophoneIcon },
+    { href: "/agenda", label: "Agenda", Icon: CalendarIcon },
+    { href: "/dashboard", label: "Dashboard", Icon: ChartIcon },
+    { href: "/weekly", label: "Weekly review", Icon: FileIcon },
   ];
 
   return (
@@ -69,9 +76,10 @@ export default function HomePage() {
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-2">
-          {shortcuts.map((s) => (
-            <Link key={s.href} href={s.href} className="btn-secondary">
-              {s.label}
+          {shortcuts.map(({ href, label, Icon }) => (
+            <Link key={href} href={href} className="btn-secondary">
+              <Icon size={17} style={{ color: "var(--ink-secondary)" }} />
+              {label}
             </Link>
           ))}
         </div>
@@ -86,21 +94,11 @@ export default function HomePage() {
           <ul className="list">
             {attention.map((e) => (
               <li key={`${e.exception_type}-${e.subject_id}`} className="row">
-                {/* CSS dot, not a glyph — swapped for a Hue icon once the
-                    library is reachable */}
                 <span
                   className="row-lead"
                   style={{ background: "var(--danger-tint)" }}
-                  aria-hidden="true"
                 >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 999,
-                      background: "var(--danger)",
-                    }}
-                  />
+                  <AlertIcon size={18} style={{ color: "var(--danger)" }} />
                 </span>
                 <span className="row-body">
                   <span className="t-title block truncate">{e.title}</span>

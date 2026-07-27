@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { CheckIcon } from "@/components/icons";
 import {
   VISIT_OBJECTIVES,
   type VisitObjective,
@@ -342,8 +343,9 @@ export default function AgendaPage() {
                   </span>
                   <button
                     onClick={() => markDone(i)}
-                    className="btn-quiet shrink-0"
+                    className="btn-quiet flex shrink-0 items-center gap-1.5"
                   >
+                    <CheckIcon size={14} />
                     Done
                   </button>
                 </li>

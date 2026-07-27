@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { XIcon } from "@/components/icons";
 import {
   ACTIVITY_OUTCOMES,
   ACTIVITY_TYPES,
@@ -565,7 +566,7 @@ function ReviewSheet({
                   className="btn-quiet shrink-0"
                   aria-label={`Remove next action: ${na.action || "untitled"}`}
                 >
-                  Remove
+                  <XIcon size={14} />
                 </button>
               </div>
             ))}
