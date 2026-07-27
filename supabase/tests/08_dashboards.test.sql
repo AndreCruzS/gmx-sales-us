@@ -13,7 +13,7 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(24);
 
--- ── Stage events (proposed D64) ─────────────────────────────────────────────
+-- ── Stage events (D64) ─────────────────────────────────────────────
 
 select is(
   (select count(*)::int from opportunity_stage_events

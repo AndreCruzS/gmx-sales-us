@@ -5,14 +5,14 @@
 -- a rep sees their own numbers, a manager their chain, an admin the org — the
 -- same RLS that guards the base tables shapes the dashboard.
 --
--- PROPOSED D64 (pending confirmation): `opportunity_stage_events` is the single
--- new table in this phase. Both source documents require "opportunities
--- advanced" / "opportunities that advanced" as a headline metric, and stage
--- transitions are not recoverable from `updated_at` (which moves on any edit).
--- The table is APPEND-ONLY and TRIGGER-WRITTEN: no client may insert, update or
--- delete it, so it adds no state a human maintains — it is the audit trail of a
--- write that already happens. This preserves the Phase 5 gate in spirit ("no
--- separate manual reporting", spec §15) while making the metric truthful.
+-- D64 (locked 2026-07-27): `opportunity_stage_events` is the single new table in
+-- this phase. Both source documents require "opportunities advanced" /
+-- "opportunities that advanced" as a headline metric, and stage transitions are
+-- not recoverable from `updated_at` (which moves on any edit). The table is
+-- APPEND-ONLY and TRIGGER-WRITTEN: no client may insert, update or delete it, so
+-- it adds no state a human maintains — it is the audit trail of a write that
+-- already happens. This preserves the Phase 5 gate in spirit ("no separate
+-- manual reporting", spec §15) while making the metric truthful.
 
 -- ── Stage transition log ────────────────────────────────────────────────────
 
@@ -161,7 +161,7 @@ select
 from account_relationships r
 group by r.org_id, date_trunc('week', r.created_at)::date, r.relationship_type;
 
--- ── Stage flow: what actually advanced (proposed D64) ───────────────────────
+-- ── Stage flow: what actually advanced (D64) ───────────────────────
 
 create view dashboard_stage_flow (
   org_id, owner_id, week_start, advanced, won, lost, created

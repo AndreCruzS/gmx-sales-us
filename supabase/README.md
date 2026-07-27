@@ -33,7 +33,7 @@ CI runs the same two commands on every push/PR (`.github/workflows/db-tests.yml`
 | `…001300_grants` | base privileges (RLS still decides the rows) |
 | `…001400_auth_hook` | `org_id` JWT claim hook + `set_active_org` (D18/D23/D24) |
 | `…001500_agenda_exceptions` | 11 exception views, snapshots, pg_cron scan (§8, D47/D50/D52) |
-| `…001600_dashboards` | dashboard + weekly-review views; `opportunity_stage_events` (proposed D64) |
+| `…001600_dashboards` | dashboard + weekly-review views; `opportunity_stage_events` (D64) |
 
 ## Implementation decisions made in this phase
 
