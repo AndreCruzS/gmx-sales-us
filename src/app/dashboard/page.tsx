@@ -5,6 +5,7 @@
 // The views are security_invoker, so this one page serves a rep (own numbers),
 // a manager (their chain) and an admin (the org) without a role switch.
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -75,10 +76,10 @@ function StatTile({
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-black/10 px-4 py-3 dark:border-white/15">
-      <div className="text-xs uppercase tracking-wide opacity-60">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {hint && <div className="mt-0.5 text-xs opacity-60">{hint}</div>}
+    <div className="card card-pad">
+      <div className="t-meta uppercase tracking-wide">{label}</div>
+      <div className="mt-1 text-2xl font-bold tracking-tight">{value}</div>
+      {hint && <div className="t-meta mt-0.5">{hint}</div>}
     </div>
   );
 }
@@ -199,15 +200,14 @@ export default function DashboardPage() {
   }, [planned]);
 
   return (
-    <div className="viz-root flex flex-col gap-7">
-      <style>{`
-        .viz-root { --data-1: #2a78d6; --axis: #c3c2b7; }
-        @media (prefers-color-scheme: dark) {
-          .viz-root { --data-1: #3987e5; --axis: #383835; }
-        }
-      `}</style>
-
-      <h1 className="text-lg font-semibold">Dashboard</h1>
+    <div className="flex flex-col gap-7">
+      {/* --data-1 is a global token, validated against the GMX surfaces */}
+      <div className="section-head">
+        <h1 className="t-section">Dashboard</h1>
+        <Link href="/weekly" className="t-action">
+          Weekly review
+        </Link>
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -300,7 +300,7 @@ export default function DashboardPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[34rem] text-sm">
             <thead>
-              <tr className="border-b border-black/10 text-left text-xs uppercase opacity-60 dark:border-white/15">
+              <tr className="t-meta text-left uppercase" style={{ borderBottom: "1px solid var(--rule)" }}>
                 <th className="py-2 pr-3 font-medium">Rep</th>
                 <th className="py-2 pr-3 text-right font-medium">Acts 30d</th>
                 <th className="py-2 pr-3 text-right font-medium">Open</th>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
               {scorecard.map((r) => (
                 <tr
                   key={r.membership_id}
-                  className="border-b border-black/5 last:border-0 dark:border-white/10"
+                  style={{ borderBottom: "1px solid var(--rule)" }}
                 >
                   <td className="py-2 pr-3">
                     <div className="font-medium">{r.rep_name}</div>
@@ -363,7 +363,7 @@ export default function DashboardPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[26rem] text-sm">
             <thead>
-              <tr className="border-b border-black/10 text-left text-xs uppercase opacity-60 dark:border-white/15">
+              <tr className="t-meta text-left uppercase" style={{ borderBottom: "1px solid var(--rule)" }}>
                 <th className="py-2 pr-3 font-medium">Week of</th>
                 <th className="py-2 pr-3 text-right font-medium">Planned</th>
                 <th className="py-2 pr-3 text-right font-medium">Done</th>
@@ -375,7 +375,7 @@ export default function DashboardPage() {
               {plannedRecent.map(([week, v]) => (
                 <tr
                   key={week}
-                  className="border-b border-black/5 last:border-0 dark:border-white/10"
+                  style={{ borderBottom: "1px solid var(--rule)" }}
                 >
                   <td className="py-2 pr-3 tabular-nums">{week}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{v.planned}</td>
@@ -408,7 +408,7 @@ export default function DashboardPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[30rem] text-sm">
             <thead>
-              <tr className="border-b border-black/10 text-left text-xs uppercase opacity-60 dark:border-white/15">
+              <tr className="t-meta text-left uppercase" style={{ borderBottom: "1px solid var(--rule)" }}>
                 <th className="py-2 pr-3 font-medium">Territory</th>
                 <th className="py-2 pr-3 text-right font-medium">Accounts</th>
                 <th className="py-2 pr-3 text-right font-medium">Covered 30d</th>
@@ -419,7 +419,7 @@ export default function DashboardPage() {
               {territories.map((t) => (
                 <tr
                   key={t.territory_id}
-                  className="border-b border-black/5 last:border-0 dark:border-white/10"
+                  style={{ borderBottom: "1px solid var(--rule)" }}
                 >
                   <td className="py-2 pr-3">
                     <div className="font-medium">{t.territory_name}</div>

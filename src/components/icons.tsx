@@ -127,6 +127,25 @@ export function FileIcon(props: IconProps) {
   );
 }
 
+export function HomeIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20.0001 20.7304"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path d="M6.7428 2.92493C7.89141 1.86377 8.46572 1.33319 9.11825 1.13252C9.69284 0.955826 10.3073 0.955826 10.8818 1.13252C11.5344 1.33319 12.1087 1.86377 13.2573 2.92493L16.943 6.33007C17.7009 7.03024 18.0799 7.38033 18.3514 7.79717C18.5922 8.16664 18.7701 8.57337 18.8782 9.00091C19 9.48326 19 9.99916 19 11.031V14.9304C19 16.6106 19 17.4506 18.6731 18.0924C18.3854 18.6569 17.9265 19.1158 17.362 19.4034C16.7203 19.7304 15.8802 19.7304 14.2 19.7304H5.80005C4.11989 19.7304 3.27981 19.7304 2.63808 19.4034C2.07359 19.1158 1.61465 18.6569 1.32703 18.0924C1.00005 17.4506 1.00005 16.6106 1.00005 14.9304L1.00005 11.031C1.00005 9.99916 1.00005 9.48326 1.12192 9.00091C1.22995 8.57337 1.40792 8.16664 1.64865 7.79717C1.92025 7.38033 2.29918 7.03024 3.05705 6.33007L6.7428 2.92493Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export function MicrophoneIcon(props: IconProps) {
   return (
     <svg
@@ -142,6 +161,25 @@ export function MicrophoneIcon(props: IconProps) {
     >
       {props.title ? <title>{props.title}</title> : null}
       <path d="M8 17C4.13401 17 1 13.866 1 10M8 17C11.866 17 15 13.866 15 10M8 17V21M8 21H12M8 21H4M8 13C6.34315 13 5 11.6569 5 10V4C5 2.34315 6.34315 1 8 1C9.65685 1 11 2.34315 11 4V10C11 11.6569 9.65685 13 8 13Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+export function PlusIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path d="M1 8H8M8 8H15M8 8V1M8 8V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
 }

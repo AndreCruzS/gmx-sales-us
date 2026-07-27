@@ -3,64 +3,72 @@
 /* ─────────────────────────────────────────────────────────────────────────
    Design tokens.
 
-   Layout language adapted from the Mobile Apps Prototyping Kit (Figma):
-   tinted cards on a plain page, fills + radius instead of hairline borders,
-   a 14/12/10 type scale, and a 12/16/20 radius scale.
+   COLOUR comes from the GMX Group visual kit (Order Management Platform,
+   extracted 2026-07-27): primary #3B82F6, cool grey surfaces, Inter, 4px
+   base unit. Hexes below are the kit's own values unless marked derived.
 
-   The palette stays GMX's: amber is the action colour, surfaces are warm
-   neutrals. Chart ink (--data-1) is validated separately against these exact
-   surfaces — see the dataviz validator.
+   LAYOUT comes from the Mobile Apps Prototyping Kit (Figma): tinted cards on
+   a plain page, fills + radius over hairline borders, section rhythm, pill
+   tags, 14/12/10 type scale, and the bottom tab bar.
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --surface-page: #ffffff;
-  --surface-card: #f5f5f1;
-  --surface-sunken: #ecebe5;
-  --surface-accent: #fdf0dc;
+  --surface-page: #ffffff;      /* GMX plate */
+  --surface-card: #f4f6fa;      /* GMX chip */
+  --surface-sunken: #eef1f6;    /* GMX rule-soft */
+  --surface-accent: #e8f0fe;    /* derived: 8% tint of primary */
+  --rule: #e3e7ee;              /* GMX rule */
 
-  --ink-primary: #1a1a17;
-  --ink-secondary: #64635c;
-  --ink-muted: #8f8e86;
+  --ink-primary: #101725;       /* GMX ink */
+  --ink-secondary: #414d63;     /* GMX ink-soft */
+  --ink-muted: #7a8699;         /* GMX ink-faint */
 
-  --accent: #f59e0b;        /* fills — always paired with near-black text */
-  --accent-ink: #9a6206;    /* accent text/icons on light surfaces */
-  --accent-line: #e8a33d;
+  --accent: #3b82f6;            /* GMX primary */
+  --accent-deep: #1e40af;       /* GMX accent-deep */
+  --accent-ink: #1e40af;        /* accent text on light surfaces */
+  --on-accent: #ffffff;         /* text on an accent fill */
 
+  /* derived — the kit defines no status ramp */
   --danger: #c0392f;
-  --danger-tint: #fbeae8;
+  --danger-tint: #fdeceb;
   --success-ink: #1d6b3f;
-  --success-tint: #e4f2e9;
+  --success-tint: #e6f4ec;
 
-  --data-1: #2a78d6;
+  /* chart ink — validated against these exact surfaces in both modes */
+  --data-1: #3b82f6;
 
   --r-control: 12px;
   --r-card: 16px;
   --r-cta: 20px;
 
-  --gutter: 16px;
+  --tabbar-h: 62px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface-page: #131311;
-    --surface-card: #1e1e1b;
-    --surface-sunken: #2a2a26;
-    --surface-accent: #34291a;
+    --surface-page: #0c111b;    /* GMX ground (dark) */
+    --surface-card: #131a27;    /* GMX plate (dark) */
+    --surface-sunken: #1a2231;  /* GMX chip (dark) */
+    --surface-accent: #17263f;  /* derived */
+    --rule: #222c3d;            /* GMX rule (dark) */
 
-    --ink-primary: #f4f3ee;
-    --ink-secondary: #a8a79e;
-    --ink-muted: #83827a;
+    --ink-primary: #edf1f8;
+    --ink-secondary: #a9b4c6;
+    --ink-muted: #6f7c91;
 
-    --accent: #f59e0b;
-    --accent-ink: #f0b44b;
-    --accent-line: #7a5417;
+    --accent: #6ba1fa;          /* GMX accent (dark) */
+    --accent-deep: #3b82f6;
+    --accent-ink: #6ba1fa;
+    --on-accent: #0c111b;
 
-    --danger: #ef7a70;
-    --danger-tint: #3a201d;
+    --danger: #f08d84;
+    --danger-tint: #2e1b1a;
     --success-ink: #6cc08c;
-    --success-tint: #1b2f22;
+    --success-tint: #12241a;
 
-    --data-1: #3987e5;
+    /* the dark UI accent (#6BA1FA, L 0.71) sits ABOVE the dark data band,
+       so the mark keeps the brand primary, which validates in band */
+    --data-1: #3b82f6;
   }
 }
 
@@ -110,7 +118,6 @@ body {
   padding: 16px;
 }
 
-/* A row in a list: leading visual, content, trailing affordance. */
 .row {
   display: flex;
   align-items: center;
@@ -136,17 +143,11 @@ body {
   flex: 1 0 0;
   min-width: 0;
 }
-.row-chevron {
-  flex-shrink: 0;
-  color: var(--ink-muted);
-  font-size: 14px;
-}
 
-/* Section: header (with optional action) + content, 40px apart vertically. */
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 36px;
 }
 .section-head {
   display: flex;
@@ -168,12 +169,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   width: 100%;
   min-height: 52px;
   padding: 14px 20px;
   border-radius: var(--r-cta);
   background: var(--accent);
-  color: #17150f;
+  color: var(--on-accent);
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -218,13 +220,14 @@ body {
 .field:focus-visible,
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
+.btn-quiet:focus-visible,
 .row:focus-visible,
-.tag:focus-visible {
-  outline: 2px solid var(--accent-ink);
+.tag:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* Pill tag — 10px uppercase, tinted by role. */
 .tag {
   display: inline-flex;
   align-items: center;
@@ -245,7 +248,7 @@ body {
 }
 .tag-solid {
   background: var(--accent);
-  color: #17150f;
+  color: var(--on-accent);
 }
 .tag-danger {
   background: var(--danger-tint);
@@ -256,11 +259,63 @@ body {
   color: var(--success-ink);
 }
 
-/* ── Signature: the sync chip ───────────────────────────────────────────────
+/* ── Bottom tab bar (kit layout: 56px row + home-indicator safe area) ────── */
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: start;
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: color-mix(in srgb, var(--surface-page) 92%, transparent);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--rule);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: var(--tabbar-h);
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.tab[data-active="true"] {
+  color: var(--accent-ink);
+}
+
+/* Centre tab is the capture action — always one tap away (D45). */
+.tab-capture {
+  position: relative;
+}
+.tab-capture .tab-fab {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-top: -16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.tab-capture:active .tab-fab {
+  transform: scale(0.96);
+}
+
+/* ── Signature: the sync chip ──────────────────────────────────────────────
    This app's promise is that a capture made in a dead-signal back room is
-   safe. D58 requires the state to be visible at all times, so it gets the
-   one piece of deliberate expression: a live dot that pulses only while
-   work is actually queued. */
+   safe (D58), so the status gets the one piece of deliberate expression:
+   a dot that pulses only while work is genuinely queued. */
 
 .sync-chip {
   display: inline-flex;
@@ -285,7 +340,7 @@ body {
   color: var(--accent-ink);
 }
 .sync-chip[data-state="pending"] .sync-dot {
-  background: var(--accent-ink);
+  background: var(--accent);
   animation: sync-pulse 1.6s ease-in-out infinite;
 }
 .sync-chip[data-state="attention"] {
@@ -309,10 +364,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sync-chip[data-state="pending"] .sync-dot {
-    animation: none;
-  }
+  .sync-chip[data-state="pending"] .sync-dot,
+  .tab-capture:active .tab-fab,
   .btn-primary:active {
+    animation: none;
     transform: none;
   }
 }

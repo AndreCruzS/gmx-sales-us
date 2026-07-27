@@ -70,6 +70,21 @@ export const LEAD_SOURCES_ALL = [
 ] as const;
 export type LeadSource = (typeof LEAD_SOURCES_ALL)[number];
 
+// Enum value → readable label. "PK" is the trade's own shorthand (Product
+// Knowledge class) and must stay uppercase; CSS `capitalize` would render it
+// "Pk", which reads as a typo to a rep.
+const ACRONYMS = new Set(["pk", "a&d", "gc"]);
+
+export function humanize(value: string): string {
+  const text = value
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .split(" ")
+    .map((word) => (ACRONYMS.has(word) ? word.toUpperCase() : word))
+    .join(" ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 // D7 — these require a referring account and write an account_relationships row.
 export const REFERRAL_LEAD_SOURCES: readonly LeadSource[] = [
   "REFERRAL_DEALER",

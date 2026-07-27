@@ -7,13 +7,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import {
-  AlertIcon,
-  CalendarIcon,
-  ChartIcon,
-  FileIcon,
-  MicrophoneIcon,
-} from "@/components/icons";
+import { AlertIcon, FileIcon } from "@/components/icons";
+import { humanize } from "@/lib/domain/enums";
 import { getOfflineLayer, wipeLocalData, type CachedActivity } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -58,30 +53,22 @@ export default function HomePage() {
     router.refresh();
   }
 
-  const shortcuts = [
-    { href: "/debriefs", label: "Voice debrief", Icon: MicrophoneIcon },
-    { href: "/agenda", label: "Agenda", Icon: CalendarIcon },
-    { href: "/dashboard", label: "Dashboard", Icon: ChartIcon },
-    { href: "/weekly", label: "Weekly review", Icon: FileIcon },
-  ];
-
   return (
     <div className="stack pt-2">
       <section>
-        <Link href="/capture" className="btn-primary">
-          Register activity
-        </Link>
-        <p className="t-meta mt-2 text-center">
-          One note is enough — works with no signal.
-        </p>
-
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          {shortcuts.map(({ href, label, Icon }) => (
-            <Link key={href} href={href} className="btn-secondary">
-              <Icon size={17} style={{ color: "var(--ink-secondary)" }} />
-              {label}
-            </Link>
-          ))}
+        {/* Navigation lives in the tab bar; Home leads with the two things a
+            rep opens it to see. */}
+        <h1 className="t-section mb-3 px-1">Today</h1>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href="/weekly" className="btn-secondary">
+            <FileIcon size={17} style={{ color: "var(--ink-secondary)" }} />
+            Weekly review
+          </Link>
+          <Link href="/tray" className="btn-secondary">
+            <AlertIcon size={17} style={{ color: "var(--ink-secondary)" }} />
+            Error tray
+            {status.rejected > 0 ? ` (${status.rejected})` : ""}
+          </Link>
         </div>
       </section>
 
@@ -103,7 +90,7 @@ export default function HomePage() {
                 <span className="row-body">
                   <span className="t-title block truncate">{e.title}</span>
                   <span className="t-sub block">
-                    {e.exception_type.replaceAll("_", " ").toLowerCase()}
+                    {humanize(e.exception_type)}
                     {e.detail ? ` — ${e.detail}` : ""}
                   </span>
                 </span>
@@ -143,8 +130,8 @@ export default function HomePage() {
                 </span>
                 <span className="row-body">
                   <span className="flex items-center gap-2">
-                    <span className="t-title truncate capitalize">
-                      {a.activity_type.replaceAll("_", " ").toLowerCase()}
+                    <span className="t-title truncate">
+                      {humanize(a.activity_type)}
                     </span>
                     {a.pendingSync && (
                       <span className="tag tag-accent">to sync</span>

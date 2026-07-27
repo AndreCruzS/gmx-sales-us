@@ -13,6 +13,7 @@ const inter = Inter({
 import { OfflineProvider } from "@/components/offline-provider";
 import { SyncBadge } from "@/components/sync-badge";
 import { SwRegister } from "@/components/sw-register";
+import { TabBar } from "@/components/tab-bar";
 
 export const metadata: Metadata = {
   title: "Commercial OS",
@@ -58,9 +59,16 @@ export default function RootLayout({
             </Link>
             <SyncBadge />
           </header>
-          <main className="mx-auto w-full max-w-lg px-4 pb-16 pt-2">
+          <main
+            className="mx-auto w-full max-w-lg px-4 pt-2"
+            style={{
+              paddingBottom:
+                "calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 24px)",
+            }}
+          >
             {children}
           </main>
+          <TabBar />
         </OfflineProvider>
         <SwRegister />
       </body>
