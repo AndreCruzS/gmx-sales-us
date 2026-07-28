@@ -3,7 +3,10 @@
 // exchanges it for an access token scoped gmail.readonly. No googleapis SDK —
 // two endpoints and a JWT don't justify 20MB of dependency.
 
-import { SignJWT, importPKCS8 } from "jose";
+import {
+  serviceAccountToken,
+  type ServiceAccountKey,
+} from "@/lib/google/auth";
 import type {
   GmailAttachmentMeta,
   GmailMessage,
@@ -14,52 +17,12 @@ import type {
 const SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const API = "https://gmail.googleapis.com/gmail/v1/users";
 
-interface ServiceAccountKey {
-  client_email: string;
-  private_key: string;
-  token_uri: string;
-}
-
 export class GoogleGmailPort implements GmailPort {
-  private tokens = new Map<string, { token: string; expiresAt: number }>();
-
   constructor(private key: ServiceAccountKey) {}
 
-  private async tokenFor(mailbox: string): Promise<string> {
-    const cached = this.tokens.get(mailbox);
-    if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
-
-    const pk = await importPKCS8(this.key.private_key, "RS256");
-    const assertion = await new SignJWT({ scope: SCOPE })
-      .setProtectedHeader({ alg: "RS256", typ: "JWT" })
-      .setIssuer(this.key.client_email)
-      .setSubject(mailbox) // domain-wide delegation: act as this mailbox
-      .setAudience(this.key.token_uri)
-      .setIssuedAt()
-      .setExpirationTime("1h")
-      .sign(pk);
-
-    const res = await fetch(this.key.token_uri, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion,
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`token exchange failed (${res.status}): ${await res.text()}`);
-    }
-    const body = (await res.json()) as { access_token: string; expires_in: number };
-    this.tokens.set(mailbox, {
-      token: body.access_token,
-      expiresAt: Date.now() + body.expires_in * 1000,
-    });
-    return body.access_token;
-  }
-
   private async get(mailbox: string, path: string): Promise<Response> {
-    const token = await this.tokenFor(mailbox);
+    // domain-wide delegation: act as this mailbox
+    const token = await serviceAccountToken(this.key, SCOPE, mailbox);
     return fetch(`${API}/${encodeURIComponent(mailbox)}/${path}`, {
       headers: { authorization: `Bearer ${token}` },
     });
