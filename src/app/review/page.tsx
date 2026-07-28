@@ -265,7 +265,9 @@ export default function ReviewPage() {
                   <span className="t-title block">
                     {c.source === "BUSINESS_CARD"
                       ? "Business card"
-                      : "Contact entry"}
+                      : c.source === "EMAIL_METADATA"
+                        ? "Emailed you"
+                        : "Contact entry"}
                   </span>
                   <span className="t-sub block">
                     {c.created_by === profile?.membershipId
@@ -999,12 +1001,24 @@ function CardSheet({
         style={{ background: "var(--surface-page)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="t-title text-base">New contact from a card</h2>
-        <p className="t-sub mt-1">
-          Read off the photo — anything marked
-          <span className="tag tag-danger mx-1">check this</span>
-          was hard to read. Fix it before saving.
-        </p>
+        <h2 className="t-title text-base">
+          {candidate.source === "EMAIL_METADATA"
+            ? "New lead — emailed you"
+            : "New contact from a card"}
+        </h2>
+        {candidate.source === "EMAIL_METADATA" ? (
+          <p className="t-sub mt-1">
+            Someone outside your accounts wrote in. Only the sender details
+            were read — never the message. Save them if they belong in your
+            book.
+          </p>
+        ) : (
+          <p className="t-sub mt-1">
+            Read off the photo — anything marked
+            <span className="tag tag-danger mx-1">check this</span>
+            was hard to read. Fix it before saving.
+          </p>
+        )}
 
         {match && (
           <div className="card card-pad mt-3 flex items-center gap-3">

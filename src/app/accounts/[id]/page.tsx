@@ -68,6 +68,12 @@ interface Relationship {
   a: { name: string; account_type: string } | null;
   b: { name: string; account_type: string } | null;
 }
+interface EmailThread {
+  id: string;
+  subject: string | null;
+  last_message_at: string | null;
+  last_direction: "INBOUND" | "OUTBOUND" | null;
+}
 
 function monthsSince(iso: string | null): number | null {
   if (!iso) return null;
@@ -85,6 +91,7 @@ export default function AccountPage() {
   const [actions, setActions] = useState<NextAction[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [threads, setThreads] = useState<EmailThread[]>([]);
   const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -206,6 +213,16 @@ export default function AccountPage() {
       setOpportunities((opp.data as Opportunity[]) ?? []);
       setRelationships((rel.data as unknown as Relationship[]) ?? []);
       setParentName((parent.data as { name: string } | null)?.name ?? null);
+
+      // Email threads matched to this account (D35). RLS scopes to visible
+      // mailboxes; the section stays empty until the Gmail sync is connected.
+      const th = await supabase
+        .from("email_threads")
+        .select("id, subject, last_message_at, last_direction")
+        .eq("matched_account_id", id)
+        .order("last_message_at", { ascending: false })
+        .limit(10);
+      setThreads((th.data as EmailThread[]) ?? []);
     } catch {
       await loadFromCache();
     } finally {
@@ -504,6 +521,45 @@ export default function AccountPage() {
           </ul>
         )}
       </section>
+
+      {/* Email — threads where a contact of this account participates (D35).
+          Rendered only when the sync has produced something. */}
+      {threads.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">Email</h2>
+            <span className="t-meta">{threads.length}</span>
+          </div>
+          <ul className="list">
+            {threads.map((t) => (
+              <li key={t.id} className="row">
+                {t.last_message_at && (
+                  <span className="row-lead flex-col leading-none">
+                    <span className="text-[15px] font-bold">
+                      {new Date(t.last_message_at).getDate()}
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
+                      {new Date(t.last_message_at).toLocaleString("en-US", {
+                        month: "short",
+                      })}
+                    </span>
+                  </span>
+                )}
+                <span className="row-body">
+                  <span className="t-title line-clamp-1 block">
+                    {t.subject ?? "No subject"}
+                  </span>
+                  <span className="t-sub block">
+                    {t.last_direction === "INBOUND"
+                      ? "Their message is the latest — reply may be owed"
+                      : "You wrote last"}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

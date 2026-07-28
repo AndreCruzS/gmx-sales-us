@@ -208,7 +208,21 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-27 (**IA restructure + business card reader**)
+- **Last updated:** 2026-07-28 (**Gmail ingestion pipeline built, awaiting credentials**)
+- **Gmail ingestion (spec §5a, D26–D38) — built hermetically, not yet live:**
+  `GmailPort`/`EmailStore` interfaces (D55 philosophy) with the sync pass as a
+  pure function; 14 fixture tests prove the rules — contact-gated storage
+  (D35), no body ever for unknown senders (D36, metadata-only candidate into
+  the SAME Review queue as cards), exclusion patterns beat contact matches
+  (D27), colleagues/outbound never become leads, inline/<20KB attachments
+  skipped with sha256 dedupe (D30), historyId resume + bounded resync (D33),
+  idempotent replay. Real adapter = raw Gmail REST + service-account JWT via
+  jose (no googleapis). `/api/email/sync`: caller mode (own mailbox) + cron
+  mode (`CRON_SECRET`, vercel.json */15). Account page gains an Email section.
+  **To go live:** set `GOOGLE_SERVICE_ACCOUNT_KEY` (SA JSON, domain-wide
+  delegation, scope gmail.readonly) + `CRON_SECRET`; client doing console
+  steps. Next after that: AI extraction per thread → Review (D32/D34), body
+  TTL purge job (D29), TJ home mode (D54).
 - **IA restructure (client-directed):** navigation rebuilt around the rep's
   day — Today (agenda+exceptions merged) · Accounts (browsable territory,
   inline search) · Record (centre: voice / typed note / card snap) · Review
