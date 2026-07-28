@@ -6,6 +6,7 @@ import type {
   CachedAccount,
   CachedActivity,
   CachedAgendaItem,
+  CachedContact,
   LocalStore,
   OutboxRecord,
   OutboxStatus,
@@ -14,6 +15,7 @@ import type {
 
 class OfflineDb extends Dexie {
   accounts!: Table<CachedAccount, string>;
+  contacts!: Table<CachedContact, string>;
   agenda!: Table<CachedAgendaItem, string>;
   activities!: Table<CachedActivity, string>;
   meta!: Table<{ key: string; value: string }, string>;
@@ -37,6 +39,11 @@ class OfflineDb extends Dexie {
     this.version(3).stores({
       outbox: "++seq, clientId, status, createdAt",
     });
+    // v4: contacts join the working set (D56) — the champion's name and phone
+    // must survive a dead zone.
+    this.version(4).stores({
+      contacts: "id, account_id, name",
+    });
   }
 }
 
@@ -52,6 +59,7 @@ export class DexieLocalStore implements LocalStore {
       "rw",
       [
         this.db.accounts,
+        this.db.contacts,
         this.db.agenda,
         this.db.activities,
         this.db.meta,
@@ -70,6 +78,8 @@ export class DexieLocalStore implements LocalStore {
         );
         await this.db.accounts.clear();
         await this.db.accounts.bulkPut(ws.accounts);
+        await this.db.contacts.clear();
+        await this.db.contacts.bulkPut(ws.contacts);
         await this.db.agenda.clear();
         await this.db.agenda.bulkPut(ws.agenda);
         const pendingLocal = await this.db.activities
@@ -84,6 +94,18 @@ export class DexieLocalStore implements LocalStore {
 
   getAccounts(): Promise<CachedAccount[]> {
     return this.db.accounts.orderBy("name").toArray();
+  }
+
+  async getContacts(accountId?: string): Promise<CachedContact[]> {
+    const rows = accountId
+      ? await this.db.contacts.where("account_id").equals(accountId).toArray()
+      : await this.db.contacts.orderBy("name").toArray();
+    // Champion first (D50) — that is who you ask for at the door.
+    return rows.sort(
+      (a, b) =>
+        Number(b.is_champion) - Number(a.is_champion) ||
+        a.name.localeCompare(b.name),
+    );
   }
 
   getAgenda(): Promise<CachedAgendaItem[]> {

@@ -55,10 +55,11 @@ describe("outbox durability", () => {
 });
 
 describe("working set (D56)", () => {
+  const accountId = crypto.randomUUID();
   const ws: WorkingSet = {
     accounts: [
       {
-        id: crypto.randomUUID(),
+        id: accountId,
         name: "Ganahl Anaheim",
         account_type: "DEALER",
         city: "Anaheim",
@@ -69,10 +70,40 @@ describe("working set (D56)", () => {
         updated_at: new Date().toISOString(),
       },
     ],
+    contacts: [
+      {
+        id: crypto.randomUUID(),
+        account_id: accountId,
+        name: "Sam Lee",
+        job_title: "Counter Sales",
+        email: null,
+        phone: "+17145550102",
+        is_champion: false,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: crypto.randomUUID(),
+        account_id: accountId,
+        name: "Mike Torres",
+        job_title: "Store Manager",
+        email: null,
+        phone: "+17145550101",
+        is_champion: true,
+        updated_at: new Date().toISOString(),
+      },
+    ],
     agenda: [],
     activities: [],
     pulledAt: new Date().toISOString(),
   };
+
+  it("caches contacts per account, champion first (D50)", async () => {
+    await store.putWorkingSet(ws);
+    const contacts = await store.getContacts(accountId);
+    expect(contacts.map((c) => c.name)).toEqual(["Mike Torres", "Sam Lee"]);
+    expect(contacts[0].is_champion).toBe(true);
+    expect(await store.getContacts(crypto.randomUUID())).toHaveLength(0);
+  });
 
   it("replaces the cached read models on pull but keeps in-flight local writes", async () => {
     const inflightId = crypto.randomUUID();

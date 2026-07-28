@@ -112,8 +112,21 @@ export class SupabaseSyncBackend implements SyncBackend {
       .limit(300);
     if (accountsRes.error) throw new Error(accountsRes.error.message);
 
+    // Contacts ride along (D56): champion name and phone at the door with no
+    // signal. Champions sort first so the bound trims spectators, not captains.
+    const contactsRes = await this.supabase
+      .from("contacts")
+      .select(
+        "id, account_id, name, job_title, email, phone, is_champion, updated_at",
+      )
+      .order("is_champion", { ascending: false })
+      .order("name")
+      .limit(500);
+    if (contactsRes.error) throw new Error(contactsRes.error.message);
+
     return {
       accounts: accountsRes.data,
+      contacts: contactsRes.data,
       agenda: agendaRes.data,
       activities: activitiesRes.data,
       pulledAt: new Date().toISOString(),

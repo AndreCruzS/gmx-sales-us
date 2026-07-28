@@ -92,6 +92,7 @@ export class FakeBackend implements SyncBackend {
     this.guard();
     return {
       accounts: [],
+      contacts: [],
       agenda: [],
       activities: [],
       pulledAt: new Date().toISOString(),

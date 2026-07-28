@@ -92,8 +92,9 @@ export default function AccountPage() {
   // sees the account in front of them (D56).
   const loadFromCache = useCallback(async () => {
     const layer = getOfflineLayer();
-    const [accounts, acts, agenda] = await Promise.all([
+    const [accounts, cachedContacts, acts, agenda] = await Promise.all([
       layer.local.getAccounts(),
+      layer.local.getContacts(id),
       layer.local.getRecentActivities(),
       layer.local.getAgenda(),
     ]);
@@ -107,6 +108,10 @@ export default function AccountPage() {
         relationship_status: null,
         lead_source: "",
       } as Account);
+      // Champion first already (D50) — who you ask for at the counter.
+      setContacts(
+        cachedContacts.map((c) => ({ ...c, influence_level: null })),
+      );
       setActivities(
         acts
           .filter((a) => a.primary_account_id === id)

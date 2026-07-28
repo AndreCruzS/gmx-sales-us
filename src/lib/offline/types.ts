@@ -65,8 +65,22 @@ export interface CachedActivity {
   pendingSync?: boolean; // optimistic local write not yet confirmed
 }
 
+// The person at the door: for a rep standing at a counter with no signal, the
+// champion's name and phone is the single most valuable cached fact.
+export interface CachedContact {
+  id: string;
+  account_id: string;
+  name: string;
+  job_title: string | null;
+  email: string | null;
+  phone: string | null;
+  is_champion: boolean;
+  updated_at: string;
+}
+
 export interface WorkingSet {
   accounts: CachedAccount[];
+  contacts: CachedContact[];
   agenda: CachedAgendaItem[];
   activities: CachedActivity[];
   pulledAt: string;
@@ -76,6 +90,7 @@ export interface LocalStore {
   // read models
   putWorkingSet(ws: WorkingSet): Promise<void>;
   getAccounts(): Promise<CachedAccount[]>;
+  getContacts(accountId?: string): Promise<CachedContact[]>;
   getAgenda(): Promise<CachedAgendaItem[]>;
   getRecentActivities(): Promise<CachedActivity[]>;
   putLocalActivity(a: CachedActivity): Promise<void>;
