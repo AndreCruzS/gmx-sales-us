@@ -14,6 +14,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CalendarIcon, CheckIcon, ChevronRightIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
+import {
+  displayAccountName,
+  formatDay,
+  formatPhone,
+  telHref,
+} from "@/lib/format";
 import { getOfflineLayer } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -286,7 +292,7 @@ export default function AccountPage() {
       {/* Identity */}
       <section>
         <h1 className="text-[26px] font-extrabold leading-tight tracking-tight">
-          {account.name}
+          {displayAccountName(account.name)}
         </h1>
         <p className="t-sub mt-1">
           {humanize(account.account_type)}
@@ -360,9 +366,23 @@ export default function AccountPage() {
                     )}
                   </span>
                   <span className="t-sub block truncate">
-                    {c.job_title ?? "—"}
-                    {c.phone ? ` · ${c.phone}` : ""}
+                    {c.job_title ?? "Contact"}
                   </span>
+                  {/* reaching this person is the point — actions, not text */}
+                  {(c.phone || c.email) && (
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {c.phone && (
+                        <a href={telHref(c.phone)} className="tag tag-accent">
+                          Call {formatPhone(c.phone)}
+                        </a>
+                      )}
+                      {c.email && (
+                        <a href={`mailto:${c.email}`} className="tag">
+                          Email
+                        </a>
+                      )}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}
@@ -397,7 +417,7 @@ export default function AccountPage() {
                 <span className="row-body">
                   <span className="t-title block truncate">{a.action}</span>
                   <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <span className="t-meta">{a.due_date}</span>
+                    <span className="t-meta">Due {formatDay(a.due_date)}</span>
                     {a.objective && (
                       <span className="tag tag-accent">
                         {a.objective.replaceAll("_", " ")}
@@ -533,7 +553,8 @@ export default function AccountPage() {
           <ul className="list">
             {threads.map((t) => (
               <li key={t.id} className="row">
-                {t.last_message_at && (
+                {/* the lead slot always renders — rows must share a left edge */}
+                {t.last_message_at ? (
                   <span className="row-lead flex-col leading-none">
                     <span className="text-[15px] font-bold">
                       {new Date(t.last_message_at).getDate()}
@@ -544,6 +565,8 @@ export default function AccountPage() {
                       })}
                     </span>
                   </span>
+                ) : (
+                  <span className="row-lead">@</span>
                 )}
                 <span className="row-body">
                   <span className="t-title line-clamp-1 block">

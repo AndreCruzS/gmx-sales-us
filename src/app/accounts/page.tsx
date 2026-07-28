@@ -8,8 +8,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { BuildingIcon, ChevronRightIcon, SearchIcon } from "@/components/icons";
+import { ChevronRightIcon, SearchIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
+import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -139,11 +140,20 @@ export default function AccountsPage() {
             {rows.map((a) => (
               <li key={a.id}>
                 <Link href={`/accounts/${a.id}`} className="row">
+                  {/* initials differentiate rows the way one repeated glyph
+                      can't — the lead slot has to earn its 56px */}
                   <span className="row-lead">
-                    <BuildingIcon size={18} />
+                    {displayAccountName(a.name)
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((w) => w[0])
+                      .join("")
+                      .toUpperCase()}
                   </span>
                   <span className="row-body">
-                    <span className="t-title block truncate">{a.name}</span>
+                    <span className="t-title block truncate">
+                      {displayAccountName(a.name)}
+                    </span>
                     <span className="t-sub block truncate">
                       {humanize(a.account_type)}
                       {a.city ? ` · ${a.city}` : ""}

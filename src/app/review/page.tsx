@@ -22,6 +22,7 @@ import {
   type LeadSource,
 } from "@/lib/domain/enums";
 import { CONFIDENCE_OK, type ExtractedCard } from "@/lib/cards/draft";
+import { displayAccountName } from "@/lib/format";
 import type { DebriefDraft } from "@/lib/voice/draft";
 import {
   getOfflineLayer,
@@ -818,7 +819,10 @@ function CardSheet({
     candidate.matched_account_id || !fields.company.value ? "existing" : "new",
   );
   const [accountId, setAccountId] = useState(candidate.matched_account_id ?? "");
-  const [newName, setNewName] = useState(fields.company.value ?? "");
+  // Cards SHOUT; records shouldn't. The rep can always re-capitalize a brand.
+  const [newName, setNewName] = useState(
+    displayAccountName(fields.company.value ?? ""),
+  );
   const [newType, setNewType] = useState<AccountType>("CONTRACTOR");
   const [newCity, setNewCity] = useState("");
   const [leadSource, setLeadSource] = useState<LeadSource | "">(suggested);

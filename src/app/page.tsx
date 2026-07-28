@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import {
   AlertIcon,
+  CalendarIcon,
   CheckIcon,
   ChevronRightIcon,
 } from "@/components/icons";
@@ -21,6 +22,7 @@ import {
   humanize,
   type VisitObjective,
 } from "@/lib/domain/enums";
+import { displayAccountName, relativizeDates } from "@/lib/format";
 import {
   getOfflineLayer,
   wipeLocalData,
@@ -52,6 +54,16 @@ interface ExceptionRow {
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+// Two alarm tiers, not one: a broken promise or money on the table is danger;
+// hygiene the system noticed (no champion yet, display unchecked) is attention.
+// Seven identical red triangles teach a rep to ignore all of them.
+const DANGER_EXCEPTIONS = new Set([
+  "OVERDUE_FOLLOW_UP",
+  "QUOTE_NO_FOLLOW_UP",
+  "OPPORTUNITY_NO_NEXT_ACTION",
+  "STRATEGIC_ACCOUNT_QUIET",
+]);
 
 function DateChip({ date, danger }: { date: string; danger?: boolean }) {
   return (
@@ -263,17 +275,37 @@ export default function TodayPage() {
     return buckets;
   }, [items, dayRefs]);
 
+  const flagged = useMemo(() => {
+    // An exception that merely restates a commitment already visible above
+    // (the engine's overdue echo of an agenda row) is noise on this screen.
+    const visible = new Set(items.map((i) => i.id));
+    const kept = attention.filter(
+      (e) => !(e.subject_type === "next_action" && visible.has(e.subject_id)),
+    );
+    // Danger first — the tier order is the read order.
+    return kept.sort(
+      (a, b) =>
+        Number(DANGER_EXCEPTIONS.has(b.exception_type)) -
+        Number(DANGER_EXCEPTIONS.has(a.exception_type)),
+    );
+  }, [attention, items]);
+
   const nothingPlanned = items.length === 0;
 
   return (
     <div className="stack pt-2">
       <section>
-        <button
-          onClick={() => setShowPlan((v) => !v)}
-          className={showPlan ? "btn-secondary w-full" : "btn-primary"}
-        >
-          {showPlan ? "Close" : "Plan a visit"}
-        </button>
+        {/* planning is occasional; the day is the screen. The action sits
+            quiet on the right instead of pushing the day below the fold. */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowPlan((v) => !v)}
+            className="btn-secondary flex items-center gap-1.5"
+          >
+            <CalendarIcon size={15} style={{ color: "var(--ink-secondary)" }} />
+            {showPlan ? "Close" : "Plan a visit"}
+          </button>
+        </div>
 
         {offlineView && (
           <p className="tag tag-accent mt-3">
@@ -418,27 +450,41 @@ export default function TodayPage() {
         ),
       )}
 
-      {attention.length > 0 && (
+      {flagged.length > 0 && (
         <section>
           <div className="section-head">
             <h2 className="t-section">Needs your attention</h2>
-            <span className="tag tag-danger">{attention.length}</span>
+            {flagged.some((e) => DANGER_EXCEPTIONS.has(e.exception_type)) ? (
+              <span className="tag tag-danger">{flagged.length}</span>
+            ) : (
+              <span className="t-meta">{flagged.length}</span>
+            )}
           </div>
           <ul className="list">
-            {attention.map((e) => {
+            {flagged.map((e) => {
+              const danger = DANGER_EXCEPTIONS.has(e.exception_type);
               const body = (
                 <>
                   <span
                     className="row-lead"
-                    style={{ background: "var(--danger-tint)" }}
+                    style={
+                      danger ? { background: "var(--danger-tint)" } : undefined
+                    }
                   >
-                    <AlertIcon size={18} style={{ color: "var(--danger)" }} />
+                    <AlertIcon
+                      size={18}
+                      style={{
+                        color: danger ? "var(--danger)" : "var(--accent-ink)",
+                      }}
+                    />
                   </span>
                   <span className="row-body">
-                    <span className="t-title block truncate">{e.title}</span>
+                    <span className="t-title block truncate">
+                      {e.title ? displayAccountName(e.title) : e.title}
+                    </span>
                     <span className="t-sub block">
                       {humanize(e.exception_type)}
-                      {e.detail ? ` — ${e.detail}` : ""}
+                      {e.detail ? ` — ${relativizeDates(e.detail)}` : ""}
                     </span>
                   </span>
                 </>

@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { formatDay } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface PipelineRow {
@@ -218,8 +219,18 @@ export default function DashboardPage() {
         />
         <StatTile
           label="Weighted"
-          value={money.format(totals.weighted)}
-          hint="value × probability"
+          // a confident $0 beside a real pipeline reads as a bug; the honest
+          // answer is "nobody has set probabilities yet"
+          value={
+            totals.weighted === 0 && totals.active > 0
+              ? "—"
+              : money.format(totals.weighted)
+          }
+          hint={
+            totals.weighted === 0 && totals.active > 0
+              ? "no probabilities set yet"
+              : "value × probability"
+          }
         />
         <StatTile
           label="Quotes outstanding"
@@ -239,10 +250,12 @@ export default function DashboardPage() {
 
       {/* Pipeline by stage — one series, so bar length carries everything and
           the heading names it; values are direct-labelled. */}
+      {/* section heads speak the same dialect as every other screen —
+          bold sentence case, count/action on the right */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Pipeline by stage
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">Pipeline by stage</h2>
+        </div>
         {totals.openCount === 0 ? (
           <p className="text-sm opacity-60">No open opportunities yet.</p>
         ) : (
@@ -358,9 +371,9 @@ export default function DashboardPage() {
 
       {/* Planned vs actual (D46) — the manager's real question */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Planned vs actual
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">Planned vs actual</h2>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[26rem] text-sm">
             <thead>
@@ -378,7 +391,7 @@ export default function DashboardPage() {
                   key={week}
                   style={{ borderBottom: "1px solid var(--rule)" }}
                 >
-                  <td className="py-2 pr-3 tabular-nums">{week}</td>
+                  <td className="py-2 pr-3">{formatDay(week)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{v.planned}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{v.done}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{v.unplanned}</td>
@@ -403,9 +416,9 @@ export default function DashboardPage() {
 
       {/* Territory */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Territory
-        </h2>
+        <div className="section-head">
+          <h2 className="t-section">Territory</h2>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[30rem] text-sm">
             <thead>
