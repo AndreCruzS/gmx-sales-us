@@ -773,7 +773,7 @@ function ReviewSheet({
               onClick={() =>
                 setActions((prev) => [
                   ...prev,
-                  { action: "", due_date: "", objective: null },
+                  { action: "", due_date: "", objective: null, kind: null },
                 ])
               }
               className="t-action text-left"

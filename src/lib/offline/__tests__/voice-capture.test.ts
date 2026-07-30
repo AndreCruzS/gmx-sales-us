@@ -113,8 +113,14 @@ describe("debrief draft schema (the shape the review gate trusts)", () => {
       outcomes: ["TRAINING_NEEDED", "OPPORTUNITY_IDENTIFIED"],
       follow_up_required: true,
       next_actions: [
-        { action: "Send quote to Mike", due_date: "2026-07-24", objective: null },
+        {
+          action: "Send quote to Mike",
+          due_date: "2026-07-24",
+          objective: null,
+          kind: "QUOTE_FOLLOW_UP",
+        },
       ],
+      routine_dispositions: [],
     });
     expect(draft.next_actions).toHaveLength(1);
   });
