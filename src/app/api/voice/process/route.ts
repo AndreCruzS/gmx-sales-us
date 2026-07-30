@@ -157,12 +157,20 @@ export async function POST() {
       let routineContext: RoutineContextItem[] | undefined;
       let openItemIds: string[] = [];
       if (capture.account_id) {
-        const { data: routineRows } = await service
+        const { data: routineRows, error: routineError } = await service
           .from("routine_items")
           .select("item_id, kind, action")
           .eq("account_id", capture.account_id)
           .eq("owner_membership_id", membership.id);
-        if (routineRows && routineRows.length > 0) {
+        if (routineError) {
+          // Don't fail the whole capture over context that's a nice-to-have —
+          // but a real failure (view rename, permissions, 5xx) must be
+          // observable, not indistinguishable from "no open routine items".
+          console.error(
+            `routine_items lookup failed for capture ${capture.id}:`,
+            routineError.message,
+          );
+        } else if (routineRows && routineRows.length > 0) {
           routineContext = routineRows as RoutineContextItem[];
           openItemIds = routineRows.map((r) => r.item_id as string);
         }

@@ -527,8 +527,6 @@ function ReviewSheet({
 }) {
   const { profile } = useOffline();
   const draft = capture.ai_draft as DebriefDraft;
-  // Task 9 finding, carried: routine_dispositions is required-without-default
-  // on the schema, but pre-existing ai_draft rows lack it — default defensively.
   const [accountId, setAccountId] = useState(capture.account_id ?? "");
   const [activityType, setActivityType] = useState<ActivityType>(
     draft.activity_type,
@@ -541,6 +539,9 @@ function ReviewSheet({
   const [actions, setActions] = useState(draft.next_actions);
   // Routine confirmations (D-routine, Task 10): pre-checked — the rep
   // unchecks anything the model got wrong rather than opting in from zero.
+  // Task 9 finding, carried: routine_dispositions is required-without-default
+  // on the schema, but pre-existing ai_draft rows lack it — `?? []` defends
+  // against that.
   const [dispositions, setDispositions] = useState(
     (draft.routine_dispositions ?? []).map((d) => ({ ...d, confirmed: true })),
   );
