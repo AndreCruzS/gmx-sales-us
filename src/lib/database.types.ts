@@ -86,11 +86,88 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "account_relationships_account_b_id_fkey"
             columns: ["account_b_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "account_relationships_created_by_fkey"
@@ -199,6 +276,27 @@ export type Database = {
             foreignKeyName: "accounts_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
@@ -210,11 +308,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "accounts_referring_account_id_fkey"
             columns: ["referring_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
           },
           {
             foreignKeyName: "accounts_territory_id_fkey"
@@ -297,6 +458,27 @@ export type Database = {
             foreignKeyName: "activities_opportunity_id_fkey"
             columns: ["opportunity_id"]
             isOneToOne: false
+            referencedRelation: "exception_opportunity_no_next_action"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_stale"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_quote_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
@@ -311,8 +493,36 @@ export type Database = {
             foreignKeyName: "activities_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_planned_action_id_fkey"
+            columns: ["planned_action_id"]
+            isOneToOne: false
+            referencedRelation: "exception_overdue_follow_up"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "activities_planned_action_id_fkey"
@@ -322,11 +532,46 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "activities_planned_action_id_fkey"
+            columns: ["planned_action_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_upcoming"
+            referencedColumns: ["next_action_id"]
+          },
+          {
             foreignKeyName: "activities_primary_account_id_fkey"
             columns: ["primary_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
           },
         ]
       }
@@ -367,11 +612,46 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "activity_accounts_activity_id_fkey"
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "activities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_accounts_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_recent_activity"
+            referencedColumns: ["activity_id"]
           },
           {
             foreignKeyName: "activity_accounts_org_id_fkey"
@@ -414,6 +694,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "activities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_contacts_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_recent_activity"
+            referencedColumns: ["activity_id"]
           },
           {
             foreignKeyName: "activity_contacts_contact_id_fkey"
@@ -479,6 +766,27 @@ export type Database = {
             foreignKeyName: "contact_candidates_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
@@ -488,6 +796,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "contact_candidates_matched_contact_id_fkey"
@@ -567,6 +903,34 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "contacts_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -632,8 +996,36 @@ export type Database = {
             foreignKeyName: "email_attachments_linked_opportunity_id_fkey"
             columns: ["linked_opportunity_id"]
             isOneToOne: false
+            referencedRelation: "exception_opportunity_no_next_action"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_attachments_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_stale"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_attachments_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_quote_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_attachments_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_attachments_linked_project_id_fkey"
+            columns: ["linked_project_id"]
+            isOneToOne: false
+            referencedRelation: "exception_project_no_dealer"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "email_attachments_linked_project_id_fkey"
@@ -760,6 +1152,27 @@ export type Database = {
             foreignKeyName: "email_sync_state_membership_id_fkey"
             columns: ["membership_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "email_sync_state_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "email_sync_state_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_sync_state_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
@@ -838,8 +1251,36 @@ export type Database = {
             foreignKeyName: "email_threads_linked_opportunity_id_fkey"
             columns: ["linked_opportunity_id"]
             isOneToOne: false
+            referencedRelation: "exception_opportunity_no_next_action"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_stale"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_quote_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_threads_linked_project_id_fkey"
+            columns: ["linked_project_id"]
+            isOneToOne: false
+            referencedRelation: "exception_project_no_dealer"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "email_threads_linked_project_id_fkey"
@@ -856,11 +1297,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "email_threads_matched_contact_id_fkey"
             columns: ["matched_contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_threads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "email_threads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "email_threads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "email_threads_membership_id_fkey"
@@ -874,6 +1364,87 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_snapshots: {
+        Row: {
+          cleared_at: string | null
+          created_at: string
+          detail: string | null
+          detected_at: string
+          exception_type: string
+          id: string
+          org_id: string
+          owner_membership_id: string | null
+          subject_id: string
+          subject_type: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          cleared_at?: string | null
+          created_at?: string
+          detail?: string | null
+          detected_at?: string
+          exception_type: string
+          id?: string
+          org_id: string
+          owner_membership_id?: string | null
+          subject_id: string
+          subject_type: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cleared_at?: string | null
+          created_at?: string
+          detail?: string | null
+          detected_at?: string
+          exception_type?: string
+          id?: string
+          org_id?: string
+          owner_membership_id?: string | null
+          subject_id?: string
+          subject_type?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exception_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exception_snapshots_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "exception_snapshots_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "exception_snapshots_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "exception_snapshots_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
         ]
@@ -923,6 +1494,27 @@ export type Database = {
             foreignKeyName: "memberships_manager_id_fkey"
             columns: ["manager_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "memberships_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "memberships_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "memberships_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
@@ -932,6 +1524,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
           },
           {
             foreignKeyName: "memberships_territory_id_fkey"
@@ -959,6 +1558,7 @@ export type Database = {
           created_at: string
           due_date: string
           id: string
+          kind: Database["public"]["Enums"]["next_action_kind"] | null
           objective: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail: string | null
           opportunity_id: string | null
@@ -976,6 +1576,7 @@ export type Database = {
           created_at?: string
           due_date: string
           id?: string
+          kind?: Database["public"]["Enums"]["next_action_kind"] | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail?: string | null
           opportunity_id?: string | null
@@ -993,6 +1594,7 @@ export type Database = {
           created_at?: string
           due_date?: string
           id?: string
+          kind?: Database["public"]["Enums"]["next_action_kind"] | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail?: string | null
           opportunity_id?: string | null
@@ -1010,11 +1612,67 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "next_actions_activity_id_fkey"
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "activities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_recent_activity"
+            referencedColumns: ["activity_id"]
+          },
+          {
+            foreignKeyName: "next_actions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_no_next_action"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_stale"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_quote_no_follow_up"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "next_actions_opportunity_id_fkey"
@@ -1034,8 +1692,36 @@ export type Database = {
             foreignKeyName: "next_actions_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "exception_project_no_dealer"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "next_actions_project_id_fkey"
@@ -1155,11 +1841,67 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "opportunities_builder_id_fkey"
             columns: ["builder_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "opportunities_contractor_id_fkey"
@@ -1169,11 +1911,67 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "opportunities_dealer_id_fkey"
             columns: ["dealer_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "opportunities_developer_id_fkey"
@@ -1183,6 +1981,34 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "opportunities_distributor_id_fkey"
             columns: ["distributor_id"]
             isOneToOne: false
@@ -1190,11 +2016,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "opportunities_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "opportunities_owner_id_fkey"
@@ -1211,6 +2086,41 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "exception_project_no_dealer"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "opportunities_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -1225,10 +2135,145 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
             foreignKeyName: "opportunities_territory_id_fkey"
             columns: ["territory_id"]
             isOneToOne: false
             referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_stage_events: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_stage: Database["public"]["Enums"]["opportunity_stage"] | null
+          id: string
+          occurred_at: string
+          opportunity_id: string
+          org_id: string
+          to_stage: Database["public"]["Enums"]["opportunity_stage"]
+          updated_at: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_stage?: Database["public"]["Enums"]["opportunity_stage"] | null
+          id?: string
+          occurred_at?: string
+          opportunity_id: string
+          org_id: string
+          to_stage: Database["public"]["Enums"]["opportunity_stage"]
+          updated_at?: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_stage?: Database["public"]["Enums"]["opportunity_stage"] | null
+          id?: string
+          occurred_at?: string
+          opportunity_id?: string
+          org_id?: string
+          to_stage?: Database["public"]["Enums"]["opportunity_stage"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_stage_events_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_no_next_action"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_stale"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_quote_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1317,6 +2362,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          settings: Json
           slug: string
           status: Database["public"]["Enums"]["org_status"]
           updated_at: string
@@ -1326,6 +2372,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          settings?: Json
           slug: string
           status?: Database["public"]["Enums"]["org_status"]
           updated_at?: string
@@ -1335,6 +2382,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          settings?: Json
           slug?: string
           status?: Database["public"]["Enums"]["org_status"]
           updated_at?: string
@@ -1379,11 +2427,46 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "project_stakeholders_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_stakeholders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "exception_project_no_dealer"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "project_stakeholders_project_id_fkey"
@@ -1445,11 +2528,98 @@ export type Database = {
             foreignKeyName: "projects_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rep_calendars: {
+        Row: {
+          created_at: string
+          google_calendar_id: string
+          id: string
+          membership_id: string
+          org_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          google_calendar_id: string
+          id?: string
+          membership_id: string
+          org_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          google_calendar_id?: string
+          id?: string
+          membership_id?: string
+          org_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rep_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "rep_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "rep_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "rep_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rep_calendars_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1494,8 +2664,50 @@ export type Database = {
             foreignKeyName: "support_assignments_rep_membership_id_fkey"
             columns: ["rep_membership_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "support_assignments_rep_membership_id_fkey"
+            columns: ["rep_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "support_assignments_rep_membership_id_fkey"
+            columns: ["rep_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "support_assignments_rep_membership_id_fkey"
+            columns: ["rep_membership_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_assignments_support_membership_id_fkey"
+            columns: ["support_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "support_assignments_support_membership_id_fkey"
+            columns: ["support_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "support_assignments_support_membership_id_fkey"
+            columns: ["support_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "support_assignments_support_membership_id_fkey"
@@ -1574,8 +2786,50 @@ export type Database = {
             foreignKeyName: "user_hierarchy_ancestor_id_fkey"
             columns: ["ancestor_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "user_hierarchy_ancestor_id_fkey"
+            columns: ["ancestor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "user_hierarchy_ancestor_id_fkey"
+            columns: ["ancestor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "user_hierarchy_ancestor_id_fkey"
+            columns: ["ancestor_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_hierarchy_descendant_id_fkey"
+            columns: ["descendant_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "user_hierarchy_descendant_id_fkey"
+            columns: ["descendant_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "user_hierarchy_descendant_id_fkey"
+            columns: ["descendant_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
           },
           {
             foreignKeyName: "user_hierarchy_descendant_id_fkey"
@@ -1633,6 +2887,7 @@ export type Database = {
       }
       voice_captures: {
         Row: {
+          account_id: string | null
           activity_id: string | null
           ai_draft: Json | null
           audio_path: string | null
@@ -1642,6 +2897,7 @@ export type Database = {
           language: string | null
           org_id: string
           owner_id: string
+          planned_action_id: string | null
           reviewed_at: string | null
           sent_at: string | null
           status: Database["public"]["Enums"]["voice_capture_status"]
@@ -1649,6 +2905,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_id?: string | null
           activity_id?: string | null
           ai_draft?: Json | null
           audio_path?: string | null
@@ -1658,6 +2915,7 @@ export type Database = {
           language?: string | null
           org_id: string
           owner_id: string
+          planned_action_id?: string | null
           reviewed_at?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["voice_capture_status"]
@@ -1665,6 +2923,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_id?: string | null
           activity_id?: string | null
           ai_draft?: Json | null
           audio_path?: string | null
@@ -1674,6 +2933,7 @@ export type Database = {
           language?: string | null
           org_id?: string
           owner_id?: string
+          planned_action_id?: string | null
           reviewed_at?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["voice_capture_status"]
@@ -1682,11 +2942,53 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
             foreignKeyName: "voice_captures_activity_id_fkey"
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "activities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_captures_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_recent_activity"
+            referencedColumns: ["activity_id"]
           },
           {
             foreignKeyName: "voice_captures_org_id_fkey"
@@ -1699,14 +3001,1093 @@ export type Database = {
             foreignKeyName: "voice_captures_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_captures_planned_action_id_fkey"
+            columns: ["planned_action_id"]
+            isOneToOne: false
+            referencedRelation: "exception_overdue_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_planned_action_id_fkey"
+            columns: ["planned_action_id"]
+            isOneToOne: false
+            referencedRelation: "next_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_captures_planned_action_id_fkey"
+            columns: ["planned_action_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_upcoming"
+            referencedColumns: ["next_action_id"]
           },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      dashboard_activity: {
+        Row: {
+          activity_count: number | null
+          activity_type: Database["public"]["Enums"]["activity_type"] | null
+          org_id: string | null
+          owner_id: string | null
+          planned_count: number | null
+          territory_id: string | null
+          week_start: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_network_growth: {
+        Row: {
+          account_type: Database["public"]["Enums"]["account_type"] | null
+          new_accounts: number | null
+          org_id: string | null
+          week_start: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_pipeline: {
+        Row: {
+          oldest_updated_at: string | null
+          opportunity_count: number | null
+          org_id: string | null
+          owner_id: string | null
+          stage: Database["public"]["Enums"]["opportunity_stage"] | null
+          territory_id: string | null
+          total_value: number | null
+          weighted_value: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "opportunities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_planned_vs_actual: {
+        Row: {
+          org_id: string | null
+          owner_id: string | null
+          planned_done: number | null
+          planned_total: number | null
+          unplanned: number | null
+          week_start: string | null
+        }
+        Relationships: []
+      }
+      dashboard_relationship_growth: {
+        Row: {
+          new_relationships: number | null
+          org_id: string | null
+          relationship_type:
+            | Database["public"]["Enums"]["relationship_type"]
+            | null
+          week_start: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_relationships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_rep_scorecard: {
+        Row: {
+          activities_30d: number | null
+          last_activity_at: string | null
+          membership_id: string | null
+          open_next_actions: number | null
+          open_opportunities: number | null
+          org_id: string | null
+          overdue_next_actions: number | null
+          pipeline_value: number | null
+          quotes_outstanding: number | null
+          rep_name: string | null
+          territory_id: string | null
+          territory_name: string | null
+          weighted_value: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "memberships_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_stage_flow: {
+        Row: {
+          advanced: number | null
+          created: number | null
+          lost: number | null
+          org_id: string | null
+          owner_id: string | null
+          week_start: string | null
+          won: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_stage_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_territory: {
+        Row: {
+          account_count: number | null
+          accounts_with_activity_30d: number | null
+          open_opportunities: number | null
+          org_id: string | null
+          pipeline_value: number | null
+          project_count: number | null
+          strategic_accounts: number | null
+          territory_id: string | null
+          territory_name: string | null
+        }
+        Insert: {
+          account_count?: never
+          accounts_with_activity_30d?: never
+          open_opportunities?: never
+          org_id?: string | null
+          pipeline_value?: never
+          project_count?: never
+          strategic_accounts?: never
+          territory_id?: string | null
+          territory_name?: string | null
+        }
+        Update: {
+          account_count?: never
+          accounts_with_activity_30d?: never
+          open_opportunities?: never
+          org_id?: string | null
+          pipeline_value?: never
+          project_count?: never
+          strategic_accounts?: never
+          territory_id?: string | null
+          territory_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "territories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_contractor_relationship_stale: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_relationships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_display_not_verified: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_new_account_no_follow_up: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_next_week_not_planned: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_no_champion: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Insert: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: string | null
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Update: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: string | null
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_opportunity_no_next_action: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Insert: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: string | null
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Update: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: string | null
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_opportunity_stale: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_overdue_follow_up: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Insert: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: never
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Update: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: never
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "next_actions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_project_no_dealer: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Insert: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: string | null
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Update: {
+          detail?: never
+          exception_type?: never
+          org_id?: string | null
+          owner_membership_id?: string | null
+          since?: string | null
+          subject_id?: string | null
+          subject_type?: never
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_quote_no_follow_up: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exception_strategic_account_quiet: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exceptions: {
+        Row: {
+          detail: string | null
+          exception_type: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+          since: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string | null
+        }
+        Relationships: []
+      }
+      routine_items: {
+        Row: {
+          account_id: string | null
+          account_name: string | null
+          action: string | null
+          context_date: string | null
+          due_date: string | null
+          item_id: string | null
+          kind: string | null
+          org_id: string | null
+          owner_membership_id: string | null
+        }
+        Relationships: []
+      }
+      weekly_review_new_objects: {
+        Row: {
+          created_at: string | null
+          name: string | null
+          object_id: string | null
+          object_type: string | null
+          org_id: string | null
+          owner_id: string | null
+        }
+        Relationships: []
+      }
+      weekly_review_recent_activity: {
+        Row: {
+          account_name: string | null
+          account_type: Database["public"]["Enums"]["account_type"] | null
+          activity_id: string | null
+          activity_type: Database["public"]["Enums"]["activity_type"] | null
+          commercial_potential: string | null
+          follow_up_required: boolean | null
+          key_information: string | null
+          occurred_at: string | null
+          org_id: string | null
+          outcomes: Database["public"]["Enums"]["activity_outcome"][] | null
+          owner_id: string | null
+          was_planned: boolean | null
+          week_start: string | null
+          what_happened: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_review_upcoming: {
+        Row: {
+          account_name: string | null
+          action: string | null
+          due_date: string | null
+          next_action_id: string | null
+          objective: Database["public"]["Enums"]["visit_objective"] | null
+          opportunity_name: string | null
+          org_id: string | null
+          owner_id: string | null
+          week_start: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "next_actions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
@@ -1757,6 +4138,12 @@ export type Database = {
       integration_provider: "anthropic" | "openai" | "google" | "workspace"
       membership_role: "rep" | "manager" | "admin" | "support"
       membership_status: "active" | "suspended"
+      next_action_kind:
+        | "VISIT"
+        | "SAMPLE_FOLLOW_UP"
+        | "QUOTE_FOLLOW_UP"
+        | "DISPLAY_CHECK"
+        | "OTHER"
       opportunity_stage:
         | "IDENTIFIED"
         | "QUALIFIED"
@@ -2000,6 +4387,13 @@ export const Constants = {
       integration_provider: ["anthropic", "openai", "google", "workspace"],
       membership_role: ["rep", "manager", "admin", "support"],
       membership_status: ["active", "suspended"],
+      next_action_kind: [
+        "VISIT",
+        "SAMPLE_FOLLOW_UP",
+        "QUOTE_FOLLOW_UP",
+        "DISPLAY_CHECK",
+        "OTHER",
+      ],
       opportunity_stage: [
         "IDENTIFIED",
         "QUALIFIED",
