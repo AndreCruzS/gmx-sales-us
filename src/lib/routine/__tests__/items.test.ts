@@ -148,6 +148,93 @@ describe("buildRoutineItems", () => {
     expect(buildRoutineItems([], accounts, SETTINGS, TODAY)).toEqual([]);
   });
 
+  // Regression guard (review round 1, Important finding): addMonths used to
+  // use plain Date.setMonth, which OVERFLOWS past a short month instead of
+  // clamping the way Postgres's `date + make_interval(months => n)` does.
+  // "2025-10-31" + 4 months rolled to "2026-03-03" (JS overflow) instead of
+  // the Postgres-correct "2026-02-28" (clamped to Feb's last day). Fixed by
+  // detecting the overflow and rolling back to day 0 of the target month.
+  //
+  // Expected values below are derived directly from the migration's own
+  // WHERE-clause predicates (supabase/migrations/20260729000100_routine.sql
+  // lines 89-98), not from this file's addMonths — i.e. by independently
+  // emulating what `now() - make_interval(months => n)` computes in
+  // Postgres (subtract n from today's month, clamping the day to today's
+  // day-of-month against the *target* month's length), for
+  // display_last_verified_at = "2025-10-31":
+  //
+  //   routine boundary (4mo, condition uses strict `<`):
+  //     today=2026-02-27 -> now-4mo=2025-10-27 -> 2025-10-31 <  that? false
+  //     today=2026-02-28 -> now-4mo=2025-10-28 -> 2025-10-31 <  that? false  (exactly 4 clamped
+  //                                                                            months old is NOT yet
+  //                                                                            "strictly older" -> excluded)
+  //     today=2026-03-01 -> now-4mo=2025-11-01 -> 2025-10-31 <  that? true   (first included day)
+  //     today=2026-03-03 -> now-4mo=2025-11-03 -> 2025-10-31 <  that? true   (included — this is the
+  //                                                                            exact date the JS-overflow
+  //                                                                            bug got wrong, since the
+  //                                                                            unclamped boundary was
+  //                                                                            itself "2026-03-03",
+  //                                                                            making the old `<` compare
+  //                                                                            self < self -> excluded)
+  //
+  //   verify boundary (6mo, condition uses inclusive `>=`):
+  //     today=2026-04-30 -> now-6mo=2025-10-30 -> 2025-10-31 >= that? true   (still inside window)
+  //     today=2026-05-01 -> now-6mo=2025-11-01 -> 2025-10-31 >= that? false  (escalated, first excluded day)
+  //
+  // These agree exactly with this module's own addMonths-based comparison
+  // once addMonths clamps correctly: addMonths("2025-10-31", 4) ==
+  // "2026-02-28" (routineBoundary < today), addMonths("2025-10-31", 6) ==
+  // "2026-04-30" (today <= verifyBoundary).
+  describe("month-end clamping at the display-check boundaries", () => {
+    const VERIFIED = "2025-10-31"; // month-end anchor that exposes the bug
+
+    it("excludes a display check exactly at the clamped 4-month routine boundary (strict <)", () => {
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
+      ];
+      // addMonths(VERIFIED, 4) clamps to "2026-02-28"; the routine condition
+      // is strict `<`, so being exactly on the boundary does not qualify yet.
+      expect(buildRoutineItems([], accounts, SETTINGS, "2026-02-28")).toEqual([]);
+    });
+
+    it("includes a display check the day after the clamped 4-month routine boundary", () => {
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
+      ];
+      const items = buildRoutineItems([], accounts, SETTINGS, "2026-03-01");
+      expect(items).toHaveLength(1);
+    });
+
+    it("includes a display check at the date the old overflow bug wrongly excluded (2026-03-03)", () => {
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
+      ];
+      // Pre-fix, addMonths("2025-10-31", 4) overflowed to "2026-03-03" (its
+      // own todayIso), so `boundary < today` compared self-to-self and was
+      // always false here. Postgres's clamped boundary is "2026-02-28", well
+      // before this date, so the correct answer is included.
+      const items = buildRoutineItems([], accounts, SETTINGS, "2026-03-03");
+      expect(items).toHaveLength(1);
+    });
+
+    it("includes a display check exactly at the clamped 6-month verify boundary (inclusive >=)", () => {
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
+      ];
+      // addMonths(VERIFIED, 6) clamps to "2026-04-30"; the verify condition
+      // is `>=`, so exactly on the boundary still qualifies (last included day).
+      const items = buildRoutineItems([], accounts, SETTINGS, "2026-04-30");
+      expect(items).toHaveLength(1);
+    });
+
+    it("excludes a display check the day after the clamped 6-month verify boundary (escalated)", () => {
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
+      ];
+      expect(buildRoutineItems([], accounts, SETTINGS, "2026-05-01")).toEqual([]);
+    });
+  });
+
   it("sources contextDate from created_at, not updated_at", () => {
     const agenda = [
       na({

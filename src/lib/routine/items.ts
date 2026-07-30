@@ -17,8 +17,10 @@
 //      the exception engine, not routine).
 //
 // Date math is plain string comparison on ISO dates (works because ISO
-// dates sort lexicographically) plus Date.setMonth on T00:00:00 anchors for
-// month arithmetic. new Date() in render paths is banned by the
+// dates sort lexicographically) plus Date.setUTCMonth on T00:00:00Z anchors
+// for month arithmetic, clamped to match Postgres's end-of-month behavior
+// (see addMonths below) and computed in UTC so results don't depend on the
+// runtime's local timezone. new Date() in render paths is banned by the
 // React-compiler lint; this is lib code, not a component.
 
 import type { CachedAccount, CachedAgendaItem } from "@/lib/offline";
@@ -50,11 +52,35 @@ const GROUP_ORDER: { kind: RoutineItem["kind"]; label: string }[] = [
 // the agenda proper (and feeds debriefWaiting below), never here.
 const CHORE_KINDS = new Set<string>(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "OTHER"]);
 
-/** ISO date (YYYY-MM-DD) `months` after `dateIso`, anchored at local midnight. */
+/** ISO date (YYYY-MM-DD) `months` after `dateIso`, anchored at UTC midnight.
+ *  Mirrors Postgres's `date + make_interval(months => n)` (used by the view
+ *  both for the display-check filter boundaries and the returned due_date):
+ *  when the target month is shorter than the anchor's day-of-month, Postgres
+ *  CLAMPS to the target month's last day. Plain `Date.setMonth` does not
+ *  clamp — it OVERFLOWS into the following month instead (e.g.
+ *  "2025-10-31" + 4 months would roll to "2026-03-03" instead of the
+ *  Postgres-correct "2026-02-28"), which silently disagrees with the live
+ *  `routine_items` view right around month-end anchors. Detect the overflow
+ *  (result day-of-month < anchor day-of-month) and roll back to day 0 of
+ *  the now-current month, i.e. the last day of the intended target month.
+ *
+ *  Anchored in UTC (not local time) deliberately: `dateIso` is a plain ISO
+ *  date with no time-of-day, so treating it as local midnight and then
+ *  slicing `toISOString()` (UTC) silently shifts the result back a day in
+ *  any timezone ahead of UTC — a real bug caught while verifying this fix
+ *  (this machine's Europe/Lisbon zone turned "2025-10-31" + 6 months into
+ *  "2026-04-29" instead of the correct "2026-04-30"). UTC-anchored
+ *  get/setUTC* math is timezone-independent, so callers get the same answer
+ *  in CI as on a dev machine in any zone. */
 function addMonths(dateIso: string, months: number): string {
-  const anchor = new Date(`${dateIso}T00:00:00`);
-  anchor.setMonth(anchor.getMonth() + months);
-  return anchor.toISOString().slice(0, 10);
+  const anchor = new Date(`${dateIso}T00:00:00Z`);
+  const anchorDay = anchor.getUTCDate();
+  const result = new Date(anchor);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  if (result.getUTCDate() < anchorDay) {
+    result.setUTCDate(0);
+  }
+  return result.toISOString().slice(0, 10);
 }
 
 export function buildRoutineItems(
