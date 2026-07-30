@@ -83,6 +83,37 @@ function addMonths(dateIso: string, months: number): string {
   return result.toISOString().slice(0, 10);
 }
 
+/** ISO date (YYYY-MM-DD) `months` before `dateIso`, anchored at UTC midnight.
+ *  Mirrors Postgres's `date - make_interval(months => n)` — the operation
+ *  the view actually uses for BOTH display-check membership predicates
+ *  (`verified < now() - interval` and `verified >= now() - interval`,
+ *  migration lines ~95-98). This is NOT the same computation as
+ *  `addMonths(verified, n) compared against today`, even though that looks
+ *  like an algebraic rearrangement of the same inequality: Postgres clamps
+ *  an overflowing day-of-month to the last day of the TARGET month, and the
+ *  day-of-month being clamped is always that of the value interval math is
+ *  applied TO. For `verified + n` that's verified's day; for `now() - n`
+ *  that's TODAY's day. Those can differ, so the two formulations diverge
+ *  right at month-end anchors — confirmed live against Postgres: with
+ *  verified="2026-02-28", today="2026-06-29", months=4,
+ *  `DATE '2026-02-28' < (DATE '2026-06-29' - make_interval(months => 4))`
+ *  is `false` (excluded), but `addMonths("2026-02-28", 4) = "2026-06-28"`,
+ *  and `"2026-06-28" < "2026-06-29"` is `true` (wrongly included). The
+ *  membership predicates below use this function, anchored on todayIso,
+ *  exactly like the view. (The view's `due_date` column, by contrast, is
+ *  `verified + interval` — addition anchored on verified — so `dueDate`
+ *  correctly keeps using `addMonths(verified, n)`, not this function.) */
+function subMonths(dateIso: string, months: number): string {
+  const anchor = new Date(`${dateIso}T00:00:00Z`);
+  const anchorDay = anchor.getUTCDate();
+  const result = new Date(anchor);
+  result.setUTCMonth(result.getUTCMonth() - months);
+  if (result.getUTCDate() < anchorDay) {
+    result.setUTCDate(0);
+  }
+  return result.toISOString().slice(0, 10);
+}
+
 export function buildRoutineItems(
   agenda: CachedAgendaItem[],
   accounts: CachedAccount[],
@@ -120,9 +151,12 @@ export function buildRoutineItems(
     .filter((a) => a.has_display_wall && a.display_last_verified_at !== null)
     .filter((a) => {
       const verified = a.display_last_verified_at as string;
-      const routineBoundary = addMonths(verified, settings.display_routine_months);
-      const verifyBoundary = addMonths(verified, settings.display_verify_months);
-      return routineBoundary < todayIso && verifyBoundary >= todayIso;
+      // Mirrors the view's WHERE clause exactly: both bounds subtract from
+      // TODAY (subMonths(todayIso, n)), not add to verified — see subMonths'
+      // doc comment for why that distinction matters at month-end anchors.
+      const routineBoundary = subMonths(todayIso, settings.display_routine_months);
+      const verifyBoundary = subMonths(todayIso, settings.display_verify_months);
+      return verified < routineBoundary && verified >= verifyBoundary;
     })
     .map((a) => {
       const verified = a.display_last_verified_at as string;

@@ -185,6 +185,29 @@ describe("buildRoutineItems", () => {
   // once addMonths clamps correctly: addMonths("2025-10-31", 4) ==
   // "2026-02-28" (routineBoundary < today), addMonths("2025-10-31", 6) ==
   // "2026-04-30" (today <= verifyBoundary).
+  // Review round 1 fixed the overflow-vs-clamp bug in addMonths. Review
+  // round 2 (live-Postgres-confirmed) found the builder was clamping on the
+  // wrong anchor: the view's membership predicates are `verified <
+  // now() - interval` / `verified >= now() - interval` — subtraction
+  // anchored on TODAY — not `verified + interval < today` — addition
+  // anchored on VERIFIED. Both formulations look algebraically equivalent,
+  // but Postgres clamps day-of-month overflow using the day of whichever
+  // value the interval is applied TO, so they diverge whenever today's
+  // day-of-month lands in a shorter target month than verified's would.
+  // Fixed by adding subMonths(dateIso, n) (mirrors `date - interval`,
+  // UTC-anchored and clamped the same way as addMonths) and rewriting both
+  // membership predicates as `verified < subMonths(todayIso, n)` /
+  // `verified >= subMonths(todayIso, n)` — the view's own formulation,
+  // verbatim. `dueDate` is untouched: the view computes it as
+  // `verified + interval` (migration ~line 93), so it correctly keeps using
+  // addMonths(verified, n).
+  //
+  // The five tests below were re-derived under the corrected
+  // subMonths-based formulation and were unchanged by the round-2 fix (all
+  // five gave the same boolean before and after — confirmed by hand and
+  // against live Postgres by the reviewer), so their expectations are
+  // untouched; only the comments below now explain them in terms of
+  // subMonths(todayIso, n) rather than addMonths(verified, n).
   describe("month-end clamping at the display-check boundaries", () => {
     const VERIFIED = "2025-10-31"; // month-end anchor that exposes the bug
 
@@ -192,8 +215,9 @@ describe("buildRoutineItems", () => {
       const accounts = [
         acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
       ];
-      // addMonths(VERIFIED, 4) clamps to "2026-02-28"; the routine condition
-      // is strict `<`, so being exactly on the boundary does not qualify yet.
+      // subMonths("2026-02-28", 4) = "2025-10-28" (Feb's day 28 fits in
+      // October, no clamp needed here). VERIFIED ("2025-10-31") is not
+      // strictly before that, so excluded.
       expect(buildRoutineItems([], accounts, SETTINGS, "2026-02-28")).toEqual([]);
     });
 
@@ -201,6 +225,7 @@ describe("buildRoutineItems", () => {
       const accounts = [
         acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
       ];
+      // subMonths("2026-03-01", 4) = "2025-11-01"; VERIFIED < that -> included.
       const items = buildRoutineItems([], accounts, SETTINGS, "2026-03-01");
       expect(items).toHaveLength(1);
     });
@@ -209,10 +234,7 @@ describe("buildRoutineItems", () => {
       const accounts = [
         acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
       ];
-      // Pre-fix, addMonths("2025-10-31", 4) overflowed to "2026-03-03" (its
-      // own todayIso), so `boundary < today` compared self-to-self and was
-      // always false here. Postgres's clamped boundary is "2026-02-28", well
-      // before this date, so the correct answer is included.
+      // subMonths("2026-03-03", 4) = "2025-11-03"; VERIFIED < that -> included.
       const items = buildRoutineItems([], accounts, SETTINGS, "2026-03-03");
       expect(items).toHaveLength(1);
     });
@@ -221,8 +243,8 @@ describe("buildRoutineItems", () => {
       const accounts = [
         acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
       ];
-      // addMonths(VERIFIED, 6) clamps to "2026-04-30"; the verify condition
-      // is `>=`, so exactly on the boundary still qualifies (last included day).
+      // subMonths("2026-04-30", 6) = "2025-10-30"; VERIFIED >= that -> included
+      // (the verify condition is inclusive, so exactly-on-boundary still qualifies).
       const items = buildRoutineItems([], accounts, SETTINGS, "2026-04-30");
       expect(items).toHaveLength(1);
     });
@@ -231,7 +253,65 @@ describe("buildRoutineItems", () => {
       const accounts = [
         acct({ id: "a1", has_display_wall: true, display_last_verified_at: VERIFIED }),
       ];
+      // subMonths("2026-05-01", 6) = "2025-11-01"; VERIFIED >= that is false -> excluded.
       expect(buildRoutineItems([], accounts, SETTINGS, "2026-05-01")).toEqual([]);
+    });
+
+    // Round 2 regression: the confirmed counterexample from live Postgres.
+    // `DATE '2026-02-28' < (DATE '2026-06-29' - make_interval(months => 4))`
+    // = false (excluded) on the real routine_items view. The pre-fix
+    // addition-anchored builder computed addMonths("2026-02-28", 4) =
+    // "2026-06-28" (Feb's day 28 fits fine in June, no clamp) and then
+    // "2026-06-28" < "2026-06-29" = true — wrongly included.
+    it("subtracts from today (not verified) — confirmed counterexample against live Postgres", () => {
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: "2026-02-28" }),
+      ];
+      expect(buildRoutineItems([], accounts, SETTINGS, "2026-06-29")).toEqual([]);
+    });
+
+    // Two more varied-day-of-month anchors on the TODAY side, each chosen
+    // so today - N months lands in a shorter target month than verified's
+    // own day-of-month would clamp to — i.e. cases where the old
+    // addition-anchored formula and the correct subtraction-anchored one
+    // give opposite answers. Each uses a dedicated settings object with a
+    // very large display_verify_months so only the routine-boundary
+    // predicate under test can determine membership.
+    it("today's 31st clamps against a 30-day target month, not verified's day-of-month", () => {
+      const s: RoutineSettings = {
+        display_routine_months: 1,
+        display_verify_months: 24,
+        overdue_follow_up_days: 7,
+      };
+      // subMonths("2026-05-31", 1): May's day 31 doesn't fit April (30
+      // days) -> clamps to "2026-04-30". VERIFIED sits exactly on that
+      // boundary, so strict `<` excludes it.
+      //   (For contrast, the old formula would get this wrong: addMonths(
+      //   "2026-04-30", 1) = "2026-05-30" (April's day 30 fits fine in May,
+      //   no clamp), and "2026-05-30" < "2026-05-31" is true -> wrongly
+      //   included.)
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: "2026-04-30" }),
+      ];
+      expect(buildRoutineItems([], accounts, s, "2026-05-31")).toEqual([]);
+    });
+
+    it("today's 30th clamps against February, not verified's day-of-month", () => {
+      const s: RoutineSettings = {
+        display_routine_months: 2,
+        display_verify_months: 24,
+        overdue_follow_up_days: 7,
+      };
+      // subMonths("2026-04-30", 2): April's day 30 doesn't fit February
+      // 2026 (28 days, not a leap year) -> clamps to "2026-02-28". VERIFIED
+      // sits exactly on that boundary, so strict `<` excludes it.
+      //   (Old formula: addMonths("2026-02-28", 2) = "2026-04-28" (Feb's
+      //   day 28 fits fine in April, no clamp), and "2026-04-28" <
+      //   "2026-04-30" is true -> wrongly included.)
+      const accounts = [
+        acct({ id: "a1", has_display_wall: true, display_last_verified_at: "2026-02-28" }),
+      ];
+      expect(buildRoutineItems([], accounts, s, "2026-04-30")).toEqual([]);
     });
   });
 
