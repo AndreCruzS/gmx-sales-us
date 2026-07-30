@@ -15,6 +15,7 @@ import { SyncBadge } from "./sync-badge";
 const TITLES: Record<string, string> = {
   "/": "Home",
   "/visits": "Visits",
+  "/routine": "Routine",
   "/accounts": "Accounts",
   "/record": "Record",
   "/review": "Review",
