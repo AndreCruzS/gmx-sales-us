@@ -11,7 +11,7 @@
 // allowed here, and write the account_relationships row (D4/D7) — "that flow
 // belongs on the account screen, not a card sheet" per that file's comment.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useOffline } from "@/components/offline-provider";
 import {
@@ -35,6 +35,11 @@ export default function NewAccountPage() {
   const [leadSource, setLeadSource] = useState<LeadSource | "">("");
   const [sourceDetail, setSourceDetail] = useState("");
   const [referringAccountId, setReferringAccountId] = useState("");
+  // Referral picker (fix round 1): type-to-filter over cached accounts, same
+  // idiom as record/page.tsx's account picker — a bare <select> doesn't scale
+  // to this org's account list and can't distinguish same-named branches.
+  const [referringQuery, setReferringQuery] = useState("");
+  const [pickingReferring, setPickingReferring] = useState(false);
   const [championNote, setChampionNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,6 +51,18 @@ export default function NewAccountPage() {
   const isReferral = leadSource
     ? (REFERRAL_LEAD_SOURCES as readonly string[]).includes(leadSource)
     : false;
+
+  const referringAccount = accounts.find((a) => a.id === referringAccountId) ?? null;
+
+  // Same filter shape as record/page.tsx's account picker: name match, capped
+  // list — this is a quick-find over the cached working set, not a full search.
+  const filteredReferring = useMemo(() => {
+    const q = referringQuery.trim().toLowerCase();
+    const base = q
+      ? accounts.filter((a) => a.name.toLowerCase().includes(q))
+      : accounts;
+    return base.slice(0, 6);
+  }, [accounts, referringQuery]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -236,6 +253,8 @@ export default function NewAccountPage() {
             onChange={(e) => {
               setLeadSource(e.target.value as LeadSource | "");
               setReferringAccountId("");
+              setReferringQuery("");
+              setPickingReferring(false);
             }}
             className="field"
           >
@@ -257,32 +276,99 @@ export default function NewAccountPage() {
           />
         )}
 
+        {/* Referral picker (fix round 1): type-to-filter over cached accounts
+            — same idiom as record/page.tsx's account picker — rather than a
+            bare <select> that can't distinguish same-named branches at this
+            org's account-list size. */}
         {isReferral && (
-          <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
             <span className="t-meta">Who sent them your way?</span>
-            <select
-              value={referringAccountId}
-              onChange={(e) => setReferringAccountId(e.target.value)}
-              className="field"
-            >
-              <option value="">Pick the referring account</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            {referringAccount ? (
+              <div className="row">
+                <span className="row-body">
+                  <span className="t-title block truncate">
+                    {referringAccount.name}
+                  </span>
+                  <span className="t-sub block truncate">
+                    {humanize(referringAccount.account_type)}
+                    {referringAccount.city ? ` · ${referringAccount.city}` : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="btn-quiet shrink-0"
+                  onClick={() => {
+                    setReferringAccountId("");
+                    setPickingReferring(true);
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+            ) : pickingReferring ? (
+              <div className="card overflow-hidden">
+                <input
+                  autoFocus
+                  placeholder="Find the referring account"
+                  value={referringQuery}
+                  onChange={(e) => setReferringQuery(e.target.value)}
+                  className="field"
+                  style={{ borderRadius: 0, border: 0 }}
+                />
+                <ul>
+                  {filteredReferring.map((a) => (
+                    <li key={a.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReferringAccountId(a.id);
+                          setPickingReferring(false);
+                          setReferringQuery("");
+                        }}
+                        className="flex w-full items-baseline gap-2 px-4 py-3 text-left"
+                        style={{ borderTop: "1px solid var(--rule)" }}
+                      >
+                        <span className="t-title">{a.name}</span>
+                        <span className="t-meta">
+                          {humanize(a.account_type)}
+                          {a.city ? ` · ${a.city}` : ""}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                  {filteredReferring.length === 0 && (
+                    <p className="t-sub px-4 py-3">
+                      No cached accounts match.
+                    </p>
+                  )}
+                </ul>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPickingReferring(true)}
+                className="btn-secondary"
+              >
+                Find the referring account
+              </button>
+            )}
+          </div>
         )}
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Champion (optional) — who to ask for</span>
+          <span className="t-meta">
+            Champion — who&apos;s your fan there?
+          </span>
           <input
             value={championNote}
             onChange={(e) => setChampionNote(e.target.value)}
             className="field"
-            placeholder="Name of your contact there"
+            placeholder="Their name (optional)"
           />
+          <span className="t-meta">
+            Optional — the name you type becomes this account&apos;s
+            champion contact.
+          </span>
         </label>
 
         {error && (
