@@ -52,6 +52,7 @@ export interface CachedAgendaItem {
   account_id: string | null;
   opportunity_id: string | null;
   objective: string | null;
+  kind: string | null; // next_action_kind (D-routine): null until the DB trigger infers it
   updated_at: string; // baseVersion source for edits
 }
 
@@ -78,11 +79,20 @@ export interface CachedContact {
   updated_at: string;
 }
 
+// Routine list display windows (D-routine): the org's grace periods before a
+// display check joins the routine, and before it escalates to an exception.
+// Same 4/6 defaults the `routine_items` view applies server-side.
+export interface OrgSettings {
+  display_routine_months: number;
+  display_verify_months: number;
+}
+
 export interface WorkingSet {
   accounts: CachedAccount[];
   contacts: CachedContact[];
   agenda: CachedAgendaItem[];
   activities: CachedActivity[];
+  settings: OrgSettings;
   pulledAt: string;
 }
 

@@ -93,8 +93,21 @@ export class FakeBackend implements SyncBackend {
     return {
       accounts: [],
       contacts: [],
-      agenda: [],
+      agenda: [
+        {
+          id: "na-sample",
+          action: "Follow up on sample drop",
+          due_date: "2026-08-05",
+          completed_at: null,
+          account_id: null,
+          opportunity_id: null,
+          objective: null,
+          kind: "SAMPLE_FOLLOW_UP",
+          updated_at: this.nextVersion(),
+        },
+      ],
       activities: [],
+      settings: { display_routine_months: 4, display_verify_months: 6 },
       pulledAt: new Date().toISOString(),
     };
   }

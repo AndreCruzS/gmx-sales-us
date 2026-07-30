@@ -206,6 +206,18 @@ describe("blob timing (D59)", () => {
   });
 });
 
+describe("pull — routine kind + org settings join the working set", () => {
+  it("caches agenda kind and org settings", async () => {
+    await engine.pull();
+    const agenda = await local.getAgenda();
+    expect(agenda.find((a) => a.id === "na-sample")?.kind).toBe("SAMPLE_FOLLOW_UP");
+    expect(JSON.parse((await local.getMeta("org_settings"))!)).toEqual({
+      display_routine_months: 4,
+      display_verify_months: 6,
+    });
+  });
+});
+
 describe("outbox boundary validation", () => {
   it("refuses an update without a baseVersion (D61 guard)", async () => {
     await expect(

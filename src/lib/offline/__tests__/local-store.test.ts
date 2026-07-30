@@ -94,6 +94,7 @@ describe("working set (D56)", () => {
     ],
     agenda: [],
     activities: [],
+    settings: { display_routine_months: 4, display_verify_months: 6 },
     pulledAt: new Date().toISOString(),
   };
 

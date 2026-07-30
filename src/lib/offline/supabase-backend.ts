@@ -3,7 +3,17 @@
 // replay because these calls carry the rep's own JWT.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SyncRejectionError, type SyncBackend, type WorkingSet } from "./types";
+import {
+  SyncRejectionError,
+  type OrgSettings,
+  type SyncBackend,
+  type WorkingSet,
+} from "./types";
+
+// routine_items (D-routine) falls back to these when an org hasn't set its
+// own windows yet — mirrors the coalesce() defaults in the view itself.
+const DEFAULT_DISPLAY_ROUTINE_MONTHS = 4;
+const DEFAULT_DISPLAY_VERIFY_MONTHS = 6;
 
 const DUPLICATE_KEY = "23505";
 // PostgREST surfaces an RLS write violation as 42501; CHECK violations as 23514.
@@ -74,20 +84,22 @@ export class SupabaseSyncBackend implements SyncBackend {
   async pullWorkingSet(): Promise<WorkingSet> {
     // D56: bounded, visit-ready working set — never the whole territory.
     const today = new Date();
-    const dayAfterTomorrow = new Date(today);
-    dayAfterTomorrow.setDate(today.getDate() + 2);
     const monthAgo = new Date(today);
     monthAgo.setDate(today.getDate() - 30);
 
-    const [agendaRes, activitiesRes] = await Promise.all([
+    const [agendaRes, activitiesRes, orgRes] = await Promise.all([
       this.supabase
         .from("next_actions")
+        // Routine list (D-routine): widened from the fortnight visit window
+        // to ALL open next_actions, capped, so routine chores (which can sit
+        // months out — e.g. a display check) are cached regardless of the
+        // visit horizon.
         .select(
-          "id, action, due_date, completed_at, account_id, opportunity_id, objective, updated_at",
+          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, updated_at",
         )
         .is("completed_at", null)
-        .lt("due_date", dayAfterTomorrow.toISOString().slice(0, 10))
-        .order("due_date"),
+        .order("due_date")
+        .limit(200),
       this.supabase
         .from("activities")
         .select(
@@ -96,9 +108,28 @@ export class SupabaseSyncBackend implements SyncBackend {
         .gte("occurred_at", monthAgo.toISOString())
         .order("occurred_at", { ascending: false })
         .limit(100),
+      // Routine list (D-routine): the org's display-check windows — RLS
+      // scopes this to the caller's own org (private.jwt_org_id()), so a
+      // plain unfiltered select returns at most one row.
+      this.supabase.from("organizations").select("settings").maybeSingle(),
     ]);
     if (agendaRes.error) throw new Error(agendaRes.error.message);
     if (activitiesRes.error) throw new Error(activitiesRes.error.message);
+    if (orgRes.error) throw new Error(orgRes.error.message);
+
+    // Mirrors the view's coalesce() semantics: only a MISSING/null key falls
+    // back to the default — an explicit 0 (however unlikely) is not falsy here.
+    const rawSettings = (orgRes.data?.settings ?? {}) as Record<string, unknown>;
+    const settings: OrgSettings = {
+      display_routine_months:
+        typeof rawSettings.display_routine_months === "number"
+          ? rawSettings.display_routine_months
+          : DEFAULT_DISPLAY_ROUTINE_MONTHS,
+      display_verify_months:
+        typeof rawSettings.display_verify_months === "number"
+          ? rawSettings.display_verify_months
+          : DEFAULT_DISPLAY_VERIFY_MONTHS,
+    };
 
     // Accounts: RLS already narrows this to the rep's own scope (own +
     // territory), which IS the D56 working-set boundary; the limit keeps the
@@ -129,6 +160,7 @@ export class SupabaseSyncBackend implements SyncBackend {
       contacts: contactsRes.data,
       agenda: agendaRes.data,
       activities: activitiesRes.data,
+      settings,
       pulledAt: new Date().toISOString(),
     };
   }

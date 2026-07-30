@@ -149,6 +149,9 @@ export class OutboxSyncEngine implements SyncEngine {
   async pull(): Promise<void> {
     const ws = await this.backend.pullWorkingSet();
     await this.local.putWorkingSet(ws);
+    // Routine list (D-routine): the org's display-check windows ride the
+    // pull, cached like any other read model so the routine renders offline.
+    await this.local.setMeta("org_settings", JSON.stringify(ws.settings));
     await this.notify();
   }
 
