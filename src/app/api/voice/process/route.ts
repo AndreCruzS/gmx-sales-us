@@ -14,7 +14,12 @@ import {
   generateText,
 } from "ai";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { debriefDraftSchema, extractionPrompt } from "@/lib/voice/draft";
+import {
+  debriefDraftSchema,
+  extractionPrompt,
+  sanitizeDraft,
+  type RoutineContextItem,
+} from "@/lib/voice/draft";
 
 export const maxDuration = 120;
 
@@ -111,7 +116,7 @@ export async function POST() {
   // Only the caller's own captures, only ones ready to process.
   const { data: captures, error } = await service
     .from("voice_captures")
-    .select("id, audio_path, transcript, language, created_at")
+    .select("id, audio_path, transcript, language, created_at, account_id")
     .eq("org_id", orgId)
     .eq("owner_id", membership.id)
     .eq("status", "UPLOADED")
@@ -144,10 +149,29 @@ export async function POST() {
       }
       if (!transcript?.trim()) throw new Error("nothing to transcribe");
 
-      const { object: draft } = await generateObject({
+      // Routine context (D-routine, Task 10): a capture pre-linked to an
+      // account (D46) offers the model that account's open chores so it can
+      // propose a disposition instead of inventing one. Scoped to this
+      // capture's own owner + account — routine_items itself already narrows
+      // to open, unescalated items (migration 20260729000100_routine.sql).
+      let routineContext: RoutineContextItem[] | undefined;
+      let openItemIds: string[] = [];
+      if (capture.account_id) {
+        const { data: routineRows } = await service
+          .from("routine_items")
+          .select("item_id, kind, action")
+          .eq("account_id", capture.account_id)
+          .eq("owner_membership_id", membership.id);
+        if (routineRows && routineRows.length > 0) {
+          routineContext = routineRows as RoutineContextItem[];
+          openItemIds = routineRows.map((r) => r.item_id as string);
+        }
+      }
+
+      const { object: rawDraft } = await generateObject({
         model: EXTRACT_MODEL,
         schema: debriefDraftSchema,
-        system: extractionPrompt(capture.created_at, language),
+        system: extractionPrompt(capture.created_at, language, routineContext),
         prompt: transcript,
         providerOptions: {
           gateway: {
@@ -156,6 +180,9 @@ export async function POST() {
           },
         },
       });
+      // Hallucination guard (Task 9): never trust the model to keep to the
+      // item ids it was offered — drop anything it invented before storing.
+      const draft = sanitizeDraft(rawDraft, openItemIds);
 
       await service
         .from("voice_captures")

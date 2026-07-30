@@ -24,9 +24,11 @@ import {
 import { CONFIDENCE_OK, type ExtractedCard } from "@/lib/cards/draft";
 import { displayAccountName } from "@/lib/format";
 import type { DebriefDraft } from "@/lib/voice/draft";
+import { buildRoutineOps } from "@/lib/voice/fanout";
 import {
   getOfflineLayer,
   type CachedAccount,
+  type CachedAgendaItem,
   type OutboxRecord,
 } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -39,6 +41,25 @@ interface CaptureRow {
   audio_path: string | null;
   created_at: string;
   updated_at: string;
+  // D46 pre-link (Task 5): the account/planned visit this capture was taken
+  // against, when known at capture time — carried through so Send can attach
+  // the routine fan-out (Task 10) and the activity's planned_action_id.
+  account_id: string | null;
+  planned_action_id: string | null;
+}
+
+// Rep-language label for a confirmed routine disposition (D-routine, Task
+// 10): pre-checked in the sheet, unchecking removes the op on Send. No
+// jargon — "disposition"/"item_id" never surface in the UI.
+function dispositionLabel(
+  disposition: { item_id: string; disposition: "DONE" | "DISPLAY_VERIFIED" },
+  agenda: CachedAgendaItem[],
+): string {
+  if (disposition.disposition === "DISPLAY_VERIFIED") {
+    return "Display wall checked — uncheck if not right";
+  }
+  const item = agenda.find((a) => a.id === disposition.item_id);
+  return `${item?.action ?? "That routine item"} — done, uncheck if not right`;
 }
 
 interface CandidateRow {
@@ -67,6 +88,7 @@ export default function ReviewPage() {
   const [captures, setCaptures] = useState<CaptureRow[]>([]);
   const [candidates, setCandidates] = useState<CandidateRow[]>([]);
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
+  const [agenda, setAgenda] = useState<CachedAgendaItem[]>([]);
   const [rejected, setRejected] = useState<OutboxRecord[]>([]);
   const [reviewing, setReviewing] = useState<CaptureRow | null>(null);
   const [reviewingCard, setReviewingCard] = useState<CandidateRow | null>(null);
@@ -77,6 +99,7 @@ export default function ReviewPage() {
   const load = useCallback(async () => {
     const layer = getOfflineLayer();
     void layer.local.getAccounts().then(setAccounts);
+    void layer.local.getAgenda().then(setAgenda);
     void layer.local.listRejected().then(setRejected);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -84,7 +107,7 @@ export default function ReviewPage() {
         supabase
           .from("voice_captures")
           .select(
-            "id, status, transcript, ai_draft, audio_path, created_at, updated_at",
+            "id, status, transcript, ai_draft, audio_path, created_at, updated_at, account_id, planned_action_id",
           )
           .neq("status", "DISCARDED")
           .order("created_at", { ascending: false })
@@ -461,6 +484,7 @@ export default function ReviewPage() {
         <ReviewSheet
           capture={reviewing}
           accounts={accounts}
+          agenda={agenda}
           onClose={() => setReviewing(null)}
           onDone={() => {
             setReviewing(null);
@@ -486,21 +510,26 @@ export default function ReviewPage() {
 }
 
 // The D9 gate: every field editable, the rep commits explicitly. Send fans out
-// through the standard outbox (D10) — activity + next actions + capture update.
+// through the standard outbox (D10) — activity + next actions + the routine
+// fan-out (dispositions/typed commitments, Task 10) + capture update.
 function ReviewSheet({
   capture,
   accounts,
+  agenda,
   onClose,
   onDone,
 }: {
   capture: CaptureRow;
   accounts: CachedAccount[];
+  agenda: CachedAgendaItem[];
   onClose: () => void;
   onDone: () => void;
 }) {
   const { profile } = useOffline();
   const draft = capture.ai_draft as DebriefDraft;
-  const [accountId, setAccountId] = useState("");
+  // Task 9 finding, carried: routine_dispositions is required-without-default
+  // on the schema, but pre-existing ai_draft rows lack it — default defensively.
+  const [accountId, setAccountId] = useState(capture.account_id ?? "");
   const [activityType, setActivityType] = useState<ActivityType>(
     draft.activity_type,
   );
@@ -510,6 +539,11 @@ function ReviewSheet({
   const [outcomes, setOutcomes] = useState<ActivityOutcome[]>(draft.outcomes);
   const [followUp, setFollowUp] = useState(draft.follow_up_required);
   const [actions, setActions] = useState(draft.next_actions);
+  // Routine confirmations (D-routine, Task 10): pre-checked — the rep
+  // unchecks anything the model got wrong rather than opting in from zero.
+  const [dispositions, setDispositions] = useState(
+    (draft.routine_dispositions ?? []).map((d) => ({ ...d, confirmed: true })),
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -527,6 +561,7 @@ function ReviewSheet({
     try {
       const layer = getOfflineLayer();
       const activityId = crypto.randomUUID();
+      const now = new Date().toISOString();
       enqueuedSeqs.push(
         await layer.sync.enqueue({
           clientId: activityId,
@@ -540,6 +575,10 @@ function ReviewSheet({
             owner_id: profile.membershipId,
             occurred_at: capture.created_at,
             was_planned: false,
+            // D46 gap fix (carried from Task 6's review): the capture's own
+            // pre-link rides through to the activity it becomes, same as the
+            // typed /record path already does.
+            planned_action_id: capture.planned_action_id ?? null,
             what_happened: whatHappened,
             key_information: keyInfo.trim() || null,
             commercial_potential: potential.trim() || null,
@@ -552,6 +591,9 @@ function ReviewSheet({
       );
       for (const na of actions) {
         if (!na.action.trim() || !na.due_date) continue;
+        // Typed commitments (a kind set) are created by the routine fan-out
+        // below instead, which is where their kind actually gets persisted.
+        if (na.kind) continue;
         const naId = crypto.randomUUID();
         enqueuedSeqs.push(
           await layer.sync.enqueue({
@@ -576,7 +618,50 @@ function ReviewSheet({
           }),
         );
       }
-      const now = new Date().toISOString();
+
+      // Routine fan-out (D-routine, Task 10): confirmed dispositions
+      // (DONE/DISPLAY_VERIFIED) and typed commitments become their own ops,
+      // appended to the same fan-out — FIFO seq still guarantees the
+      // activity above lands first; D62 compensation covers all of it.
+      const itemVersions: Record<string, string> = {};
+      for (const d of dispositions) {
+        if (d.disposition !== "DONE") continue;
+        const item = agenda.find((a) => a.id === d.item_id);
+        if (item) itemVersions[d.item_id] = item.updated_at;
+      }
+      const accountVersion = accounts.find((a) => a.id === accountId)?.updated_at ?? "";
+      const routineOps = buildRoutineOps(
+        {
+          ...draft,
+          next_actions: actions,
+          routine_dispositions: dispositions
+            .filter((d) => d.confirmed)
+            .map((d) => ({
+              item_id: d.item_id,
+              disposition: d.disposition,
+              note: d.note,
+            })),
+        },
+        accountId,
+        profile.membershipId,
+        profile.orgId,
+        itemVersions,
+        accountVersion,
+        now,
+      );
+      for (const op of routineOps) {
+        enqueuedSeqs.push(
+          await layer.sync.enqueue({
+            clientId: op.payload.id as string,
+            entityType: op.entityType,
+            op: op.op,
+            payload: op.payload,
+            baseVersion: op.baseVersion,
+            blobRef: null,
+          }),
+        );
+      }
+
       enqueuedSeqs.push(
         await layer.sync.enqueue({
           clientId: capture.id,
@@ -600,10 +685,10 @@ function ReviewSheet({
         occurred_at: capture.created_at,
         what_happened: whatHappened,
         follow_up_required: followUp,
-        // This send path doesn't link to a planned visit (the payload above
-        // hardcodes was_planned: false, no planned_action_id) — null here
-        // matches what the server row will actually carry.
-        planned_action_id: null,
+        // Mirrors the outbox payload's planned_action_id above (D46) — Home's
+        // "Visits this week" tile dedupes a debriefed planned visit from a
+        // walk-in on this field, same as the typed /record path.
+        planned_action_id: capture.planned_action_id ?? null,
         pendingSync: true,
       });
       void layer.sync.drain();
@@ -730,6 +815,29 @@ function ReviewSheet({
             />
             Needs a follow-up
           </label>
+
+          {dispositions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="t-meta">On your list</span>
+              {dispositions.map((d, i) => (
+                <label key={`${d.item_id}-${i}`} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={d.confirmed}
+                    onChange={() =>
+                      setDispositions((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, confirmed: !x.confirmed } : x,
+                        ),
+                      )
+                    }
+                    className="h-4 w-4 accent-[var(--accent)]"
+                  />
+                  {dispositionLabel(d, agenda)}
+                </label>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-col gap-2">
             <span className="t-meta">What happens next</span>

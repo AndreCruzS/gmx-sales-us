@@ -57,6 +57,11 @@ export const nextActionCreateSchema = z.object({
   activity_id: uuid.nullish(),
   objective: z.enum(VISIT_OBJECTIVES).nullish(),
   objective_detail: z.string().nullish(),
+  // Task 10 (D-routine): debrief commitments carry the same typed kind the
+  // routine list groups by. Mirrors debriefDraftSchema's next_actions.kind
+  // (src/lib/voice/draft.ts) — DISPLAY_CHECK is deliberately excluded, since
+  // that kind is only ever derived from an account, never created directly.
+  kind: z.enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"]).nullish(),
 });
 export type NextActionCreate = z.infer<typeof nextActionCreateSchema>;
 
@@ -162,6 +167,14 @@ export const accountCreateSchema = z
   );
 export type AccountCreate = z.infer<typeof accountCreateSchema>;
 
+// Task 10 (D-routine): the DISPLAY_VERIFIED disposition fan-out is a scalar
+// edit, LWW-guarded like next_action's — same shape, one field.
+export const accountUpdateSchema = z.object({
+  id: uuid,
+  display_last_verified_at: isoTimestamp.nullish(),
+});
+export type AccountUpdate = z.infer<typeof accountUpdateSchema>;
+
 export const ENTITY_TABLES = {
   activity: "activities",
   next_action: "next_actions",
@@ -184,4 +197,5 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "contact_candidate:update": contactCandidateUpdateSchema,
   "contact:create": contactCreateSchema,
   "account:create": accountCreateSchema,
+  "account:update": accountUpdateSchema,
 };
