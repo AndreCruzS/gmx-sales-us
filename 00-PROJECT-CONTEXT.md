@@ -208,7 +208,61 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-28 (**Gmail ingestion pipeline built, awaiting credentials**)
+- **Last updated:** 2026-07-30 (**Home widgets + Routine list shipped and gate-verified**)
+- **Home widgets + Routine list delivered** (design: `docs/superpowers/specs/2026-07-29-home-widgets-routine-design.md`, 12-task TDD plan, Tasks 1–12):
+  Home rebuilt as a launcher (widget grid, direction C) instead of opening on the
+  day list — greeting + honest sync line, offline search surfaced on Home, a
+  full-width "Visits coming" tile, a 2×2 count-tile grid (**Routine**, **Needs
+  attention**, **Waiting your OK**, **Visits this week**), a 4-up action row
+  (scan card / voice note / accounts / add account), and a "Debrief waiting"
+  card for "How did it go?" pre-links (D46 link-and-complete). The day list
+  moved one tap deep to `/visits` (plan-a-visit kept, **objective required**
+  per D48). New **Routine list** (`/routine`): the customer's samples/quotes/
+  display-wall to-do list, grouped by kind, born from data and cleared by
+  doing (no checkboxes) — substrate is `next_actions.kind` (new column:
+  `VISIT | SAMPLE_FOLLOW_UP | QUOTE_FOLLOW_UP | DISPLAY_CHECK | OTHER`, a
+  `BEFORE INSERT` trigger infers it when the app doesn't set it explicitly)
+  unioned with derived display checks (`display_last_verified_at` older than
+  the new `display_routine_months` org setting, before the existing
+  `display_verify_months` exception threshold — chore surfaces two months
+  before it becomes a warning; one `routine_items` security_invoker view,
+  same RLS posture as the exception views). Debrief fan-out (Task 9–10)
+  closes the loop both directions: the review sheet's AI draft carries
+  `routine_dispositions` (pre-checked confirmations the rep can uncheck) and
+  typed commitments with a `kind`; Send turns confirmed dispositions into
+  `next_action:update`/`account:update` ops and commitments into new
+  `next_action:create` rows — one fan-out function (`buildRoutineOps`),
+  covered by both unit tests and a live-Postgres run. `voice_captures` gained
+  `account_id`/`planned_action_id` so the AI extraction prompt can offer the
+  rep's open routine items as context instead of inventing dispositions.
+  Review badge (Task 7) unifies the tab badge and Home's "Waiting your OK"
+  tile behind one `useReviewCount()`. Add-account promoted to its own screen
+  reachable from Home (`/accounts/new`), with the referral fan-out
+  (`account_relationship` REFERRED_BY) and a champion-note field that creates
+  a real champion contact — neither existed as an outbox entity before this
+  feature. **Task 12 gate + persona walk:** `npm test` 84/84, `npx supabase
+  test db` 121/121, lint 0 errors, `npm run build` clean. Persona walk run as
+  the seeded rep (Deon) against a **production build pointed at the local
+  stack** — chrome-devtools MCP stayed locked by another Chrome instance all
+  session (confirmed via a live attach attempt), so the walk is **PARTIAL**:
+  route/auth-gate reachability confirmed by curl with a real signed-in
+  session (incl. both never-before-exercised deep links,
+  `/visits?plan=&objective=` and `/record?account=&item=`); the deep-link
+  lazy `useState` initializers, the "objective required" guard, and the
+  review-sheet disposition checkbox uncheck/recheck were run as real JS
+  against real deep-link URLs and real fan-out output (not just read); the
+  full typed-debrief Send path and the `/accounts/new` referral+champion path
+  were driven through the real `buildRoutineOps`/`SupabaseSyncBackend` code
+  against real Postgres, confirming `next_actions.completed_at`,
+  `display_last_verified_at`, new commitment rows, and the routine count
+  dropping (2 → 1) — all reverted via `supabase db reset` afterward. Not
+  verifiable without a browser and left for a follow-up manual pass:
+  rendered tile/chart pixels, the review badge at mobile vs. desktop width,
+  and the airplane-mode UI queue look (the underlying exactly-once-on-
+  reconnect behavior was already DB-verified in Task 11). The AI leg
+  (`generateObject` extraction) is un-runnable locally — no
+  `AI_GATEWAY_API_KEY` in `.env.development.local` — the typed path used for
+  verification skips it by design, same gap noted since Task 10.
 - **Gmail ingestion (spec §5a, D26–D38) — built hermetically, not yet live:**
   `GmailPort`/`EmailStore` interfaces (D55 philosophy) with the sync pass as a
   pure function; 14 fixture tests prove the rules — contact-gated storage

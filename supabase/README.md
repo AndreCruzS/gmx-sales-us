@@ -69,6 +69,30 @@ here for review (details in `docs/superpowers/plans/2026-07-22-phase1-schema-rls
    (`strategic_importance`, `relationship_status`, `influence_level`,
    relationship `strength`/`status`, `project_status`, candidate/email
    statuses) — validate with the client alongside Q6's lead-source check.
+10. **Home widgets + Routine list** (`…20260729000100_routine`, migration map
+    above) — flagged here for review, same as items 1–9:
+    - Two new `organizations.settings` keys, both read via `coalesce()` so an
+      org that hasn't set them gets the default: `display_routine_months`
+      (default 4 — how old a verified display wall must be before the chore
+      surfaces in Routine) and `display_verify_months` (default 6 — the
+      existing exception threshold; unchanged value, now also read by the
+      `routine_items` view so the chore surfaces two months before the
+      warning does).
+    - `next_actions.kind` (new nullable enum column:
+      `VISIT | SAMPLE_FOLLOW_UP | QUOTE_FOLLOW_UP | DISPLAY_CHECK | OTHER`)
+      plus a `BEFORE INSERT` trigger (`infer_next_action_kind`) that
+      classifies any row landing without an explicit `kind` (manual entry,
+      imports, fixtures) the same way the one-time backfill did — objective
+      present → `VISIT`; else action text matched against
+      sample/quote/display; else `OTHER`. App code that creates a commitment
+      (debrief dispositions) typically sets `kind` explicitly and never hits
+      the trigger. **Andre-approved this session** (2026-07-30).
+    - `voice_captures.account_id`/`planned_action_id` (both nullable FKs) —
+      lets `/api/voice/process` offer the rep's open routine items for that
+      account as AI-extraction context, and lets `/record`'s pre-linked
+      debrief ("How did it go?" / Routine's "Record call" row) carry the
+      account and planned visit through the capture instead of only through
+      the eventual activity.
 
 ## Test suites (`supabase/tests`)
 
