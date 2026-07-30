@@ -12,8 +12,8 @@
 // Everything works offline: blobs and writes ride the outbox (D57/D59).
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CheckIcon, FileIcon, MicrophoneIcon } from "@/components/icons";
 import {
@@ -37,14 +37,40 @@ const MIME_CANDIDATES = [
   "audio/webm",
 ];
 
+// useSearchParams opts this tree into client-side rendering; a page-level
+// Suspense boundary is required so `npm run build` doesn't fail the static
+// prerender of this route (same guard as src/app/visits/page.tsx).
 export default function RecordPage() {
+  return (
+    <Suspense fallback={null}>
+      <RecordPageInner />
+    </Suspense>
+  );
+}
+
+function RecordPageInner() {
   const { profile } = useOffline();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Deep-link contracts (D46, task 5): Home's "How did it go?" card lands
+  // with ?visit=<nextActionId> — the account isn't known yet, it's resolved
+  // from the agenda once cached. Routine's rows land with
+  // ?account=<accountId>&item=<nextActionId> — both are known up front.
+  // Lazy initializers read the params once, on first render — no effect, no
+  // cascading setState (mirrors visits/page.tsx).
+  const [visitParam] = useState(() => searchParams.get("visit"));
+  const [itemParam] = useState(() => searchParams.get("item"));
+  const targetItemId = visitParam ?? itemParam;
 
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [agenda, setAgenda] = useState<CachedAgendaItem[]>([]);
   const [accountQuery, setAccountQuery] = useState("");
-  const [accountId, setAccountId] = useState<string | null>(null);
+  // "Log a visit here" on an account page lands with ?account=<id>; the
+  // Routine deep link supplies it directly too.
+  const [accountId, setAccountId] = useState<string | null>(
+    () => searchParams.get("account"),
+  );
   const [pickingAccount, setPickingAccount] = useState(false);
   const [linkPlanned, setLinkPlanned] = useState(true);
   const [note, setNote] = useState("");
@@ -73,13 +99,18 @@ export default function RecordPage() {
     const t = setTimeout(() => {
       const layer = getOfflineLayer();
       void layer.local.getAccounts().then(setAccounts);
-      void layer.local.getAgenda().then(setAgenda);
-      // "Log a visit here" on an account page lands with ?account=<id>
-      const preset = new URLSearchParams(window.location.search).get("account");
-      if (preset) setAccountId(preset);
+      void layer.local.getAgenda().then((items) => {
+        setAgenda(items);
+        // ?visit=<nextActionId>: the account isn't in the URL — resolve it
+        // from the cached agenda item once it lands.
+        if (visitParam) {
+          const item = items.find((i) => i.id === visitParam);
+          if (item?.account_id) setAccountId(item.account_id);
+        }
+      });
     }, 0);
     return () => clearTimeout(t);
-  }, []);
+  }, [visitParam]);
 
   const filtered = useMemo(() => {
     const q = accountQuery.trim().toLowerCase();
@@ -90,15 +121,26 @@ export default function RecordPage() {
   const selected = accounts.find((a) => a.id === accountId) ?? null;
 
   // D46: if the cached agenda holds an open item for this account, offer to
-  // record this as that planned visit — linking and completing it.
-  const plannedItem = useMemo(
-    () =>
-      accountId
-        ? (agenda.find((i) => i.account_id === accountId && !i.completed_at) ??
+  // record this as that planned visit — linking and completing it. A
+  // ?visit=<id> or ?item=<id> deep link names the exact agenda item; without
+  // one, fall back to whatever open item matches the selected account.
+  const plannedItem = useMemo(() => {
+    if (targetItemId) {
+      const exact = agenda.find(
+        (i) => i.id === targetItemId && !i.completed_at,
+      );
+      if (exact) return exact;
+    }
+    return accountId
+      ? (agenda.find((i) => i.account_id === accountId && !i.completed_at) ??
           null)
-        : null,
-    [agenda, accountId],
-  );
+      : null;
+  }, [agenda, accountId, targetItemId]);
+
+  // D46: the link starts already-on for a pre-linked debrief; the checkbox
+  // lets the rep turn it off before anything gets sent.
+  const linkedPlannedActionId =
+    linkPlanned && plannedItem ? plannedItem.id : null;
 
   // ── Voice: queued the moment recording stops ─────────────────────────────
 
@@ -141,6 +183,10 @@ export default function RecordPage() {
             transcript: null,
             status: "UPLOADED", // the blob uploads before the row lands (D59)
             language: null, // server falls back to membership.debrief_language
+            // D46 pre-link: whichever account is on-screen (deep-linked or
+            // picked by the rep) rides along so the debrief keeps context.
+            account_id: accountId,
+            planned_action_id: linkedPlannedActionId,
           },
           baseVersion: null,
           blobRef: `voice::${audioPath}`,
@@ -241,6 +287,8 @@ export default function RecordPage() {
             transcript: note.trim(),
             status: "UPLOADED",
             language: null,
+            account_id: accountId,
+            planned_action_id: linkedPlannedActionId,
           },
           baseVersion: null,
           blobRef: null,

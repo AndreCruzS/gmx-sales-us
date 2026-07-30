@@ -80,6 +80,11 @@ export const voiceCaptureCreateSchema = z.object({
   transcript: z.string().nullish(), // set directly on the typed path
   status: z.enum(["PENDING", "UPLOADED"]),
   language: z.string().nullish(),
+  // D46 pre-links (task 5): set when Record is opened via ?visit=<id> or
+  // ?account=<id>&item=<id> so the debrief carries its context through the
+  // outbox even though the AI draft still needs the rep's OK.
+  account_id: uuid.nullish(),
+  planned_action_id: uuid.nullish(),
 });
 export type VoiceCaptureCreate = z.infer<typeof voiceCaptureCreateSchema>;
 
