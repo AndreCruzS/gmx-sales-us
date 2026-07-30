@@ -95,7 +95,7 @@ export class SupabaseSyncBackend implements SyncBackend {
         // months out — e.g. a display check) are cached regardless of the
         // visit horizon.
         .select(
-          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, updated_at",
+          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, created_at, updated_at",
         )
         .is("completed_at", null)
         .order("due_date")

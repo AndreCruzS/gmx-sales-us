@@ -83,7 +83,7 @@ export function buildRoutineItems(
         accountId: item.account_id,
         accountName: account?.name ?? "",
         action: item.action,
-        contextDate: item.updated_at,
+        contextDate: item.created_at,
         dueDate: item.due_date,
       };
     });

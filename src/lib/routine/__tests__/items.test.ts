@@ -31,7 +31,8 @@ function na(
     opportunity_id: null,
     objective: null,
     kind: null,
-    updated_at: "2026-07-01T00:00:00.000Z",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-15T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -145,6 +146,20 @@ describe("buildRoutineItems", () => {
       }),
     ];
     expect(buildRoutineItems([], accounts, SETTINGS, TODAY)).toEqual([]);
+  });
+
+  it("sources contextDate from created_at, not updated_at", () => {
+    const agenda = [
+      na({
+        id: "s1",
+        kind: "SAMPLE_FOLLOW_UP",
+        due_date: "2026-08-01",
+        created_at: "2026-06-01T00:00:00.000Z",
+        updated_at: "2026-07-20T00:00:00.000Z",
+      }),
+    ];
+    const items = buildRoutineItems(agenda, [], SETTINGS, TODAY);
+    expect(items[0].contextDate).toBe("2026-06-01T00:00:00.000Z");
   });
 
   it("falls back to an empty account name when accountId is null", () => {

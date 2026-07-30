@@ -103,6 +103,7 @@ export class FakeBackend implements SyncBackend {
           opportunity_id: null,
           objective: null,
           kind: "SAMPLE_FOLLOW_UP",
+          created_at: "2026-07-01T00:00:00.000Z",
           updated_at: this.nextVersion(),
         },
       ],
