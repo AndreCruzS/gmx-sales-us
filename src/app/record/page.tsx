@@ -261,7 +261,7 @@ function RecordPageInner() {
       setError("Say what happened — one line is enough.");
       return;
     }
-    if (accountId && objective === "OTHER" && !objectiveDetail.trim()) {
+    if (selected && objective === "OTHER" && !objectiveDetail.trim()) {
       setError("A word on what the objective was.");
       return;
     }
@@ -270,9 +270,13 @@ function RecordPageInner() {
     const layer = getOfflineLayer();
 
     try {
-      if (!accountId) {
-        // No account: same drafting path as voice — the system proposes the
-        // account and details, the rep confirms in Review.
+      if (!selected) {
+        // No resolved account (none picked, or a deep link named one that
+        // isn't in the cached list): same drafting path as voice — the
+        // system proposes the account and details, the rep confirms in
+        // Review. The raw ids still ride along — nullable columns the
+        // server-side draft can resolve even if this device hasn't cached
+        // that account yet.
         const id = crypto.randomUUID();
         await layer.sync.enqueue({
           clientId: id,
@@ -308,7 +312,7 @@ function RecordPageInner() {
           id,
           org_id: profile.orgId,
           activity_type: activityType,
-          primary_account_id: accountId,
+          primary_account_id: selected.id,
           owner_id: profile.membershipId,
           occurred_at: new Date().toISOString(),
           // D46: planned_done when linked to an agenda item.
@@ -338,7 +342,7 @@ function RecordPageInner() {
       await layer.local.putLocalActivity({
         id,
         activity_type: activityType,
-        primary_account_id: accountId,
+        primary_account_id: selected.id,
         occurred_at: new Date().toISOString(),
         what_happened: note.trim(),
         follow_up_required: followUp,
