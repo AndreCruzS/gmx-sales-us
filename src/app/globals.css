@@ -388,6 +388,29 @@ body {
   color: var(--accent-ink);
 }
 
+/* Review badge: what's waiting on the rep, at a glance — hidden at 0 so a
+   quiet inbox reads as quiet, not as a permanent fixture. */
+.tab-icon {
+  position: relative;
+  display: inline-flex;
+}
+.tab-badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* Centre tab is the capture action — always one tap away (D45). */
 .tab-capture {
   position: relative;

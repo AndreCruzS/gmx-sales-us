@@ -10,6 +10,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useReviewCount } from "@/lib/review/count";
 import {
   BuildingIcon,
   ChartIcon,
@@ -27,6 +28,7 @@ const TABS = [
 
 export function TabBar() {
   const pathname = usePathname();
+  const reviewCount = useReviewCount();
   if (pathname === "/login") return null;
 
   const isActive = (href: string) =>
@@ -75,7 +77,14 @@ export function TabBar() {
           data-active={isActive(href)}
           aria-current={isActive(href) ? "page" : undefined}
         >
-          <Icon size={21} />
+          <span className="tab-icon">
+            <Icon size={21} />
+            {href === "/review" && reviewCount > 0 && (
+              <span className="tab-badge" aria-label={`${reviewCount} waiting for your review`}>
+                {reviewCount > 9 ? "9+" : reviewCount}
+              </span>
+            )}
+          </span>
           {label}
         </Link>
       ))}

@@ -100,6 +100,22 @@ export default function ReviewPage() {
       ]);
       if (caps.data) setCaptures(caps.data as CaptureRow[]);
       if (cands.data) setCandidates(cands.data as CandidateRow[]);
+      // Cached so the badge (Task 7) and Home's "Waiting your OK" tile can
+      // read a count offline, between loads — only written when the fetch
+      // actually landed, so a failed/offline load leaves the last-known
+      // count in place rather than zeroing it out.
+      if (caps.data && cands.data) {
+        const drafted = (caps.data as CaptureRow[]).filter(
+          (c) => c.status === "DRAFTED",
+        ).length;
+        void layer.local.setMeta(
+          "review_counts",
+          JSON.stringify({
+            captures: drafted,
+            candidates: (cands.data as CandidateRow[]).length,
+          }),
+        );
+      }
     } catch {
       // offline — rejected saves still show; drafts need signal
     }
