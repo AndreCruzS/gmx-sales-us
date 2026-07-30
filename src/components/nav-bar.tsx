@@ -13,7 +13,7 @@ import { ChevronRightIcon, SearchIcon } from "./icons";
 import { SyncBadge } from "./sync-badge";
 
 const TITLES: Record<string, string> = {
-  "/": "Today",
+  "/": "Home",
   "/visits": "Visits",
   "/accounts": "Accounts",
   "/record": "Record",

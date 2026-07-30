@@ -404,8 +404,8 @@ export default function AccountPage() {
         <section>
           <div className="section-head">
             <h2 className="t-section">What&apos;s owed here</h2>
-            <Link href="/" className="t-action">
-              Today
+            <Link href="/visits" className="t-action">
+              Visits
             </Link>
           </div>
           <ul className="list">

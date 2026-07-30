@@ -20,7 +20,7 @@ import {
 } from "./icons";
 
 const TABS = [
-  { href: "/", label: "Today", Icon: HomeIcon },
+  { href: "/", label: "Home", Icon: HomeIcon },
   { href: "/accounts", label: "Accounts", Icon: BuildingIcon },
   { href: "/review", label: "Review", Icon: CheckIcon },
   { href: "/dashboard", label: "Insights", Icon: ChartIcon },
