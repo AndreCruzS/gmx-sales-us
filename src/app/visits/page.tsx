@@ -3,13 +3,15 @@
 // Visits — the whole day on one screen, in the order a rep asks about it:
 // what's overdue, what's on for today, what the system flagged, what's coming.
 // The agenda is an ADVANCE COMMITMENT measured against reality (D46); visits
-// are planned with a required objective (D48). Online reads the fortnight from
-// the server; offline falls back to the cached working set filtered back down
-// to visits — the cache itself now holds ALL open next_actions (cap 200,
-// D-routine), including routine chores that live outside the visit horizon,
-// so the offline read model re-applies the visit-kind + fortnight filter the
-// server query does online. Mark-done rides the LWW-guarded outbox, so it
-// works offline too.
+// are planned with a required objective (D48). Both online and offline read
+// the same shape: open next_actions of kind VISIT (or null — unclassified),
+// due within the fortnight. Online reads that straight from the server;
+// offline reads it from the cached working set, which holds ALL open
+// next_actions (cap 200, D-routine) — including routine chores like
+// SAMPLE_FOLLOW_UP that belong on the /routine list, not here — so the
+// offline path re-applies the same kind + horizon filter the online query
+// expresses server-side. Mark-done rides the LWW-guarded outbox, so it works
+// offline too.
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -154,10 +156,16 @@ function VisitsPageInner() {
       const { data, error } = await getSupabaseBrowserClient()
         .from("next_actions")
         .select(
-          "id, action, due_date, completed_at, account_id, opportunity_id, objective, updated_at, accounts(name)",
+          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, updated_at, accounts(name)",
         )
         .is("completed_at", null)
         .lte("due_date", visitHorizon)
+        // /visits is the rep's visit day list — routine chores (SAMPLE_FOLLOW_UP,
+        // QUOTE_FOLLOW_UP, DISPLAY_CHECK, OTHER) get their own page (later task),
+        // so they're excluded here the same way the offline filter excludes them
+        // below. `kind` is null for rows the DB trigger hasn't classified yet
+        // (pre-D-routine rows, or a race with the trigger) — treated as a visit.
+        .or("kind.eq.VISIT,kind.is.null")
         .order("due_date");
       if (error) throw new Error(error.message);
       setOfflineView(false);
