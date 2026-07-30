@@ -29,6 +29,7 @@ function baseDraft(overrides: Partial<DebriefDraft> = {}): DebriefDraft {
 const ACCOUNT_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const OWNER_ID = "bbbbbbbb-0000-0000-0000-000000000001";
 const ORG_ID = "cccccccc-0000-0000-0000-000000000001";
+const ACTIVITY_ID = "dddddddd-0000-0000-0000-000000000001";
 const NOW = "2026-07-30T12:00:00.000Z";
 const ACCOUNT_VERSION = "2026-07-01T00:00:00.000Z";
 
@@ -64,6 +65,7 @@ describe("buildRoutineOps", () => {
       itemVersions,
       ACCOUNT_VERSION,
       NOW,
+      ACTIVITY_ID,
     );
 
     const update = ops.find(
@@ -94,6 +96,7 @@ describe("buildRoutineOps", () => {
         org_id: ORG_ID,
         owner_id: OWNER_ID,
         account_id: ACCOUNT_ID,
+        activity_id: ACTIVITY_ID,
         kind: "SAMPLE_FOLLOW_UP",
       });
       expect(c.baseVersion).toBeNull();
@@ -125,6 +128,7 @@ describe("buildRoutineOps", () => {
       {},
       ACCOUNT_VERSION,
       NOW,
+      ACTIVITY_ID,
     );
 
     expect(ops.filter((o) => o.entityType === "account")).toHaveLength(1);
@@ -156,10 +160,15 @@ describe("buildRoutineOps", () => {
       {},
       ACCOUNT_VERSION,
       NOW,
+      ACTIVITY_ID,
     );
 
     expect(ops).toHaveLength(1);
-    expect(ops[0]).toMatchObject({ entityType: "next_action", op: "create" });
+    expect(ops[0]).toMatchObject({
+      entityType: "next_action",
+      op: "create",
+      payload: { activity_id: ACTIVITY_ID },
+    });
     expect(ops[0].payload.kind).toBe("QUOTE_FOLLOW_UP");
   });
 
@@ -167,7 +176,146 @@ describe("buildRoutineOps", () => {
     const draft = { ...baseDraft(), routine_dispositions: undefined } as unknown as DebriefDraft;
 
     expect(() =>
-      buildRoutineOps(draft, ACCOUNT_ID, OWNER_ID, ORG_ID, {}, ACCOUNT_VERSION, NOW),
+      buildRoutineOps(
+        draft,
+        ACCOUNT_ID,
+        OWNER_ID,
+        ORG_ID,
+        {},
+        ACCOUNT_VERSION,
+        NOW,
+        ACTIVITY_ID,
+      ),
     ).not.toThrow();
+  });
+
+  // Final-review finding 3: a pre-checked DONE disposition whose item isn't
+  // in the cached agenda (completed elsewhere, dropped by the 200-row cache
+  // cap, or another device) must be dropped, not turned into an update op
+  // with baseVersion null — that would throw at enqueue (sync-engine.ts's
+  // D61 guard) and sink the entire Send, including the activity and every
+  // other op in the same fan-out.
+  it("drops a DONE disposition whose item is not in the cached itemVersions, keeps the rest", () => {
+    const draft = baseDraft({
+      routine_dispositions: [
+        { item_id: "na-cached", disposition: "DONE", note: null },
+        { item_id: "na-not-cached", disposition: "DONE", note: null },
+      ],
+    });
+    const itemVersions = { "na-cached": "2026-07-20T00:00:00.000Z" };
+
+    const ops = buildRoutineOps(
+      draft,
+      ACCOUNT_ID,
+      OWNER_ID,
+      ORG_ID,
+      itemVersions,
+      ACCOUNT_VERSION,
+      NOW,
+      ACTIVITY_ID,
+    );
+
+    const updates = ops.filter(
+      (o) => o.entityType === "next_action" && o.op === "update",
+    );
+    expect(updates).toHaveLength(1);
+    expect(updates[0].payload.id).toBe("na-cached");
+  });
+
+  // Same principle, the DISPLAY_VERIFIED path: an uncached account (the old
+  // `?? ""` fallback in review/page.tsx) must not produce an update op —
+  // `accountVersion: null` signals "not resolvable" and the op is dropped.
+  it("drops a DISPLAY_VERIFIED disposition when accountVersion is null (account not cached)", () => {
+    const draft = baseDraft({
+      routine_dispositions: [
+        { item_id: ACCOUNT_ID, disposition: "DISPLAY_VERIFIED", note: null },
+      ],
+    });
+
+    const ops = buildRoutineOps(
+      draft,
+      ACCOUNT_ID,
+      OWNER_ID,
+      ORG_ID,
+      {},
+      null,
+      NOW,
+      ACTIVITY_ID,
+    );
+
+    expect(ops.filter((o) => o.entityType === "account")).toHaveLength(0);
+  });
+
+  // Final-review finding 4: typed (kind-bearing) commitments used to skip
+  // the untyped path's guards entirely. A blank due_date must be excluded
+  // here rather than reach the outbox boundary, where it would fail zod
+  // (nextActionCreateSchema's due_date regex) and sink the whole Send.
+  it("excludes a kind-bearing commitment with a blank due_date", () => {
+    const draft = baseDraft({
+      next_actions: [
+        { action: "Send sample", due_date: "", objective: null, kind: "SAMPLE_FOLLOW_UP" },
+        {
+          action: "Send another",
+          due_date: "2026-08-01",
+          objective: null,
+          kind: "SAMPLE_FOLLOW_UP",
+        },
+      ],
+    });
+
+    const ops = buildRoutineOps(
+      draft,
+      ACCOUNT_ID,
+      OWNER_ID,
+      ORG_ID,
+      {},
+      ACCOUNT_VERSION,
+      NOW,
+      ACTIVITY_ID,
+    );
+
+    expect(ops).toHaveLength(1);
+    expect(ops[0].payload.action).toBe("Send another");
+  });
+
+  // A VISIT-kind commitment's AI-extracted objective must survive into the
+  // create payload — it used to be dropped entirely for typed commitments.
+  it("threads objective through for a kind-bearing commitment, applying the D48 OTHER guard", () => {
+    const draft = baseDraft({
+      next_actions: [
+        {
+          action: "Discovery visit",
+          due_date: "2026-08-01",
+          objective: "MEET_CONTRACTOR",
+          kind: "VISIT",
+        },
+        {
+          action: "Some other visit",
+          due_date: "2026-08-02",
+          objective: "OTHER",
+          kind: "VISIT",
+        },
+      ],
+    });
+
+    const ops = buildRoutineOps(
+      draft,
+      ACCOUNT_ID,
+      OWNER_ID,
+      ORG_ID,
+      {},
+      ACCOUNT_VERSION,
+      NOW,
+      ACTIVITY_ID,
+    );
+
+    expect(ops).toHaveLength(2);
+    const discovery = ops.find((o) => o.payload.action === "Discovery visit");
+    expect(discovery?.payload.objective).toBe("MEET_CONTRACTOR");
+    // D48: OTHER requires objective_detail, which a draft can't supply — a
+    // draft-sourced OTHER objective is dropped to null rather than trip the
+    // DB check constraint, same as the untyped path.
+    const other = ops.find((o) => o.payload.action === "Some other visit");
+    expect(other?.payload.objective).toBeNull();
   });
 });

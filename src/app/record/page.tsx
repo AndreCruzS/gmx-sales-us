@@ -169,30 +169,43 @@ function RecordPageInner() {
         const ext = mime.startsWith("audio/mp4") ? "m4a" : "webm";
         const audioPath = `${profile.orgId}/${profile.userId}/${id}.${ext}`;
         const layer = getOfflineLayer();
-        await layer.blobs.put(`voice::${audioPath}`, blob);
-        await layer.sync.enqueue({
-          clientId: id,
-          entityType: "voice_capture",
-          op: "create",
-          payload: {
-            id,
-            org_id: profile.orgId,
-            owner_id: profile.membershipId,
-            audio_path: audioPath,
-            duration_seconds: seconds,
-            transcript: null,
-            status: "UPLOADED", // the blob uploads before the row lands (D59)
-            language: null, // server falls back to membership.debrief_language
-            // D46 pre-link: whichever account is on-screen (deep-linked or
-            // picked by the rep) rides along so the debrief keeps context.
-            account_id: accountId,
-            planned_action_id: linkedPlannedActionId,
-          },
-          baseVersion: null,
-          blobRef: `voice::${audioPath}`,
-        });
-        void layer.sync.drain();
-        setQueuedVoice(true);
+        // Final-review finding 5: this chain has no caller awaiting it (it's
+        // MediaRecorder's onstop callback) — an unhandled rejection here
+        // (e.g. a malformed ?account= reaching schema.parse at enqueue) used
+        // to vanish silently, leaving the rep's voice capture lost and the
+        // UI stalled with no queued-state change. Surface it instead.
+        try {
+          await layer.blobs.put(`voice::${audioPath}`, blob);
+          await layer.sync.enqueue({
+            clientId: id,
+            entityType: "voice_capture",
+            op: "create",
+            payload: {
+              id,
+              org_id: profile.orgId,
+              owner_id: profile.membershipId,
+              audio_path: audioPath,
+              duration_seconds: seconds,
+              transcript: null,
+              status: "UPLOADED", // the blob uploads before the row lands (D59)
+              language: null, // server falls back to membership.debrief_language
+              // D46 pre-link: whichever account is on-screen (deep-linked or
+              // picked by the rep) rides along so the debrief keeps context.
+              account_id: accountId,
+              planned_action_id: linkedPlannedActionId,
+            },
+            baseVersion: null,
+            blobRef: `voice::${audioPath}`,
+          });
+          void layer.sync.drain();
+          setQueuedVoice(true);
+        } catch {
+          // Rep-language, matching this page's other capture-failure copy —
+          // never surface the raw error (schema/LWW-guard jargon).
+          setError(
+            "Couldn't save that recording — try again, or type your note instead.",
+          );
+        }
       };
       recorderRef.current = recorder;
       recorder.start();

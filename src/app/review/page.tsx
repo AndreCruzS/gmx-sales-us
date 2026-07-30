@@ -563,6 +563,11 @@ function ReviewSheet({
       const layer = getOfflineLayer();
       const activityId = crypto.randomUUID();
       const now = new Date().toISOString();
+      // Final-review finding 2: a voice debrief of a planned visit must close
+      // the visit exactly like the typed /record path does — `was_planned`
+      // reflects whether this capture was pre-linked to a planned
+      // next_action, not hardcoded false.
+      const plannedActionId = capture.planned_action_id ?? null;
       enqueuedSeqs.push(
         await layer.sync.enqueue({
           clientId: activityId,
@@ -575,11 +580,11 @@ function ReviewSheet({
             primary_account_id: accountId,
             owner_id: profile.membershipId,
             occurred_at: capture.created_at,
-            was_planned: false,
+            was_planned: Boolean(plannedActionId),
             // D46 gap fix (carried from Task 6's review): the capture's own
             // pre-link rides through to the activity it becomes, same as the
             // typed /record path already does.
-            planned_action_id: capture.planned_action_id ?? null,
+            planned_action_id: plannedActionId,
             what_happened: whatHappened,
             key_information: keyInfo.trim() || null,
             commercial_potential: potential.trim() || null,
@@ -590,6 +595,32 @@ function ReviewSheet({
           blobRef: null,
         }),
       );
+      // Recording a planned visit's debrief completes its agenda item — same
+      // as record/page.tsx's submit(). Rides right after the activity create
+      // (FIFO). If the planned item isn't in the cached agenda (dropped by
+      // the cache cap, completed elsewhere, another device), there's no
+      // baseVersion to update against — skip the completion op rather than
+      // throw and sink the whole Send (finding 3's principle); the activity
+      // itself still records was_planned/planned_action_id correctly.
+      if (plannedActionId) {
+        const plannedItem = agenda.find((a) => a.id === plannedActionId);
+        if (plannedItem) {
+          enqueuedSeqs.push(
+            await layer.sync.enqueue({
+              clientId: plannedActionId,
+              entityType: "next_action",
+              op: "update",
+              payload: { id: plannedActionId, completed_at: now },
+              baseVersion: plannedItem.updated_at,
+              blobRef: null,
+            }),
+          );
+        } else {
+          console.warn(
+            `ReviewSheet.send: planned_action_id ${plannedActionId} not in cached agenda — skipping completion`,
+          );
+        }
+      }
       for (const na of actions) {
         if (!na.action.trim() || !na.due_date) continue;
         // Typed commitments (a kind set) are created by the routine fan-out
@@ -624,17 +655,34 @@ function ReviewSheet({
       // (DONE/DISPLAY_VERIFIED) and typed commitments become their own ops,
       // appended to the same fan-out — FIFO seq still guarantees the
       // activity above lands first; D62 compensation covers all of it.
+      //
+      // Final-review finding 3: versions are resolved from the cache HERE,
+      // before buildRoutineOps runs, so "not in cache" is representable
+      // (missing key / null) rather than coerced into a truthy placeholder.
+      // The old `accountVersion ?? ""` fallback below used to hand
+      // buildRoutineOps a value that looked resolved but would throw at
+      // enqueue (sync-engine.ts's D61 guard rejects update ops with a falsy
+      // baseVersion) — buildRoutineOps now drops any op it can't resolve a
+      // real baseVersion for, instead of producing one that sinks the Send.
       const itemVersions: Record<string, string> = {};
       for (const d of dispositions) {
         if (d.disposition !== "DONE") continue;
         const item = agenda.find((a) => a.id === d.item_id);
         if (item) itemVersions[d.item_id] = item.updated_at;
       }
-      const accountVersion = accounts.find((a) => a.id === accountId)?.updated_at ?? "";
+      const accountVersion = accounts.find((a) => a.id === accountId)?.updated_at ?? null;
       const routineOps = buildRoutineOps(
         {
           ...draft,
-          next_actions: actions,
+          // Final-review finding 4: typed (kind-bearing) commitments used to
+          // skip the untyped loop's guards entirely (a blank due_date would
+          // fail zod at the outbox boundary and sink the whole Send). Apply
+          // the same empty-field skip here, before they ever reach
+          // buildRoutineOps — mirrors `if (!na.action.trim() || !na.due_date)
+          // continue` in the untyped loop above.
+          next_actions: actions.filter(
+            (na) => na.kind && na.action.trim() && na.due_date,
+          ),
           routine_dispositions: dispositions
             .filter((d) => d.confirmed)
             .map((d) => ({
@@ -649,6 +697,7 @@ function ReviewSheet({
         itemVersions,
         accountVersion,
         now,
+        activityId,
       );
       for (const op of routineOps) {
         enqueuedSeqs.push(

@@ -315,7 +315,7 @@ describe("buildRoutineItems", () => {
     });
   });
 
-  it("sources contextDate from created_at, not updated_at", () => {
+  it("sources contextDate from created_at, not updated_at (date-only)", () => {
     const agenda = [
       na({
         id: "s1",
@@ -326,7 +326,72 @@ describe("buildRoutineItems", () => {
       }),
     ];
     const items = buildRoutineItems(agenda, [], SETTINGS, TODAY);
-    expect(items[0].contextDate).toBe("2026-06-01T00:00:00.000Z");
+    // created_at is normalized to date-only at the builder boundary (finding 1):
+    // real cached rows carry full timestamps, and passing them straight through
+    // into a rendered "sample sent <contextDate>" line prints the raw offset
+    // instead of a relative date.
+    expect(items[0].contextDate).toBe("2026-06-01");
+  });
+
+  // Regression guard (final review, CRITICAL finding 1): `accounts.
+  // display_last_verified_at` is timestamptz in the real DB — the cache holds
+  // full timestamps like "2026-02-28T10:23:45.123+00:00", not bare dates.
+  // addMonths/subMonths build `new Date(`${dateIso}T00:00:00Z`)`; feeding them
+  // an already-full timestamp produces "...123+00:00T00:00:00Z", an Invalid
+  // Date, and `.toISOString()` throws a RangeError. Any rep whose display wall
+  // was verified 4-6 months ago (still inside the routine window) white-screens
+  // Home and /routine. The builder must slice to date-only before doing any
+  // date math.
+  it("does not crash on timestamptz-format display_last_verified_at (real cached-data shape)", () => {
+    const accounts = [
+      acct({
+        id: "a1",
+        has_display_wall: true,
+        display_last_verified_at: "2026-02-28T10:23:45.123+00:00",
+      }),
+    ];
+    expect(() =>
+      buildRoutineItems([], accounts, SETTINGS, TODAY),
+    ).not.toThrow();
+    const items = buildRoutineItems([], accounts, SETTINGS, TODAY);
+    expect(items).toHaveLength(1);
+    expect(items[0].contextDate).toBe("2026-02-28");
+    expect(items[0].dueDate).toBe("2026-08-28");
+  });
+
+  // Same crash, reached through created_at instead: a legacy/real cached
+  // next_action's created_at is also a full timestamptz string.
+  it("does not crash on timestamptz-format created_at on a chore", () => {
+    const agenda = [
+      na({
+        id: "s1",
+        kind: "SAMPLE_FOLLOW_UP",
+        due_date: "2026-08-01",
+        created_at: "2026-06-01T14:32:07.500+00:00",
+      }),
+    ];
+    expect(() =>
+      buildRoutineItems(agenda, [], SETTINGS, TODAY),
+    ).not.toThrow();
+    const items = buildRoutineItems(agenda, [], SETTINGS, TODAY);
+    expect(items[0].contextDate).toBe("2026-06-01");
+  });
+
+  // Legacy IndexedDB rows may predate the created_at field entirely. The
+  // builder must not crash on `undefined.slice(...)` — it falls back to the
+  // chore's own due_date (a real, meaningful date already on the row) rather
+  // than an empty string, so a legacy chore's context line still shows a date.
+  it("falls back to due_date when created_at is missing on a legacy cached row", () => {
+    const agenda = [
+      na({
+        id: "s1",
+        kind: "SAMPLE_FOLLOW_UP",
+        due_date: "2026-08-01",
+      }),
+    ];
+    delete (agenda[0] as { created_at?: string }).created_at;
+    const items = buildRoutineItems(agenda, [], SETTINGS, TODAY);
+    expect(items[0].contextDate).toBe("2026-08-01");
   });
 
   it("falls back to an empty account name when accountId is null", () => {

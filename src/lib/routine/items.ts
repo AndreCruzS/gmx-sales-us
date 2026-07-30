@@ -140,7 +140,15 @@ export function buildRoutineItems(
         accountId: item.account_id,
         accountName: account?.name ?? "",
         action: item.action,
-        contextDate: item.created_at,
+        // created_at is timestamptz on the real cached row ("2026-06-01T...Z"),
+        // not a bare date — slice to date-only so this matches the DB view's
+        // `context_date` shape and so relativizeDates (routine/page.tsx) can
+        // rewrite it, instead of printing a raw offset. Legacy IndexedDB rows
+        // may predate the created_at field entirely (it's typed required but
+        // wasn't always written); `?.slice` guards that, falling back to the
+        // chore's own due_date — a real date already on the row — rather than
+        // an empty string, so the context line still shows something dated.
+        contextDate: (item.created_at as string | undefined)?.slice(0, 10) ?? item.due_date,
         dueDate: item.due_date,
       };
     });
@@ -149,8 +157,19 @@ export function buildRoutineItems(
   // threshold — mirrors the view's second select (union all).
   const displayChecks: RoutineItem[] = accounts
     .filter((a) => a.has_display_wall && a.display_last_verified_at !== null)
-    .filter((a) => {
-      const verified = a.display_last_verified_at as string;
+    // display_last_verified_at is timestamptz on the real cached row
+    // ("2026-02-28T10:23:45.123+00:00"), not a bare date. addMonths/subMonths
+    // anchor on `${dateIso}T00:00:00Z`; feeding them an already-full
+    // timestamp produces an Invalid Date and `.toISOString()` throws a
+    // RangeError — the CRITICAL crash fixed here. Slice to date-only up
+    // front, before any comparison or date math, so every downstream use
+    // (membership predicates below, addMonths for dueDate) sees a plain ISO
+    // date, matching what the DB view's `context_date` returns.
+    .map((a) => ({
+      account: a,
+      verified: (a.display_last_verified_at as string).slice(0, 10),
+    }))
+    .filter(({ verified }) => {
       // Mirrors the view's WHERE clause exactly: both bounds subtract from
       // TODAY (subMonths(todayIso, n)), not add to verified — see subMonths'
       // doc comment for why that distinction matters at month-end anchors.
@@ -158,18 +177,15 @@ export function buildRoutineItems(
       const verifyBoundary = subMonths(todayIso, settings.display_verify_months);
       return verified < routineBoundary && verified >= verifyBoundary;
     })
-    .map((a) => {
-      const verified = a.display_last_verified_at as string;
-      return {
-        kind: "DISPLAY_CHECK" as const,
-        itemId: a.id,
-        accountId: a.id,
-        accountName: a.name,
-        action: "Check the display wall",
-        contextDate: verified,
-        dueDate: addMonths(verified, settings.display_verify_months),
-      };
-    });
+    .map(({ account: a, verified }) => ({
+      kind: "DISPLAY_CHECK" as const,
+      itemId: a.id,
+      accountId: a.id,
+      accountName: a.name,
+      action: "Check the display wall",
+      contextDate: verified,
+      dueDate: addMonths(verified, settings.display_verify_months),
+    }));
 
   return [...chores, ...displayChecks];
 }
