@@ -17,6 +17,7 @@ const TITLES: Record<string, string> = {
   "/visits": "Visits",
   "/routine": "Routine",
   "/accounts": "Accounts",
+  "/accounts/new": "New account",
   "/record": "Record",
   "/review": "Review",
   "/dashboard": "Insights",

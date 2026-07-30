@@ -37,6 +37,7 @@ function fakeStore(overrides: Partial<LocalStore> = {}): LocalStore {
     getAgenda: notImplemented,
     getRecentActivities: notImplemented,
     putLocalActivity: notImplemented,
+    putLocalAccount: notImplemented,
     getMeta: async () => null,
     setMeta: notImplemented,
     enqueue: notImplemented,

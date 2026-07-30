@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { ChevronRightIcon, SearchIcon } from "@/components/icons";
+import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
@@ -104,17 +104,26 @@ export default function AccountsPage() {
 
   return (
     <div className="stack pt-2">
-      <label className="search-field">
-        <SearchIcon size={18} />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Find an account…"
-          type="search"
-          enterKeyHint="search"
-          aria-label="Find an account"
-        />
-      </label>
+      <div className="flex gap-2">
+        <label className="search-field flex-1">
+          <SearchIcon size={18} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find an account…"
+            type="search"
+            enterKeyHint="search"
+            aria-label="Find an account"
+          />
+        </label>
+        <Link
+          href="/accounts/new"
+          className="btn-secondary shrink-0"
+          aria-label="Add account"
+        >
+          <PlusIcon size={18} style={{ color: "var(--ink-secondary)" }} />
+        </Link>
+      </div>
 
       {offlineOnly && (
         <p className="tag tag-accent">

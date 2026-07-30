@@ -1,0 +1,300 @@
+"use client";
+
+// Standalone add-account form (spec §4): the card flow's create fields,
+// promoted to a screen reachable from Home and the Accounts tab — because a
+// rep who just walked a new dealer's counter shouldn't have to fake a card
+// scan to get the account on the books.
+//
+// Reuses accountCreateSchema + the account:create outbox path exactly as the
+// card confirm sheet does (src/app/review/page.tsx CardSheet.save), with one
+// addition the card flow deliberately punts: referral lead sources are
+// allowed here, and write the account_relationships row (D4/D7) — "that flow
+// belongs on the account screen, not a card sheet" per that file's comment.
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useOffline } from "@/components/offline-provider";
+import {
+  ACCOUNT_TYPES,
+  LEAD_SOURCES_ALL,
+  REFERRAL_LEAD_SOURCES,
+  humanize,
+  type AccountType,
+  type LeadSource,
+} from "@/lib/domain/enums";
+import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
+
+export default function NewAccountPage() {
+  const { profile } = useOffline();
+  const router = useRouter();
+
+  const [accounts, setAccounts] = useState<CachedAccount[]>([]);
+  const [name, setName] = useState("");
+  const [accountType, setAccountType] = useState<AccountType>("DEALER");
+  const [city, setCity] = useState("");
+  const [leadSource, setLeadSource] = useState<LeadSource | "">("");
+  const [sourceDetail, setSourceDetail] = useState("");
+  const [referringAccountId, setReferringAccountId] = useState("");
+  const [championNote, setChampionNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void getOfflineLayer().local.getAccounts().then(setAccounts);
+  }, []);
+
+  const isReferral = leadSource
+    ? (REFERRAL_LEAD_SOURCES as readonly string[]).includes(leadSource)
+    : false;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!profile) {
+      setError("You're signed out.");
+      return;
+    }
+    if (!profile.territoryId) {
+      setError(
+        "Your login has no territory, so it can't create accounts.",
+      );
+      return;
+    }
+    if (!name.trim()) {
+      setError("The account needs a name.");
+      return;
+    }
+    if (!leadSource) {
+      setError("Where did this account come from? Pick the source.");
+      return;
+    }
+    if (leadSource === "OTHER" && !sourceDetail.trim()) {
+      setError("A word on where it came from.");
+      return;
+    }
+    if (isReferral && !referringAccountId) {
+      setError(
+        "Who sent them your way? Referrals need the referring account.",
+      );
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    // Compensation: multiple outbox ops; if any enqueue fails, roll back the
+    // ones already queued so a retry can't create duplicates (same pattern
+    // as CardSheet.save / ReviewSheet.send in src/app/review/page.tsx).
+    const enqueuedSeqs: number[] = [];
+    try {
+      const layer = getOfflineLayer();
+      const accountId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      enqueuedSeqs.push(
+        await layer.sync.enqueue({
+          clientId: accountId,
+          entityType: "account",
+          op: "create",
+          payload: {
+            id: accountId,
+            org_id: profile.orgId,
+            name: name.trim(),
+            account_type: accountType,
+            city: city.trim() || null,
+            territory_id: profile.territoryId,
+            owner_id: profile.membershipId,
+            lead_source: leadSource,
+            source_detail: sourceDetail.trim() || null,
+            referring_account_id: isReferral ? referringAccountId : null,
+          },
+          baseVersion: null,
+          blobRef: null,
+        }),
+      );
+
+      // D4/D7: the referral fan-out — a row on account_relationships,
+      // "app-layer responsibility at account creation" per the migration
+      // comment. account_a is the new account, account_b the one that sent
+      // them your way (matches accounts/[id]/page.tsx's a/b phrasing).
+      if (isReferral) {
+        const relationshipId = crypto.randomUUID();
+        enqueuedSeqs.push(
+          await layer.sync.enqueue({
+            clientId: relationshipId,
+            entityType: "account_relationship",
+            op: "create",
+            payload: {
+              id: relationshipId,
+              org_id: profile.orgId,
+              account_a_id: accountId,
+              relationship_type: "REFERRED_BY",
+              account_b_id: referringAccountId,
+              created_by: profile.membershipId,
+            },
+            baseVersion: null,
+            blobRef: null,
+          }),
+        );
+      }
+
+      // A champion note, if given, becomes a real contact (D50) — the person
+      // this account page will lead with, not a text blob nobody can call.
+      if (championNote.trim()) {
+        const contactId = crypto.randomUUID();
+        enqueuedSeqs.push(
+          await layer.sync.enqueue({
+            clientId: contactId,
+            entityType: "contact",
+            op: "create",
+            payload: {
+              id: contactId,
+              org_id: profile.orgId,
+              account_id: accountId,
+              name: championNote.trim(),
+              job_title: null,
+              email: null,
+              phone: null,
+              is_champion: true,
+            },
+            baseVersion: null,
+            blobRef: null,
+          }),
+        );
+      }
+
+      // D56 optimistic mirror: the new account shows in the cached list
+      // immediately — same idiom as record/page.tsx's putLocalActivity.
+      await layer.local.putLocalAccount({
+        id: accountId,
+        name: name.trim(),
+        account_type: accountType,
+        city: city.trim() || null,
+        territory_id: profile.territoryId,
+        has_display_wall: false,
+        display_last_verified_at: null,
+        parent_account_id: null,
+        updated_at: now,
+        pendingSync: true,
+      });
+
+      void layer.sync.drain();
+      router.push("/accounts");
+    } catch (err) {
+      const layer = getOfflineLayer();
+      for (const seq of enqueuedSeqs) {
+        await layer.local.deleteOutbox(seq);
+      }
+      setBusy(false);
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="stack pt-2">
+      <section className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="t-meta">
+            Name — brand + city, e.g. &quot;Ganahl Anaheim&quot;
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="field"
+            placeholder="Ganahl Anaheim"
+            autoFocus
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="t-meta">Type</span>
+          <select
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value as AccountType)}
+            className="field"
+          >
+            {ACCOUNT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {humanize(t)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="t-meta">City (optional)</span>
+          <input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="field"
+            placeholder="City"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="t-meta">How did you get to them?</span>
+          <select
+            value={leadSource}
+            onChange={(e) => {
+              setLeadSource(e.target.value as LeadSource | "");
+              setReferringAccountId("");
+            }}
+            className="field"
+          >
+            <option value="">Pick the source</option>
+            {LEAD_SOURCES_ALL.map((s) => (
+              <option key={s} value={s}>
+                {humanize(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {leadSource === "OTHER" && (
+          <input
+            placeholder="Where did this come from?"
+            value={sourceDetail}
+            onChange={(e) => setSourceDetail(e.target.value)}
+            className="field"
+          />
+        )}
+
+        {isReferral && (
+          <label className="flex flex-col gap-1">
+            <span className="t-meta">Who sent them your way?</span>
+            <select
+              value={referringAccountId}
+              onChange={(e) => setReferringAccountId(e.target.value)}
+              className="field"
+            >
+              <option value="">Pick the referring account</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label className="flex flex-col gap-1">
+          <span className="t-meta">Champion (optional) — who to ask for</span>
+          <input
+            value={championNote}
+            onChange={(e) => setChampionNote(e.target.value)}
+            className="field"
+            placeholder="Name of your contact there"
+          />
+        </label>
+
+        {error && (
+          <p className="t-sub" style={{ color: "var(--danger)" }}>
+            {error}
+          </p>
+        )}
+
+        <button type="submit" disabled={busy} className="btn-primary">
+          Save account
+        </button>
+      </section>
+    </form>
+  );
+}

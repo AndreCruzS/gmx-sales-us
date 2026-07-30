@@ -9,6 +9,7 @@ import {
   ACTIVITY_TYPES,
   LEAD_SOURCES_ALL,
   REFERRAL_LEAD_SOURCES,
+  RELATIONSHIP_TYPES,
   VISIT_OBJECTIVES,
 } from "./enums";
 
@@ -137,6 +138,9 @@ export const contactCreateSchema = z.object({
   job_title: z.string().nullish(),
   email: z.string().nullish(),
   phone: z.string().nullish(),
+  // D50: the elected "capitão" — undefined/null leaves the DB's own
+  // default (false) in place, so every existing caller is unaffected.
+  is_champion: z.boolean().nullish(),
 });
 export type ContactCreate = z.infer<typeof contactCreateSchema>;
 
@@ -167,6 +171,23 @@ export const accountCreateSchema = z
   );
 export type AccountCreate = z.infer<typeof accountCreateSchema>;
 
+// D4/D7: the standalone create form (unlike the card quick-create) is allowed
+// to write this — a referral lead source on the account above pairs with one
+// of these, "app-layer responsibility at account creation" per the migration
+// comment. account_a is always the new account, account_b the one that sent
+// them your way (mirrors accounts/[id]/page.tsx's a/b phrasing).
+export const accountRelationshipCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  account_a_id: uuid,
+  relationship_type: z.enum(RELATIONSHIP_TYPES),
+  account_b_id: uuid,
+  created_by: uuid.nullish(),
+});
+export type AccountRelationshipCreate = z.infer<
+  typeof accountRelationshipCreateSchema
+>;
+
 // Task 10 (D-routine): the DISPLAY_VERIFIED disposition fan-out is a scalar
 // edit, LWW-guarded like next_action's — same shape, one field.
 export const accountUpdateSchema = z.object({
@@ -184,6 +205,7 @@ export const ENTITY_TABLES = {
   contact_candidate: "contact_candidates",
   contact: "contacts",
   account: "accounts",
+  account_relationship: "account_relationships",
 } as const;
 export type EntityType = keyof typeof ENTITY_TABLES;
 
@@ -198,4 +220,5 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "contact:create": contactCreateSchema,
   "account:create": accountCreateSchema,
   "account:update": accountUpdateSchema,
+  "account_relationship:create": accountRelationshipCreateSchema,
 };

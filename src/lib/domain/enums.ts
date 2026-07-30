@@ -104,3 +104,21 @@ export const REFERRAL_LEAD_SOURCES: readonly LeadSource[] = [
   "SPEC_DRIVEN",
   "REFERRAL_OTHER",
 ];
+
+// Mirrors relationship_type in supabase/migrations/20260722000200_enums.sql.
+// The account creation fan-out (D4/D7) only ever writes REFERRED_BY, but the
+// full set is kept here so the schema matches the DB enum, not a subset of it.
+export const RELATIONSHIP_TYPES = [
+  "SUPPLIES",
+  "PURCHASES_FROM",
+  "WORKS_WITH",
+  "REFERRED_BY",
+  "REFERRED_TO",
+  "SPECIFIES_THROUGH",
+  "SUPPORTS",
+  "PREFERRED_PARTNER",
+  "INSTALLER_FOR",
+  "ARCHITECT_FOR",
+  "DEVELOPER_FOR",
+] as const;
+export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];

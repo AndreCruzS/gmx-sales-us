@@ -133,6 +133,40 @@ describe("working set (D56)", () => {
     expect(activities.map((a) => a.id)).toEqual([inflightId]);
     expect(activities[0].pendingSync).toBe(true);
   });
+
+  // Task 11: an account created offline (still pending in the outbox) must
+  // not vanish from the cached list if a pull lands before the create drains
+  // — same rule as putLocalActivity above, applied to accounts.
+  it("keeps an in-flight local account across a pull, drops it once synced", async () => {
+    const inflightId = crypto.randomUUID();
+    const syncedId = crypto.randomUUID();
+    for (const [id, status] of [
+      [inflightId, "pending"],
+      [syncedId, "synced"],
+    ] as const) {
+      await store.enqueue(outboxRecord({ clientId: id, entityType: "account", status }));
+      await store.putLocalAccount({
+        id,
+        name: "New Branch",
+        account_type: "DEALER",
+        city: null,
+        territory_id: crypto.randomUUID(),
+        has_display_wall: false,
+        display_last_verified_at: null,
+        parent_account_id: null,
+        updated_at: new Date().toISOString(),
+        pendingSync: true,
+      });
+    }
+    await store.putWorkingSet(ws);
+    const accounts = await store.getAccounts();
+    // The seeded working-set account plus the still-in-flight local one; the
+    // already-synced optimistic mirror was dropped in favour of the pull.
+    expect(accounts.map((a) => a.id).sort()).toEqual(
+      [accountId, inflightId].sort(),
+    );
+    expect(accounts.find((a) => a.id === inflightId)?.pendingSync).toBe(true);
+  });
 });
 
 describe("wipe (D60)", () => {

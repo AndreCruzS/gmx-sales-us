@@ -76,8 +76,15 @@ export class DexieLocalStore implements LocalStore {
             .filter((o) => o.status !== "synced")
             .map((o) => o.clientId),
         );
+        // Same rule as activities below: an account created offline (Task 11)
+        // must survive this replace while its account:create is still in
+        // flight, or the optimistic row would vanish from the cached list
+        // the moment a pull lands before the outbox drains.
+        const pendingLocalAccounts = await this.db.accounts
+          .filter((a) => a.pendingSync === true && inflight.has(a.id))
+          .toArray();
         await this.db.accounts.clear();
-        await this.db.accounts.bulkPut(ws.accounts);
+        await this.db.accounts.bulkPut([...ws.accounts, ...pendingLocalAccounts]);
         await this.db.contacts.clear();
         await this.db.contacts.bulkPut(ws.contacts);
         await this.db.agenda.clear();
@@ -118,6 +125,10 @@ export class DexieLocalStore implements LocalStore {
 
   putLocalActivity(a: CachedActivity): Promise<void> {
     return this.db.activities.put(a).then(() => undefined);
+  }
+
+  putLocalAccount(a: CachedAccount): Promise<void> {
+    return this.db.accounts.put(a).then(() => undefined);
   }
 
   async getMeta(key: string): Promise<string | null> {

@@ -42,6 +42,7 @@ export interface CachedAccount {
   display_last_verified_at: string | null;
   parent_account_id: string | null;
   updated_at: string;
+  pendingSync?: boolean; // optimistic local write not yet confirmed
 }
 
 export interface CachedAgendaItem {
@@ -109,6 +110,11 @@ export interface LocalStore {
   getAgenda(): Promise<CachedAgendaItem[]>;
   getRecentActivities(): Promise<CachedActivity[]>;
   putLocalActivity(a: CachedActivity): Promise<void>;
+  // D56 optimistic mirror (Task 11): an account created offline appears in
+  // the cached list immediately, the same way putLocalActivity does for a
+  // captured visit — survives until the next pull replaces it with the
+  // synced server row (or preserves it if the create is still in flight).
+  putLocalAccount(a: CachedAccount): Promise<void>;
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
   // outbox
