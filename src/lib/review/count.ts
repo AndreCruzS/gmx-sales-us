@@ -49,8 +49,14 @@ export function useReviewCount(): number {
     const layer = getOfflineLayer();
 
     async function refresh() {
-      const next = await reviewCount(layer.local);
-      if (!cancelled) setCount(next);
+      try {
+        const next = await reviewCount(layer.local);
+        if (!cancelled) setCount(next);
+      } catch {
+        // Local-store hiccup (Dexie error, stale layer post-wipe on
+        // logout/org switch): keep the last-known count; the next tick
+        // (sync event or 30s interval) retries.
+      }
     }
 
     void refresh();
