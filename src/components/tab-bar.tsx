@@ -31,8 +31,13 @@ export function TabBar() {
   const reviewCount = useReviewCount();
   if (pathname === "/login") return null;
 
+  // /visits is one tap behind Home (the day list moved there in Task 4) but
+  // isn't its own tab destination — the Home tab stays lit while there,
+  // same as how "/accounts/[id]" keeps the Accounts tab lit via startsWith.
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === "/"
+      ? pathname === "/" || pathname.startsWith("/visits")
+      : pathname.startsWith(href);
 
   const [today, accounts, review, insights] = TABS;
 

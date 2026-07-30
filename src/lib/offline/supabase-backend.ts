@@ -103,7 +103,10 @@ export class SupabaseSyncBackend implements SyncBackend {
       this.supabase
         .from("activities")
         .select(
-          "id, activity_type, primary_account_id, occurred_at, what_happened, follow_up_required",
+          // planned_action_id (D46 link-and-complete) rides along so Home's
+          // "Visits this week" tile can dedupe a debriefed planned visit
+          // from a walk-in activity — both are rows in this table.
+          "id, activity_type, primary_account_id, occurred_at, what_happened, follow_up_required, planned_action_id",
         )
         .gte("occurred_at", monthAgo.toISOString())
         .order("occurred_at", { ascending: false })

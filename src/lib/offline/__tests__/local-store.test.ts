@@ -121,6 +121,7 @@ describe("working set (D56)", () => {
         occurred_at: new Date().toISOString(),
         what_happened: "offline capture",
         follow_up_required: false,
+        planned_action_id: null,
         pendingSync: true,
       });
     }

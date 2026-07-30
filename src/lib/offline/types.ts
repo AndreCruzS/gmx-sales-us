@@ -64,6 +64,10 @@ export interface CachedActivity {
   occurred_at: string;
   what_happened: string | null;
   follow_up_required: boolean;
+  // D46 link-and-complete: set when this activity debriefs a planned
+  // next_action (record/page.tsx's `linked?.id`). Home's "Visits this week"
+  // tile reads this to dedupe a debriefed planned visit from a walk-in.
+  planned_action_id: string | null;
   pendingSync?: boolean; // optimistic local write not yet confirmed
 }
 

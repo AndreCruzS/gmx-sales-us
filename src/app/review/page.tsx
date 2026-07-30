@@ -600,6 +600,10 @@ function ReviewSheet({
         occurred_at: capture.created_at,
         what_happened: whatHappened,
         follow_up_required: followUp,
+        // This send path doesn't link to a planned visit (the payload above
+        // hardcodes was_planned: false, no planned_action_id) — null here
+        // matches what the server row will actually carry.
+        planned_action_id: null,
         pendingSync: true,
       });
       void layer.sync.drain();

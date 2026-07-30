@@ -25,11 +25,13 @@ import {
   SearchIcon,
   XIcon,
 } from "@/components/icons";
+import { syncStatusLabel } from "@/components/sync-badge";
 import { humanize } from "@/lib/domain/enums";
 import { displayAccountName } from "@/lib/format";
 import {
   getOfflineLayer,
   type CachedAccount,
+  type CachedActivity,
   type CachedAgendaItem,
   type CachedContact,
 } from "@/lib/offline";
@@ -46,12 +48,17 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 // Same two alarm tiers as /visits: a broken promise or money on the table is
 // danger, hygiene the system noticed is attention. Home surfaces the danger
 // tier only — that's the number worth a glance on the way out the door.
-const DANGER_EXCEPTIONS = new Set([
+const DANGER_EXCEPTION_TYPES = [
   "OVERDUE_FOLLOW_UP",
   "QUOTE_NO_FOLLOW_UP",
   "OPPORTUNITY_NO_NEXT_ACTION",
   "STRATEGIC_ACCOUNT_QUIET",
-]);
+];
+
+// "Visit" activities are the *_VISIT-suffixed types (DEALER_VISIT,
+// DISTRIBUTOR_VISIT, JOBSITE_VISIT) — phone calls, emails and follow-ups
+// aren't a visit even when they're about one.
+const VISIT_ACTIVITY_SUFFIX = "_VISIT";
 
 interface ExceptionRow {
   exception_type: string;
@@ -152,6 +159,7 @@ export default function HomeClient() {
   const [agenda, setAgenda] = useState<CachedAgendaItem[]>([]);
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [contacts, setContacts] = useState<CachedContact[]>([]);
+  const [activities, setActivities] = useState<CachedActivity[]>([]);
   const [settings, setSettings] = useState<RoutineSettings>(DEFAULT_SETTINGS);
   const [attention, setAttention] = useState<number | null>(null);
   const [attentionDetail, setAttentionDetail] = useState<ExceptionRow | null>(
@@ -161,15 +169,17 @@ export default function HomeClient() {
 
   const load = useCallback(async () => {
     const layer = getOfflineLayer();
-    const [a, accts, cts, settingsRaw] = await Promise.all([
+    const [a, accts, cts, acts, settingsRaw] = await Promise.all([
       layer.local.getAgenda(),
       layer.local.getAccounts(),
       layer.local.getContacts(),
+      layer.local.getRecentActivities(),
       layer.local.getMeta("org_settings"),
     ]);
     setAgenda(a);
     setAccounts(accts);
     setContacts(cts);
+    setActivities(acts);
     setSettings(parseSettings(settingsRaw));
     setTodayIso(isoDate(new Date()));
   }, []);
@@ -196,19 +206,33 @@ export default function HomeClient() {
     async function loadAttention() {
       try {
         // Management by exception (spec §3/§14): RLS scopes to the caller.
-        const { data, error } = await getSupabaseBrowserClient()
-          .from("exceptions")
-          .select("exception_type, title, detail")
-          .order("since", { ascending: true })
-          .limit(20);
-        if (error) throw new Error(error.message);
-        const danger = ((data as ExceptionRow[]) ?? []).filter((e) =>
-          DANGER_EXCEPTIONS.has(e.exception_type),
-        );
+        // Two queries, not one filter-after-fetch: a `limit` + client-side
+        // filter undercounts once there are more than `limit` total
+        // exceptions (danger + attention tiers mixed together). `count:
+        // "exact", head: true` with the tier filter server-side gets the
+        // real number with zero rows transferred; a second, small query
+        // gets just enough detail for the subline.
+        const supabase = getSupabaseBrowserClient();
+        const [{ count, error: countError }, { data, error: detailError }] =
+          await Promise.all([
+            supabase
+              .from("exceptions")
+              .select("*", { count: "exact", head: true })
+              .in("exception_type", DANGER_EXCEPTION_TYPES),
+            supabase
+              .from("exceptions")
+              .select("exception_type, title, detail")
+              .in("exception_type", DANGER_EXCEPTION_TYPES)
+              .order("since", { ascending: true })
+              .limit(1),
+          ]);
+        if (countError) throw new Error(countError.message);
+        if (detailError) throw new Error(detailError.message);
         if (cancelled) return;
-        setAttention(danger.length);
-        setAttentionDetail(danger[0] ?? null);
-        void layer.local.setMeta("attention_count", String(danger.length));
+        const exact = count ?? 0;
+        setAttention(exact);
+        setAttentionDetail((data as ExceptionRow[])?.[0] ?? null);
+        void layer.local.setMeta("attention_count", String(exact));
       } catch {
         // No signal — the last count this device saw is still honest enough
         // for a glance; the detail line is not cached, so it stays generic.
@@ -247,7 +271,10 @@ export default function HomeClient() {
       .filter(
         (i) =>
           i.completed_at === null &&
-          i.kind === "VISIT" &&
+          // null kind = unclassified (pre-trigger cached row) — /visits
+          // treats it as a visit too (visits/page.tsx); tiles must agree
+          // with the page they open.
+          (i.kind === "VISIT" || i.kind === null) &&
           i.due_date >= todayIso &&
           i.due_date <= horizon,
       )
@@ -267,13 +294,37 @@ export default function HomeClient() {
     if (!todayIso) return { completed: 0, planned: 0 };
     const { start, end } = weekBounds(todayIso);
     const planned = agenda.filter(
-      (i) => i.kind === "VISIT" && i.due_date >= start && i.due_date <= end,
+      (i) =>
+        (i.kind === "VISIT" || i.kind === null) &&
+        i.due_date >= start &&
+        i.due_date <= end,
     );
+    const debriefedPlannedIds = new Set(
+      planned.filter((i) => i.completed_at !== null).map((i) => i.id),
+    );
+    // The brief's formula is "agenda + activities": a planned visit debriefed
+    // this week is already counted above via completed_at; a walk-in — a
+    // visit-type activity recorded with no plan behind it — only shows up
+    // here. Dedupe on planned_action_id so a debriefed planned visit's own
+    // activity row isn't counted twice, and so two activities that
+    // (unusually) share a planned_action_id only add one.
+    const seenPlannedIds = new Set<string>();
+    const walkIns = activities.filter((a) => {
+      const day = a.occurred_at.slice(0, 10);
+      if (day < start || day > end) return false;
+      if (!a.activity_type.endsWith(VISIT_ACTIVITY_SUFFIX)) return false;
+      if (a.planned_action_id) {
+        if (debriefedPlannedIds.has(a.planned_action_id)) return false;
+        if (seenPlannedIds.has(a.planned_action_id)) return false;
+        seenPlannedIds.add(a.planned_action_id);
+      }
+      return true;
+    }).length;
     return {
-      completed: planned.filter((i) => i.completed_at !== null).length,
+      completed: debriefedPlannedIds.size + walkIns,
       planned: planned.length,
     };
-  }, [agenda, todayIso]);
+  }, [agenda, activities, todayIso]);
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -292,14 +343,10 @@ export default function HomeClient() {
     hour === null ? "Hello" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const firstName = profile ? firstNameFromEmail(profile.email) : "";
 
-  // Reuses the sync chip's own copy (D58) so a rep never reads two different
-  // stories about the same outbox from two corners of the same screen.
-  const syncLine =
-    status.rejected > 0
-      ? `${status.rejected} need${status.rejected === 1 ? "s" : ""} you`
-      : status.pending > 0
-        ? `${status.pending} save${status.pending === 1 ? "" : "s"} waiting for signal`
-        : "all set to sync";
+  // The exact string SyncBadge renders (D58) — both live on this same
+  // screen (NavBar wraps Home), so they must never tell two different
+  // stories about the same outbox.
+  const syncLine = syncStatusLabel(status);
 
   const attentionColor = attention && attention > 0 ? "var(--danger)" : "var(--accent-ink)";
   const searching = query.trim().length > 0;

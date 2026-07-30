@@ -346,6 +346,10 @@ function RecordPageInner() {
         occurred_at: new Date().toISOString(),
         what_happened: note.trim(),
         follow_up_required: followUp,
+        // Mirrors the outbox payload's planned_action_id above (D46) — Home's
+        // "Visits this week" tile dedupes on this so a just-debriefed planned
+        // visit isn't also counted as a walk-in before the next real pull.
+        planned_action_id: linked?.id ?? null,
         pendingSync: true,
       });
       void layer.sync.drain();
