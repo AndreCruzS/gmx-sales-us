@@ -1,8 +1,9 @@
 // Outbound planning rules, proven with fixtures before any HubSpot call exists.
 
 import { describe, expect, it } from "vitest";
-import type { OutboundCandidate, Snapshot } from "../sync-core";
-import { planOutbound } from "../sync-core";
+import type { HsRecord } from "../port";
+import type { LocalLink, OutboundCandidate, Snapshot } from "../sync-core";
+import { planInbound, planOutbound } from "../sync-core";
 
 function candidate(over: Partial<OutboundCandidate>): OutboundCandidate {
   return {
@@ -99,6 +100,161 @@ describe("planOutbound", () => {
     const plan = planOutbound([cand], snapshots);
     expect(plan.patches).toEqual([
       { entityId: "e-1", hubspotId: "hs-1", props: { phone: "555-1111" } },
+    ]);
+  });
+});
+
+// Inbound planning rules — stage-authoritative LWW conflicts, merge/unlinked
+// routing, echo suppression.
+
+function hsRecord(over: Partial<HsRecord>): HsRecord {
+  return {
+    id: "hs-1",
+    props: { name: "Ganahl" },
+    lastModifiedAt: "1754384400000", // 2025-08-05T09:00:00.000Z
+    ...over,
+  };
+}
+
+function localLink(over: Partial<LocalLink>): LocalLink {
+  return {
+    entityId: "e-1",
+    updatedAt: "2025-08-05T09:00:00.000Z",
+    props: { name: "Ganahl" },
+    ...over,
+  };
+}
+
+describe("planInbound", () => {
+  it("rule 1: record's props equal the snapshot's → echo", () => {
+    const records = [hsRecord({ id: "hs-1", props: { name: "Ganahl" } })];
+    const links = new Map([["hs-1", localLink({ props: { name: "Ganahl" } })]]);
+    const snapshots = new Map([["e-1", snapshot({ props: { name: "Ganahl" } })]]);
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: null });
+
+    expect(plan).toEqual([{ kind: "echo", hubspotId: "hs-1" }]);
+  });
+
+  it("rule 2: HS changed vs snapshot, local unchanged → apply with only the changed props; stageChanged true when dealstage is among them", () => {
+    const records = [
+      hsRecord({
+        id: "hs-1",
+        props: { dealstage: "closed_won", amount: "1000" },
+      }),
+    ];
+    const links = new Map([
+      ["hs-1", localLink({ props: { dealstage: "qualified", amount: "1000" } })],
+    ]);
+    const snapshots = new Map([
+      ["e-1", snapshot({ props: { dealstage: "qualified", amount: "1000" } })],
+    ]);
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: "dealstage" });
+
+    expect(plan).toEqual([
+      {
+        kind: "apply",
+        entityId: "e-1",
+        patch: { dealstage: "closed_won" },
+        stageChanged: true,
+      },
+    ]);
+  });
+
+  it("rule 3: true conflict, HS newer → apply with patch diffed against the local link's current props", () => {
+    const records = [
+      hsRecord({
+        id: "hs-1",
+        props: { name: "Ganahl Lumber", city: "Anaheim" },
+        lastModifiedAt: "1754388000000", // 2025-08-05T10:00:00.000Z — later
+      }),
+    ];
+    const links = new Map([
+      [
+        "hs-1",
+        localLink({
+          props: { name: "Ganahl", city: "Placentia" }, // local changed city
+          updatedAt: "2025-08-05T09:00:00.000Z", // earlier
+        }),
+      ],
+    ]);
+    const snapshots = new Map([
+      ["e-1", snapshot({ props: { name: "Ganahl", city: "Anaheim" } })],
+    ]);
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: null });
+
+    expect(plan).toEqual([
+      {
+        kind: "apply",
+        entityId: "e-1",
+        patch: { name: "Ganahl Lumber", city: "Anaheim" },
+        stageChanged: false,
+      },
+    ]);
+  });
+
+  it("rule 4: no links entry → unlinked", () => {
+    const records = [hsRecord({ id: "hs-9", props: { name: "New Co" } })];
+    const links = new Map<string, LocalLink>();
+    const snapshots = new Map<string, Snapshot>();
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: null });
+
+    expect(plan).toEqual([{ kind: "unlinked", hubspotId: "hs-9" }]);
+  });
+
+  it("rule 5: record with a link but no snapshot (backfill-adopted) → treat local as unchanged, apply the diff vs the local link", () => {
+    const records = [
+      hsRecord({ id: "hs-1", props: { name: "Ganahl Lumber", city: "Anaheim" } }),
+    ];
+    const links = new Map([
+      ["hs-1", localLink({ props: { name: "Ganahl", city: "Anaheim" } })],
+    ]);
+    const snapshots = new Map<string, Snapshot>(); // no entry for e-1
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: null });
+
+    expect(plan).toEqual([
+      {
+        kind: "apply",
+        entityId: "e-1",
+        patch: { name: "Ganahl Lumber" },
+        stageChanged: false,
+      },
+    ]);
+  });
+
+  it("stage-only conflict: local newer, only the stage differs → local-wins with stagePatch (HubSpot stays stage-authoritative)", () => {
+    const records = [
+      hsRecord({
+        id: "hs-1",
+        props: { dealstage: "closed_won", amount: "1000" },
+        lastModifiedAt: "1754384400000", // 2025-08-05T09:00:00.000Z — earlier
+      }),
+    ];
+    const links = new Map([
+      [
+        "hs-1",
+        localLink({
+          props: { dealstage: "qualified", amount: "2000" }, // local changed amount
+          updatedAt: "2025-08-05T10:00:00.000Z", // later
+        }),
+      ],
+    ]);
+    const snapshots = new Map([
+      ["e-1", snapshot({ props: { dealstage: "qualified", amount: "1000" } })],
+    ]);
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: "dealstage" });
+
+    expect(plan).toEqual([
+      {
+        kind: "local-wins",
+        entityId: "e-1",
+        stagePatch: { dealstage: "closed_won" },
+      },
     ]);
   });
 });

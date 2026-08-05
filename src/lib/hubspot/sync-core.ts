@@ -13,7 +13,7 @@
 //                                             history clean)
 //   hubspotId + no snapshot (backfill-adopted record) → full-props patch
 
-import type { HsProps } from "./port";
+import type { HsProps, HsRecord } from "./port";
 
 // ── Outbound ─────────────────────────────────────────────────────────────
 
@@ -102,4 +102,106 @@ export function planOutbound(
   }
 
   return plan;
+}
+
+// ── Inbound ──────────────────────────────────────────────────────────────
+//
+// Rules, in the order they gate:
+//   no links entry                          → unlinked (store resolves:
+//                                              deal → create, else error row)
+//   record props === snapshot props         → echo (our own outbound write
+//                                              coming back around)
+//   HS changed vs snapshot, local unchanged  → apply, only the changed props
+//   no snapshot but a link (backfill-adopted
+//     during the link) → treat local as unchanged, diff against the link's
+//                         current props instead of a snapshot
+//   both changed (true conflict)             → newer timestamp wins:
+//     local newer  → local-wins, but HubSpot stays stage-authoritative: if
+//                     opts.stagePropName is set and the HS stage differs
+//                     from the local link's stage, carry a stagePatch anyway
+//     HS newer     → apply, patch = props differing from the local link's
+//                     current props (the store applies it to local rows)
+
+export interface LocalLink {
+  entityId: string;
+  updatedAt: string; // our updated_at ISO
+  props: HsProps; // current local values mapped to HS prop space
+}
+
+export type InboundDecision =
+  | { kind: "echo"; hubspotId: string }
+  | { kind: "apply"; entityId: string; patch: HsProps; stageChanged: boolean }
+  | { kind: "local-wins"; entityId: string; stagePatch: HsProps | null }
+  | { kind: "unlinked"; hubspotId: string }; // no local row — store resolves (deal→create, else error row)
+
+/** ISO timestamp or ms-epoch string, normalized to ms for comparison. */
+function toMs(iso: string): number {
+  return Date.parse(iso);
+}
+
+function toApplyDecision(
+  entityId: string,
+  hsProps: HsProps,
+  baseline: HsProps,
+  stagePropName: "dealstage" | null,
+): InboundDecision {
+  const patch = diffProps(hsProps, baseline);
+  const stageChanged = stagePropName !== null && stagePropName in patch;
+  return { kind: "apply", entityId, patch, stageChanged };
+}
+
+export function planInbound(
+  records: HsRecord[],
+  links: Map<string, LocalLink>,
+  snapshots: Map<string, Snapshot>,
+  opts: { stagePropName: "dealstage" | null },
+): InboundDecision[] {
+  const decisions: InboundDecision[] = [];
+
+  for (const record of records) {
+    const link = links.get(record.id);
+    if (!link) {
+      decisions.push({ kind: "unlinked", hubspotId: record.id });
+      continue;
+    }
+
+    const snapshot = snapshots.get(link.entityId);
+    // No prior snapshot (backfill-adopted link) — the local link's current
+    // props are the only baseline we have; treat local as unchanged (rule 5).
+    const baseline = snapshot ? snapshot.props : link.props;
+
+    if (propsEqual(record.props, baseline)) {
+      decisions.push({ kind: "echo", hubspotId: record.id });
+      continue;
+    }
+
+    const localChanged = snapshot ? !propsEqual(link.props, snapshot.props) : false;
+
+    if (!localChanged) {
+      decisions.push(toApplyDecision(link.entityId, record.props, baseline, opts.stagePropName));
+      continue;
+    }
+
+    // True conflict: both sides changed since the snapshot. Newer wins.
+    const hsMs = Number(record.lastModifiedAt);
+    const localMs = toMs(link.updatedAt);
+
+    if (localMs >= hsMs) {
+      let stagePatch: HsProps | null = null;
+      if (opts.stagePropName) {
+        const stageProp = opts.stagePropName;
+        const hsStage = record.props[stageProp];
+        const localStage = link.props[stageProp];
+        if (hsStage !== localStage) {
+          stagePatch = { [stageProp]: hsStage };
+        }
+      }
+      decisions.push({ kind: "local-wins", entityId: link.entityId, stagePatch });
+      continue;
+    }
+
+    decisions.push(toApplyDecision(link.entityId, record.props, link.props, opts.stagePropName));
+  }
+
+  return decisions;
 }
