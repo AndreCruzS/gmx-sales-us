@@ -66,6 +66,16 @@ const money = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
+const timeOfDay = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+interface HubspotHealth {
+  configured: boolean;
+  unresolvedErrors: number;
+  lastPassAt: string | null;
+}
 
 function StatTile({
   label,
@@ -94,6 +104,10 @@ export default function DashboardPage() {
   const [flow, setFlow] = useState<FlowRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Admin-only card (Task 13); the route 403s reps, and we render nothing
+  // on any non-200 or unconfigured response rather than surface a jargon
+  // error a rep can't act on.
+  const [hubspotHealth, setHubspotHealth] = useState<HubspotHealth | null>(null);
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -143,6 +157,23 @@ export default function DashboardPage() {
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
   }, [profile, load]);
+
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    fetch("/api/hubspot/health")
+      .then((res) => (res.ok ? (res.json() as Promise<HubspotHealth>) : null))
+      .then((data) => {
+        if (!cancelled && data?.configured) setHubspotHealth(data);
+      })
+      .catch(() => {
+        // Not configured / not visible to this role — the card simply
+        // doesn't render; no error surfaced for a non-actionable failure.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
 
   const byStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number; weighted: number }>();
@@ -208,6 +239,22 @@ export default function DashboardPage() {
         <p className="t-sub" style={{ color: "var(--danger)" }}>
           {error}
         </p>
+      )}
+
+      {/* HubSpot sync health (Task 13) — manager/admin only, and only once
+          HubSpot is actually connected; a rep or an unconfigured org sees
+          nothing here. */}
+      {hubspotHealth && (
+        <div className="card card-pad">
+          <div className="t-meta uppercase tracking-wide">HubSpot sync</div>
+          <div className="mt-1 text-sm">
+            {hubspotHealth.unresolvedErrors > 0
+              ? `${hubspotHealth.unresolvedErrors} change${hubspotHealth.unresolvedErrors === 1 ? "" : "s"} need${hubspotHealth.unresolvedErrors === 1 ? "s" : ""} attention`
+              : hubspotHealth.lastPassAt
+                ? `Up to date · last pass ${timeOfDay.format(new Date(hubspotHealth.lastPassAt))}`
+                : "Up to date"}
+          </div>
+        </div>
       )}
 
       {/* Commercial overview — headline numbers are tiles, not charts */}

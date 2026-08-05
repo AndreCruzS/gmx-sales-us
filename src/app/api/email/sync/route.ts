@@ -11,20 +11,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { GoogleGmailPort } from "@/lib/email/google-gmail";
 import { syncMailbox } from "@/lib/email/sync-core";
 import { SupabaseEmailStore } from "@/lib/email/supabase-store";
+import { orgIdFromJwt } from "@/lib/supabase/jwt";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 300;
-
-function orgIdFromJwt(token: string): string | null {
-  try {
-    const payload = JSON.parse(
-      Buffer.from(token.split(".")[1], "base64url").toString("utf8"),
-    );
-    return payload.org_id ?? null;
-  } catch {
-    return null;
-  }
-}
 
 function serviceClient(): SupabaseClient {
   return createClient(
