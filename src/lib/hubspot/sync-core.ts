@@ -84,10 +84,20 @@ export function planOutbound(
       continue;
     }
 
+    const diff = diffProps(cand.props, snapshot.props);
+    if (Object.keys(diff).length === 0) {
+      // The only difference is a key present in the snapshot but absent from
+      // the candidate (e.g. hubspot_owner_id omitted once a membership drops
+      // out of the owner map) — nothing in the candidate's own props changed,
+      // so there's nothing to send. Treat as an echo, not a no-op patch call.
+      plan.echoes.push(cand.entityId);
+      continue;
+    }
+
     plan.patches.push({
       entityId: cand.entityId,
       hubspotId: cand.hubspotId,
-      props: diffProps(cand.props, snapshot.props),
+      props: diff,
     });
   }
 

@@ -26,8 +26,9 @@ function snapshot(over: Partial<Snapshot>): Snapshot {
 
 describe("planOutbound", () => {
   it("no hubspotId → creates", () => {
-    const plan = planOutbound([candidate({ hubspotId: null })], new Map());
-    expect(plan.creates).toHaveLength(1);
+    const cand = candidate({ hubspotId: null });
+    const plan = planOutbound([cand], new Map());
+    expect(plan.creates).toEqual([cand]);
     expect(plan.patches).toHaveLength(0);
     expect(plan.echoes).toHaveLength(0);
   });
@@ -71,6 +72,17 @@ describe("planOutbound", () => {
   it("empty candidate list → empty plan", () => {
     const plan = planOutbound([], new Map());
     expect(plan).toEqual({ creates: [], patches: [], echoes: [] });
+  });
+
+  it("a key present only in the snapshot (e.g. owner dropped from the map) with no other diff → echo, not an empty-props patch", () => {
+    const cand = candidate({ hubspotId: "hs-1", props: { name: "Ganahl" } });
+    const snapshots = new Map([
+      ["e-1", snapshot({ props: { name: "Ganahl", city: "Anaheim" } })],
+    ]);
+    const plan = planOutbound([cand], snapshots);
+    expect(plan.echoes).toEqual(["e-1"]);
+    expect(plan.patches).toHaveLength(0);
+    expect(plan.creates).toHaveLength(0);
   });
 
   it("a candidate differing in exactly one prop patches only that prop", () => {
