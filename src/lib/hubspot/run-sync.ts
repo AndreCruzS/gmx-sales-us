@@ -12,6 +12,7 @@
 // a per-record failure is surfaced via recordError rather than retried by
 // an automatic rescan — D62).
 
+import type { OpportunityStage } from "@/lib/domain/enums";
 import {
   accountToCompanyProps,
   activityToEngagement,
@@ -49,6 +50,57 @@ export interface StreamOutcome {
 
 export interface SyncReport {
   streams: StreamOutcome[];
+}
+
+// ── Admin setup helpers (Task 12) ───────────────────────────────────────────
+//
+// Pure, despite this module's otherwise-impure neighbors — kept here rather
+// than a separate file since they exist only to feed runOrgSync's cfg shape
+// (stage_map/owner_map) and the admin route is their only other caller.
+
+/** Our stage enum ↔ the HubSpot pipeline stage label MAXIMO USA ships with,
+ *  in display order. An explicit pairing (not humanize()) so a relabel on
+ *  either side is a one-line diff instead of a silent mismatch. */
+export const STAGE_LABELS: readonly (readonly [OpportunityStage, string])[] = [
+  ["IDENTIFIED", "Identified"],
+  ["QUALIFIED", "Qualified"],
+  ["DEVELOPMENT", "Development"],
+  ["QUOTE", "Quote"],
+  ["DECISION", "Decision"],
+  ["WON", "Won"],
+  ["LOST", "Lost"],
+  ["ON_HOLD", "On hold"],
+];
+
+export interface OwnerMapResult {
+  /** membership_id → HubSpot owner id, for every membership matched by email. */
+  ownerMap: Record<string, string>;
+  /** membership_ids of active memberships with no matching HubSpot owner —
+   *  reported to the caller, never fatal (a rep without a HubSpot seat is
+   *  normal, not an error). */
+  unmatched: string[];
+}
+
+/** Case-insensitive email match between HubSpot owners and active org
+ *  memberships — HubSpot doesn't normalize case on its `email` field and
+ *  neither does auth.users, so a literal `===` would silently drop matches
+ *  over a stray capital letter. */
+export function buildOwnerMap(
+  owners: { id: string; email: string }[],
+  memberships: { membershipId: string; email: string }[],
+): OwnerMapResult {
+  const byEmail = new Map(owners.map((o) => [o.email.toLowerCase(), o.id]));
+  const ownerMap: Record<string, string> = {};
+  const unmatched: string[] = [];
+  for (const m of memberships) {
+    const hsOwnerId = byEmail.get(m.email.toLowerCase());
+    if (hsOwnerId) {
+      ownerMap[m.membershipId] = hsOwnerId;
+    } else {
+      unmatched.push(m.membershipId);
+    }
+  }
+  return { ownerMap, unmatched };
 }
 
 function errMsg(err: unknown): string {
@@ -250,7 +302,11 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
   return { stream, succeeded, errors };
 }
 
-async function syncOutboundAccounts(
+// Exported (not just module-private) so the admin route's backfill (Task 12)
+// can reuse them directly — "backfill is outbound with a null cursor" per
+// the spec, and these three already do exactly that whenever no cursor row
+// exists yet for the stream.
+export async function syncOutboundAccounts(
   port: HubSpotPort,
   store: HubSpotStorePort,
   cfg: HubSpotOrgConfig,
@@ -279,7 +335,7 @@ async function syncOutboundAccounts(
   }
 }
 
-async function syncOutboundContacts(
+export async function syncOutboundContacts(
   port: HubSpotPort,
   store: HubSpotStorePort,
   cfg: HubSpotOrgConfig,
@@ -307,7 +363,7 @@ async function syncOutboundContacts(
   }
 }
 
-async function syncOutboundDeals(
+export async function syncOutboundDeals(
   port: HubSpotPort,
   store: HubSpotStorePort,
   cfg: HubSpotOrgConfig,

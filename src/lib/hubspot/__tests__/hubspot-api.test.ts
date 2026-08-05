@@ -153,6 +153,43 @@ describe("HubSpotApi.searchModifiedSince", () => {
   });
 });
 
+describe("HubSpotApi.searchByProperty", () => {
+  it("sends a single EQ filter and returns mapped records", async () => {
+    let capturedUrl = "";
+    let capturedInit: RequestInit | undefined;
+    const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      return jsonRes(200, {
+        results: [{ id: "9", properties: { email: "rep@example.com", hs_lastmodifieddate: "500" } }],
+      });
+    });
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    const results = await api.searchByProperty("contacts", "email", "rep@example.com", ["email"]);
+
+    expect(capturedUrl).toBe("https://api.hubapi.com/crm/v3/objects/contacts/search");
+    const body = JSON.parse(String(capturedInit?.body));
+    expect(body).toEqual({
+      filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: "rep@example.com" }] }],
+      properties: ["email"],
+      limit: 10,
+    });
+    expect(results).toEqual([
+      { id: "9", props: { email: "rep@example.com", hs_lastmodifieddate: "500" }, lastModifiedAt: "500" },
+    ]);
+  });
+
+  it("returns an empty array on no match", async () => {
+    const fetchFn = vi.fn(async () => jsonRes(200, { results: [] }));
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    const results = await api.searchByProperty("contacts", "email", "nobody@example.com", ["email"]);
+
+    expect(results).toEqual([]);
+  });
+});
+
 describe("HsRecord.lastModifiedAt normalization", () => {
   it("passes a numeric ms-epoch hs_lastmodifieddate through unchanged", async () => {
     const fetchFn = vi.fn(async () =>

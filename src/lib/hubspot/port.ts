@@ -31,6 +31,16 @@ export interface HubSpotPort {
     properties: string[],
     after?: string,
   ): Promise<{ results: HsRecord[]; after: string | null }>;
+  /** Single-page EQ search — used by backfill's contact-adoption lookup
+   *  (search by email before deciding create vs. adopt). No paging: an
+   *  exact-match property search returning more than a handful of hits
+   *  isn't a case v1 needs to handle. */
+  searchByProperty(
+    type: HsObjectType,
+    propertyName: string,
+    value: string,
+    properties: string[],
+  ): Promise<HsRecord[]>;
   /** v4 default association — no hardcoded association type ids. */
   associateDefault(
     fromType: HsObjectType, fromId: string,

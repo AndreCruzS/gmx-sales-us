@@ -6,7 +6,8 @@
 
 import { describe, expect, it } from "vitest";
 import type { HsFilter, HsObjectType, HsProps, HsRecord, HubSpotOrgConfig, HubSpotPort } from "../port";
-import { runOrgSync } from "../run-sync";
+import { buildOwnerMap, runOrgSync, STAGE_LABELS } from "../run-sync";
+import { OPPORTUNITY_STAGES } from "@/lib/domain/enums";
 import type { DealPatch } from "../mapping";
 import type {
   DealLocalLink,
@@ -116,6 +117,10 @@ function makeFakePort(): FakePort {
         return { results: [DEAL_A, DEAL_B, DEAL_C], after: null };
       }
       return { results: [], after: null };
+    },
+    async searchByProperty() {
+      calls.push("searchByProperty");
+      return [];
     },
     async associateDefault(fromType, _fromId, toType) {
       calls.push(`associate:${fromType}->${toType}`);
@@ -294,6 +299,9 @@ describe("runOrgSync", () => {
         }
         return { results: [], after: null };
       },
+      async searchByProperty() {
+        return [];
+      },
       async associateDefault() {},
       async listOwners() {
         return [];
@@ -395,6 +403,9 @@ describe("F1: partial-failure outbound cursor advancement", () => {
       },
       async searchModifiedSince() {
         return { results: [], after: null };
+      },
+      async searchByProperty() {
+        return [];
       },
       async associateDefault() {},
       async listOwners() {
@@ -539,6 +550,9 @@ describe("F7: stalled search pagination is guarded, not looped forever", () => {
         // would spin forever without the stall guard.
         return { results: [], after: "cur-stuck" };
       },
+      async searchByProperty() {
+        return [];
+      },
       async associateDefault() {},
       async listOwners() {
         return [];
@@ -604,5 +618,65 @@ describe("F7: stalled search pagination is guarded, not looped forever", () => {
 
     const dealsStream = report.streams.find((s) => s.stream === "in:deals");
     expect(dealsStream?.errors).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// Task 12 Step 1: the admin route's setup helpers, tested in isolation from
+// any HubSpot API or Supabase call — buildOwnerMap and STAGE_LABELS are pure.
+describe("STAGE_LABELS", () => {
+  it("carries exactly the 8 opportunity-stage enum values, each with a label", () => {
+    expect(STAGE_LABELS.map(([stage]) => stage).sort()).toEqual([...OPPORTUNITY_STAGES].sort());
+    expect(STAGE_LABELS).toHaveLength(8);
+    for (const [, label] of STAGE_LABELS) {
+      expect(typeof label).toBe("string");
+      expect(label.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("builds a stage_map whose keys are exactly the 8 enum values", () => {
+    // Mirrors how the admin route turns ensureDealPipeline's label→id map
+    // into our enum→id stage_map.
+    const stageIds = Object.fromEntries(STAGE_LABELS.map(([, label]) => [label, `hs-${label}`]));
+    const stageMap = Object.fromEntries(
+      STAGE_LABELS.map(([stage, label]) => [stage, stageIds[label]]),
+    );
+    expect(Object.keys(stageMap).sort()).toEqual([...OPPORTUNITY_STAGES].sort());
+  });
+});
+
+describe("buildOwnerMap", () => {
+  it("matches owners to memberships by email, case-insensitively", () => {
+    const owners = [
+      { id: "hs-owner-1", email: "Rep@Example.com" },
+      { id: "hs-owner-2", email: "second@example.com" },
+    ];
+    const memberships = [
+      { membershipId: "mem-1", email: "rep@example.com" }, // differs only by case
+      { membershipId: "mem-2", email: "SECOND@EXAMPLE.COM" },
+    ];
+
+    const { ownerMap, unmatched } = buildOwnerMap(owners, memberships);
+
+    expect(ownerMap).toEqual({ "mem-1": "hs-owner-1", "mem-2": "hs-owner-2" });
+    expect(unmatched).toEqual([]);
+  });
+
+  it("lists memberships with no matching HubSpot owner as unmatched, not fatal", () => {
+    const owners = [{ id: "hs-owner-1", email: "rep@example.com" }];
+    const memberships = [
+      { membershipId: "mem-1", email: "rep@example.com" },
+      { membershipId: "mem-2", email: "nobody@example.com" },
+    ];
+
+    const { ownerMap, unmatched } = buildOwnerMap(owners, memberships);
+
+    expect(ownerMap).toEqual({ "mem-1": "hs-owner-1" });
+    expect(unmatched).toEqual(["mem-2"]);
+  });
+
+  it("returns an empty map and no unmatched entries when there are no memberships", () => {
+    const { ownerMap, unmatched } = buildOwnerMap([{ id: "hs-1", email: "a@b.com" }], []);
+    expect(ownerMap).toEqual({});
+    expect(unmatched).toEqual([]);
   });
 });

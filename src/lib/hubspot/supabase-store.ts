@@ -125,6 +125,21 @@ export interface HubSpotStorePort {
   ): Promise<void>;
 }
 
+/** The admin route's own store surface (Task 12) — kept separate from
+ *  HubSpotStorePort since runOrgSync never needs either method. */
+export interface HubSpotAdminStorePort {
+  /** Active memberships' (id, user email) — the raw material for
+   *  buildOwnerMap. Case folding happens in buildOwnerMap, not here. */
+  listActiveMembershipEmails(): Promise<{ membershipId: string; email: string }[]>;
+  /** Merge `patch` into org_integrations.config for this org's hubspot row
+   *  (shallow merge — existing top-level keys not present in `patch` are
+   *  kept). Returns the merged config actually persisted. Throws if no
+   *  org_integrations row exists yet for provider 'hubspot' (admin setup
+   *  can't provision the connection itself — that's a separate "connect"
+   *  step, out of scope here). */
+  mergeIntegrationConfig(patch: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
+
 /** yyyy-mm-dd, `days` from `base`, in UTC (matches mapping.ts's utcMidnightMs posture). */
 function addDaysIso(base: Date, days: number): string {
   const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
@@ -144,7 +159,7 @@ function companyPropsToPatch(props: HsProps): Record<string, unknown> {
   return patch;
 }
 
-export class HubSpotStore implements HubSpotStorePort {
+export class HubSpotStore implements HubSpotStorePort, HubSpotAdminStorePort {
   constructor(
     private service: SupabaseClient,
     private orgId: string,
@@ -593,5 +608,40 @@ export class HubSpotStore implements HubSpotStorePort {
     if (dbErr) {
       console.error(`hubspot recordError insert failed: ${dbErr.message}`, { direction, entityType, entityId, hubspotId, error });
     }
+  }
+
+  async listActiveMembershipEmails(): Promise<{ membershipId: string; email: string }[]> {
+    const { data, error } = await this.service
+      .from("memberships")
+      .select("id, users(email)")
+      .eq("org_id", this.orgId)
+      .eq("status", "active");
+    if (error) throw new Error(`listActiveMembershipEmails failed: ${error.message}`);
+    const rows = (data ?? []) as unknown as { id: string; users: { email: string } | null }[];
+    return rows.filter((r) => r.users?.email).map((r) => ({ membershipId: r.id, email: r.users!.email }));
+  }
+
+  async mergeIntegrationConfig(patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { data, error } = await this.service
+      .from("org_integrations")
+      .select("config")
+      .eq("org_id", this.orgId)
+      .eq("provider", "hubspot")
+      .maybeSingle();
+    if (error) throw new Error(`mergeIntegrationConfig read failed: ${error.message}`);
+    if (!data) {
+      throw new Error(
+        "mergeIntegrationConfig: no org_integrations row for provider 'hubspot' — connect HubSpot for this org first",
+      );
+    }
+    const existing = (data.config as Record<string, unknown> | null) ?? {};
+    const merged = { ...existing, ...patch };
+    const { error: updateErr } = await this.service
+      .from("org_integrations")
+      .update({ config: merged })
+      .eq("org_id", this.orgId)
+      .eq("provider", "hubspot");
+    if (updateErr) throw new Error(`mergeIntegrationConfig write failed: ${updateErr.message}`);
+    return merged;
   }
 }

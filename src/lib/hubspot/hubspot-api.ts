@@ -170,6 +170,24 @@ export class HubSpotApi implements HubSpotPort {
     };
   }
 
+  async searchByProperty(
+    type: HsObjectType,
+    propertyName: string,
+    value: string,
+    properties: string[],
+  ): Promise<HsRecord[]> {
+    const res = await this.request(`/crm/v3/objects/${type}/search`, {
+      method: "POST",
+      body: JSON.stringify({
+        filterGroups: [{ filters: [{ propertyName, operator: "EQ", value }] }],
+        properties,
+        limit: 10,
+      }),
+    });
+    const body = (await res.json()) as { results: HsApiRecord[] };
+    return body.results.map(toHsRecord);
+  }
+
   async associateDefault(
     fromType: HsObjectType,
     fromId: string,
