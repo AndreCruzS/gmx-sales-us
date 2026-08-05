@@ -90,6 +90,41 @@ describe("HubSpotApi.batchCreate chunking", () => {
   });
 });
 
+describe("HubSpotApi.batchCreate partial-success (I-1)", () => {
+  it("throws HubSpotApiError on a 207 Multi-Status response instead of returning a short/misaligned results array", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonRes(207, {
+        status: "COMPLETE_WITH_ERRORS",
+        results: [{ id: "1", properties: { email: "ok@example.com" } }],
+        numErrors: 1,
+        errors: [{ message: "already exists" }],
+      }),
+    );
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    await expect(
+      api.batchCreate("contacts", [
+        { props: { email: "ok@example.com" } },
+        { props: { email: "dup@example.com" } },
+      ]),
+    ).rejects.toBeInstanceOf(HubSpotApiError);
+  });
+
+  it("throws when the body reports COMPLETE_WITH_ERRORS even on a 200 status", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonRes(200, {
+        status: "COMPLETE_WITH_ERRORS",
+        results: [{ id: "1", properties: {} }],
+      }),
+    );
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    await expect(api.batchUpdate("deals", [{ id: "1", props: {} }])).rejects.toBeInstanceOf(
+      HubSpotApiError,
+    );
+  });
+});
+
 describe("HubSpotApi.searchModifiedSince", () => {
   it("sends the exact body shape: filterGroups, sorts, properties, limit, after", async () => {
     let capturedUrl = "";

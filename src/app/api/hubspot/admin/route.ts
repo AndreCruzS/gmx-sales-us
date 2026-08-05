@@ -14,7 +14,14 @@ import { HubSpotApi } from "@/lib/hubspot/hubspot-api";
 import { accountToCompanyProps, contactToContactProps, opportunityToDealProps } from "@/lib/hubspot/mapping";
 import type { HsPropertyDef, HubSpotOrgConfig, HubSpotPort } from "@/lib/hubspot/port";
 import { COMPANY_PROPERTY_DEFS, CONTACT_PROPERTY_DEFS, DEAL_PROPERTY_DEFS } from "@/lib/hubspot/properties";
-import { buildOwnerMap, STAGE_LABELS, syncOutboundAccounts, syncOutboundContacts, syncOutboundDeals } from "@/lib/hubspot/run-sync";
+import {
+  associateContactCompany,
+  buildOwnerMap,
+  STAGE_LABELS,
+  syncOutboundAccounts,
+  syncOutboundContacts,
+  syncOutboundDeals,
+} from "@/lib/hubspot/run-sync";
 import { planOutbound } from "@/lib/hubspot/sync-core";
 import type { OutboundCandidate, OutboundPlan } from "@/lib/hubspot/sync-core";
 import { HubSpotStore } from "@/lib/hubspot/supabase-store";
@@ -275,10 +282,19 @@ async function handleBackfillLive(
   // below sees a hubspotId with no snapshot yet — planOutbound's own rule
   // for that shape is a full-props patch, which is exactly the adopt write
   // (link + patch with our props, including P.managed) the spec calls for.
+  // Spec §6 also requires adopted contacts be "associated" — a PATCH (what
+  // this row gets next, below) never calls syncOutboundEntities's associate
+  // hook, only a CREATE does, so it's done explicitly here (Ledger #24).
+  // The account may not have a HubSpot company yet at this point in the pass
+  // (this pre-pass runs before the accounts stream below) — that's a skip +
+  // recordError, not a blocker for the rest of backfill.
   const contactRows = await store.changedContactsSince(null);
+  const contactsById = new Map(contactRows.map((r) => [r.id, r]));
   const adopted = await findContactAdoptionTargets(port, contactRows);
   for (const [entityId, hubspotId] of adopted) {
     await store.linkHubspotId("contacts", entityId, hubspotId);
+    const row = contactsById.get(entityId);
+    if (row) await associateContactCompany(port, store, entityId, hubspotId, row.account_id);
   }
 
   const forced = forceNullCursor(store, ["out:accounts", "out:contacts", "out:deals"]);

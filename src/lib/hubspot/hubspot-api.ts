@@ -105,15 +105,37 @@ export class HubSpotApi implements HubSpotPort {
     throw new HubSpotApiError(0, "unreachable: retry loop exited without a response");
   }
 
+  // I-1: HubSpot's batch endpoints can return 207 Multi-Status (body.status
+  // "COMPLETE_WITH_ERRORS") when some inputs in a batch succeeded and others
+  // didn't — `results` then omits the failed entries, which shortens or
+  // reorders the array relative to the request. batchCreate/batchUpdate's
+  // callers pair `results[i]` with their own input list by INDEX (run-sync.ts
+  // syncOutboundEntities), so a partial batch would silently link the wrong
+  // hubspot_id to the wrong local row. `request()` alone won't catch this —
+  // 207 is inside the 200-299 "ok" range — so batch calls check explicitly
+  // and throw, turning a silent cross-link into a caught batch-level failure
+  // (the stream's try/catch records it and F1's cursor floor keeps every row
+  // in the batch safe to retry next pass). Simplest correct v1; a caller
+  // that needs partial-success handling can fall back to per-record calls
+  // (see run-sync.ts's contacts adopt-on-failure path, I-2).
+  private async requestBatch(path: string, body: unknown): Promise<HsRecord[]> {
+    const res = await this.request(path, { method: "POST", body: JSON.stringify(body) });
+    const text = await res.text();
+    const parsed = JSON.parse(text) as { results: HsApiRecord[]; status?: string };
+    if (res.status === 207 || parsed.status === "COMPLETE_WITH_ERRORS") {
+      throw new HubSpotApiError(res.status, text);
+    }
+    return parsed.results.map(toHsRecord);
+  }
+
   async batchCreate(type: HsObjectType, inputs: { props: HsProps }[]): Promise<HsRecord[]> {
     const out: HsRecord[] = [];
     for (const batch of chunk(inputs, BATCH_SIZE)) {
-      const res = await this.request(`/crm/v3/objects/${type}/batch/create`, {
-        method: "POST",
-        body: JSON.stringify({ inputs: batch.map((i) => ({ properties: i.props })) }),
-      });
-      const body = (await res.json()) as { results: HsApiRecord[] };
-      out.push(...body.results.map(toHsRecord));
+      out.push(
+        ...(await this.requestBatch(`/crm/v3/objects/${type}/batch/create`, {
+          inputs: batch.map((i) => ({ properties: i.props })),
+        })),
+      );
     }
     return out;
   }
@@ -124,14 +146,11 @@ export class HubSpotApi implements HubSpotPort {
   ): Promise<HsRecord[]> {
     const out: HsRecord[] = [];
     for (const batch of chunk(inputs, BATCH_SIZE)) {
-      const res = await this.request(`/crm/v3/objects/${type}/batch/update`, {
-        method: "POST",
-        body: JSON.stringify({
+      out.push(
+        ...(await this.requestBatch(`/crm/v3/objects/${type}/batch/update`, {
           inputs: batch.map((i) => ({ id: i.id, properties: i.props })),
-        }),
-      });
-      const body = (await res.json()) as { results: HsApiRecord[] };
-      out.push(...body.results.map(toHsRecord));
+        })),
+      );
     }
     return out;
   }

@@ -180,6 +180,14 @@ interface OutboundEntityRow {
   updated_at: string;
 }
 
+/** Outcome of a per-record fallback attempted after a whole batchCreate call
+ *  throws (I-2) — "created" and "adopted" both resolve to a usable hubspot
+ *  id; "error" means this candidate genuinely failed and must be recorded,
+ *  not retried in this pass. */
+type CreateFallbackResult =
+  | { kind: "created" | "adopted"; hsId: string }
+  | { kind: "error"; message: string };
+
 async function syncOutboundEntities<Row extends OutboundEntityRow>(
   port: HubSpotPort,
   store: HubSpotStorePort,
@@ -191,9 +199,17 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
     rows: Row[];
     toProps: (r: Row) => HsProps;
     associate?: (entityId: string, hsId: string, row: Row) => Promise<void>;
+    /** I-2: contacts-only. When the whole batchCreate call throws (e.g. one
+     *  colliding email 207s the batch per hubspot-api.ts's I-1 fix), fall
+     *  back to a per-record create-or-adopt instead of failing — and
+     *  therefore F1-cursor-stalling — every candidate in the batch forever.
+     *  A per-candidate "error" outcome still goes through the normal
+     *  recordError + cursor-floor path below. */
+    createOrAdoptOnBatchFailure?: (cand: OutboundCandidate) => Promise<CreateFallbackResult>;
   },
 ): Promise<StreamOutcome> {
-  const { stream, entityType, table, hsType, rows, toProps, associate } = opts;
+  const { stream, entityType, table, hsType, rows, toProps, associate, createOrAdoptOnBatchFailure } =
+    opts;
   let succeeded = 0;
   let errors = 0;
   if (rows.length === 0) return { stream, succeeded, errors };
@@ -231,36 +247,57 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
   }
 
   if (plan.creates.length) {
-    let created: HsRecord[] = [];
+    // resolved pairs each candidate with the hubspot id it landed on — via
+    // the whole-batch call (the common case, index-aligned since I-1 makes
+    // any partial batch throw rather than return a short results array) or
+    // via the per-record fallback below. `adopted` gates saveSnapshot: an
+    // adopted contact keeps NO snapshot, so sync-core's no-snapshot rule
+    // sends a full-props patch next pass instead of silently echoing.
+    const resolved: { cand: OutboundCandidate; hsId: string; adopted: boolean }[] = [];
     try {
-      created = await port.batchCreate(
+      const created = await port.batchCreate(
         hsType,
         plan.creates.map((c) => ({ props: c.props })),
       );
-    } catch (err) {
-      errors += plan.creates.length;
-      for (const cand of plan.creates) {
-        await store.recordError("outbound", entityType, cand.entityId, null, cand.props, errMsg(err));
-        failedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
+      for (let i = 0; i < plan.creates.length; i++) {
+        resolved.push({ cand: plan.creates[i], hsId: created[i].id, adopted: false });
       }
-      created = [];
+    } catch (err) {
+      if (createOrAdoptOnBatchFailure) {
+        for (const cand of plan.creates) {
+          const result = await createOrAdoptOnBatchFailure(cand);
+          if (result.kind === "error") {
+            errors++;
+            await store.recordError("outbound", entityType, cand.entityId, null, cand.props, result.message);
+            failedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
+          } else {
+            resolved.push({ cand, hsId: result.hsId, adopted: result.kind === "adopted" });
+          }
+        }
+      } else {
+        errors += plan.creates.length;
+        for (const cand of plan.creates) {
+          await store.recordError("outbound", entityType, cand.entityId, null, cand.props, errMsg(err));
+          failedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
+        }
+      }
     }
-    for (let i = 0; i < created.length; i++) {
-      const cand = plan.creates[i];
-      const rec = created[i];
+    for (const { cand, hsId, adopted } of resolved) {
       try {
-        await store.linkHubspotId(table, cand.entityId, rec.id);
-        await store.saveSnapshot(entityType, {
-          entityId: cand.entityId,
-          hubspotId: rec.id,
-          props: cand.props,
-        });
-        if (associate) await associate(cand.entityId, rec.id, byId.get(cand.entityId)!);
+        await store.linkHubspotId(table, cand.entityId, hsId);
+        if (!adopted) {
+          await store.saveSnapshot(entityType, {
+            entityId: cand.entityId,
+            hubspotId: hsId,
+            props: cand.props,
+          });
+        }
+        if (associate) await associate(cand.entityId, hsId, byId.get(cand.entityId)!);
         succeeded++;
         succeededUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
       } catch (err) {
         errors++;
-        await store.recordError("outbound", entityType, cand.entityId, rec.id, cand.props, errMsg(err));
+        await store.recordError("outbound", entityType, cand.entityId, hsId, cand.props, errMsg(err));
         failedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
       }
     }
@@ -335,6 +372,63 @@ export async function syncOutboundAccounts(
   }
 }
 
+// Ledger #24 / I-2: shared by the ongoing out:contacts create+adopt path
+// below and the admin route's backfill adopt pre-pass (whose direct
+// linkHubspotId call never goes through syncOutboundEntities's `associate`
+// hook at all — a plain PATCH, the shape planOutbound gives a
+// linked-but-unsnapshotted row, never calls it either; only a CREATE does).
+// Records an error rather than silently skipping when the account itself
+// has no HubSpot company yet (e.g. backfill's contact pre-pass runs before
+// the accounts stream) — an admin can associate by hand once the company
+// exists; there is no automatic retry for this specific miss.
+export async function associateContactCompany(
+  port: HubSpotPort,
+  store: HubSpotStorePort,
+  contactId: string,
+  contactHsId: string,
+  accountId: string,
+): Promise<void> {
+  const companies = await store.loadHubspotIdsByLocalId("accounts", [accountId]);
+  const companyHsId = companies.get(accountId);
+  if (!companyHsId) {
+    await store.recordError(
+      "outbound",
+      "contact",
+      contactId,
+      contactHsId,
+      {},
+      `contact's account ${accountId} has no HubSpot company link yet — association skipped`,
+    );
+    return;
+  }
+  await port.associateDefault("contacts", contactHsId, "companies", companyHsId);
+}
+
+// I-2: an ongoing contact create failure is either (a) an email collision —
+// the contact already exists somewhere in the shared HubSpot portal — or (b)
+// a genuine failure (bad data, HubSpot outage, etc). Both look the same from
+// here (batchCreate just throws), so the fallback tries a single-record
+// create first; only on failure does it search by email. A hit means adopt;
+// a miss (or no email to search on) means this candidate really did fail —
+// recordError, same as any other outbound failure — rather than silently
+// treating every failure as an adoption.
+async function createOrAdoptContact(
+  port: HubSpotPort,
+  cand: OutboundCandidate,
+): Promise<CreateFallbackResult> {
+  try {
+    const [rec] = await port.batchCreate("contacts", [{ props: cand.props }]);
+    return { kind: "created", hsId: rec.id };
+  } catch (err) {
+    const email = cand.props.email;
+    if (email) {
+      const hits = await port.searchByProperty("contacts", "email", email, ["email"]);
+      if (hits.length) return { kind: "adopted", hsId: hits[0].id };
+    }
+    return { kind: "error", message: errMsg(err) };
+  }
+}
+
 export async function syncOutboundContacts(
   port: HubSpotPort,
   store: HubSpotStorePort,
@@ -351,11 +445,8 @@ export async function syncOutboundContacts(
       hsType: "contacts",
       rows,
       toProps: (r) => contactToContactProps(r, cfg.owner_map),
-      associate: async (_entityId, hsId, row) => {
-        const companies = await store.loadHubspotIdsByLocalId("accounts", [row.account_id]);
-        const companyHsId = companies.get(row.account_id);
-        if (companyHsId) await port.associateDefault("contacts", hsId, "companies", companyHsId);
-      },
+      associate: (_entityId, hsId, row) => associateContactCompany(port, store, row.id, hsId, row.account_id),
+      createOrAdoptOnBatchFailure: (cand) => createOrAdoptContact(port, cand),
     });
   } catch (err) {
     await store.recordError("outbound", "contact", null, null, {}, errMsg(err));

@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { HsFilter, HsObjectType, HsProps, HsRecord, HubSpotOrgConfig, HubSpotPort } from "../port";
-import { buildOwnerMap, runOrgSync, STAGE_LABELS } from "../run-sync";
+import { buildOwnerMap, runOrgSync, STAGE_LABELS, syncOutboundAccounts, syncOutboundContacts } from "../run-sync";
 import { OPPORTUNITY_STAGES } from "@/lib/domain/enums";
 import type { DealPatch } from "../mapping";
 import type {
@@ -14,6 +14,7 @@ import type {
   HubSpotStorePort,
   ReviewAction,
   SyncedAccountRow,
+  SyncedContactRow,
   SyncedOpportunityRow,
 } from "../supabase-store";
 import type { LocalLink, Snapshot } from "../sync-core";
@@ -678,5 +679,314 @@ describe("buildOwnerMap", () => {
     const { ownerMap, unmatched } = buildOwnerMap([{ id: "hs-1", email: "a@b.com" }], []);
     expect(ownerMap).toEqual({});
     expect(unmatched).toEqual([]);
+  });
+});
+
+// I-1: hubspot-api.ts's HubSpotApi.batchCreate/batchUpdate throw on a 207
+// partial-success response rather than returning a short/misaligned results
+// array (see hubspot-api.test.ts). This test proves the OTHER half of the
+// fix: a stream with no per-record fallback (accounts/opportunities — only
+// contacts gets one, I-2) must treat that thrown error as a batch-level
+// failure — every candidate recordError'd, NO linkHubspotId call for
+// anyone — rather than pairing a short results array to the wrong rows by
+// index and silently cross-linking a hubspot_id to the wrong local account.
+describe("I-1: a batch-level partial-success failure never cross-links ids", () => {
+  function accountRow(over: Partial<SyncedAccountRow> & { id: string }): SyncedAccountRow {
+    return {
+      hubspot_id: null,
+      updated_at: "2026-08-05T08:00:00.000Z",
+      parent_account_id: null,
+      name: "Some Account",
+      city: "Anaheim",
+      account_type: "DEALER",
+      lead_source: "JOBSITE",
+      has_display_wall: false,
+      owner_id: "mem-1",
+      ...over,
+    };
+  }
+
+  it("records an error for every candidate and links no one when batchCreate throws", async () => {
+    const linkCalls: { table: string; id: string; hubspotId: string }[] = [];
+    const errorCalls: unknown[][] = [];
+    const cursors = new Map<string, string>();
+
+    const port: HubSpotPort = {
+      async batchCreate() {
+        // Simulates hubspot-api.ts's I-1 throw on a 207 Multi-Status batch.
+        throw new Error("HubSpot API 207: partial success");
+      },
+      async batchUpdate() {
+        return [];
+      },
+      async searchModifiedSince() {
+        return { results: [], after: null };
+      },
+      async searchByProperty() {
+        return [];
+      },
+      async associateDefault() {},
+      async listOwners() {
+        return [];
+      },
+      async ensureProperty() {},
+      async ensureDealPipeline() {
+        return { pipelineId: "pl-1", stageIds: {} };
+      },
+    };
+
+    const rows: SyncedAccountRow[] = [
+      accountRow({ id: "acct-a", updated_at: "2026-08-05T08:00:00.000Z" }),
+      accountRow({ id: "acct-b", updated_at: "2026-08-05T09:00:00.000Z" }),
+    ];
+
+    const store: HubSpotStorePort = {
+      async getCursor(stream) {
+        return cursors.get(stream) ?? null;
+      },
+      async setCursor(stream, cursor) {
+        cursors.set(stream, cursor);
+      },
+      async changedAccountsSince(iso) {
+        return iso ? [] : rows;
+      },
+      async changedContactsSince() {
+        return [];
+      },
+      async changedOpportunitiesSince() {
+        return [];
+      },
+      async changedActivitiesSince() {
+        return [];
+      },
+      async changedNextActionsSince() {
+        return [];
+      },
+      async linkHubspotId(table, id, hubspotId) {
+        linkCalls.push({ table, id, hubspotId });
+      },
+      async loadSnapshots() {
+        return new Map();
+      },
+      async saveSnapshot() {},
+      async loadLinksByHubspotId() {
+        return new Map();
+      },
+      async loadHubspotIdsByLocalId() {
+        return new Map();
+      },
+      async applyCompanyPatch() {},
+      async applyContactPatch() {},
+      async applyDealPatch() {},
+      async createDealFromHubSpot() {},
+      async recordError(...args) {
+        errorCalls.push(args);
+      },
+    };
+
+    const outcome = await syncOutboundAccounts(port, store, CFG);
+
+    expect(linkCalls).toHaveLength(0);
+    expect(errorCalls).toHaveLength(2);
+    expect(errorCalls.map((args) => args[2])).toEqual(["acct-a", "acct-b"]);
+    expect(outcome.succeeded).toBe(0);
+    expect(outcome.errors).toBe(2);
+    // Both candidates failed, so the cursor must not advance at all.
+    expect(cursors.has("out:accounts")).toBe(false);
+  });
+});
+
+// I-2: an ongoing contact create batch that partially fails (a colliding
+// email 207s the whole batch, per hubspot-api.ts's I-1 fix) must not wedge
+// out:contacts forever — F1's cursor floor would refetch the SAME
+// candidates every 5-minute pass. syncOutboundContacts falls back to a
+// per-record create-or-adopt for that batch.
+describe("I-2: ongoing out:contacts falls back to per-record create-or-adopt on a batch failure", () => {
+  function contactRow(over: Partial<SyncedContactRow> & { id: string; email: string }): SyncedContactRow {
+    return {
+      hubspot_id: null,
+      updated_at: "2026-08-05T08:00:00.000Z",
+      account_id: "acct-1",
+      name: "Someone",
+      phone: null,
+      job_title: null,
+      is_champion: false,
+      ...over,
+    };
+  }
+
+  const CONTACT_OK = contactRow({
+    id: "c-ok",
+    email: "new@example.com",
+    updated_at: "2026-08-05T08:00:00.000Z",
+    account_id: "acct-ok",
+  });
+  const CONTACT_COLLIDING = contactRow({
+    id: "c-collide",
+    email: "dup@example.com",
+    updated_at: "2026-08-05T08:05:00.000Z",
+    account_id: "acct-collide",
+  });
+  const CONTACT_BAD = contactRow({
+    id: "c-bad",
+    email: "fail@example.com",
+    updated_at: "2026-08-05T08:10:00.000Z",
+    account_id: "acct-bad",
+  });
+
+  interface FakeContactPort extends HubSpotPort {
+    associateCalls: { contactHsId: string; companyHsId: string }[];
+  }
+
+  function makePort(): FakeContactPort {
+    const associateCalls: FakeContactPort["associateCalls"] = [];
+    return {
+      associateCalls,
+      async batchCreate(type, inputs) {
+        if (type !== "contacts" || inputs.length > 1) {
+          throw new Error("simulated 207 partial-success batch failure");
+        }
+        const email = inputs[0].props.email;
+        if (email === "new@example.com") {
+          return [{ id: "hs-new", props: inputs[0].props, lastModifiedAt: "1" }];
+        }
+        throw new Error(`simulated create failure for ${email}`);
+      },
+      async batchUpdate() {
+        return [];
+      },
+      async searchModifiedSince() {
+        return { results: [], after: null };
+      },
+      async searchByProperty(_type, _prop, value) {
+        if (value === "dup@example.com") {
+          return [{ id: "hs-existing-dup", props: { email: value }, lastModifiedAt: "1" }];
+        }
+        return [];
+      },
+      async associateDefault(_fromType, contactHsId, _toType, companyHsId) {
+        associateCalls.push({ contactHsId, companyHsId });
+      },
+      async listOwners() {
+        return [];
+      },
+      async ensureProperty() {},
+      async ensureDealPipeline() {
+        return { pipelineId: "pl-1", stageIds: {} };
+      },
+    };
+  }
+
+  interface FakeContactStore extends HubSpotStorePort {
+    linkCalls: { table: string; id: string; hubspotId: string }[];
+    saveSnapshotCalls: { entityType: string; entityId: string }[];
+    errorCalls: unknown[][];
+    cursors: Map<string, string>;
+  }
+
+  function makeStore(rows: SyncedContactRow[]): FakeContactStore {
+    const linkCalls: FakeContactStore["linkCalls"] = [];
+    const saveSnapshotCalls: FakeContactStore["saveSnapshotCalls"] = [];
+    const errorCalls: unknown[][] = [];
+    const cursors = new Map<string, string>();
+    // acct-bad deliberately has no company mapping — irrelevant, since c-bad
+    // fails before association is ever attempted.
+    const companyByAccount = new Map([
+      ["acct-ok", "hs-company-ok"],
+      ["acct-collide", "hs-company-collide"],
+    ]);
+
+    return {
+      linkCalls,
+      saveSnapshotCalls,
+      errorCalls,
+      cursors,
+      async getCursor(stream) {
+        return cursors.get(stream) ?? null;
+      },
+      async setCursor(stream, cursor) {
+        cursors.set(stream, cursor);
+      },
+      async changedAccountsSince() {
+        return [];
+      },
+      async changedContactsSince(iso) {
+        return iso ? [] : rows;
+      },
+      async changedOpportunitiesSince() {
+        return [];
+      },
+      async changedActivitiesSince() {
+        return [];
+      },
+      async changedNextActionsSince() {
+        return [];
+      },
+      async linkHubspotId(table, id, hubspotId) {
+        linkCalls.push({ table, id, hubspotId });
+      },
+      async loadSnapshots() {
+        return new Map();
+      },
+      async saveSnapshot(entityType, s) {
+        saveSnapshotCalls.push({ entityType, entityId: s.entityId });
+      },
+      async loadLinksByHubspotId() {
+        return new Map();
+      },
+      async loadHubspotIdsByLocalId(table, ids) {
+        const out = new Map<string, string>();
+        if (table !== "accounts") return out;
+        for (const id of ids) {
+          const hs = companyByAccount.get(id);
+          if (hs) out.set(id, hs);
+        }
+        return out;
+      },
+      async applyCompanyPatch() {},
+      async applyContactPatch() {},
+      async applyDealPatch() {},
+      async createDealFromHubSpot() {},
+      async recordError(...args) {
+        errorCalls.push(args);
+      },
+    };
+  }
+
+  it("adopts the colliding contact, creates the clean one, and records an error for the genuine failure", async () => {
+    const port = makePort();
+    const store = makeStore([CONTACT_OK, CONTACT_COLLIDING, CONTACT_BAD]);
+
+    const outcome = await syncOutboundContacts(port, store, CFG);
+
+    // Colliding contact: adopted via the email search hit — linked to the
+    // FOUND hubspot id, never created, and (per the no-snapshot rule) no
+    // snapshot saved for it — next pass sends a full-props patch instead.
+    const collideLink = store.linkCalls.find((c) => c.id === "c-collide");
+    expect(collideLink?.hubspotId).toBe("hs-existing-dup");
+    expect(store.saveSnapshotCalls.some((s) => s.entityId === "c-collide")).toBe(false);
+    expect(port.associateCalls).toContainEqual({
+      contactHsId: "hs-existing-dup",
+      companyHsId: "hs-company-collide",
+    });
+
+    // Clean contact: created, linked, snapshotted, and associated normally.
+    const okLink = store.linkCalls.find((c) => c.id === "c-ok");
+    expect(okLink?.hubspotId).toBe("hs-new");
+    expect(store.saveSnapshotCalls.some((s) => s.entityId === "c-ok")).toBe(true);
+    expect(port.associateCalls).toContainEqual({ contactHsId: "hs-new", companyHsId: "hs-company-ok" });
+
+    // Genuinely-failing contact: no create, no adoption match, no link call —
+    // just a recorded error, same as any other outbound failure.
+    expect(store.linkCalls.some((c) => c.id === "c-bad")).toBe(false);
+    const badError = store.errorCalls.find((args) => args[2] === "c-bad");
+    expect(badError).toBeDefined();
+
+    expect(outcome.succeeded).toBe(2);
+    expect(outcome.errors).toBe(1);
+
+    // F1: cursor floors strictly below c-bad's (08:10) updated_at, so it's
+    // refetched and retried next pass instead of being skipped forever.
+    expect(store.cursors.get("out:contacts")).toBe("2026-08-05T08:05:00.000Z");
   });
 });

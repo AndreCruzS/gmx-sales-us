@@ -100,7 +100,14 @@ curl -X POST https://<app-domain>/api/hubspot/admin \
   -d '{"action":"setup","org_id":"<org uuid>","dry_run":false}'
 ```
 
-Confirm the response's `config` block matches what the dry run promised.
+Confirm the response's `config` block matches the **structure** the dry run
+promised (same keys: `pipeline_id`, `stage_map` covering all 8 stages,
+`owner_map`) — not the literal ids. The dry run's `noWritePort` fabricates
+`DRY_RUN_PIPELINE` / `DRY_RUN_STAGE_<label>` by design (it never calls
+HubSpot, see `noWritePort` in `src/app/api/hubspot/admin/route.ts`), so the
+live run's real pipeline/stage ids will always differ from what the dry run
+printed. A shape mismatch (a missing stage key, an empty owner_map) is the
+signal to chase, not an id mismatch.
 
 ## 4. Association-type verification (the one hardcoding risk)
 
@@ -183,13 +190,17 @@ response alone.
 
 Before calling it live, prove all three directions end to end:
 
-1. **App → HubSpot:** create a deal in the app for a test account. Confirm
-   it appears in HubSpot under the **MAXIMO USA** pipeline, correct stage.
-2. **HubSpot → App:** in HubSpot, drag that deal to a different stage.
+1. **App → HubSpot (create):** using the app's create-deal form, create a
+   deal for a test account. Confirm it appears in HubSpot under the
+   **MAXIMO USA** pipeline, correct stage.
+2. **App → HubSpot (stage advance):** using the app's stage-advance sheet,
+   move that same deal to a different stage. Within 5 minutes (the cron
+   cadence, §8 below) confirm the deal shows the new stage in HubSpot too.
+3. **HubSpot → App:** in HubSpot, drag that deal to a different stage.
    Within 5 minutes (the cron cadence, §8 below) the app should show the
    new stage on the opportunity, and a "Review deal" item should appear
    (the auto-generated next action HubSpot-side stage moves create).
-3. **Activity → HubSpot:** log an activity (note) against the test account
+4. **Activity → HubSpot:** log an activity (note) against the test account
    in the app. Confirm it lands as a note on the company's timeline in
    HubSpot.
 
@@ -260,14 +271,54 @@ purely a HubSpot-side duplicate.
   what should be one local record; or a manual check of
   `hubspot_sync_errors` around the time of a deploy/restart.
 - **Resolution:** merge the two objects in the HubSpot UI (standard HubSpot
-  merge). The sync bridge already handles merges correctly on replay — a
-  merge remaps to the surviving HubSpot id
-  (`loadLinksByHubspotId`/Task 9 rule 4), so no code change or manual DB
-  surgery is needed. Just merge and let the next pass reconcile.
+  merge). Whether that's enough on its own depends on **which** object
+  survives — see "Merge handling" immediately below; the crash-window
+  duplicate above is a merge candidate, not a self-healing one.
 - **Scope:** this is an outbound (app → HubSpot) failure mode. The inbound
   equivalent (HubSpot deal → local opportunity) already has a replay guard
   (`createDealFromHubSpot` checks for an existing `hubspot_id` link before
   creating) — see task-11 finding F5.
+
+### Merge and deletion handling in HubSpot (not fully automatic)
+
+**Merges.** `loadLinksByHubspotId` matches purely on our local row's stored
+`hubspot_id` (`src/lib/hubspot/supabase-store.ts`) — it has no knowledge of
+HubSpot's merge history, so behavior depends on which side of the merge
+survives:
+
+- **Our linked record survives the merge** (the id our local row already
+  points at is the surviving id): nothing to do. The next pass just sees an
+  ordinary property update — merges on this side are transparent.
+- **The other record survives** (our local row's `hubspot_id` was the one
+  merged away): our local row is now pointing at an id that no longer
+  resolves as itself. This does **not** remap automatically:
+  - **Contacts/companies:** the surviving record's inbound search no longer
+    matches any local `hubspot_id` (ours still points at the dead id), so it
+    comes through `planInbound` as `unlinked` — `syncInboundEntities`
+    records an error row (`hubspot_sync_errors`, "unlinked ... from HubSpot
+    — needs admin mapping") instead of silently reconciling. Meanwhile
+    outbound writes that still target our stale `hubspot_id` (patches,
+    associations) start 404ing — see "Deletions" below.
+  - **Deals:** same unlinked path, but deals DO have an inbound create
+    fallback (`createDealFromHubSpot`) — the surviving deal comes in as a
+    **new** local opportunity plus a "Review deal — created in HubSpot"
+    next action, alongside the original (now orphaned) local row. That's a
+    visible duplicate, not a silent one.
+  - **Manual resolution:** relink the local row's `hubspot_id` to the
+    surviving HubSpot id directly (service-role SQL), or — for the deals
+    case — merge the two local opportunity rows and delete/relink the
+    orphan. Check `hubspot_sync_errors` for the unlinked-record rows and
+    "Review deal — created in HubSpot" next actions as your worklist; there
+    is no automatic detection sweep beyond what each sync pass naturally
+    surfaces.
+
+**Deletions.** HubSpot object deletions are never polled for proactively (no
+webhooks, no delete-aware query) — the only signal is indirect: an outbound
+`batchUpdate`/`associateDefault` call against a deleted object's
+`hubspot_id` gets a 404 from HubSpot, which lands in `hubspot_sync_errors`
+as an ordinary outbound error row. There is no dedicated "record was
+deleted" detection; treat a 404 error row against a previously-working
+`hubspot_id` as the signal, and relink or recreate by hand as appropriate.
 
 ---
 
