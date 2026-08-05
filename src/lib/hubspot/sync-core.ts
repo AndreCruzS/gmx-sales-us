@@ -140,12 +140,21 @@ function toMs(iso: string): number {
 }
 
 function toApplyDecision(
+  hubspotId: string,
   entityId: string,
   hsProps: HsProps,
   baseline: HsProps,
   stagePropName: "dealstage" | null,
 ): InboundDecision {
   const patch = diffProps(hsProps, baseline);
+  if (Object.keys(patch).length === 0) {
+    // Nothing in the record's own props actually differs from the baseline
+    // (e.g. a key present in the baseline but absent from the record, or —
+    // in the HS-newer conflict branch — HubSpot's newer value converged
+    // with what local already has). Mirrors planOutbound's empty-diff
+    // guard: treat as an echo, not a no-op apply.
+    return { kind: "echo", hubspotId };
+  }
   const stageChanged = stagePropName !== null && stagePropName in patch;
   return { kind: "apply", entityId, patch, stageChanged };
 }
@@ -178,7 +187,9 @@ export function planInbound(
     const localChanged = snapshot ? !propsEqual(link.props, snapshot.props) : false;
 
     if (!localChanged) {
-      decisions.push(toApplyDecision(link.entityId, record.props, baseline, opts.stagePropName));
+      decisions.push(
+        toApplyDecision(record.id, link.entityId, record.props, baseline, opts.stagePropName),
+      );
       continue;
     }
 
@@ -200,7 +211,9 @@ export function planInbound(
       continue;
     }
 
-    decisions.push(toApplyDecision(link.entityId, record.props, link.props, opts.stagePropName));
+    decisions.push(
+      toApplyDecision(record.id, link.entityId, record.props, link.props, opts.stagePropName),
+    );
   }
 
   return decisions;

@@ -257,4 +257,44 @@ describe("planInbound", () => {
       },
     ]);
   });
+
+  it("dropped-key case: baseline has a key HubSpot no longer returns, nothing else differs → echo, not an empty-props apply", () => {
+    const records = [hsRecord({ id: "hs-1", props: { name: "Ganahl" } })]; // owner dropped
+    const links = new Map([
+      ["hs-1", localLink({ props: { name: "Ganahl", owner: "rep-1" } })], // unchanged vs snapshot
+    ]);
+    const snapshots = new Map([
+      ["e-1", snapshot({ props: { name: "Ganahl", owner: "rep-1" } })],
+    ]);
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: null });
+
+    expect(plan).toEqual([{ kind: "echo", hubspotId: "hs-1" }]);
+  });
+
+  it("converged-value case: true conflict, HS newer, but HubSpot's newer value equals what local already has → echo, not an empty-props apply", () => {
+    const records = [
+      hsRecord({
+        id: "hs-1",
+        props: { name: "Ganahl Lumber", city: "Anaheim" }, // HS changed name...
+        lastModifiedAt: "1754388000000", // 2025-08-05T10:00:00.000Z — later
+      }),
+    ];
+    const links = new Map([
+      [
+        "hs-1",
+        localLink({
+          props: { name: "Ganahl Lumber", city: "Anaheim" }, // ...to the same value local already has
+          updatedAt: "2025-08-05T09:00:00.000Z", // earlier
+        }),
+      ],
+    ]);
+    const snapshots = new Map([
+      ["e-1", snapshot({ props: { name: "Ganahl", city: "Anaheim" } })],
+    ]);
+
+    const plan = planInbound(records, links, snapshots, { stagePropName: null });
+
+    expect(plan).toEqual([{ kind: "echo", hubspotId: "hs-1" }]);
+  });
 });
