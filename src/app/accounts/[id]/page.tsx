@@ -431,13 +431,18 @@ export default function AccountPage() {
         </section>
       )}
 
-      {/* Pipeline on this account */}
-      {opportunities.length > 0 && (
-        <section>
-          <div className="section-head">
-            <h2 className="t-section">Opportunities</h2>
-            <span className="t-meta">{opportunities.length}</span>
-          </div>
+      {/* Pipeline on this account — the section stays visible even with no
+          deals yet, or the only door to /new-deal would be unreachable. */}
+      <section>
+        <div className="section-head">
+          <h2 className="t-section">Opportunities</h2>
+          <Link href={`/accounts/${account.id}/new-deal`} className="t-action">
+            New deal
+          </Link>
+        </div>
+        {opportunities.length === 0 ? (
+          <p className="t-sub px-1">No deals yet.</p>
+        ) : (
           <ul className="list">
             {opportunities.map((o) => (
               <li key={o.id} className="row">
@@ -460,8 +465,8 @@ export default function AccountPage() {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* The commercial network (D4) — how this account connects to the market.
           One row per counterpart: a contractor that both buys here AND was
