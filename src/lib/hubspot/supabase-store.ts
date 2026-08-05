@@ -309,11 +309,19 @@ export class HubSpotStore implements HubSpotStorePort {
         .eq("org_id", this.orgId)
         .in("hubspot_id", hubspotIds);
       if (error) throw new Error(`loadLinksByHubspotId(accounts) failed: ${error.message}`);
+      // F6: link props must be built with the SAME owner map the outbound
+      // pass uses for its snapshot (accountToCompanyProps(row, cfg.owner_map)
+      // in run-sync.ts's syncOutboundAccounts) — building links with an empty
+      // map here meant hubspot_owner_id was always absent from link.props but
+      // always present in the snapshot for any owner with a mapping, so
+      // propsEqual saw a permanent mismatch and every inbound company change
+      // fell into the (wrong) conflict branch.
+      const ownerMap = cfg?.owner_map ?? {};
       for (const row of (data ?? []) as SyncedAccountRow[]) {
         map.set(row.hubspot_id as string, {
           entityId: row.id,
           updatedAt: row.updated_at,
-          props: accountToCompanyProps(row, {}),
+          props: accountToCompanyProps(row, ownerMap),
         });
       }
       return map;
@@ -326,11 +334,15 @@ export class HubSpotStore implements HubSpotStorePort {
         .eq("org_id", this.orgId)
         .in("hubspot_id", hubspotIds);
       if (error) throw new Error(`loadLinksByHubspotId(contacts) failed: ${error.message}`);
+      // contactToContactProps ignores ownerMap entirely (contacts carry no
+      // owner column in v1) — passed through anyway for symmetry with the
+      // accounts branch above, not because it changes anything here.
+      const ownerMap = cfg?.owner_map ?? {};
       for (const row of (data ?? []) as SyncedContactRow[]) {
         map.set(row.hubspot_id as string, {
           entityId: row.id,
           updatedAt: row.updated_at,
-          props: contactToContactProps(row, {}),
+          props: contactToContactProps(row, ownerMap),
         });
       }
       return map;
@@ -442,6 +454,25 @@ export class HubSpotStore implements HubSpotStorePort {
   }
 
   async createDealFromHubSpot(record: HsRecord, cfg: HubSpotOrgConfig): Promise<void> {
+    // F5 replay safety: a crash (or any error) between this RPC succeeding
+    // and the in:deals cursor write means the next pass re-searches the same
+    // HubSpot deal and would otherwise mint a fresh UUID and try to create it
+    // again — the unique (org_id, hubspot_id) index on opportunities turns
+    // that into a recordError'd failure AND leaves the first, unlinked
+    // attempt as an orphan row. Check for an existing link first; if found,
+    // this deal was already created (possibly by a prior, interrupted pass)
+    // and there is nothing left to do.
+    const { data: existing, error: existingErr } = await this.service
+      .from("opportunities")
+      .select("id")
+      .eq("org_id", this.orgId)
+      .eq("hubspot_id", record.id)
+      .maybeSingle();
+    if (existingErr) {
+      throw new Error(`createDealFromHubSpot existing-link check failed: ${existingErr.message}`);
+    }
+    if (existing) return;
+
     // v1 resolves the owning company through the deal's primary-company
     // association (HubSpot's legacy `associatedcompanyid` property, always
     // populated for the primary company — see run-sync.ts's inbound deal

@@ -55,17 +55,41 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Running max over ISO-8601 UTC timestamps — safe to compare lexicographically. */
-function maxIso(a: string | null, b: string): string {
-  if (a === null) return b;
-  return b > a ? b : a;
-}
-
 /** Running max over ms-epoch strings. */
 function maxMs(a: string | null, b: string): string {
   if (a === null) return b;
   return Number(b) > Number(a) ? b : a;
 }
+
+// F1: cursor advances only to the greatest successful updated_at that is
+// strictly below the earliest FAILED row's updated_at this pass — never past
+// it. Outbound `changed*Since` queries are `updated_at > cursor`, so
+// advancing past a failed row's timestamp would skip it forever; if a
+// failure precedes every success this pass, the cursor doesn't move at all.
+async function advanceOutboundCursor(
+  store: HubSpotStorePort,
+  stream: string,
+  succeededUpdatedAts: string[],
+  failedUpdatedAts: string[],
+): Promise<void> {
+  const floor = failedUpdatedAts.length
+    ? failedUpdatedAts.reduce((a, b) => (b < a ? b : a))
+    : null;
+  const eligible =
+    floor === null ? succeededUpdatedAts : succeededUpdatedAts.filter((u) => u < floor);
+  if (eligible.length === 0) return;
+  const max = eligible.reduce((a, b) => (b > a ? b : a));
+  await store.setCursor(stream, max);
+}
+
+// F7: HubSpot's search endpoint sorts ascending by hs_lastmodifieddate, so a
+// bounded number of pages is safe to stop at mid-stream — the remainder is
+// picked up next pass since inbound cursors advance to the max lastModifiedAt
+// actually processed. 20 pages * the adapter's 100-record page size caps a
+// single stream at 2000 records per cron invocation, well inside maxDuration
+// 300s even for a large backlog. `stalled` guards a `after` token that stops
+// advancing (a HubSpot API anomaly) from looping forever.
+const MAX_SEARCH_PAGES = 20;
 
 async function searchAll(
   port: HubSpotPort,
@@ -73,10 +97,10 @@ async function searchAll(
   sinceMs: string,
   filters: HsFilter[],
   properties: string[],
-): Promise<HsRecord[]> {
+): Promise<{ results: HsRecord[]; stalled: boolean }> {
   const all: HsRecord[] = [];
   let after: string | undefined;
-  for (;;) {
+  for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
     const { results, after: next } = await port.searchModifiedSince(
       type,
       sinceMs,
@@ -85,10 +109,11 @@ async function searchAll(
       after,
     );
     all.push(...results);
-    if (!next) break;
+    if (!next) return { results: all, stalled: false };
+    if (next === after) return { results: all, stalled: true };
     after = next;
   }
-  return all;
+  return { results: all, stalled: false }; // hit the page cap — not an error
 }
 
 // ── Outbound: accounts, contacts, deals (steps 1-3) ─────────────────────────
@@ -123,7 +148,8 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
 
   const byId = new Map(rows.map((r) => [r.id, r]));
   const candidates: OutboundCandidate[] = [];
-  const processedUpdatedAts: string[] = [];
+  const succeededUpdatedAts: string[] = [];
+  const failedUpdatedAts: string[] = [];
 
   for (const r of rows) {
     try {
@@ -137,6 +163,7 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
     } catch (err) {
       errors++;
       await store.recordError("outbound", entityType, r.id, r.hubspot_id, {}, errMsg(err));
+      failedUpdatedAts.push(r.updated_at);
     }
   }
 
@@ -148,7 +175,7 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
 
   for (const entityId of plan.echoes) {
     succeeded++;
-    processedUpdatedAts.push(byId.get(entityId)!.updated_at);
+    succeededUpdatedAts.push(byId.get(entityId)!.updated_at);
   }
 
   if (plan.creates.length) {
@@ -162,6 +189,7 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
       errors += plan.creates.length;
       for (const cand of plan.creates) {
         await store.recordError("outbound", entityType, cand.entityId, null, cand.props, errMsg(err));
+        failedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
       }
       created = [];
     }
@@ -177,10 +205,11 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
         });
         if (associate) await associate(cand.entityId, rec.id, byId.get(cand.entityId)!);
         succeeded++;
-        processedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
+        succeededUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
       } catch (err) {
         errors++;
         await store.recordError("outbound", entityType, cand.entityId, rec.id, cand.props, errMsg(err));
+        failedUpdatedAts.push(byId.get(cand.entityId)!.updated_at);
       }
     }
   }
@@ -200,27 +229,23 @@ async function syncOutboundEntities<Row extends OutboundEntityRow>(
             props: toProps(row),
           });
           succeeded++;
-          processedUpdatedAts.push(row.updated_at);
+          succeededUpdatedAts.push(row.updated_at);
         } catch (err) {
           errors++;
           await store.recordError("outbound", entityType, p.entityId, p.hubspotId, p.props, errMsg(err));
+          failedUpdatedAts.push(byId.get(p.entityId)!.updated_at);
         }
       }
     } catch (err) {
       errors += plan.patches.length;
       for (const p of plan.patches) {
         await store.recordError("outbound", entityType, p.entityId, p.hubspotId, p.props, errMsg(err));
+        failedUpdatedAts.push(byId.get(p.entityId)!.updated_at);
       }
     }
   }
 
-  // Cursor advances only past rows we actually finished pushing (creates +
-  // patches + echoes); a failed row's updated_at is never included, so it
-  // resurfaces on the next pass unless its error row is resolved by hand.
-  if (processedUpdatedAts.length) {
-    const max = processedUpdatedAts.reduce((a, b) => (b > a ? b : a));
-    await store.setCursor(stream, max);
-  }
+  await advanceOutboundCursor(store, stream, succeededUpdatedAts, failedUpdatedAts);
 
   return { stream, succeeded, errors };
 }
@@ -339,7 +364,8 @@ async function syncOutboundActivities(
       byType.set(eng.type, list);
     }
 
-    let maxUpdatedAt: string | null = null;
+    const succeededUpdatedAts: string[] = [];
+    const failedUpdatedAts: string[] = [];
 
     for (const [type, items] of byType) {
       let created: HsRecord[] = [];
@@ -352,6 +378,7 @@ async function syncOutboundActivities(
         errors += items.length;
         for (const i of items) {
           await store.recordError("outbound", "activity", i.row.id, null, i.props, errMsg(err));
+          failedUpdatedAts.push(i.row.updated_at);
         }
         continue;
       }
@@ -380,15 +407,16 @@ async function syncOutboundActivities(
           }
 
           succeeded++;
-          maxUpdatedAt = maxIso(maxUpdatedAt, row.updated_at);
+          succeededUpdatedAts.push(row.updated_at);
         } catch (err) {
           errors++;
           await store.recordError("outbound", "activity", row.id, rec.id, props, errMsg(err));
+          failedUpdatedAts.push(row.updated_at);
         }
       }
     }
 
-    if (maxUpdatedAt) await store.setCursor(stream, maxUpdatedAt);
+    await advanceOutboundCursor(store, stream, succeededUpdatedAts, failedUpdatedAts);
   } catch (err) {
     errors++;
     await store.recordError("outbound", "activity", null, null, {}, errMsg(err));
@@ -417,7 +445,22 @@ async function syncOutboundNextActions(
 
     const toCreate = rows.filter((r) => !r.hubspot_id);
     const toComplete = rows.filter((r) => r.hubspot_id && r.completed_at);
-    let maxUpdatedAt: string | null = null;
+    // F2: linked + still-open rows push nothing (task bodies don't sync
+    // incrementally in v1) but they WERE evaluated this pass — they must
+    // still count toward cursor advancement. linkHubspotId already bumped
+    // each of these rows' updated_at once (when it was first created), above
+    // whatever cursor existed then; skipping them here means they refetch
+    // and refill the 200-row window every single pass forever, starving
+    // genuinely new next_actions from ever being reached.
+    const noOp = rows.filter((r) => r.hubspot_id && !r.completed_at);
+
+    const succeededUpdatedAts: string[] = [];
+    const failedUpdatedAts: string[] = [];
+
+    for (const r of noOp) {
+      succeeded++;
+      succeededUpdatedAts.push(r.updated_at);
+    }
 
     if (toCreate.length) {
       let created: HsRecord[] = [];
@@ -430,6 +473,7 @@ async function syncOutboundNextActions(
         errors += toCreate.length;
         for (const r of toCreate) {
           await store.recordError("outbound", "next_action", r.id, null, {}, errMsg(err));
+          failedUpdatedAts.push(r.updated_at);
         }
       }
       for (let i = 0; i < created.length; i++) {
@@ -438,10 +482,11 @@ async function syncOutboundNextActions(
         try {
           await store.linkHubspotId("next_actions", row.id, rec.id);
           succeeded++;
-          maxUpdatedAt = maxIso(maxUpdatedAt, row.updated_at);
+          succeededUpdatedAts.push(row.updated_at);
         } catch (err) {
           errors++;
           await store.recordError("outbound", "next_action", row.id, rec.id, {}, errMsg(err));
+          failedUpdatedAts.push(row.updated_at);
         }
       }
     }
@@ -454,17 +499,18 @@ async function syncOutboundNextActions(
         );
         for (const r of toComplete) {
           succeeded++;
-          maxUpdatedAt = maxIso(maxUpdatedAt, r.updated_at);
+          succeededUpdatedAts.push(r.updated_at);
         }
       } catch (err) {
         errors += toComplete.length;
         for (const r of toComplete) {
           await store.recordError("outbound", "next_action", r.id, r.hubspot_id, {}, errMsg(err));
+          failedUpdatedAts.push(r.updated_at);
         }
       }
     }
 
-    if (maxUpdatedAt) await store.setCursor(stream, maxUpdatedAt);
+    await advanceOutboundCursor(store, stream, succeededUpdatedAts, failedUpdatedAts);
   } catch (err) {
     errors++;
     await store.recordError("outbound", "next_action", null, null, {}, errMsg(err));
@@ -482,6 +528,7 @@ async function syncOutboundNextActions(
 async function syncInboundEntities(
   port: HubSpotPort,
   store: HubSpotStorePort,
+  cfg: HubSpotOrgConfig,
   opts: {
     stream: string;
     entityType: "account" | "contact";
@@ -497,12 +544,28 @@ async function syncInboundEntities(
   try {
     const cursor = await store.getCursor(stream);
     const filters: HsFilter[] = [{ propertyName: P.managed, operator: "EQ", value: "true" }];
-    const records = await searchAll(port, hsType, cursor ?? "0", filters, properties);
+    const { results: records, stalled } = await searchAll(port, hsType, cursor ?? "0", filters, properties);
+    if (stalled) {
+      errors++;
+      await store.recordError(
+        "inbound",
+        entityType,
+        null,
+        null,
+        {},
+        "HubSpot search pagination stalled (after token stopped advancing) — stopped fetching early this pass",
+      );
+    }
     if (records.length === 0) return { stream, succeeded, errors };
 
+    // F6: pass cfg through so link props are built with the same owner map
+    // the outbound pass's snapshot uses (see loadLinksByHubspotId's accounts
+    // branch) — otherwise every inbound account change misreads as a
+    // local+HubSpot conflict.
     const links = await store.loadLinksByHubspotId(
       table,
       records.map((r) => r.id),
+      cfg,
     );
     const snapshots = await store.loadSnapshots(
       entityType,
@@ -555,8 +618,12 @@ async function syncInboundEntities(
   return { stream, succeeded, errors };
 }
 
-async function syncInboundCompanies(port: HubSpotPort, store: HubSpotStorePort): Promise<StreamOutcome> {
-  return syncInboundEntities(port, store, {
+async function syncInboundCompanies(
+  port: HubSpotPort,
+  store: HubSpotStorePort,
+  cfg: HubSpotOrgConfig,
+): Promise<StreamOutcome> {
+  return syncInboundEntities(port, store, cfg, {
     stream: "in:companies",
     entityType: "account",
     table: "accounts",
@@ -566,8 +633,12 @@ async function syncInboundCompanies(port: HubSpotPort, store: HubSpotStorePort):
   });
 }
 
-async function syncInboundContacts(port: HubSpotPort, store: HubSpotStorePort): Promise<StreamOutcome> {
-  return syncInboundEntities(port, store, {
+async function syncInboundContacts(
+  port: HubSpotPort,
+  store: HubSpotStorePort,
+  cfg: HubSpotOrgConfig,
+): Promise<StreamOutcome> {
+  return syncInboundEntities(port, store, cfg, {
     stream: "in:contacts",
     entityType: "contact",
     table: "contacts",
@@ -630,7 +701,24 @@ async function syncInboundDeals(
       { propertyName: P.managed, operator: "EQ", value: "true" },
       { propertyName: "pipeline", operator: "EQ", value: cfg.pipeline_id },
     ];
-    const records = await searchAll(port, "deals", cursor ?? "0", filters, DEAL_PROPERTIES);
+    const { results: records, stalled } = await searchAll(
+      port,
+      "deals",
+      cursor ?? "0",
+      filters,
+      DEAL_PROPERTIES,
+    );
+    if (stalled) {
+      errors++;
+      await store.recordError(
+        "inbound",
+        "opportunity",
+        null,
+        null,
+        {},
+        "HubSpot search pagination stalled (after token stopped advancing) — stopped fetching early this pass",
+      );
+    }
     if (records.length === 0) return { stream, succeeded, errors };
 
     const planningRecords = records.map(stripAssociationProp);
@@ -707,8 +795,8 @@ export async function runOrgSync(
   streams.push(await syncOutboundDeals(port, store, cfg));
   streams.push(await syncOutboundActivities(port, store));
   streams.push(await syncOutboundNextActions(port, store, cfg));
-  streams.push(await syncInboundCompanies(port, store));
-  streams.push(await syncInboundContacts(port, store));
+  streams.push(await syncInboundCompanies(port, store, cfg));
+  streams.push(await syncInboundContacts(port, store, cfg));
   streams.push(await syncInboundDeals(port, store, cfg, now));
 
   return { streams };

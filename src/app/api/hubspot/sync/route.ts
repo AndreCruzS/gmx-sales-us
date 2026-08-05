@@ -35,7 +35,10 @@ function isValidConfig(config: unknown): config is HubSpotOrgConfig {
   );
 }
 
-export async function POST(req: Request) {
+// Vercel Cron invokes scheduled routes with GET, not POST — export both
+// against the same handler (F3) so `vercel.json`'s cron entry actually fires
+// this route instead of 405ing every 5 minutes.
+async function handler(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
   if (!cronSecret || auth !== `Bearer ${cronSecret}`) {
@@ -90,3 +93,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ results });
 }
+
+export const POST = handler;
+export const GET = handler;

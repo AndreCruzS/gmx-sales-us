@@ -47,5 +47,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest).*)"],
+  // F4: the sync cron routes (hubspot/email/calendar) authenticate themselves
+  // via `authorization: Bearer ${CRON_SECRET}` (or a rep's own session for
+  // email/calendar's caller mode) — they have no browser session and must
+  // never hit this middleware's session check, or Vercel Cron's sessionless
+  // GET/POST gets redirected to /login before CRON_SECRET is ever read.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest|api/hubspot/sync|api/email/sync|api/calendar/sync).*)",
+  ],
 };

@@ -50,11 +50,24 @@ interface HsApiRecord {
   updatedAt?: string;
 }
 
+// hs_lastmodifieddate is documented as a ms-epoch string, but HubSpot has
+// been observed returning ISO-8601 instead in some responses (and the
+// `updatedAt` fallback is ISO-8601 outright). Number("2026-08-05T...") is
+// NaN, which would silently corrupt cursor max-tracking (run-sync.ts),
+// LWW timestamp comparisons (sync-core.ts's toMs), and mapping.ts's
+// msToDateString — normalize defensively so every HsRecord.lastModifiedAt
+// downstream code sees is always a ms-epoch string.
+function normalizeLastModified(raw: string): string {
+  if (/^\d+$/.test(raw)) return raw;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? raw : String(parsed);
+}
+
 function toHsRecord(r: HsApiRecord): HsRecord {
   return {
     id: r.id,
     props: r.properties,
-    lastModifiedAt: r.properties.hs_lastmodifieddate ?? r.updatedAt ?? "",
+    lastModifiedAt: normalizeLastModified(r.properties.hs_lastmodifieddate ?? r.updatedAt ?? ""),
   };
 }
 

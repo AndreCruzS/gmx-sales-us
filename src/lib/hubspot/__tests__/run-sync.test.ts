@@ -13,6 +13,7 @@ import type {
   HubSpotStorePort,
   ReviewAction,
   SyncedAccountRow,
+  SyncedOpportunityRow,
 } from "../supabase-store";
 import type { LocalLink, Snapshot } from "../sync-core";
 
@@ -368,5 +369,240 @@ describe("runOrgSync", () => {
     const dealsStream = report.streams.find((s) => s.stream === "in:deals");
     expect(dealsStream?.succeeded).toBe(1);
     expect(dealsStream?.errors).toBe(0);
+  });
+});
+
+// F1: a failed row must never be skipped forever by a cursor that advanced
+// past it — changed*Since queries are `updated_at > cursor`, so the cursor
+// may only advance to the greatest SUCCESSFUL updated_at that is strictly
+// below the earliest FAILED row's updated_at this pass.
+describe("F1: partial-failure outbound cursor advancement", () => {
+  function makeMinimalPort(): FakePort {
+    const calls: string[] = [];
+    return {
+      calls,
+      async batchCreate(type, inputs) {
+        calls.push(`batchCreate:${type}`);
+        return inputs.map((input, i) => ({
+          id: `${type}-new-${i}`,
+          props: input.props,
+          lastModifiedAt: "1000",
+        }));
+      },
+      async batchUpdate(type, inputs) {
+        calls.push(`batchUpdate:${type}`);
+        return inputs.map((input) => ({ id: input.id, props: input.props, lastModifiedAt: "1000" }));
+      },
+      async searchModifiedSince() {
+        return { results: [], after: null };
+      },
+      async associateDefault() {},
+      async listOwners() {
+        return [];
+      },
+      async ensureProperty() {},
+      async ensureDealPipeline() {
+        return { pipelineId: "pl-1", stageIds: {} };
+      },
+    };
+  }
+
+  function makeDealsOnlyStore(opportunities: SyncedOpportunityRow[]): FakeStore {
+    const cursors = new Map<string, string>();
+    const applyDealPatchCalls: FakeStore["applyDealPatchCalls"] = [];
+    const createDealCalls: HsRecord[] = [];
+    const errorCalls: unknown[][] = [];
+    return {
+      cursors,
+      applyDealPatchCalls,
+      createDealCalls,
+      errorCalls,
+      async getCursor(stream) {
+        return cursors.get(stream) ?? null;
+      },
+      async setCursor(stream, cursor) {
+        cursors.set(stream, cursor);
+      },
+      async changedAccountsSince() {
+        return [];
+      },
+      async changedContactsSince() {
+        return [];
+      },
+      async changedOpportunitiesSince(iso) {
+        return iso ? [] : opportunities;
+      },
+      async changedActivitiesSince() {
+        return [];
+      },
+      async changedNextActionsSince() {
+        return [];
+      },
+      async linkHubspotId() {},
+      async loadSnapshots() {
+        return new Map();
+      },
+      async saveSnapshot() {},
+      async loadLinksByHubspotId() {
+        return new Map();
+      },
+      async loadHubspotIdsByLocalId() {
+        return new Map();
+      },
+      async applyCompanyPatch() {},
+      async applyContactPatch() {},
+      async applyDealPatch(entityId, patch, review) {
+        applyDealPatchCalls.push({ entityId, patch, review });
+      },
+      async createDealFromHubSpot(record) {
+        createDealCalls.push(record);
+      },
+      async recordError(...args) {
+        errorCalls.push(args);
+      },
+    };
+  }
+
+  function opp(over: Partial<SyncedOpportunityRow> & { id: string }): SyncedOpportunityRow {
+    return {
+      hubspot_id: null,
+      updated_at: "2026-08-05T08:00:00.000Z",
+      primary_account_id: "acct-1",
+      owner_id: "mem-1",
+      name: "Deal",
+      stage: "IDENTIFIED",
+      estimated_revenue: null,
+      expected_close_date: null,
+      current_status: "ok",
+      current_blocker: null,
+      lead_source: "JOBSITE",
+      ...over,
+    };
+  }
+
+  it("advances the cursor only to the greatest success strictly below the earliest failure", async () => {
+    // opp-mid-fail's stage ("BOGUS_STAGE") has no entry in CFG.stage_map, so
+    // opportunityToDealProps throws for it — a realistic per-row outbound
+    // failure alongside two rows that map fine.
+    const rows: SyncedOpportunityRow[] = [
+      opp({ id: "opp-earliest", updated_at: "2026-08-05T08:00:00.000Z", stage: "IDENTIFIED" }),
+      opp({ id: "opp-mid-fail", updated_at: "2026-08-05T09:00:00.000Z", stage: "BOGUS_STAGE" }),
+      opp({ id: "opp-late", updated_at: "2026-08-05T11:00:00.000Z", stage: "QUALIFIED" }),
+    ];
+    const port = makeMinimalPort();
+    const store = makeDealsOnlyStore(rows);
+
+    const report = await runOrgSync(port, store, CFG, new Date("2026-08-05T12:00:00.000Z"));
+
+    // opp-late (11:00) succeeded, but the cursor must NOT jump to it — that
+    // would permanently skip opp-mid-fail (09:00) on every future pass
+    // (`updated_at > cursor`). Only opp-earliest (08:00, strictly below the
+    // 09:00 failure) is eligible.
+    expect(store.cursors.get("out:deals")).toBe("2026-08-05T08:00:00.000Z");
+
+    const dealsStream = report.streams.find((s) => s.stream === "out:deals");
+    expect(dealsStream?.succeeded).toBe(2);
+    expect(dealsStream?.errors).toBe(1);
+  });
+
+  it("does not advance the cursor at all when the earliest failure precedes every success", async () => {
+    const rows: SyncedOpportunityRow[] = [
+      opp({ id: "opp-early-fail", updated_at: "2026-08-05T07:00:00.000Z", stage: "BOGUS_STAGE" }),
+      opp({ id: "opp-late-success", updated_at: "2026-08-05T12:00:00.000Z", stage: "QUALIFIED" }),
+    ];
+    const port = makeMinimalPort();
+    const store = makeDealsOnlyStore(rows);
+
+    await runOrgSync(port, store, CFG, new Date("2026-08-05T13:00:00.000Z"));
+
+    expect(store.cursors.has("out:deals")).toBe(false);
+  });
+});
+
+// F7: a `after` token that stops advancing must not spin the pagination
+// loop forever — searchAll bails and the stream records the anomaly instead
+// of hanging the whole cron invocation.
+describe("F7: stalled search pagination is guarded, not looped forever", () => {
+  it("stops after the after token repeats and records an error", async () => {
+    const searchCalls: (string | undefined)[] = [];
+    const port: HubSpotPort = {
+      async batchCreate() {
+        return [];
+      },
+      async batchUpdate() {
+        return [];
+      },
+      async searchModifiedSince(type: HsObjectType, _sinceMs, _filters, _properties, after?: string) {
+        if (type !== "deals") return { results: [], after: null };
+        searchCalls.push(after);
+        // Always hands back the same `after` — a non-advancing cursor, which
+        // would spin forever without the stall guard.
+        return { results: [], after: "cur-stuck" };
+      },
+      async associateDefault() {},
+      async listOwners() {
+        return [];
+      },
+      async ensureProperty() {},
+      async ensureDealPipeline() {
+        return { pipelineId: "pl-1", stageIds: {} };
+      },
+    };
+
+    const errorCalls: unknown[][] = [];
+    const store: HubSpotStorePort = {
+      async getCursor() {
+        return null;
+      },
+      async setCursor() {},
+      async changedAccountsSince() {
+        return [];
+      },
+      async changedContactsSince() {
+        return [];
+      },
+      async changedOpportunitiesSince() {
+        return [];
+      },
+      async changedActivitiesSince() {
+        return [];
+      },
+      async changedNextActionsSince() {
+        return [];
+      },
+      async linkHubspotId() {},
+      async loadSnapshots() {
+        return new Map();
+      },
+      async saveSnapshot() {},
+      async loadLinksByHubspotId() {
+        return new Map();
+      },
+      async loadHubspotIdsByLocalId() {
+        return new Map();
+      },
+      async applyCompanyPatch() {},
+      async applyContactPatch() {},
+      async applyDealPatch() {},
+      async createDealFromHubSpot() {},
+      async recordError(...args) {
+        errorCalls.push(args);
+      },
+    };
+
+    const report = await runOrgSync(port, store, CFG, new Date("2026-08-05T08:00:00.000Z"));
+
+    // First call: after=undefined, returns "cur-stuck" (advances, not
+    // stalled). Second call: after="cur-stuck", returns "cur-stuck" again
+    // (repeats) — stalled, loop breaks. Exactly 2 calls, not an infinite loop.
+    expect(searchCalls).toEqual([undefined, "cur-stuck"]);
+
+    const stalledError = errorCalls.find(
+      (args) => typeof args[5] === "string" && (args[5] as string).includes("stalled"),
+    );
+    expect(stalledError).toBeDefined();
+
+    const dealsStream = report.streams.find((s) => s.stream === "in:deals");
+    expect(dealsStream?.errors).toBeGreaterThanOrEqual(1);
   });
 });

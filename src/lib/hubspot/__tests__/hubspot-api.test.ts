@@ -153,6 +153,46 @@ describe("HubSpotApi.searchModifiedSince", () => {
   });
 });
 
+describe("HsRecord.lastModifiedAt normalization", () => {
+  it("passes a numeric ms-epoch hs_lastmodifieddate through unchanged", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonRes(200, { results: [{ id: "1", properties: { hs_lastmodifieddate: "1754384400000" } }] }),
+    );
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    const result = await api.searchModifiedSince("deals", "0", [], ["dealname"]);
+
+    expect(result.results[0].lastModifiedAt).toBe("1754384400000");
+  });
+
+  it("converts an ISO-8601 hs_lastmodifieddate to a ms-epoch string (F8)", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonRes(200, {
+        results: [{ id: "1", properties: { hs_lastmodifieddate: "2025-08-05T09:00:00.000Z" } }],
+      }),
+    );
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    const result = await api.searchModifiedSince("deals", "0", [], ["dealname"]);
+
+    expect(result.results[0].lastModifiedAt).toBe("1754384400000");
+    expect(Number.isNaN(Number(result.results[0].lastModifiedAt))).toBe(false);
+  });
+
+  it("falls back to an ISO-8601 updatedAt, also normalized to ms-epoch", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonRes(200, {
+        results: [{ id: "1", properties: {}, updatedAt: "2025-08-05T09:00:00.000Z" }],
+      }),
+    );
+    const api = new HubSpotApi("token", fetchFn as unknown as typeof fetch, async () => {});
+
+    const result = await api.searchModifiedSince("deals", "0", [], ["dealname"]);
+
+    expect(result.results[0].lastModifiedAt).toBe("1754384400000");
+  });
+});
+
 describe("HubSpotApi request headers", () => {
   it("sends bearer auth and json content-type", async () => {
     let capturedInit: RequestInit | undefined;
