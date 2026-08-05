@@ -26,18 +26,31 @@ select has_table('public', 'hubspot_sync_cursors',   'cursors table');
 select has_table('public', 'hubspot_sync_snapshots', 'snapshots table');
 select has_table('public', 'hubspot_sync_errors',    'errors table');
 
--- default-deny: an authenticated caller sees nothing (no policies exist)
+-- default-deny: an authenticated caller sees nothing (no policies exist).
+-- Seed one fixture row per table (as postgres, bypassing RLS) for the seeded
+-- org so the is_empty() checks below actually prove denial rather than
+-- passing vacuously on empty tables.
+insert into hubspot_sync_cursors (org_id, stream, cursor)
+values ('11111111-1111-1111-1111-111111111111', 'out:accounts', '2026-08-01T00:00:00Z');
+
+insert into hubspot_sync_snapshots (org_id, entity_type, entity_id, hubspot_id, synced_props)
+values ('11111111-1111-1111-1111-111111111111', 'account',
+        'd0000000-0000-0000-0000-000000000000', 'hs-001', '{}'::jsonb);
+
+insert into hubspot_sync_errors (org_id, direction, entity_type, payload, error)
+values ('11111111-1111-1111-1111-111111111111', 'outbound', 'account', '{}'::jsonb, 'boom');
+
 select tests.set_claims('tj@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 select is_empty(
   $$ select * from hubspot_sync_errors $$,
-  'sync errors invisible to authenticated');
+  'sync errors invisible to authenticated, despite a fixture row existing');
 select is_empty(
   $$ select * from hubspot_sync_cursors $$,
-  'cursors invisible to authenticated');
+  'cursors invisible to authenticated, despite a fixture row existing');
 select is_empty(
   $$ select * from hubspot_sync_snapshots $$,
-  'snapshots invisible to authenticated');
+  'snapshots invisible to authenticated, despite a fixture row existing');
 reset role;
 
 -- secret accessor exists and authenticated cannot execute it

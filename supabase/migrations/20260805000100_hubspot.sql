@@ -25,6 +25,7 @@ create table hubspot_sync_cursors (
   org_id     uuid not null references organizations (id),
   stream     text not null,
   cursor     text not null,
+  created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (org_id, stream)
 );
@@ -35,9 +36,10 @@ create trigger set_updated_at
 
 -- Last property values we synced, in HubSpot property space. A side that
 -- still equals its snapshot has not really changed — that is the echo test.
--- updated_at (alongside synced_at) satisfies the repo-wide invariant (01:
--- "every table has updated_at" + the set_updated_at trigger) that every
--- public table carries a trigger-maintained LWW version key (D61).
+-- created_at/updated_at (alongside synced_at) satisfy the repo-wide
+-- created_at/updated_at + set_updated_at trigger convention (organizations,
+-- org_integrations, hubspot_sync_errors below) — every public table carries
+-- a trigger-maintained LWW version key (D61), not just the sync-state ones.
 create table hubspot_sync_snapshots (
   org_id       uuid not null references organizations (id),
   entity_type  text not null check (entity_type in ('account', 'contact', 'opportunity')),
@@ -45,6 +47,7 @@ create table hubspot_sync_snapshots (
   hubspot_id   text not null,
   synced_props jsonb not null,
   synced_at    timestamptz not null default now(),
+  created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   primary key (org_id, entity_type, entity_id)
 );
