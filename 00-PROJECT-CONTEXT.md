@@ -208,7 +208,38 @@ Then update this file at the end of each working session:
 - note where you stopped in the section below
 
 ### Session state
-- **Last updated:** 2026-07-30 (**Home widgets + Routine list shipped and gate-verified**)
+- **Last updated:** 2026-08-05 (**HubSpot sync bridge built and gate-verified,
+  go-live pending client console steps**)
+- **HubSpot sync bridge built** on branch `hubspot-sync-bridge` (spec:
+  `docs/superpowers/specs/2026-08-05-hubspot-integration-design.md`, plan:
+  `docs/superpowers/plans/2026-08-05-hubspot-sync-bridge.md`, 14-task SDD
+  cycle, all tasks complete and reviewed). HubSpot is the pipeline system of
+  record: a bidirectional bridge keeps accounts/contacts/opportunities in
+  sync — outbound (app → HubSpot) on a per-org, per-stream cursor with
+  echo-suppression snapshots so round-trips don't ping-pong; inbound
+  (HubSpot → app) on the same cadence, creating opportunities + a "Review
+  deal" next action on stage moves and applying company/contact patches;
+  activities and next actions surface as HubSpot notes/tasks; an admin route
+  (`/api/hubspot/admin`) drives one-time-per-org setup (pipeline + property
+  creation, owner map) and backfill, both dry-run-first; a Vercel Cron route
+  (`/api/hubspot/sync`, `*/5 * * * *`) drives ongoing sync for every
+  configured org; a dashboard card + `hubspot_sync_errors` table surface
+  sync health to managers/admins. Multi-tenant by construction (D16/D20):
+  token, pipeline, stage map, and owner map are all per-org, nothing
+  hardcoded. **Gates passed:** `npm test` 202/202, `npx supabase test db`
+  153/153 across 12 suites, `npm run lint` 0 errors, `npm run build` clean,
+  `npx tsc --noEmit` clean. **Go-live still needs client HubSpot-console
+  steps** (private app + scopes, Vault token, association-type direction
+  check, sandbox round-trip, Lumber Plus shared-contact sign-off) — full
+  checklist in `docs/hubspot-go-live.md`. **Open items carried, non-blocking:**
+  Q-A (portal tier — Pro vs Enterprise; gates projects sync and association
+  labels), Q-B (who is the HubSpot super-admin, lead time), Q-C
+  (shared-contact etiquette — needs Lumber Plus sign-off before live
+  backfill, see go-live doc §7); a live browser walkthrough of the two new
+  deal UIs (`/accounts/[id]/new-deal`, deal-stage-sheet) is still owed — the
+  Chrome DevTools MCP profile stayed locked all session (same known
+  environment issue noted in the 2026-07-30 entry below), so this was
+  verified by code inspection + the DB-level gate, not a live click-through.
 - **Home widgets + Routine list delivered** (design: `docs/superpowers/specs/2026-07-29-home-widgets-routine-design.md`, 12-task TDD plan, Tasks 1–12):
   Home rebuilt as a launcher (widget grid, direction C) instead of opening on the
   day list — greeting + honest sync line, offline search surfaced on Home, a
