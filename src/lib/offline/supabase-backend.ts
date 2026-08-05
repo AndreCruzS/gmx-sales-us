@@ -81,6 +81,23 @@ export class SupabaseSyncBackend implements SyncBackend {
     if (error) throw new Error(error.message);
   }
 
+  async createOpportunityWithAction(payload: Record<string, unknown>): Promise<void> {
+    const { first_action, ...opp } = payload as {
+      first_action: Record<string, unknown>;
+    } & Record<string, unknown>;
+    const { error } = await this.supabase.rpc("create_opportunity_with_action", {
+      p_opportunity: opp,
+      p_next_action: {
+        ...first_action,
+        org_id: opp.org_id,
+        owner_id: opp.owner_id,
+        account_id: opp.primary_account_id,
+        opportunity_id: opp.id,
+      },
+    });
+    if (error) classify(error.code ?? null, error.message);
+  }
+
   async pullWorkingSet(): Promise<WorkingSet> {
     // D56: bounded, visit-ready working set — never the whole territory.
     const today = new Date();

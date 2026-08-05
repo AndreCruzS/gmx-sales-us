@@ -91,7 +91,11 @@ export class OutboxSyncEngine implements SyncEngine {
 
       const table = ENTITY_TABLES[rec.entityType];
       if (rec.op === "create") {
-        await this.backend.upsertIgnoreDuplicates(table, rec.payload);
+        if (rec.entityType === "opportunity") {
+          await this.backend.createOpportunityWithAction(rec.payload);
+        } else {
+          await this.backend.upsertIgnoreDuplicates(table, rec.payload);
+        }
       } else {
         const { id, ...patch } = rec.payload as { id: string };
         const affected = await this.backend.updateWithVersion(

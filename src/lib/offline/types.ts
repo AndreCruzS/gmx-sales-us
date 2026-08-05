@@ -166,6 +166,9 @@ export interface SyncBackend {
     blob: Blob,
   ): Promise<void>;
   pullWorkingSet(): Promise<WorkingSet>;
+  /** Deal create replays as one RPC — the stage gate needs both rows in one
+   *  transaction, which per-op upserts cannot give. */
+  createOpportunityWithAction(payload: Record<string, unknown>): Promise<void>;
 }
 
 /** Thrown/classified by the backend so drain() can route the failure. */

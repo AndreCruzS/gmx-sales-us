@@ -193,6 +193,7 @@ export type Database = {
           created_at: string
           display_last_verified_at: string | null
           has_display_wall: boolean
+          hubspot_id: string | null
           id: string
           lead_source: string
           name: string
@@ -219,6 +220,7 @@ export type Database = {
           created_at?: string
           display_last_verified_at?: string | null
           has_display_wall?: boolean
+          hubspot_id?: string | null
           id?: string
           lead_source: string
           name: string
@@ -245,6 +247,7 @@ export type Database = {
           created_at?: string
           display_last_verified_at?: string | null
           has_display_wall?: boolean
+          hubspot_id?: string | null
           id?: string
           lead_source?: string
           name?: string
@@ -392,6 +395,7 @@ export type Database = {
           commercial_potential: string | null
           created_at: string
           follow_up_required: boolean
+          hubspot_id: string | null
           id: string
           key_information: string | null
           location: string | null
@@ -414,6 +418,7 @@ export type Database = {
           commercial_potential?: string | null
           created_at?: string
           follow_up_required?: boolean
+          hubspot_id?: string | null
           id?: string
           key_information?: string | null
           location?: string | null
@@ -436,6 +441,7 @@ export type Database = {
           commercial_potential?: string | null
           created_at?: string
           follow_up_required?: boolean
+          hubspot_id?: string | null
           id?: string
           key_information?: string | null
           location?: string | null
@@ -846,6 +852,7 @@ export type Database = {
           account_id: string
           created_at: string
           email: string | null
+          hubspot_id: string | null
           id: string
           influence_level: Database["public"]["Enums"]["influence_level"] | null
           is_champion: boolean
@@ -862,6 +869,7 @@ export type Database = {
           account_id: string
           created_at?: string
           email?: string | null
+          hubspot_id?: string | null
           id?: string
           influence_level?:
             | Database["public"]["Enums"]["influence_level"]
@@ -880,6 +888,7 @@ export type Database = {
           account_id?: string
           created_at?: string
           email?: string | null
+          hubspot_id?: string | null
           id?: string
           influence_level?:
             | Database["public"]["Enums"]["influence_level"]
@@ -1449,6 +1458,132 @@ export type Database = {
           },
         ]
       }
+      hubspot_sync_cursors: {
+        Row: {
+          created_at: string
+          cursor: string
+          org_id: string
+          stream: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cursor: string
+          org_id: string
+          stream: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cursor?: string
+          org_id?: string
+          stream?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_sync_cursors_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubspot_sync_errors: {
+        Row: {
+          created_at: string
+          direction: string
+          entity_id: string | null
+          entity_type: string
+          error: string
+          hubspot_id: string | null
+          id: string
+          org_id: string
+          payload: Json
+          resolved_at: string | null
+          retry_count: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          entity_id?: string | null
+          entity_type: string
+          error: string
+          hubspot_id?: string | null
+          id?: string
+          org_id: string
+          payload: Json
+          resolved_at?: string | null
+          retry_count?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          entity_id?: string | null
+          entity_type?: string
+          error?: string
+          hubspot_id?: string | null
+          id?: string
+          org_id?: string
+          payload?: Json
+          resolved_at?: string | null
+          retry_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_sync_errors_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubspot_sync_snapshots: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          hubspot_id: string
+          org_id: string
+          synced_at: string
+          synced_props: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          hubspot_id: string
+          org_id: string
+          synced_at?: string
+          synced_props: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          hubspot_id?: string
+          org_id?: string
+          synced_at?: string
+          synced_props?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_sync_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           created_at: string
@@ -1557,6 +1692,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           due_date: string
+          hubspot_id: string | null
           id: string
           kind: Database["public"]["Enums"]["next_action_kind"] | null
           objective: Database["public"]["Enums"]["visit_objective"] | null
@@ -1575,6 +1711,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           due_date: string
+          hubspot_id?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
@@ -1593,6 +1730,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           due_date?: string
+          hubspot_id?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
@@ -1749,6 +1887,7 @@ export type Database = {
           estimated_quantity: number | null
           estimated_revenue: number | null
           expected_close_date: string | null
+          hubspot_id: string | null
           id: string
           lead_source: string
           name: string
@@ -1782,6 +1921,7 @@ export type Database = {
           estimated_quantity?: number | null
           estimated_revenue?: number | null
           expected_close_date?: string | null
+          hubspot_id?: string | null
           id?: string
           lead_source: string
           name: string
@@ -1815,6 +1955,7 @@ export type Database = {
           estimated_quantity?: number | null
           estimated_revenue?: number | null
           expected_close_date?: string | null
+          hubspot_id?: string | null
           id?: string
           lead_source?: string
           name?: string
@@ -4090,7 +4231,21 @@ export type Database = {
       }
     }
     Functions: {
+      create_opportunity_with_action: {
+        Args: { p_next_action: Json; p_opportunity: Json }
+        Returns: undefined
+      }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      get_integration_secret: { Args: { p_ref: string }; Returns: string }
+      hubspot_apply_deal: {
+        Args: {
+          p_opportunity_id: string
+          p_org_id: string
+          p_patch: Json
+          p_review_action: Json
+        }
+        Returns: undefined
+      }
       set_active_org: { Args: { p_org_id: string }; Returns: undefined }
     }
     Enums: {
@@ -4135,7 +4290,12 @@ export type Database = {
       candidate_status: "PENDING" | "CONFIRMED" | "MERGED" | "DISCARDED"
       email_direction: "INBOUND" | "OUTBOUND"
       influence_level: "LOW" | "MEDIUM" | "HIGH" | "DECISION_MAKER"
-      integration_provider: "anthropic" | "openai" | "google" | "workspace"
+      integration_provider:
+        | "anthropic"
+        | "openai"
+        | "google"
+        | "workspace"
+        | "hubspot"
       membership_role: "rep" | "manager" | "admin" | "support"
       membership_status: "active" | "suspended"
       next_action_kind:
@@ -4384,7 +4544,13 @@ export const Constants = {
       candidate_status: ["PENDING", "CONFIRMED", "MERGED", "DISCARDED"],
       email_direction: ["INBOUND", "OUTBOUND"],
       influence_level: ["LOW", "MEDIUM", "HIGH", "DECISION_MAKER"],
-      integration_provider: ["anthropic", "openai", "google", "workspace"],
+      integration_provider: [
+        "anthropic",
+        "openai",
+        "google",
+        "workspace",
+        "hubspot",
+      ],
       membership_role: ["rep", "manager", "admin", "support"],
       membership_status: ["active", "suspended"],
       next_action_kind: [

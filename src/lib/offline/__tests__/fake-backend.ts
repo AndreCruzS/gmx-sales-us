@@ -58,6 +58,26 @@ export class FakeBackend implements SyncBackend {
     table.set(id, { ...row, updated_at: this.nextVersion() } as Row);
   }
 
+  async createOpportunityWithAction(payload: Record<string, unknown>): Promise<void> {
+    this.guard();
+    const { first_action, ...opp } = payload as {
+      first_action: Record<string, unknown>;
+    } & Record<string, unknown>;
+    this.table("opportunities").set(opp.id as string, {
+      ...opp,
+      updated_at: this.nextVersion(),
+    } as Row);
+    this.table("next_actions").set(first_action.id as string, {
+      id: first_action.id,
+      ...first_action,
+      org_id: opp.org_id,
+      owner_id: opp.owner_id,
+      account_id: opp.primary_account_id,
+      opportunity_id: opp.id,
+      updated_at: this.nextVersion(),
+    } as Row);
+  }
+
   async updateWithVersion(
     tableName: string,
     id: string,

@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DealStageSheet } from "@/components/deal-stage-sheet";
 import { useOffline } from "@/components/offline-provider";
 import { CalendarIcon, CheckIcon, ChevronRightIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
@@ -58,6 +59,9 @@ interface NextAction {
   action: string;
   due_date: string;
   objective: string | null;
+  // Needed to derive hasOpenAction (Rule 3, Task 6) for the stage sheet —
+  // null for actions not tied to a deal.
+  opportunity_id: string | null;
 }
 interface Opportunity {
   id: string;
@@ -65,6 +69,8 @@ interface Opportunity {
   stage: string;
   estimated_revenue: number | null;
   current_status: string | null;
+  updated_at: string;
+  primary_account_id: string;
 }
 interface Relationship {
   id: string;
@@ -100,6 +106,9 @@ export default function AccountPage() {
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [stageSheetOpp, setStageSheetOpp] = useState<Opportunity | null>(
+    null,
+  );
 
   // No signal: serve the account from the cached working set so the rep still
   // sees the account in front of them (D56).
@@ -144,6 +153,7 @@ export default function AccountPage() {
             action: i.action,
             due_date: i.due_date,
             objective: i.objective,
+            opportunity_id: i.opportunity_id,
           })),
       );
     }
@@ -189,13 +199,15 @@ export default function AccountPage() {
           .limit(10),
         supabase
           .from("next_actions")
-          .select("id, action, due_date, objective")
+          .select("id, action, due_date, objective, opportunity_id")
           .eq("account_id", id)
           .is("completed_at", null)
           .order("due_date"),
         supabase
           .from("opportunities")
-          .select("id, name, stage, estimated_revenue, current_status")
+          .select(
+            "id, name, stage, estimated_revenue, current_status, updated_at, primary_account_id",
+          )
           .eq("primary_account_id", id)
           .order("updated_at", { ascending: false }),
         supabase
@@ -431,20 +443,33 @@ export default function AccountPage() {
         </section>
       )}
 
-      {/* Pipeline on this account */}
-      {opportunities.length > 0 && (
-        <section>
-          <div className="section-head">
-            <h2 className="t-section">Opportunities</h2>
-            <span className="t-meta">{opportunities.length}</span>
-          </div>
+      {/* Pipeline on this account — the section stays visible even with no
+          deals yet, or the only door to /new-deal would be unreachable. */}
+      <section>
+        <div className="section-head">
+          <h2 className="t-section">Opportunities</h2>
+          <Link href={`/accounts/${account.id}/new-deal`} className="t-action">
+            New deal
+          </Link>
+        </div>
+        {opportunities.length === 0 ? (
+          <p className="t-sub px-1">No deals yet.</p>
+        ) : (
           <ul className="list">
             {opportunities.map((o) => (
               <li key={o.id} className="row">
                 <span className="row-body">
                   <span className="flex items-center gap-2">
                     <span className="t-title truncate">{o.name}</span>
-                    <span className="tag">{humanize(o.stage)}</span>
+                    {/* Opens the stage sheet (Task 6) — the pill is the door
+                        to advancing the deal, not just a status readout. */}
+                    <button
+                      type="button"
+                      className="tag"
+                      onClick={() => setStageSheetOpp(o)}
+                    >
+                      {humanize(o.stage)}
+                    </button>
                   </span>
                   <span className="t-sub block truncate">
                     {o.estimated_revenue
@@ -460,8 +485,8 @@ export default function AccountPage() {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* The commercial network (D4) — how this account connects to the market.
           One row per counterpart: a contractor that both buys here AND was
@@ -582,6 +607,19 @@ export default function AccountPage() {
             ))}
           </ul>
         </section>
+      )}
+
+      {stageSheetOpp && (
+        <DealStageSheet
+          opportunity={stageSheetOpp}
+          hasOpenAction={actions.some(
+            (n) => n.opportunity_id === stageSheetOpp.id,
+          )}
+          onClose={() => {
+            setStageSheetOpp(null);
+            void load();
+          }}
+        />
       )}
     </div>
   );
