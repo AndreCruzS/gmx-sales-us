@@ -94,6 +94,11 @@ export function DealStageSheet({
 
     setBusy(true);
     setError(null);
+    // Compensation: two outbox ops; if the second enqueue fails after the
+    // first succeeded, roll back what's already queued so a retry can't
+    // strand a duplicate action (same pattern as accounts/new/page.tsx's
+    // submit() and the sheets in src/app/review/page.tsx).
+    const enqueuedSeqs: number[] = [];
     try {
       const layer = getOfflineLayer();
 
@@ -101,43 +106,52 @@ export function DealStageSheet({
       // sees it already on the books when the update op commits.
       if (needsAction) {
         const actionId = crypto.randomUUID();
-        await layer.sync.enqueue({
-          clientId: actionId,
-          entityType: "next_action",
-          op: "create",
-          payload: {
-            id: actionId,
-            org_id: profile.orgId,
-            action: actionText.trim(),
-            owner_id: profile.membershipId,
-            due_date: actionDue,
-            account_id: opportunity.primary_account_id,
-            opportunity_id: opportunity.id,
-            kind: actionKind,
-          },
-          baseVersion: null,
-          blobRef: null,
-        });
+        enqueuedSeqs.push(
+          await layer.sync.enqueue({
+            clientId: actionId,
+            entityType: "next_action",
+            op: "create",
+            payload: {
+              id: actionId,
+              org_id: profile.orgId,
+              action: actionText.trim(),
+              owner_id: profile.membershipId,
+              due_date: actionDue,
+              account_id: opportunity.primary_account_id,
+              opportunity_id: opportunity.id,
+              kind: actionKind,
+            },
+            baseVersion: null,
+            blobRef: null,
+          }),
+        );
       }
 
-      await layer.sync.enqueue({
-        clientId: opportunity.id,
-        entityType: "opportunity",
-        op: "update",
-        payload: {
-          id: opportunity.id,
-          stage,
-          current_status: status.trim(),
-        },
-        // A stale baseVersion (deal moved in HubSpot meanwhile) lands in the
-        // error tray by design (D61) — no special handling needed here.
-        baseVersion: opportunity.updated_at,
-        blobRef: null,
-      });
+      enqueuedSeqs.push(
+        await layer.sync.enqueue({
+          clientId: opportunity.id,
+          entityType: "opportunity",
+          op: "update",
+          payload: {
+            id: opportunity.id,
+            stage,
+            current_status: status.trim(),
+          },
+          // A stale baseVersion (deal moved in HubSpot meanwhile) lands in
+          // the error tray by design (D61) — no special handling needed
+          // here.
+          baseVersion: opportunity.updated_at,
+          blobRef: null,
+        }),
+      );
 
       void layer.sync.drain();
       onClose();
     } catch (err) {
+      const layer = getOfflineLayer();
+      for (const seq of enqueuedSeqs) {
+        await layer.local.deleteOutbox(seq);
+      }
       setBusy(false);
       setError(err instanceof Error ? err.message : String(err));
     }
