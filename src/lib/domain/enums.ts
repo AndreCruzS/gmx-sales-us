@@ -105,6 +105,14 @@ export const REFERRAL_LEAD_SOURCES: readonly LeadSource[] = [
   "REFERRAL_OTHER",
 ];
 
+// Mirrors opportunity_stage. WON/LOST are terminal; the stage gate exempts
+// them from the open-next-action requirement (Rule 3).
+export const OPPORTUNITY_STAGES = [
+  "IDENTIFIED", "QUALIFIED", "DEVELOPMENT", "QUOTE", "DECISION",
+  "WON", "LOST", "ON_HOLD",
+] as const;
+export type OpportunityStage = (typeof OPPORTUNITY_STAGES)[number];
+
 // Mirrors relationship_type in supabase/migrations/20260722000200_enums.sql.
 // The account creation fan-out (D4/D7) only ever writes REFERRED_BY, but the
 // full set is kept here so the schema matches the DB enum, not a subset of it.

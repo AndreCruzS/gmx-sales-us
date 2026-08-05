@@ -4,7 +4,7 @@
 //   3. stale edit lands in the error tray (never clobbered, never dropped)
 // plus D59 blob timing and D62 RLS-rejection-at-replay.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DexieBlobStore } from "../blob-store.dexie";
 import { DexieLocalStore } from "../local-store.dexie";
 import { OutboxSyncEngine } from "../sync-engine";
@@ -244,5 +244,101 @@ describe("outbox boundary validation", () => {
         blobRef: null,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("opportunity outbox entity", () => {
+  const validCreate = {
+    id: "11111111-1111-1111-1111-111111111111",
+    org_id: "22222222-2222-2222-2222-222222222222",
+    name: "Ganahl decking",
+    primary_account_id: "33333333-3333-3333-3333-333333333333",
+    territory_id: "44444444-4444-4444-4444-444444444444",
+    owner_id: "55555555-5555-5555-5555-555555555555",
+    stage: "IDENTIFIED",
+    current_status: "Intro made",
+    lead_source: "EXISTING_RELATIONSHIP",
+    first_action: {
+      id: "66666666-6666-6666-6666-666666666666",
+      action: "Drop decking sample",
+      due_date: "2026-08-12",
+      kind: "SAMPLE_FOLLOW_UP",
+    },
+  };
+
+  it("validates create and dispatches to createOpportunityWithAction", async () => {
+    const createSpy = vi.spyOn(backend, "createOpportunityWithAction");
+    const upsertSpy = vi.spyOn(backend, "upsertIgnoreDuplicates");
+
+    await engine.enqueue({
+      clientId: validCreate.id,
+      entityType: "opportunity",
+      op: "create",
+      payload: validCreate,
+      baseVersion: null,
+      blobRef: null,
+    });
+    await engine.drain();
+
+    expect(createSpy).toHaveBeenCalledWith(validCreate);
+    expect(upsertSpy).not.toHaveBeenCalledWith("opportunities", expect.anything());
+  });
+
+  it("rejects a create without first_action at enqueue time", async () => {
+    const { first_action: _drop, ...bad } = validCreate;
+    await expect(
+      engine.enqueue({
+        clientId: validCreate.id,
+        entityType: "opportunity",
+        op: "create",
+        payload: bad,
+        baseVersion: null,
+        blobRef: null,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects OTHER lead source without detail (D8) and referral without account (D7)", async () => {
+    await expect(
+      engine.enqueue({
+        clientId: validCreate.id,
+        entityType: "opportunity",
+        op: "create",
+        payload: { ...validCreate, lead_source: "OTHER" },
+        baseVersion: null,
+        blobRef: null,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      engine.enqueue({
+        clientId: validCreate.id,
+        entityType: "opportunity",
+        op: "create",
+        payload: { ...validCreate, lead_source: "REFERRAL_DEALER" },
+        baseVersion: null,
+        blobRef: null,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("routes opportunity:update through updateWithVersion with LWW guard", async () => {
+    const updateSpy = vi.spyOn(backend, "updateWithVersion");
+
+    await engine.enqueue({
+      clientId: validCreate.id,
+      entityType: "opportunity",
+      op: "update",
+      payload: { id: validCreate.id, stage: "QUALIFIED" },
+      baseVersion: "2026-08-05T00:00:00Z",
+      blobRef: null,
+    });
+    await engine.drain();
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      "opportunities",
+      validCreate.id,
+      { stage: "QUALIFIED" },
+      "2026-08-05T00:00:00Z",
+    );
   });
 });

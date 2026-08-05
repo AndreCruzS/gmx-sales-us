@@ -8,6 +8,7 @@ import {
   ACTIVITY_OUTCOMES,
   ACTIVITY_TYPES,
   LEAD_SOURCES_ALL,
+  OPPORTUNITY_STAGES,
   REFERRAL_LEAD_SOURCES,
   RELATIONSHIP_TYPES,
   VISIT_OBJECTIVES,
@@ -196,6 +197,61 @@ export const accountUpdateSchema = z.object({
 });
 export type AccountUpdate = z.infer<typeof accountUpdateSchema>;
 
+// Deal create travels as ONE op: the stage gate demands opportunity + open
+// next_action in the same transaction, so first_action rides inside the
+// payload and the backend replays both through create_opportunity_with_action.
+export const opportunityCreateSchema = z
+  .object({
+    id: uuid,
+    org_id: uuid,
+    name: z.string().min(1),
+    primary_account_id: uuid,
+    territory_id: uuid,
+    owner_id: uuid,
+    stage: z.enum(OPPORTUNITY_STAGES).default("IDENTIFIED"),
+    current_status: z.string().min(1),
+    current_blocker: z.string().nullish(),
+    estimated_revenue: z.number().nonnegative().nullish(),
+    probability: z.number().int().min(0).max(100).nullish(),
+    expected_close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+    product: z.string().nullish(),
+    competitor: z.string().nullish(),
+    lead_source: z.enum(LEAD_SOURCES_ALL),
+    source_detail: z.string().nullish(),
+    referring_account_id: uuid.nullish(),
+    project_id: uuid.nullish(),
+    first_action: z.object({
+      id: uuid,
+      action: z.string().min(1),
+      due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      objective: z.enum(VISIT_OBJECTIVES).nullish(),
+      objective_detail: z.string().nullish(),
+      kind: z.enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"]).nullish(),
+    }),
+  })
+  .refine((o) => o.lead_source !== "OTHER" || Boolean(o.source_detail), {
+    message: "OTHER lead source needs a word on where it came from (D8)",
+  })
+  .refine(
+    (o) =>
+      !(REFERRAL_LEAD_SOURCES as readonly string[]).includes(o.lead_source) ||
+      Boolean(o.referring_account_id),
+    { message: "referral lead sources need the referring account (D7)" },
+  );
+export type OpportunityCreate = z.infer<typeof opportunityCreateSchema>;
+
+// Scalar deal edits (stage advance included) ride the D61 LWW path.
+export const opportunityUpdateSchema = z.object({
+  id: uuid,
+  stage: z.enum(OPPORTUNITY_STAGES).optional(),
+  current_status: z.string().min(1).optional(),
+  current_blocker: z.string().nullish(),
+  estimated_revenue: z.number().nonnegative().nullish(),
+  probability: z.number().int().min(0).max(100).nullish(),
+  expected_close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+});
+export type OpportunityUpdate = z.infer<typeof opportunityUpdateSchema>;
+
 export const ENTITY_TABLES = {
   activity: "activities",
   next_action: "next_actions",
@@ -206,6 +262,7 @@ export const ENTITY_TABLES = {
   contact: "contacts",
   account: "accounts",
   account_relationship: "account_relationships",
+  opportunity: "opportunities",
 } as const;
 export type EntityType = keyof typeof ENTITY_TABLES;
 
@@ -221,4 +278,6 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "account:create": accountCreateSchema,
   "account:update": accountUpdateSchema,
   "account_relationship:create": accountRelationshipCreateSchema,
+  "opportunity:create": opportunityCreateSchema,
+  "opportunity:update": opportunityUpdateSchema,
 };
