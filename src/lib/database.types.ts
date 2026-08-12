@@ -82,6 +82,13 @@ export type Database = {
             foreignKeyName: "account_relationships_account_a_id_fkey"
             columns: ["account_a_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -112,6 +119,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "account_relationships_account_b_id_fkey"
@@ -181,6 +195,123 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_rollout: {
+        Row: {
+          account_id: string
+          created_at: string
+          material_state: Database["public"]["Enums"]["rollout_gate_state"]
+          merchandiser_state: Database["public"]["Enums"]["rollout_gate_state"]
+          notes: string | null
+          org_id: string
+          pk_state: Database["public"]["Enums"]["rollout_gate_state"]
+          product: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          material_state?: Database["public"]["Enums"]["rollout_gate_state"]
+          merchandiser_state?: Database["public"]["Enums"]["rollout_gate_state"]
+          notes?: string | null
+          org_id: string
+          pk_state?: Database["public"]["Enums"]["rollout_gate_state"]
+          product?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          material_state?: Database["public"]["Enums"]["rollout_gate_state"]
+          merchandiser_state?: Database["public"]["Enums"]["rollout_gate_state"]
+          notes?: string | null
+          org_id?: string
+          pk_state?: Database["public"]["Enums"]["rollout_gate_state"]
+          product?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_rollout_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
         ]
@@ -307,6 +438,13 @@ export type Database = {
             foreignKeyName: "accounts_parent_account_id_fkey"
             columns: ["parent_account_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -337,6 +475,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "accounts_referring_account_id_fkey"
@@ -548,6 +693,13 @@ export type Database = {
             foreignKeyName: "activities_primary_account_id_fkey"
             columns: ["primary_account_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -610,6 +762,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "activity_accounts_account_id_fkey"
             columns: ["account_id"]
@@ -800,6 +959,13 @@ export type Database = {
             foreignKeyName: "contact_candidates_matched_account_id_fkey"
             columns: ["matched_account_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -904,6 +1070,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "contacts_account_id_fkey"
             columns: ["account_id"]
@@ -1297,6 +1470,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "email_threads_matched_account_id_fkey"
@@ -1746,6 +1926,13 @@ export type Database = {
             foreignKeyName: "next_actions_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -1978,6 +2165,13 @@ export type Database = {
             foreignKeyName: "opportunities_architect_id_fkey"
             columns: ["architect_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -2013,6 +2207,13 @@ export type Database = {
             foreignKeyName: "opportunities_builder_id_fkey"
             columns: ["builder_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -2048,6 +2249,13 @@ export type Database = {
             foreignKeyName: "opportunities_contractor_id_fkey"
             columns: ["contractor_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -2083,6 +2291,13 @@ export type Database = {
             foreignKeyName: "opportunities_dealer_id_fkey"
             columns: ["dealer_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -2118,6 +2333,13 @@ export type Database = {
             foreignKeyName: "opportunities_developer_id_fkey"
             columns: ["developer_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -2148,6 +2370,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "opportunities_distributor_id_fkey"
@@ -2223,6 +2452,13 @@ export type Database = {
             foreignKeyName: "opportunities_primary_account_id_fkey"
             columns: ["primary_account_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -2267,6 +2503,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "opportunities_referring_account_id_fkey"
@@ -2560,6 +2803,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "project_stakeholders_account_id_fkey"
             columns: ["account_id"]
@@ -3086,6 +3336,13 @@ export type Database = {
             foreignKeyName: "voice_captures_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -3191,6 +3448,122 @@ export type Database = {
       }
     }
     Views: {
+      account_rollout_status: {
+        Row: {
+          account_id: string | null
+          display_wall_state:
+            | Database["public"]["Enums"]["rollout_gate_state"]
+            | null
+          gates_done: number | null
+          material_state:
+            | Database["public"]["Enums"]["rollout_gate_state"]
+            | null
+          merchandiser_state:
+            | Database["public"]["Enums"]["rollout_gate_state"]
+            | null
+          name: string | null
+          notes: string | null
+          org_id: string | null
+          owner_id: string | null
+          parent_account_id: string | null
+          pk_state: Database["public"]["Enums"]["rollout_gate_state"] | null
+          product: string | null
+          territory_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dashboard_activity: {
         Row: {
           activity_count: number | null
@@ -3399,6 +3772,27 @@ export type Database = {
             columns: ["territory_id"]
             isOneToOne: false
             referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_rollout: {
+        Row: {
+          branches: number | null
+          display_wall_done: number | null
+          fully_through: number | null
+          material_done: number | null
+          merchandiser_done: number | null
+          not_started: number | null
+          org_id: string | null
+          pk_done: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4350,6 +4744,7 @@ export type Database = {
         | "INSTALLER_FOR"
         | "ARCHITECT_FOR"
         | "DEVELOPER_FOR"
+      rollout_gate_state: "OK" | "PENDING" | "NO"
       strategic_importance: "STRATEGIC" | "HIGH" | "MEDIUM" | "LOW"
       visit_objective:
         | "COLLECT_QUOTE"
@@ -4611,6 +5006,7 @@ export const Constants = {
         "ARCHITECT_FOR",
         "DEVELOPER_FOR",
       ],
+      rollout_gate_state: ["OK", "PENDING", "NO"],
       strategic_importance: ["STRATEGIC", "HIGH", "MEDIUM", "LOW"],
       visit_objective: [
         "COLLECT_QUOTE",

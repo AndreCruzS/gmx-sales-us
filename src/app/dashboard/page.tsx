@@ -57,6 +57,18 @@ interface FlowRow {
   lost: number;
   created: number;
 }
+// The rollout funnel, from the California tracker: a branch is gated on four
+// things before it can sell. Separate from the opportunity pipeline below,
+// which tracks a deal rather than a door.
+interface RolloutRow {
+  branches: number | null;
+  pk_done: number | null;
+  merchandiser_done: number | null;
+  display_wall_done: number | null;
+  material_done: number | null;
+  fully_through: number | null;
+  not_started: number | null;
+}
 interface ExceptionRow {
   exception_type: string | null;
   subject_type: string | null;
@@ -111,6 +123,7 @@ export default function DashboardPage() {
   const [flow, setFlow] = useState<FlowRow[]>([]);
   const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  const [rollout, setRollout] = useState<RolloutRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Admin-only card (Task 13); the route 403s reps, and we render nothing
@@ -120,7 +133,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [p, s, t, pv, f, ex] = await Promise.all([
+    const [p, s, t, pv, f, ex, ro] = await Promise.all([
       supabase
         .from("dashboard_pipeline")
         .select("owner_id, territory_id, stage, opportunity_count, total_value, weighted_value"),
@@ -152,6 +165,12 @@ export default function DashboardPage() {
         .from("exceptions")
         .select("exception_type, subject_type, subject_id, owner_membership_id")
         .limit(1000),
+      supabase
+        .from("dashboard_rollout")
+        .select(
+          "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through, not_started",
+        )
+        .maybeSingle(),
     ]);
     const firstError = [p, s, t, pv, f].map((r) => r.error).find(Boolean);
     // The exception union is additive to this page — if it fails, the numbers
@@ -167,6 +186,7 @@ export default function DashboardPage() {
     setPlanned((pv.data as PlannedRow[]) ?? []);
     setFlow((f.data as FlowRow[]) ?? []);
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
+    setRollout(ro.error ? null : ((ro.data as RolloutRow | null) ?? null));
     setLoadedAt(Date.now());
     setLoaded(true);
   }, []);
@@ -440,6 +460,64 @@ export default function DashboardPage() {
               );
             })}
           </ul>
+        </section>
+      )}
+
+      {/* Getting dealers selling. Four gates from the rollout tracker, shown
+          as four independent bars rather than a funnel, because they complete
+          out of order — walls go up with no merchandiser behind them, and a
+          funnel would report that branch as further along than it is. */}
+      {rollout && (rollout.branches ?? 0) > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">Getting dealers selling</h2>
+            <span className="t-meta">{rollout.branches} branches</span>
+          </div>
+          <ul className="stack-sm">
+            {(
+              [
+                ["PK class done", rollout.pk_done],
+                ["Merchandiser assigned", rollout.merchandiser_done],
+                ["Display wall up", rollout.display_wall_done],
+                ["Material in stock", rollout.material_done],
+              ] as const
+            ).map(([label, done]) => {
+              const n = done ?? 0;
+              const total = rollout.branches ?? 0;
+              const pct = total === 0 ? 0 : Math.round((100 * n) / total);
+              return (
+                <li key={label}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="t-title">{label}</span>
+                    <span className="t-meta tabular-nums">
+                      {n}/{total}
+                    </span>
+                  </div>
+                  <div
+                    className="mt-1 flex h-2 overflow-hidden rounded"
+                    style={{ background: "var(--rule)" }}
+                    role="img"
+                    aria-label={`${n} of ${total} branches: ${label}`}
+                  >
+                    <span
+                      style={{
+                        width: `${pct}%`,
+                        background: "var(--accent, currentColor)",
+                      }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="t-sub px-1">
+            {rollout.fully_through} through all four
+            {(rollout.not_started ?? 0) > 0
+              ? `, ${rollout.not_started} not started`
+              : ""}
+            . A branch can clear a later gate with an earlier one still open —
+            that gap is the queue.
+          </p>
         </section>
       )}
 
