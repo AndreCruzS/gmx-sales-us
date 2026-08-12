@@ -40,23 +40,24 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-sm flex-col gap-6 pt-10">
+    // Fixed to the viewport: the app shell pads this column for a tab bar
+    // that never renders on /login, so in-flow centering is always skewed.
+    // m-auto in an overflow container still scrolls cleanly on short screens.
+    <div className="fixed inset-0 flex overflow-y-auto px-4">
+      <div className="m-auto flex w-full max-w-sm flex-col gap-6 py-8">
       <div className="text-center">
-        <h1 className="text-2xl font-semibold">Commercial OS</h1>
-        <p className="mt-1 text-sm opacity-60">Record once — update everything.</p>
+        <h1 className="t-title text-2xl">Commercial OS</h1>
+        <p className="t-meta mt-1">Record once — update everything.</p>
       </div>
 
-      <button
-        onClick={signInWithGoogle}
-        className="rounded-xl border border-black/15 px-4 py-3 font-medium dark:border-white/20"
-      >
+      <button onClick={signInWithGoogle} className="btn-secondary w-full">
         Continue with Google Workspace
       </button>
 
-      <div className="flex items-center gap-3 text-xs uppercase opacity-40">
-        <div className="h-px flex-1 bg-current" />
+      <div className="t-meta flex items-center gap-3 uppercase">
+        <div className="h-px flex-1 bg-current opacity-30" />
         or
-        <div className="h-px flex-1 bg-current" />
+        <div className="h-px flex-1 bg-current opacity-30" />
       </div>
 
       <form onSubmit={signInWithPassword} className="flex flex-col gap-3">
@@ -66,7 +67,7 @@ export default function LoginPage() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-xl border border-black/15 bg-transparent px-4 py-3 dark:border-white/20"
+          className="field"
         />
         <input
           type="password"
@@ -74,18 +75,17 @@ export default function LoginPage() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-xl border border-black/15 bg-transparent px-4 py-3 dark:border-white/20"
+          className="field"
         />
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-xl bg-amber-500 px-4 py-3 font-semibold text-black disabled:opacity-50"
-        >
+        {/* desktop caps btn-primary at 340px by design — center the pill
+            under the full-width fields instead of hanging it left */}
+        <button type="submit" disabled={busy} className="btn-primary mx-auto w-full">
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      {error && <p className="text-center text-sm text-red-600">{error}</p>}
+        {error && <p className="text-center text-sm text-red-600">{error}</p>}
+      </div>
     </div>
   );
 }
