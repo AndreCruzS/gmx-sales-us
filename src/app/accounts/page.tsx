@@ -20,6 +20,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
+import { groupByCompany } from "@/lib/domain/companies";
 import {
   ACCOUNT_EXCEPTION_TYPES,
   exceptionShort,
@@ -47,8 +48,13 @@ const FILTERS = [
 
 type FilterKey = (typeof FILTERS)[number]["key"];
 
+// owner_id rides along so the company lens can say who works a banner. It is
+// not part of CachedAccount because the device cache is one rep's own working
+// set, where the answer is always "me".
 const COLUMNS =
-  "id, name, account_type, city, territory_id, has_display_wall, display_last_verified_at, parent_account_id, updated_at";
+  "id, name, account_type, city, territory_id, has_display_wall, display_last_verified_at, parent_account_id, updated_at, owner_id";
+
+type AccountRow = CachedAccount & { owner_id?: string | null };
 
 export default function AccountsPage() {
   // useSearchParams needs a boundary; the list is the fallback-free part.
@@ -70,6 +76,7 @@ function AccountsView() {
   }>({ fresh: false, rows: [] });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [lens, setLens] = useState<"account" | "company">("account");
   const [flags, setFlags] = useState<Map<string, AccountFlag[]>>(new Map());
   const [ownerName, setOwnerName] = useState<{ id: string; name: string } | null>(
     null,
@@ -264,6 +271,23 @@ function AccountsView() {
     [rows, flags],
   );
 
+  // A company is not a rep's property: a banner has branches in more than one
+  // patch, and rep-centric lists cannot see that. Grouping by the parent
+  // account is what makes "nobody actually holds this one" visible.
+  const companies = useMemo(() => {
+    if (lens !== "company") return [];
+    return groupByCompany(rows as AccountRow[], displayAccountName).map((g) => ({
+      ...g,
+      flagged: g.branches.filter((b) => (flags.get(b.id) ?? []).length > 0)
+        .length,
+    }));
+  }, [rows, lens, flags]);
+
+  const sharedCount = useMemo(
+    () => companies.filter((c) => c.shared).length,
+    [companies],
+  );
+
   return (
     <div className="stack pt-2">
       {owner && (
@@ -306,6 +330,24 @@ function AccountsView() {
         </p>
       )}
 
+      {/* Two ways to read the same territory. "By company" answers the question
+          a rep-shaped list cannot: which banners are worked by more than one
+          person with nobody holding the relationship itself. */}
+      <div className="flex gap-2" role="group" aria-label="Group accounts by">
+        {(["account", "company"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            className="tag"
+            aria-pressed={lens === k}
+            data-active={lens === k}
+            onClick={() => setLens(k)}
+          >
+            {k === "account" ? "By account" : "By company"}
+          </button>
+        ))}
+      </div>
+
       {/* Filters only appear once there is something to filter to. */}
       {flags.size > 0 && (
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter accounts">
@@ -328,7 +370,77 @@ function AccountsView() {
         </div>
       )}
 
-      <section>
+      {lens === "company" ? (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">By company</h2>
+            <span className="t-meta">{companies.length}</span>
+          </div>
+          {sharedCount > 0 && (
+            <p className="t-sub px-1">
+              {sharedCount} worked by more than one rep — that is where a
+              relationship falls between people.
+            </p>
+          )}
+          {companies.length === 0 ? (
+            <p className="t-sub px-1">Nothing to group yet.</p>
+          ) : (
+            <ul className="stack-sm">
+              {companies.map((c) => (
+                <li key={c.id ?? c.name}>
+                  <div className="flex items-baseline justify-between gap-3 pt-2">
+                    {c.id ? (
+                      <Link href={`/accounts/${c.id}`} className="t-title">
+                        {c.name}
+                      </Link>
+                    ) : (
+                      <span className="t-title">{c.name}</span>
+                    )}
+                    <span className="t-meta tabular-nums">
+                      {c.branches.length}
+                      {c.branches.length === 1 ? " location" : " locations"}
+                      {c.shared ? ` · ${c.owners.length} reps` : ""}
+                    </span>
+                  </div>
+                  {(c.shared || c.flagged > 0) && (
+                    <p className="t-sub px-1">
+                      {c.shared ? "No single owner" : ""}
+                      {c.shared && c.flagged > 0 ? " · " : ""}
+                      {c.flagged > 0 ? `${c.flagged} need a visit` : ""}
+                    </p>
+                  )}
+                  <ul className="list">
+                    {c.branches.map((b) => {
+                      const fs = flags.get(b.id) ?? [];
+                      return (
+                        <li key={b.id}>
+                          <Link href={`/accounts/${b.id}`} className="row">
+                            <span className="row-body">
+                              <span className="t-title block truncate">
+                                {displayAccountName(b.name)}
+                              </span>
+                              <span className="t-sub block truncate">
+                                {fs.length > 0
+                                  ? fs.map((f) => exceptionShort(f.type)).join(" · ")
+                                  : `${humanize(b.account_type)}${b.city ? ` · ${b.city}` : ""}`}
+                              </span>
+                            </span>
+                            <ChevronRightIcon
+                              size={14}
+                              style={{ color: "var(--ink-muted)" }}
+                            />
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <section>
         <div className="section-head">
           <h2 className="t-section">
             {query.trim()
@@ -397,7 +509,8 @@ function AccountsView() {
             })}
           </ul>
         )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
