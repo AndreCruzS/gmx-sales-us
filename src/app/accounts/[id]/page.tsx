@@ -14,6 +14,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DealStageSheet } from "@/components/deal-stage-sheet";
 import { useOffline } from "@/components/offline-provider";
 import { CalendarIcon, CheckIcon, ChevronRightIcon } from "@/components/icons";
+import {
+  CHAIN_HEADING,
+  CHAIN_ORDER,
+  chainPosition,
+  resolvePosition,
+  type ChainPosition,
+} from "@/lib/domain/chain";
 import { humanize } from "@/lib/domain/enums";
 import {
   displayAccountName,
@@ -261,7 +268,13 @@ export default function AccountPage() {
   const network = useMemo(() => {
     const byAccount = new Map<
       string,
-      { id: string; name: string; type: string; phrases: string[] }
+      {
+        id: string;
+        name: string;
+        type: string;
+        phrases: string[];
+        positions: ChainPosition[];
+      }
     >();
     for (const r of relationships) {
       if (!account) break;
@@ -274,6 +287,7 @@ export default function AccountPage() {
         name: other.name,
         type: other.account_type,
         phrases: [],
+        positions: [],
       };
       // the row title is already the counterpart, so the phrase never repeats it
       entry.phrases.push(
@@ -281,10 +295,27 @@ export default function AccountPage() {
           ? `This account ${humanize(r.relationship_type).toLowerCase()} them`
           : `${humanize(r.relationship_type)} this account`,
       );
+      entry.positions.push(chainPosition(r.relationship_type, isA));
       byAccount.set(otherId, entry);
     }
-    return [...byAccount.values()];
+    return [...byAccount.values()].map((e) => ({
+      ...e,
+      position: resolvePosition(e.positions),
+    }));
   }, [relationships, account]);
+
+  // Grouped so the section reads down the channel — who supplies this account,
+  // who sits alongside it, and where the demand is. A flat list of names cannot
+  // show that a branch and its banner run through different distributors.
+  const networkByPosition = useMemo(
+    () =>
+      CHAIN_ORDER.map((position) => ({
+        position,
+        heading: CHAIN_HEADING[position],
+        entries: network.filter((n) => n.position === position),
+      })).filter((g) => g.entries.length > 0),
+    [network],
+  );
 
   if (loaded && !account) {
     return (
@@ -497,28 +528,39 @@ export default function AccountPage() {
             <h2 className="t-section">Commercial network</h2>
             <span className="t-meta">{network.length}</span>
           </div>
-          <ul className="list">
-            {network.map((n) => (
-              <li key={n.id}>
-                <Link href={`/accounts/${n.id}`} className="row">
-                  <span
-                    className="row-lead"
-                    style={{ fontSize: 10, fontWeight: 700 }}
-                  >
-                    {n.type.slice(0, 3)}
-                  </span>
-                  <span className="row-body">
-                    <span className="t-title block truncate">{n.name}</span>
-                    <span className="t-sub block">{n.phrases.join(" · ")}</span>
-                  </span>
-                  <ChevronRightIcon
-                    size={14}
-                    style={{ color: "var(--ink-muted)" }}
-                  />
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {networkByPosition.map((group) => (
+            <div key={group.position}>
+              {/* The heading only earns its place when there is more than one
+                  side to tell apart. */}
+              {networkByPosition.length > 1 && (
+                <p className="t-meta px-1 pt-1">{group.heading}</p>
+              )}
+              <ul className="list">
+                {group.entries.map((n) => (
+                  <li key={n.id}>
+                    <Link href={`/accounts/${n.id}`} className="row">
+                      <span
+                        className="row-lead"
+                        style={{ fontSize: 10, fontWeight: 700 }}
+                      >
+                        {n.type.slice(0, 3)}
+                      </span>
+                      <span className="row-body">
+                        <span className="t-title block truncate">{n.name}</span>
+                        <span className="t-sub block">
+                          {n.phrases.join(" · ")}
+                        </span>
+                      </span>
+                      <ChevronRightIcon
+                        size={14}
+                        style={{ color: "var(--ink-muted)" }}
+                      />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       )}
 
