@@ -174,8 +174,58 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+/* .stack is the 36px rhythm BETWEEN sections; this is for a list of blocks
+   inside one, where 36px reads as a page break that isn't there. */
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
 /* ── Controls ───────────────────────────────────────────────────────────── */
+
+/* Filter chip — the first control in the app carrying an on/off state.
+   Sized off .btn-quiet (36px) because it is tapped, not read: .tag is a 10px
+   uppercase label and never was a target. aria-pressed drives the selected
+   look, so the accessible state and the visible state cannot disagree. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: var(--r-control);
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip[aria-pressed="true"] {
+  background: var(--accent-strong);
+  color: var(--on-accent);
+}
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+/* The chip row scrolls rather than wrapping to three lines on a narrow phone;
+   the edge fade is the affordance that there is more. */
+.chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-inline: 4px;
+  margin-inline: -4px;
+}
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
 
 .btn-primary {
   display: flex;

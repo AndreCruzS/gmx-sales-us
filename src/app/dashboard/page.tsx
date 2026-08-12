@@ -89,6 +89,15 @@ const timeOfDay = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
 });
+const MONTH_DAY = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+});
+/** The Monday a week began, as a date a manager can put against a calendar. */
+function weekOf(iso: string): string {
+  const d = iso.length === 10 ? new Date(`${iso}T00:00:00`) : new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : MONTH_DAY.format(d);
+}
 
 interface HubspotHealth {
   configured: boolean;
@@ -226,12 +235,19 @@ export default function DashboardPage() {
   // reports. The weekly table below still answers the trend question; this
   // answers the one a manager actually opens with — who is behind, right now.
   const thisWeek = useMemo(() => {
-    if (planned.length === 0) return { week: null as string | null, rows: [] };
-    const week = planned.reduce(
+    if (planned.length === 0 || loadedAt === null) {
+      return { week: null as string | null, rows: [] };
+    }
+    // Only weeks that have actually started. The view also reports next week's
+    // plan, and the newest row is often that — asking "did they do what they
+    // said" about a week nobody has lived yet accuses people of nothing.
+    const started = planned.filter((r) => Date.parse(r.week_start) <= loadedAt);
+    if (started.length === 0) return { week: null as string | null, rows: [] };
+    const week = started.reduce(
       (max, r) => (r.week_start > max ? r.week_start : max),
-      planned[0].week_start,
+      started[0].week_start,
     );
-    const rows = planned
+    const rows = started
       .filter((r) => r.week_start === week)
       .map((r) => {
         const total = Number(r.planned_total);
@@ -250,7 +266,7 @@ export default function DashboardPage() {
       })
       .sort((a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name));
     return { week, rows };
-  }, [planned, repName]);
+  }, [planned, repName, loadedAt]);
 
   // Stamped when the data loads, not read during render — the clock is an
   // external system, and reading it mid-render makes the label flip on any
@@ -416,8 +432,11 @@ export default function DashboardPage() {
         <section>
           <div className="section-head">
             <h2 className="t-section">Did they do what they said</h2>
+            {/* An absolute date, not formatDay: that one is relative ("in 5
+                days"), which is right on a due date and nonsense after
+                "week of". */}
             <span className="t-meta">
-              {thisWeek.week ? `week of ${formatDay(thisWeek.week)}` : ""}
+              {thisWeek.week ? `week of ${weekOf(thisWeek.week)}` : ""}
             </span>
           </div>
           <ul className="stack-sm">

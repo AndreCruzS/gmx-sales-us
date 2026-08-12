@@ -333,14 +333,13 @@ function AccountsView() {
       {/* Two ways to read the same territory. "By company" answers the question
           a rep-shaped list cannot: which banners are worked by more than one
           person with nobody holding the relationship itself. */}
-      <div className="flex gap-2" role="group" aria-label="Group accounts by">
+      <div className="chip-row" role="group" aria-label="Group accounts by">
         {(["account", "company"] as const).map((k) => (
           <button
             key={k}
             type="button"
-            className="tag"
+            className="chip"
             aria-pressed={lens === k}
-            data-active={lens === k}
             onClick={() => setLens(k)}
           >
             {k === "account" ? "By account" : "By company"}
@@ -350,7 +349,7 @@ function AccountsView() {
 
       {/* Filters only appear once there is something to filter to. */}
       {flags.size > 0 && (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter accounts">
+        <div className="chip-row" role="group" aria-label="Filter accounts">
           {FILTERS.map((f) => {
             const n = f.type ? (counts[f.type] ?? 0) : rows.length;
             if (f.type && n === 0) return null;
@@ -358,12 +357,11 @@ function AccountsView() {
               <button
                 key={f.key}
                 type="button"
-                className="tag"
+                className="chip"
                 aria-pressed={filter === f.key}
-                data-active={filter === f.key}
                 onClick={() => setFilter(f.key)}
               >
-                {f.label} {n}
+                {f.label} <span className="chip-count">{n}</span>
               </button>
             );
           })}
@@ -406,7 +404,9 @@ function AccountsView() {
                     <p className="t-sub px-1">
                       {c.shared ? "No single owner" : ""}
                       {c.shared && c.flagged > 0 ? " · " : ""}
-                      {c.flagged > 0 ? `${c.flagged} need a visit` : ""}
+                      {c.flagged > 0
+                        ? `${c.flagged} ${c.flagged === 1 ? "needs" : "need"} a visit`
+                        : ""}
                     </p>
                   )}
                   <ul className="list">
@@ -454,7 +454,9 @@ function AccountsView() {
 
         {rows.length > 0 && filter === "all" && flaggedTotal > 0 && (
           <p className="t-sub px-1">
-            {flaggedTotal} need a visit — those are the ones at the top.
+            {flaggedTotal === 1
+              ? "1 needs a visit — it is at the top."
+              : `${flaggedTotal} need a visit — they are at the top.`}
           </p>
         )}
 
