@@ -22,3 +22,6 @@ supabase/.temp/
 
 .vercel
 .env*.local
+
+# Local-only notes (demo credentials etc.)
+*.local.md
