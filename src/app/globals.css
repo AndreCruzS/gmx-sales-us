@@ -12,75 +12,108 @@
    tags, 14/12/10 type scale, and the bottom tab bar.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* The palette demoed to leadership (August 2026): warm concrete ground, near
+   white cards, teal for what is done and clay for what is slipping. It reads
+   as a tool for a trade rather than a blue SaaS dashboard, which is the whole
+   point of it.
+
+   The ratios below are measured, not assumed — every text pair clears the
+   4.5:1 body floor on BOTH the page and a card, because these screens get
+   read on a phone in a truck and thrown at a projector in a boardroom. Two
+   values from the mockups were changed to get there, noted where they sit. */
 :root {
-  --surface-page: #ffffff;      /* GMX plate */
-  --surface-card: #f4f6fa;      /* GMX chip */
-  --surface-sunken: #eef1f6;    /* GMX rule-soft */
-  --surface-accent: #e8f0fe;    /* derived: 8% tint of primary */
-  --rule: #e3e7ee;              /* GMX rule */
+  --surface-page: #e3e6e7;      /* concrete — the ground, not white */
+  --surface-card: #fbfcfc;      /* surface — cards lift off the ground */
+  --surface-sunken: #d5d9da;    /* concrete-deep — chips, tracks, wells */
+  --surface-accent: #dcebea;    /* teal-soft */
+  --rule: #d3d8d9;              /* border */
 
-  --ink-primary: #101725;       /* GMX ink */
-  --ink-secondary: #414d63;     /* GMX ink-soft */
-  /* darkened from the kit's #7a8699, which measured 3.41:1 on cards and
-     3.69:1 on the page — below the 4.5:1 floor for body text. This clears
-     4.77:1 on cards, 5.16:1 on the page, and survives a projector. */
-  --ink-muted: #646e7d;         /* GMX ink-faint, contrast-corrected */
+  --ink-primary: #1c2530;       /* 12.34:1 on the page, 15.06:1 on a card */
+  --ink-secondary: #46515b;     /* 6.47:1 / 7.89:1 */
+  /* The mockups' --slate-soft (#8A939B) measures 2.49:1 on the concrete
+     ground — decorative only, and this role carries real sentences. Uses the
+     mockups' --slate instead: 4.68:1 on the page, 5.71:1 on a card. */
+  --ink-muted: #5b6670;
 
-  --accent: #3b82f6;            /* GMX primary — fills, icons, focus rings */
-  /* White on the GMX primary is only 3.68:1, short of the 4.5:1 body floor.
-     Text-bearing accent fills use this one step deeper (5.17:1) so the brand
-     survives on a projector; --accent itself is untouched. */
-  --accent-strong: #2563eb;
-  --accent-deep: #1e40af;       /* GMX accent-deep */
-  --accent-ink: #1e40af;        /* accent text on light surfaces */
-  --on-accent: #ffffff;         /* text on an accent fill */
+  --accent: #2c6e6b;            /* teal — done, verified, on plan */
+  --accent-strong: #2c6e6b;     /* white on it: 5.92:1 */
+  --accent-deep: #1f524f;
+  --accent-ink: #2c6e6b;        /* 5.76:1 as text on a card */
+  --on-accent: #ffffff;
 
-  /* derived — the kit defines no status ramp */
-  --danger: #c0392f;
-  --danger-tint: #fdeceb;
-  --success-ink: #1d6b3f;
-  --success-tint: #e6f4ec;
+  --danger: #b1502e;            /* clay — 5.04:1 as text on a card */
+  --danger-tint: #f4ddd1;
+  --success-ink: #2c6e6b;       /* teal carries "good" in this language */
+  --success-tint: #dcebea;
 
-  /* chart ink — validated against these exact surfaces in both modes */
-  --data-1: #3b82f6;
+  /* Amber is a highlight, never a text-bearing fill: white on it is 2.45:1.
+     Amber ink on amber-soft is 4.74:1, which is how the mockups use it. */
+  --warn-ink: #96590f;
+  --warn-tint: #fbe9d2;
+  --warn: #e2952f;
 
-  --r-control: 12px;
+  --data-1: #2c6e6b;
+
+  /* 6 / 10 / 16 in the mockups — tighter than the kit's 12/16/20 */
+  --r-control: 10px;
   --r-card: 16px;
-  --r-cta: 20px;
+  --r-cta: 12px;
+
+  --shadow-1: 0 1px 2px rgba(20, 27, 35, 0.07), 0 6px 16px rgba(20, 27, 35, 0.06);
+  --shadow-2: 0 2px 4px rgba(20, 27, 35, 0.08), 0 10px 24px rgba(20, 27, 35, 0.08);
+
+  /* Labels, counts and dates are set in mono. It is the loudest signal of the
+     demo's look and it earns its place: figures line up in a column, and a
+     label stops competing with the sentence next to it. System stack, so
+     there is no font to download on a truck's connection. */
+  --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas,
+    "Liberation Mono", Menlo, monospace;
 
   --tabbar-h: 62px;
   --rail-w: 232px;   /* desktop left rail */
   --content-w: 1040px;
 }
 
+/* The mockups are light only. This is the same language after dark: the warm
+   neutral is kept (it is what stops the palette reading as generic blue-grey)
+   and the teal and clay are lifted until they clear the floor on a dark card,
+   since a colour that works as ink on white is far too dark to be ink on
+   near-black. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface-page: #0c111b;    /* GMX ground (dark) */
-    --surface-card: #131a27;    /* GMX plate (dark) */
-    --surface-sunken: #1a2231;  /* GMX chip (dark) */
-    --surface-accent: #17263f;  /* derived */
-    --rule: #222c3d;            /* GMX rule (dark) */
+    --surface-page: #171c22;
+    --surface-card: #1f262e;
+    --surface-sunken: #262e37;
+    --surface-accent: #17322f;
+    --rule: #2e3843;
 
-    --ink-primary: #edf1f8;
-    --ink-secondary: #a9b4c6;
-    --ink-muted: #7e8ba1;       /* 4.12:1 → 5.06:1 on the dark plate */
+    --ink-primary: #e7ebee;     /* 14.29:1 on the ground */
+    --ink-secondary: #aeb8c0;   /* 8.50:1 */
+    --ink-muted: #98a3ac;       /* 6.67:1 */
 
-    --accent: #6ba1fa;          /* GMX accent (dark) */
-    /* dark mode puts DARK ink on the accent, so the strong variant must stay
-       light — inheriting the light theme's #2563eb here would drop to 3.65:1 */
-    --accent-strong: #6ba1fa;   /* 7.29:1 under --on-accent */
-    --accent-deep: #3b82f6;
-    --accent-ink: #6ba1fa;
-    --on-accent: #0c111b;
+    --accent: #5fb3ae;          /* 6.22:1 as text on a dark card */
+    /* Dark mode puts DARK ink on the accent fill, so the strong variant must
+       stay light — inheriting the light theme's #2C6E6B here would be
+       unreadable. Ground ink on this fill is 6.97:1. */
+    --accent-strong: #5fb3ae;
+    --accent-deep: #7accc5;
+    --accent-ink: #5fb3ae;
+    --on-accent: #171c22;
 
-    --danger: #f08d84;
-    --danger-tint: #2e1b1a;
-    --success-ink: #6cc08c;
-    --success-tint: #12241a;
+    --danger: #e0937a;          /* clay, lifted — 6.27:1 */
+    --danger-tint: #33211a;
+    --success-ink: #5fb3ae;
+    --success-tint: #17322f;
 
-    /* the dark UI accent (#6BA1FA, L 0.71) sits ABOVE the dark data band,
-       so the mark keeps the brand primary, which validates in band */
-    --data-1: #3b82f6;
+    /* A shadow does nothing on near-black; the hairline carries the lift. */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 2px 8px rgba(0, 0, 0, 0.5);
+
+    --warn-ink: #eda94a;        /* 7.55:1 */
+    --warn-tint: #33270f;
+    --warn: #e2952f;
+
+    --data-1: #5fb3ae;
   }
 }
 
@@ -109,9 +142,12 @@ body {
   line-height: 16px;
   color: var(--ink-secondary);
 }
+/* The eyebrow/meta role: mono, so counts and dates sit apart from prose. */
 .t-meta {
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 15px;
+  letter-spacing: 0.01em;
   color: var(--ink-muted);
 }
 .t-action {
@@ -122,9 +158,14 @@ body {
 
 /* ── Surfaces ───────────────────────────────────────────────────────────── */
 
+/* On a white page a card is a grey block. On the concrete ground it is the
+   other way round: the card is the light thing, and a hairline plus a low
+   shadow is what lifts it. That inversion is most of the new look. */
 .card {
   background: var(--surface-card);
+  border: 1px solid var(--rule);
   border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
 }
 .card-pad {
   padding: 16px;
@@ -137,7 +178,9 @@ body {
   width: 100%;
   padding: 14px 16px;
   background: var(--surface-card);
+  border: 1px solid var(--rule);
   border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
   text-align: left;
 }
 .row-lead {
@@ -194,9 +237,10 @@ body {
   gap: 6px;
   min-height: 36px;
   padding: 8px 14px;
-  border-radius: var(--r-control);
+  border-radius: 999px;
   background: var(--surface-sunken);
   color: var(--ink-secondary);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
