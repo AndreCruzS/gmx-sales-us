@@ -21,9 +21,16 @@
 
   --ink-primary: #101725;       /* GMX ink */
   --ink-secondary: #414d63;     /* GMX ink-soft */
-  --ink-muted: #7a8699;         /* GMX ink-faint */
+  /* darkened from the kit's #7a8699, which measured 3.41:1 on cards and
+     3.69:1 on the page — below the 4.5:1 floor for body text. This clears
+     4.77:1 on cards, 5.16:1 on the page, and survives a projector. */
+  --ink-muted: #646e7d;         /* GMX ink-faint, contrast-corrected */
 
-  --accent: #3b82f6;            /* GMX primary */
+  --accent: #3b82f6;            /* GMX primary — fills, icons, focus rings */
+  /* White on the GMX primary is only 3.68:1, short of the 4.5:1 body floor.
+     Text-bearing accent fills use this one step deeper (5.17:1) so the brand
+     survives on a projector; --accent itself is untouched. */
+  --accent-strong: #2563eb;
   --accent-deep: #1e40af;       /* GMX accent-deep */
   --accent-ink: #1e40af;        /* accent text on light surfaces */
   --on-accent: #ffffff;         /* text on an accent fill */
@@ -56,9 +63,12 @@
 
     --ink-primary: #edf1f8;
     --ink-secondary: #a9b4c6;
-    --ink-muted: #6f7c91;
+    --ink-muted: #7e8ba1;       /* 4.12:1 → 5.06:1 on the dark plate */
 
     --accent: #6ba1fa;          /* GMX accent (dark) */
+    /* dark mode puts DARK ink on the accent, so the strong variant must stay
+       light — inheriting the light theme's #2563eb here would drop to 3.65:1 */
+    --accent-strong: #6ba1fa;   /* 7.29:1 under --on-accent */
     --accent-deep: #3b82f6;
     --accent-ink: #6ba1fa;
     --on-accent: #0c111b;
@@ -176,7 +186,7 @@ body {
   min-height: 52px;
   padding: 14px 20px;
   border-radius: var(--r-cta);
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--on-accent);
   font-size: 16px;
   font-weight: 700;
@@ -249,7 +259,7 @@ body {
   color: var(--accent-ink);
 }
 .tag-solid {
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--on-accent);
 }
 .tag-danger {
@@ -422,7 +432,7 @@ body {
   height: 46px;
   margin-top: -16px;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--on-accent);
   box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
 }
@@ -553,11 +563,11 @@ body {
     order: -1;
     margin-bottom: 10px;
     height: 44px;
-    background: var(--accent);
+    background: var(--accent-strong);
     color: var(--on-accent);
   }
   .tab-capture:hover {
-    background: var(--accent);
+    background: var(--accent-strong);
     filter: brightness(1.05);
   }
   .tab-capture .tab-fab {
