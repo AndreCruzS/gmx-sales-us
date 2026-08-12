@@ -51,6 +51,7 @@
   --warn-ink: #96590f;
   --warn-tint: #fbe9d2;
   --warn: #e2952f;
+  --on-warn: #3a2508;           /* dark ink on amber — 8.9:1; white is 2.45:1 */
 
   --data-1: #2c6e6b;
 
@@ -384,6 +385,40 @@ body {
   min-height: 56px;
   padding: 8px 16px;
 }
+/* Identity block: on a root screen the demo shows who you are and which patch
+   you hold, not the name of the screen you just tapped. */
+.navbar-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 0 0;
+  min-width: 0;
+}
+.navbar-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--ink-primary);
+  color: var(--surface-card);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.navbar-patch {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.navbar-identity .navbar-title {
+  font-size: 17px;
+  line-height: 1.15;
+}
 .navbar-title {
   flex: 1 0 0;
   min-width: 0;
@@ -519,16 +554,20 @@ body {
 .tab-capture {
   position: relative;
 }
+/* Capture is amber, not teal, and bigger than the other tabs. Teal in this
+   language means "done"; the one thing a rep must be able to hit from any
+   screen should not wear the colour of a finished task. Dark ink on amber,
+   because white on it is 2.45:1. */
 .tab-capture .tab-fab {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  margin-top: -16px;
+  width: 56px;
+  height: 56px;
+  margin-top: -22px;
   border-radius: 999px;
-  background: var(--accent-strong);
-  color: var(--on-accent);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
+  background: var(--warn);
+  color: var(--on-warn);
+  box-shadow: var(--shadow-2);
 }
 .tab-capture:active .tab-fab {
   transform: scale(0.96);

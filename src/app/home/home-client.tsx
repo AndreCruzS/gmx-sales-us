@@ -348,17 +348,55 @@ export default function HomeClient() {
   // stories about the same outbox.
   const syncLine = syncStatusLabel(status);
 
+  // One sentence about the state of the day, assembled from the same numbers
+  // the tiles below show — so the sentence and the tiles cannot tell two
+  // stories. Clauses that would read "0 things" are dropped rather than
+  // padded, and if nothing is outstanding it says so plainly.
+  const dayNarrative = useMemo(() => {
+    const left = Math.max(0, weekStats.planned - weekStats.completed);
+    const parts: string[] = [];
+    if (reviewCount > 0) {
+      parts.push(
+        `${reviewCount} ${reviewCount === 1 ? "capture is" : "captures are"} waiting for your OK`,
+      );
+    }
+    if (attention && attention > 0) {
+      parts.push(`${attention} ${attention === 1 ? "account needs" : "accounts need"} attention`);
+    }
+    if (left > 0) {
+      parts.push(`${left} ${left === 1 ? "visit" : "visits"} left this week`);
+    }
+    if (parts.length === 0) {
+      return weekStats.planned > 0
+        ? "Everything you planned this week is done and logged."
+        : "Nothing outstanding.";
+    }
+    const sentence = parts.join(", ").replace(/,([^,]*)$/, " and$1");
+    return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+  }, [weekStats, reviewCount, attention]);
+
   const attentionColor = attention && attention > 0 ? "var(--danger)" : "var(--accent-ink)";
   const searching = query.trim().length > 0;
 
   return (
     <div className="stack pt-2">
       <section>
-        <p className="text-[17px] font-extrabold leading-tight" style={{ color: "var(--ink-primary)" }}>
+        <h1
+          className="text-[28px] font-extrabold leading-[1.1] tracking-[-0.02em]"
+          style={{ color: "var(--ink-primary)" }}
+        >
           {greetingWord}
           {firstName ? `, ${firstName}` : ""}
+        </h1>
+        {/* The demo opens on the state of the day, not the date — a rep
+            glancing at this on the way out already knows what day it is. */}
+        <p
+          className="mt-1.5 text-[14px] leading-[1.45]"
+          style={{ color: "var(--ink-secondary)" }}
+        >
+          {dayNarrative}
         </p>
-        <p className="t-meta mt-0.5">
+        <p className="t-meta mt-1.5">
           {todayIso ? formatFullDate(todayIso) : " "} · {syncLine}
         </p>
       </section>
@@ -550,32 +588,57 @@ export default function HomeClient() {
             </div>
           </section>
 
+          {/* The demo's four actions: a 2x2 of real tiles, each with the one
+              line that says why you would tap it. Four 10px labels in a row
+              read as a toolbar; these read as offers. */}
           <section>
-            <div className="grid grid-cols-4 gap-2">
-              <Link href="/record?mode=card" className="card flex flex-col items-center justify-center gap-1.5 py-3">
-                <FileIcon size={18} style={{ color: "var(--accent-ink)" }} />
-                <span className="text-center text-[10px] font-semibold" style={{ color: "var(--ink-primary)" }}>
-                  Scan card
-                </span>
-              </Link>
-              <Link href="/record" className="card flex flex-col items-center justify-center gap-1.5 py-3">
-                <MicrophoneIcon size={18} style={{ color: "var(--accent-ink)" }} />
-                <span className="text-center text-[10px] font-semibold" style={{ color: "var(--ink-primary)" }}>
-                  Voice note
-                </span>
-              </Link>
-              <Link href="/accounts" className="card flex flex-col items-center justify-center gap-1.5 py-3">
-                <BuildingIcon size={18} style={{ color: "var(--accent-ink)" }} />
-                <span className="text-center text-[10px] font-semibold" style={{ color: "var(--ink-primary)" }}>
-                  Accounts
-                </span>
-              </Link>
-              <Link href="/accounts/new" className="card flex flex-col items-center justify-center gap-1.5 py-3">
-                <PlusIcon size={18} style={{ color: "var(--accent-ink)" }} />
-                <span className="text-center text-[10px] font-semibold" style={{ color: "var(--ink-primary)" }}>
-                  Add account
-                </span>
-              </Link>
+            <div className="grid grid-cols-2 gap-2.5">
+              {[
+                {
+                  href: "/record",
+                  Icon: MicrophoneIcon,
+                  title: "Talk it through",
+                  sub: "Log a visit in 20 seconds",
+                },
+                {
+                  href: "/record?mode=card",
+                  Icon: FileIcon,
+                  title: "Scan a card",
+                  sub: "Add a contact from a card",
+                },
+                {
+                  href: "/accounts",
+                  Icon: BuildingIcon,
+                  title: "Your accounts",
+                  sub:
+                    attention && attention > 0
+                      ? `${attention} ${attention === 1 ? "needs" : "need"} a visit`
+                      : "Browse the territory",
+                  warn: !!attention && attention > 0,
+                },
+                {
+                  href: "/accounts/new",
+                  Icon: PlusIcon,
+                  title: "Add an account",
+                  sub: "A new door in the patch",
+                },
+              ].map(({ href, Icon, title, sub, warn }) => (
+                <Link key={href} href={href} className="card card-pad flex flex-col gap-2">
+                  <span
+                    className="grid h-9 w-9 place-items-center rounded-[10px]"
+                    style={{ background: "var(--surface-sunken)" }}
+                  >
+                    <Icon size={18} style={{ color: "var(--ink-secondary)" }} />
+                  </span>
+                  <span className="t-title">{title}</span>
+                  <span
+                    className="text-[12px] leading-[16px]"
+                    style={{ color: warn ? "var(--warn-ink)" : "var(--ink-muted)" }}
+                  >
+                    {sub}
+                  </span>
+                </Link>
+              ))}
             </div>
           </section>
 
