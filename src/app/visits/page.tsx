@@ -28,6 +28,7 @@ import {
   humanize,
   type VisitObjective,
 } from "@/lib/domain/enums";
+import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
 import { displayAccountName, relativizeDates } from "@/lib/format";
 import {
   getOfflineLayer,
@@ -62,14 +63,10 @@ function isoDate(d: Date): string {
 }
 
 // Two alarm tiers, not one: a broken promise or money on the table is danger;
-// hygiene the system noticed (no champion yet, display unchecked) is attention.
+// hygiene the system noticed (no captain yet, display unchecked) is attention.
 // Seven identical red triangles teach a rep to ignore all of them.
-const DANGER_EXCEPTIONS = new Set([
-  "OVERDUE_FOLLOW_UP",
-  "QUOTE_NO_FOLLOW_UP",
-  "OPPORTUNITY_NO_NEXT_ACTION",
-  "STRATEGIC_ACCOUNT_QUIET",
-]);
+// The tiers and the wording both live in lib/domain/exceptions so this screen
+// and the manager's cannot drift into calling the same thing two names.
 
 function DateChip({ date, danger }: { date: string; danger?: boolean }) {
   return (
@@ -534,7 +531,7 @@ function VisitsPageInner() {
                       {e.title ? displayAccountName(e.title) : e.title}
                     </span>
                     <span className="t-sub block">
-                      {humanize(e.exception_type)}
+                      {exceptionLabel(e.exception_type)}
                       {e.detail ? ` — ${relativizeDates(e.detail)}` : ""}
                     </span>
                   </span>

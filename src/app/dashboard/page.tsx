@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
 import { formatDay } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -56,6 +57,12 @@ interface FlowRow {
   lost: number;
   created: number;
 }
+interface ExceptionRow {
+  exception_type: string | null;
+  subject_type: string | null;
+  subject_id: string | null;
+  owner_membership_id: string | null;
+}
 
 // Pipeline stages in funnel order; WON/LOST/ON_HOLD are outcomes, not stages
 // you sit in, so they read as tiles rather than funnel rows.
@@ -102,6 +109,8 @@ export default function DashboardPage() {
   const [territories, setTerritories] = useState<TerritoryRow[]>([]);
   const [planned, setPlanned] = useState<PlannedRow[]>([]);
   const [flow, setFlow] = useState<FlowRow[]>([]);
+  const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Admin-only card (Task 13); the route 403s reps, and we render nothing
@@ -111,7 +120,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [p, s, t, pv, f] = await Promise.all([
+    const [p, s, t, pv, f, ex] = await Promise.all([
       supabase
         .from("dashboard_pipeline")
         .select("owner_id, territory_id, stage, opportunity_count, total_value, weighted_value"),
@@ -137,8 +146,16 @@ export default function DashboardPage() {
         .select("week_start, advanced, won, lost, created")
         .order("week_start", { ascending: false })
         .limit(12),
+      // Management by exception, chain-wide. Same view the rep's day uses —
+      // RLS is what makes it "their chain" here and "mine" there.
+      supabase
+        .from("exceptions")
+        .select("exception_type, subject_type, subject_id, owner_membership_id")
+        .limit(1000),
     ]);
     const firstError = [p, s, t, pv, f].map((r) => r.error).find(Boolean);
+    // The exception union is additive to this page — if it fails, the numbers
+    // above are still true, so it must not blank the whole dashboard.
     if (firstError) {
       setError(firstError.message);
       setLoaded(true);
@@ -149,6 +166,8 @@ export default function DashboardPage() {
     setTerritories((t.data as TerritoryRow[]) ?? []);
     setPlanned((pv.data as PlannedRow[]) ?? []);
     setFlow((f.data as FlowRow[]) ?? []);
+    setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
+    setLoadedAt(Date.now());
     setLoaded(true);
   }, []);
 
@@ -174,6 +193,81 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [profile]);
+
+  const repName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of scorecard) {
+      if (r.membership_id) m.set(r.membership_id, r.rep_name ?? "—");
+    }
+    return m;
+  }, [scorecard]);
+
+  // "Did they do what they said", per rep, for the most recent week the view
+  // reports. The weekly table below still answers the trend question; this
+  // answers the one a manager actually opens with — who is behind, right now.
+  const thisWeek = useMemo(() => {
+    if (planned.length === 0) return { week: null as string | null, rows: [] };
+    const week = planned.reduce(
+      (max, r) => (r.week_start > max ? r.week_start : max),
+      planned[0].week_start,
+    );
+    const rows = planned
+      .filter((r) => r.week_start === week)
+      .map((r) => {
+        const total = Number(r.planned_total);
+        const done = Number(r.planned_done);
+        return {
+          owner: r.owner_id,
+          name: repName.get(r.owner_id) ?? "—",
+          total,
+          done,
+          // What is left of a plan is "still to come" mid-week and "never
+          // happened" once the week is behind us. Calling it the wrong one is
+          // the difference between a nudge and an accusation.
+          outstanding: Math.max(0, total - done),
+          unplanned: Number(r.unplanned),
+        };
+      })
+      .sort((a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name));
+    return { week, rows };
+  }, [planned, repName]);
+
+  // Stamped when the data loads, not read during render — the clock is an
+  // external system, and reading it mid-render makes the label flip on any
+  // unrelated re-render.
+  const weekIsCurrent = useMemo(() => {
+    if (!thisWeek.week || loadedAt === null) return false;
+    const start = new Date(thisWeek.week).getTime();
+    return loadedAt - start < 7 * 24 * 60 * 60 * 1000;
+  }, [thisWeek.week, loadedAt]);
+
+  // Grouped by what is wrong, with the people it belongs to — the demo's
+  // "what's slipping", which is a manager's read of the same exception union
+  // a rep sees one row at a time.
+  const slippingGroups = useMemo(() => {
+    const map = new Map<string, { count: number; who: Set<string>; account: boolean }>();
+    for (const e of slipping) {
+      if (!e.exception_type) continue;
+      const cur = map.get(e.exception_type) ?? {
+        count: 0,
+        who: new Set<string>(),
+        account: e.subject_type === "account",
+      };
+      cur.count += 1;
+      const who = e.owner_membership_id ? repName.get(e.owner_membership_id) : null;
+      if (who) cur.who.add(who);
+      map.set(e.exception_type, cur);
+    }
+    return [...map.entries()]
+      .map(([type, v]) => ({
+        type,
+        count: v.count,
+        who: [...v.who].sort(),
+        account: v.account,
+        danger: DANGER_EXCEPTIONS.has(type),
+      }))
+      .sort((a, b) => Number(b.danger) - Number(a.danger) || b.count - a.count);
+  }, [slipping, repName]);
 
   const byStage = useMemo(() => {
     const map = new Map<string, { count: number; value: number; weighted: number }>();
@@ -295,6 +389,106 @@ export default function DashboardPage() {
         />
       </section>
 
+      {/* Did they do what they said. A manager's day is people before money,
+          so this sits above the pipeline. One bar per rep, the plan they made
+          against the part of it they kept. */}
+      {thisWeek.rows.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">Did they do what they said</h2>
+            <span className="t-meta">
+              {thisWeek.week ? `week of ${formatDay(thisWeek.week)}` : ""}
+            </span>
+          </div>
+          <ul className="stack-sm">
+            {thisWeek.rows.map((r) => {
+              const pct = r.total === 0 ? 0 : Math.round((100 * r.done) / r.total);
+              return (
+                <li key={r.owner}>
+                  <Link
+                    href={`/accounts?owner=${r.owner}`}
+                    className="block py-2"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="t-title">{r.name}</span>
+                      <span className="t-meta tabular-nums">
+                        {r.done}/{r.total}
+                        {r.unplanned > 0 ? ` · ${r.unplanned} unplanned` : ""}
+                      </span>
+                    </div>
+                    <div
+                      className="mt-1 flex h-2 overflow-hidden rounded"
+                      style={{ background: "var(--rule)" }}
+                      role="img"
+                      aria-label={`${r.done} of ${r.total} planned visits done`}
+                    >
+                      <span
+                        style={{
+                          width: `${pct}%`,
+                          background: "var(--accent, currentColor)",
+                        }}
+                      />
+                    </div>
+                    {r.outstanding > 0 && (
+                      <span className="t-sub">
+                        {r.outstanding}{" "}
+                        {weekIsCurrent ? "still to come" : "never happened"}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* What's slipping. The same exception union the rep meets one row at a
+          time, read as a list of problems with names against them. */}
+      {slippingGroups.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">What&rsquo;s slipping</h2>
+            <span className="t-meta">{slipping.length}</span>
+          </div>
+          <ul className="list">
+            {slippingGroups.map((g) => {
+              const body = (
+                <>
+                  <span className="row-body">
+                    <span className="t-title block truncate">
+                      {exceptionLabel(g.type)}
+                    </span>
+                    <span className="t-sub block truncate">
+                      {g.who.length > 0 ? g.who.join(", ") : "across the chain"}
+                    </span>
+                  </span>
+                  <span
+                    className="t-title tabular-nums"
+                    style={g.danger ? { color: "var(--danger)" } : undefined}
+                  >
+                    {g.count}
+                  </span>
+                </>
+              );
+              // Account-shaped exceptions have a list to land on; the rest
+              // would be a link to nowhere, so they stay as rows.
+              return (
+                <li key={g.type}>
+                  {g.account ? (
+                    <Link href="/accounts" className="row">
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="row">{body}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {/* Pipeline by stage — one series, so bar length carries everything and
           the heading names it; values are direct-labelled. */}
       {/* section heads speak the same dialect as every other screen —
@@ -376,7 +570,15 @@ export default function DashboardPage() {
                   style={{ borderBottom: "1px solid var(--rule)" }}
                 >
                   <td className="py-2 pr-3">
-                    <div className="font-medium">{r.rep_name}</div>
+                    {/* The counts answer "is this rep working"; they never say
+                        which doors. The name opens their accounts so a manager
+                        can go from a number to the thing it is about. */}
+                    <Link
+                      href={`/accounts?owner=${r.membership_id}`}
+                      className="font-medium underline-offset-2 hover:underline"
+                    >
+                      {r.rep_name}
+                    </Link>
                     {r.territory_name && (
                       <div className="text-xs opacity-60">{r.territory_name}</div>
                     )}
