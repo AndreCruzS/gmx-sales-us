@@ -92,6 +92,10 @@ export const voiceCaptureCreateSchema = z.object({
   // outbox even though the AI draft still needs the rep's OK.
   account_id: uuid.nullish(),
   planned_action_id: uuid.nullish(),
+  // Set when the visit was ALREADY logged and this capture exists only so the
+  // model can find the extras (the spine's inline debrief). Review reads it to
+  // enrich that activity instead of filing the same visit twice.
+  activity_id: uuid.nullish(),
 });
 export type VoiceCaptureCreate = z.infer<typeof voiceCaptureCreateSchema>;
 

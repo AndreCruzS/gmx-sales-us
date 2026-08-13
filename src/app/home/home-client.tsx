@@ -279,16 +279,33 @@ export default function HomeClient() {
     [accounts],
   );
 
+  // Stops logged from the spine this session. Held until the pull catches up,
+  // so a logged stop cannot reappear as still owing a debrief.
+  const [justLogged, setJustLogged] = useState<Set<string>>(new Set());
+
   // The day in time order, from the same agenda the tiles read. The
   // coming-up filter that used to live here now sits in buildDayTimeline,
   // where it is tested alongside the rest of the day's shape.
-  const timeline = useMemo(
-    () =>
-      todayIso
-        ? buildDayTimeline(agenda, todayIso, addDays(todayIso, VISIT_HORIZON_DAYS))
-        : { before: [], after: [], stops: 0, done: 0, needsDebrief: 0 },
-    [agenda, todayIso],
-  );
+  const timeline = useMemo(() => {
+    if (!todayIso) return { before: [], after: [], stops: 0, done: 0, needsDebrief: 0 };
+    // Derived from todayIso rather than read from the clock: buildDayTimeline
+    // only looks at the date part, and reading the clock during render is the
+    // impurity that makes a label flip on an unrelated re-render.
+    const loggedToday = `${todayIso}T12:00:00.000Z`;
+    const withOptimism =
+      justLogged.size === 0
+        ? agenda
+        : agenda.map((i) =>
+            justLogged.has(i.id) && i.completed_at === null
+              ? { ...i, completed_at: loggedToday }
+              : i,
+          );
+    return buildDayTimeline(
+      withOptimism,
+      todayIso,
+      addDays(todayIso, VISIT_HORIZON_DAYS),
+    );
+  }, [agenda, todayIso, justLogged]);
 
   // "Today", "Tomorrow", "Thu" — a stop's own day, not a relative phrase like
   // "in 5 days", which reads wrong beside a time.
@@ -347,13 +364,41 @@ export default function HomeClient() {
         blobRef: null,
       });
 
+      // The line also goes to the model, as a typed capture (audio_path null,
+      // transcript set — the shape voiceCaptureCreateSchema documents). It
+      // carries activity_id, which tells Review this visit is ALREADY logged:
+      // the extraction runs only to find the extras a rep should not have to
+      // type — the commitments and dates buried in "chase the quote Friday" —
+      // and Send links those to this activity instead of filing a second one.
+      const captureId = crypto.randomUUID();
+      await layer.sync.enqueue({
+        clientId: captureId,
+        entityType: "voice_capture",
+        op: "create",
+        payload: {
+          id: captureId,
+          org_id: profile.orgId,
+          owner_id: profile.membershipId,
+          audio_path: null,
+          transcript: note,
+          status: "UPLOADED",
+          account_id: stop.accountId,
+          planned_action_id: stop.id,
+          activity_id: activityId,
+        },
+        baseVersion: null,
+        blobRef: null,
+      });
+
       // Take it off the spine immediately; the drain and the next pull will
       // confirm it. A rep should never watch a spinner to know they logged.
-      setAgenda((prev) =>
-        prev.map((i) =>
-          i.id === stop.id ? { ...i, completed_at: new Date().toISOString() } : i,
-        ),
-      );
+      //
+      // This is held in its own set rather than by patching `agenda`, because
+      // the drain below triggers a pull, and the pull overwrites agenda from
+      // the cache — where the row is still open until the server round-trips.
+      // Patching agenda alone let the debrief form come BACK and be submitted
+      // again, which filed the same visit twice.
+      setJustLogged((prev) => new Set(prev).add(stop.id));
       void layer.sync.drain();
     },
     [profile, accountsById],

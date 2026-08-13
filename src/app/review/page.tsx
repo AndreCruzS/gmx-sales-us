@@ -46,6 +46,9 @@ interface CaptureRow {
   // the routine fan-out (Task 10) and the activity's planned_action_id.
   account_id: string | null;
   planned_action_id: string | null;
+  // Set when the visit was already logged inline and the model ran only to
+  // find the extras — Send enriches this activity rather than creating one.
+  activity_id: string | null;
 }
 
 // Rep-language label for a confirmed routine disposition (D-routine, Task
@@ -107,7 +110,7 @@ export default function ReviewPage() {
         supabase
           .from("voice_captures")
           .select(
-            "id, status, transcript, ai_draft, audio_path, created_at, updated_at, account_id, planned_action_id",
+            "id, status, transcript, ai_draft, audio_path, created_at, updated_at, account_id, planned_action_id, activity_id",
           )
           .neq("status", "DISCARDED")
           .order("created_at", { ascending: false })
@@ -561,40 +564,50 @@ function ReviewSheet({
     const enqueuedSeqs: number[] = [];
     try {
       const layer = getOfflineLayer();
-      const activityId = crypto.randomUUID();
+      // A capture from the day spine's inline debrief ALREADY has its activity:
+      // the rep logged the line and moved on, and the model only ever ran to
+      // find the extras (commitments, outcomes, what was learned). Enrich that
+      // activity rather than filing the same visit a second time — and leave
+      // the planned action alone, since logging it inline already closed it.
+      // Without this, Send created a duplicate activity and its completion op
+      // was rejected as a stale write.
+      const existingActivityId = capture.activity_id ?? null;
+      const activityId = existingActivityId ?? crypto.randomUUID();
       const now = new Date().toISOString();
       // Final-review finding 2: a voice debrief of a planned visit must close
       // the visit exactly like the typed /record path does — `was_planned`
       // reflects whether this capture was pre-linked to a planned
       // next_action, not hardcoded false.
       const plannedActionId = capture.planned_action_id ?? null;
-      enqueuedSeqs.push(
-        await layer.sync.enqueue({
-          clientId: activityId,
-          entityType: "activity",
-          op: "create",
-          payload: {
-            id: activityId,
-            org_id: profile.orgId,
-            activity_type: activityType,
-            primary_account_id: accountId,
-            owner_id: profile.membershipId,
-            occurred_at: capture.created_at,
-            was_planned: Boolean(plannedActionId),
-            // D46 gap fix (carried from Task 6's review): the capture's own
-            // pre-link rides through to the activity it becomes, same as the
-            // typed /record path already does.
-            planned_action_id: plannedActionId,
-            what_happened: whatHappened,
-            key_information: keyInfo.trim() || null,
-            commercial_potential: potential.trim() || null,
-            outcomes,
-            follow_up_required: followUp,
-          },
-          baseVersion: null,
-          blobRef: null,
-        }),
-      );
+      if (!existingActivityId) {
+        enqueuedSeqs.push(
+          await layer.sync.enqueue({
+            clientId: activityId,
+            entityType: "activity",
+            op: "create",
+            payload: {
+              id: activityId,
+              org_id: profile.orgId,
+              activity_type: activityType,
+              primary_account_id: accountId,
+              owner_id: profile.membershipId,
+              occurred_at: capture.created_at,
+              was_planned: Boolean(plannedActionId),
+              // D46 gap fix (carried from Task 6's review): the capture's own
+              // pre-link rides through to the activity it becomes, same as the
+              // typed /record path already does.
+              planned_action_id: plannedActionId,
+              what_happened: whatHappened,
+              key_information: keyInfo.trim() || null,
+              commercial_potential: potential.trim() || null,
+              outcomes,
+              follow_up_required: followUp,
+            },
+            baseVersion: null,
+            blobRef: null,
+          }),
+        );
+      }
       // Recording a planned visit's debrief completes its agenda item — same
       // as record/page.tsx's submit(). Rides right after the activity create
       // (FIFO). If the planned item isn't in the cached agenda (dropped by
@@ -602,7 +615,9 @@ function ReviewSheet({
       // baseVersion to update against — skip the completion op rather than
       // throw and sink the whole Send (finding 3's principle); the activity
       // itself still records was_planned/planned_action_id correctly.
-      if (plannedActionId) {
+      // ...unless the inline debrief already closed it, in which case the
+      // cached updated_at is stale by definition and this op would be rejected.
+      if (plannedActionId && !existingActivityId) {
         const plannedItem = agenda.find((a) => a.id === plannedActionId);
         if (plannedItem) {
           enqueuedSeqs.push(
@@ -728,19 +743,23 @@ function ReviewSheet({
           blobRef: null,
         }),
       );
-      await layer.local.putLocalActivity({
-        id: activityId,
-        activity_type: activityType,
-        primary_account_id: accountId,
-        occurred_at: capture.created_at,
-        what_happened: whatHappened,
-        follow_up_required: followUp,
-        // Mirrors the outbox payload's planned_action_id above (D46) — Home's
-        // "Visits this week" tile dedupes a debriefed planned visit from a
-        // walk-in on this field, same as the typed /record path.
-        planned_action_id: capture.planned_action_id ?? null,
-        pendingSync: true,
-      });
+      // Only mirror an activity this Send actually created — the inline path
+      // already mirrored its own.
+      if (!existingActivityId) {
+        await layer.local.putLocalActivity({
+          id: activityId,
+          activity_type: activityType,
+          primary_account_id: accountId,
+          occurred_at: capture.created_at,
+          what_happened: whatHappened,
+          follow_up_required: followUp,
+          // Mirrors the outbox payload's planned_action_id above (D46) — Home's
+          // "Visits this week" tile dedupes a debriefed planned visit from a
+          // walk-in on this field, same as the typed /record path.
+          planned_action_id: capture.planned_action_id ?? null,
+          pendingSync: true,
+        });
+      }
       void layer.sync.drain();
       onDone();
     } catch (err) {
