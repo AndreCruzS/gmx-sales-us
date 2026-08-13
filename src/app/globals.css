@@ -380,10 +380,12 @@ body {
   min-height: 32px;
   padding: 5px 11px;
 }
+/* Ink, as in the demo: a chosen shortcut is a decision, and ink reads as
+   chosen at a glance where a tint reads as merely hovered. */
 .debrief .chip[aria-pressed="true"] {
-  background: var(--surface-accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--ink-primary);
+  border-color: var(--ink-primary);
+  color: var(--surface-card);
 }
 .debrief-mic {
   display: grid;
@@ -525,9 +527,14 @@ body {
   font-weight: 600;
 }
 
+/* A field needs a stroke of its own. Filling it with the card colour made it
+   invisible the moment it sat ON a card — the debrief box was a placeholder
+   floating in white with nothing to say "type here". The border does that work
+   on any surface; the fill only works on one. */
 .field {
   width: 100%;
   padding: 12px 14px;
+  border: 1px solid var(--rule);
   border-radius: var(--r-control);
   background: var(--surface-card);
   color: var(--ink-primary);
@@ -535,6 +542,17 @@ body {
 }
 .field::placeholder {
   color: var(--ink-muted);
+}
+/* Focus moves the stroke as well as drawing the ring, so the field a keyboard
+   is in is obvious without relying on the ring alone. */
+.field:focus-visible {
+  border-color: var(--accent);
+}
+/* On a card, sink the fill too — a white field on a white card is carried by
+   1px alone, and that is not enough in a truck in daylight. */
+.card .field,
+.debrief .field {
+  background: var(--surface-page);
 }
 .field:focus-visible,
 .btn-primary:focus-visible,
