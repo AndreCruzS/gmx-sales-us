@@ -551,7 +551,9 @@ body {
 /* On a card, sink the fill too — a white field on a white card is carried by
    1px alone, and that is not enough in a truck in daylight. */
 .card .field,
-.debrief .field {
+.card .search-field,
+.debrief .field,
+.debrief .search-field {
   background: var(--surface-page);
 }
 .field:focus-visible,
@@ -692,12 +694,15 @@ body {
 
 /* ── Search ─────────────────────────────────────────────────────────────── */
 
+/* Same box as .field, and now the same stroke. A search input is an input:
+   it should not be identifiable only by the magnifier sitting inside it. */
 .search-field {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   padding: 12px 14px;
+  border: 1px solid var(--rule);
   border-radius: var(--r-control);
   background: var(--surface-card);
   color: var(--ink-muted);
@@ -721,6 +726,8 @@ body {
 .search-field:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+  /* the stroke moves with focus, same as .field */
+  border-color: var(--accent);
 }
 
 /* ── Bottom tab bar (kit layout: 56px row + home-indicator safe area) ────── */
