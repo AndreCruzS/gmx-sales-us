@@ -44,17 +44,23 @@ function Debrief({
 }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [logged, setLogged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!note.trim() || busy) return;
+    // `logged` latches: the row usually unmounts on success, but a slow pull
+    // would otherwise leave the button live long enough to file the same visit
+    // twice — which is a duplicate activity, not a harmless retry.
+    if (!note.trim() || busy || logged) return;
     setBusy(true);
     setError(null);
     try {
       await onDebrief(stop, note.trim());
+      setLogged(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
       setBusy(false);
     }
   }
@@ -62,6 +68,20 @@ function Debrief({
   return (
     <form className="debrief mt-2.5" onSubmit={submit}>
       <p className="debrief-prompt">
+        {/* the same flag the demo flies over a stop that owes an answer */}
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 21V4l14 6-14 5" />
+        </svg>
         This stop passed with nothing logged. How did it go?
       </p>
       <div className="mt-2 flex gap-2">
@@ -104,9 +124,9 @@ function Debrief({
       <button
         type="submit"
         className="btn-log mt-2.5"
-        disabled={!note.trim() || busy}
+        disabled={!note.trim() || busy || logged}
       >
-        {busy ? "Logging…" : "Log & continue"}
+        {logged ? "Logged" : busy ? "Logging…" : "Log & continue"}
       </button>
     </form>
   );
