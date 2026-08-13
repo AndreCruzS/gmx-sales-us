@@ -42,7 +42,9 @@ import {
   type RoutineItem,
   type RoutineSettings,
 } from "@/lib/routine/items";
+import { buildDayTimeline } from "@/lib/routine/day-timeline";
 import { useReviewCount } from "@/lib/review/count";
+import { DaySpine } from "./day-spine";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 // Same two alarm tiers as /visits: a broken promise or money on the table is
@@ -264,31 +266,36 @@ export default function HomeClient() {
     [accounts],
   );
 
-  const upcomingVisits = useMemo(() => {
-    if (!todayIso) return [];
-    const horizon = addDays(todayIso, VISIT_HORIZON_DAYS);
-    return agenda
-      .filter(
-        (i) =>
-          i.completed_at === null &&
-          // null kind = unclassified (pre-trigger cached row) — /visits
-          // treats it as a visit too (visits/page.tsx); tiles must agree
-          // with the page they open.
-          (i.kind === "VISIT" || i.kind === null) &&
-          i.due_date >= todayIso &&
-          i.due_date <= horizon,
-      )
-      .sort((a, b) => a.due_date.localeCompare(b.due_date));
-  }, [agenda, todayIso]);
+  // The day in time order, from the same agenda the tiles read. The
+  // coming-up filter that used to live here now sits in buildDayTimeline,
+  // where it is tested alongside the rest of the day's shape.
+  const timeline = useMemo(
+    () =>
+      todayIso
+        ? buildDayTimeline(agenda, todayIso, addDays(todayIso, VISIT_HORIZON_DAYS))
+        : { before: [], after: [], stops: 0, done: 0, needsDebrief: 0 },
+    [agenda, todayIso],
+  );
 
-  const nextVisit = upcomingVisits[0] ?? null;
-  const moreThisWeek = useMemo(() => {
-    if (!nextVisit || !todayIso) return 0;
-    const { end } = weekBounds(todayIso);
-    return upcomingVisits.filter(
-      (v) => v.id !== nextVisit.id && v.due_date <= end,
-    ).length;
-  }, [upcomingVisits, nextVisit, todayIso]);
+  // "Today", "Tomorrow", "Thu" — a stop's own day, not a relative phrase like
+  // "in 5 days", which reads wrong beside a time.
+  const spineDay = useCallback(
+    (iso: string) =>
+      iso === todayIso
+        ? "Today"
+        : todayIso && iso === addDays(todayIso, 1)
+          ? "Tomorrow"
+          : weekdayShort(iso),
+    [todayIso],
+  );
+
+  // Stamped when the clock is read, never during render.
+  const nowLabel = useMemo(() => {
+    if (hour === null) return "today";
+    const h12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${h12}${hour < 12 ? "AM" : "PM"}`;
+  }, [hour]);
+
 
   const weekStats = useMemo(() => {
     if (!todayIso) return { completed: 0, planned: 0 };
@@ -474,46 +481,33 @@ export default function HomeClient() {
         </section>
       ) : (
         <>
-          <section>
-            <Link href="/visits" className="card card-pad flex items-center justify-between gap-3">
-              <span className="min-w-0">
-                <span
-                  className="block text-[10px] font-bold uppercase tracking-wide"
-                  style={{ color: "var(--ink-muted)" }}
-                >
-                  Visits coming
-                </span>
-                {nextVisit ? (
-                  <>
-                    <span className="t-title mt-0.5 block truncate">
-                      {weekdayShort(nextVisit.due_date)} ·{" "}
-                      {nextVisit.account_id
-                        ? displayAccountName(
-                            accountsById.get(nextVisit.account_id)?.name ?? "",
-                          )
-                        : "No account"}
-                    </span>
-                    <span className="t-sub mt-0.5 block truncate">
-                      {nextVisit.objective ? humanize(nextVisit.objective) : "Visit"}
-                      {moreThisWeek > 0
-                        ? ` · ${moreThisWeek} more this week`
-                        : ""}
-                    </span>
-                  </>
-                ) : (
+          {/* The day as one spine. It replaces the "visits coming" card: that
+              one answered "what is next" but never "what did I leave behind",
+              which is the half a rep can still do something about. */}
+          {timeline.stops > 0 ? (
+            <DaySpine
+              timeline={timeline}
+              accountsById={accountsById}
+              formatDay={spineDay}
+              nowLabel={nowLabel}
+            />
+          ) : (
+            <section>
+              <Link href="/visits" className="card card-pad flex items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span
+                    className="block text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: "var(--ink-muted)" }}
+                  >
+                    Today &amp; what&rsquo;s next
+                  </span>
                   <span className="t-sub mt-0.5 block">
                     Nothing planned in the next two weeks
                   </span>
-                )}
-              </span>
-              <span
-                className="shrink-0 text-[26px] font-extrabold leading-none"
-                style={{ color: "var(--accent-ink)" }}
-              >
-                {upcomingVisits.length}
-              </span>
-            </Link>
-          </section>
+                </span>
+              </Link>
+            </section>
+          )}
 
           <section>
             <div className="grid grid-cols-2 gap-3">

@@ -226,6 +226,149 @@ body {
   gap: 14px;
 }
 
+/* ── The day spine ──────────────────────────────────────────────────────────
+   The rep's day as one vertical line rather than three cards. A continuous
+   rail is what makes it read as time: the segment above a stop is coloured by
+   what already happened, the segment below by what is still owed. Teal for
+   logged, clay for a debrief owed, dashed grey for the part that has not
+   happened yet. */
+
+.spine {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.spine-item {
+  display: flex;
+  align-items: stretch;
+}
+.spine-rail {
+  width: 30px;
+  flex: 0 0 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* The segment above a node is fixed so the dot pins to the TOP of its stop and
+   stays beside the time. Letting both segments grow centres the dot, which
+   drifts it halfway down a tall stop and breaks the line's reading order. */
+.spine-seg {
+  width: 2px;
+  flex: 1 1 auto;
+  min-height: 12px;
+  background: var(--rule);
+}
+.spine-item > .spine-rail > .spine-seg:first-child {
+  flex: 0 0 10px;
+  min-height: 10px;
+}
+.spine-seg.is-off {
+  background: transparent;
+}
+.spine-seg.is-done {
+  background: var(--accent);
+}
+.spine-seg.is-flagged {
+  background: var(--danger);
+}
+/* Dashed, because the future is not a promise the system can colour in. */
+.spine-seg.is-future {
+  background-color: transparent;
+  background-image: linear-gradient(
+    to bottom,
+    var(--rule) 0 5px,
+    transparent 5px 11px
+  );
+  background-size: 2px 11px;
+  background-repeat: repeat-y;
+}
+.spine-node {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 1px 0;
+  border-radius: 50%;
+  background: var(--surface-card);
+  border: 2.5px solid var(--rule);
+}
+.spine-node.is-done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.spine-node.is-flagged {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+.spine-node.is-future {
+  background: var(--surface-page);
+  border-color: var(--rule);
+}
+/* Now is the only ring, and it is amber — the same colour as capture, because
+   both mean "you, here, right now". */
+.spine-now {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 1px -3px;
+  border-radius: 50%;
+  border: 3px solid var(--warn);
+  background: var(--surface-card);
+  box-shadow: 0 0 0 4px var(--warn-tint);
+}
+.spine-body {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0 20px 14px;
+}
+.spine-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+.spine-now-head {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--warn-ink);
+}
+.spine-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+/* State pills — mono, so a status never reads as prose. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pill-done {
+  background: var(--success-tint);
+  color: var(--accent-ink);
+}
+.pill-flagged {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+.pill-planned {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+}
+
 /* ── Controls ───────────────────────────────────────────────────────────── */
 
 /* Filter chip — the first control in the app carrying an on/off state.
