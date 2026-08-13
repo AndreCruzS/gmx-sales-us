@@ -344,6 +344,51 @@ body {
   margin: 0;
 }
 
+/* The inline debrief. A rep answers where they are standing: one line, or a
+   tap, or the mic. Sending them to another screen to type a sentence is the
+   friction the whole capture story exists to remove. The clay border is what
+   marks it as the thing still owed. */
+.debrief {
+  padding: 14px;
+  background: var(--surface-card);
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--surface-card));
+  border-radius: var(--r-control);
+  box-shadow: var(--shadow-1);
+  max-width: 420px;
+}
+.debrief-prompt {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+.debrief-mic {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--ink-primary);
+  color: var(--surface-card);
+}
+/* Amber: the same colour as capture, because this IS a capture. */
+.btn-log {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: var(--r-control);
+  background: var(--warn);
+  color: var(--on-warn);
+  font-size: 14px;
+  font-weight: 700;
+}
+.btn-log:disabled {
+  opacity: 0.5;
+}
+
 /* State pills — mono, so a status never reads as prose. */
 .pill {
   display: inline-flex;

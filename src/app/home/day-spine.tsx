@@ -8,6 +8,8 @@
 // thing on this screen a rep can still put right today.
 
 import Link from "next/link";
+import { useState } from "react";
+import { MicrophoneIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
 import { displayAccountName } from "@/lib/format";
 import type { CachedAccount } from "@/lib/offline";
@@ -26,16 +28,102 @@ function segAbove(prev: StopState | null): string {
   return prev === "planned" ? "is-future" : `is-${prev}`;
 }
 
+// Shortcuts for the line, not outcomes. ACTIVITY_OUTCOMES is a commercial
+// vocabulary (QUOTE_REQUESTED, SAMPLE_REQUESTED); "nobody available" is not one
+// of those, and forcing it into that enum would corrupt the reporting it feeds.
+const QUICK_LINES = ["Went well", "Rescheduled", "Nobody available"];
+
+function Debrief({
+  stop,
+  account,
+  onDebrief,
+}: {
+  stop: TimelineStop;
+  account: CachedAccount | undefined;
+  onDebrief: (stop: TimelineStop, note: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!note.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onDebrief(stop, note.trim());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="debrief mt-2.5" onSubmit={submit}>
+      <p className="debrief-prompt">
+        This stop passed with nothing logged. How did it go?
+      </p>
+      <div className="mt-2 flex gap-2">
+        <input
+          className="field flex-1"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="One line — what happened?"
+          aria-label={`What happened at ${account ? displayAccountName(account.name) : "this stop"}`}
+          enterKeyHint="done"
+        />
+        {/* Talking is the other way in, and that one does belong on /record —
+            it is a recorder, not a form. */}
+        <Link
+          href={`/record?visit=${stop.id}`}
+          className="debrief-mic"
+          aria-label="Talk instead of typing"
+        >
+          <MicrophoneIcon size={18} />
+        </Link>
+      </div>
+      <div className="chip-row mt-2">
+        {QUICK_LINES.map((q) => (
+          <button
+            key={q}
+            type="button"
+            className="chip"
+            aria-pressed={note === q}
+            onClick={() => setNote(note === q ? "" : q)}
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+      {error && (
+        <p className="t-sub mt-2" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        className="btn-log mt-2.5"
+        disabled={!note.trim() || busy}
+      >
+        {busy ? "Logging…" : "Log & continue"}
+      </button>
+    </form>
+  );
+}
+
 function Stop({
   stop,
   prev,
   account,
   formatDay,
+  onDebrief,
 }: {
   stop: TimelineStop;
   prev: StopState | null;
   account: CachedAccount | undefined;
   formatDay: (iso: string) => string;
+  onDebrief?: (stop: TimelineStop, note: string) => Promise<void>;
 }) {
   const pill = PILL[stop.state];
   const below = stop.state === "planned" ? "is-future" : `is-${stop.state}`;
@@ -66,15 +154,11 @@ function Stop({
           )}
         </Link>
 
-        {/* The one state a rep can act on from here. */}
-        {stop.state === "flagged" && (
-          <Link
-            href={`/record?visit=${stop.id}`}
-            className="btn-quiet mt-2 inline-flex"
-            style={{ background: "var(--danger-tint)", color: "var(--danger)" }}
-          >
-            This one passed with nothing logged — how did it go?
-          </Link>
+        {/* The one state a rep can act on, answered where they are. Sending
+            someone to another screen to type one line is the friction this
+            app exists to remove. */}
+        {stop.state === "flagged" && onDebrief && (
+          <Debrief stop={stop} account={account} onDebrief={onDebrief} />
         )}
       </div>
     </li>
@@ -86,11 +170,13 @@ export function DaySpine({
   accountsById,
   formatDay,
   nowLabel,
+  onDebrief,
 }: {
   timeline: DayTimeline;
   accountsById: Map<string, CachedAccount>;
   formatDay: (iso: string) => string;
   nowLabel: string;
+  onDebrief?: (stop: TimelineStop, note: string) => Promise<void>;
 }) {
   const { before, after, stops, done, needsDebrief } = timeline;
   if (stops === 0) return null;
@@ -131,6 +217,7 @@ export function DaySpine({
             prev={i === 0 ? null : before[i - 1].state}
             account={stop.accountId ? accountsById.get(stop.accountId) : undefined}
             formatDay={formatDay}
+            onDebrief={onDebrief}
           />
         ))}
 

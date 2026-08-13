@@ -47,6 +47,27 @@ describe("buildDayTimeline", () => {
     expect(t.needsDebrief).toBe(0);
   });
 
+  it("keeps a stop debriefed today on the spine, as done", () => {
+    // Logging yesterday's missed visit is work done today. If it dropped out
+    // of the timeline the moment a rep saved it, the save would look like a
+    // failure — the row would simply disappear.
+    const t = buildDayTimeline(
+      [
+        item({
+          id: "caught-up",
+          due_date: "2026-08-11",
+          completed_at: `${TODAY}T07:30:00Z`,
+        }),
+      ],
+      TODAY,
+      HORIZON,
+    );
+    expect(t.before.map((s) => s.id)).toEqual(["caught-up"]);
+    expect(t.before[0].state).toBe("done");
+    expect(t.done).toBe(1);
+    expect(t.needsDebrief).toBe(0);
+  });
+
   it("does not let an earlier day's win count towards today", () => {
     // Otherwise a quiet day silently inherits yesterday's numbers.
     const t = buildDayTimeline(

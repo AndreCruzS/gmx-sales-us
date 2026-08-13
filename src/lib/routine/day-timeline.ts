@@ -25,6 +25,8 @@ export interface TimelineStop {
   accountId: string | null;
   dueDate: string;
   completedAt: string | null;
+  /** LWW version key (D61) — a debrief logged against a stale row goes to Review. */
+  updatedAt: string;
 }
 
 export interface DayTimeline {
@@ -52,6 +54,7 @@ function toStop(item: CachedAgendaItem, state: StopState): TimelineStop {
     accountId: item.account_id,
     dueDate: item.due_date,
     completedAt: item.completed_at,
+    updatedAt: item.updated_at,
   };
 }
 
@@ -68,10 +71,17 @@ export function buildDayTimeline(
   const byDate = (a: TimelineStop, b: TimelineStop) =>
     a.dueDate.localeCompare(b.dueDate) || a.action.localeCompare(b.action);
 
-  // Logged today. Completed work from earlier days belongs to those days, not
-  // to this one — a day that quietly grows yesterday's wins is a lie.
+  // Logged today — by when it was LOGGED, not only when it was due. Debriefing
+  // yesterday's missed stop is work done today, and it has to stay on the spine
+  // as "done" rather than vanishing the moment a rep saves it. Work completed
+  // on an earlier day still belongs to that day: a day that quietly grows
+  // yesterday's wins is a lie.
   const done = agenda
-    .filter((i) => i.completed_at !== null && i.due_date === todayIso)
+    .filter(
+      (i) =>
+        i.completed_at !== null &&
+        (i.completed_at.slice(0, 10) === todayIso || i.due_date === todayIso),
+    )
     .map((i) => toStop(i, "done"));
 
   // The stop passed with nothing logged. Strictly VISIT here: an unclassified

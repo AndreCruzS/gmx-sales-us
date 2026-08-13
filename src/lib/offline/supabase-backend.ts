@@ -103,6 +103,10 @@ export class SupabaseSyncBackend implements SyncBackend {
     const today = new Date();
     const monthAgo = new Date(today);
     monthAgo.setDate(today.getDate() - 30);
+    // Enough to cover "yesterday's stop, debriefed this morning" across a
+    // timezone, without dragging a month of closed work onto the device.
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(today.getDate() - 2);
 
     const [agendaRes, activitiesRes, orgRes] = await Promise.all([
       this.supabase
@@ -114,7 +118,13 @@ export class SupabaseSyncBackend implements SyncBackend {
         .select(
           "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, created_at, updated_at",
         )
-        .is("completed_at", null)
+        // Open work, plus anything closed in the last couple of days. Home's
+        // day spine has to show what a rep just logged as "done" — caching
+        // only open rows made a debrief look like a failed save, because the
+        // stop vanished the moment it was answered. Both consumers of this
+        // cache (the routine list and debriefWaiting) filter on
+        // completed_at === null themselves, so they are unaffected.
+        .or(`completed_at.is.null,completed_at.gte.${twoDaysAgo.toISOString()}`)
         .order("due_date")
         .limit(200),
       this.supabase

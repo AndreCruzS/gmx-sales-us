@@ -42,7 +42,7 @@ import {
   type RoutineItem,
   type RoutineSettings,
 } from "@/lib/routine/items";
-import { buildDayTimeline } from "@/lib/routine/day-timeline";
+import { buildDayTimeline, type TimelineStop } from "@/lib/routine/day-timeline";
 import { useReviewCount } from "@/lib/review/count";
 import { DaySpine } from "./day-spine";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -75,6 +75,19 @@ const DEFAULT_SETTINGS: RoutineSettings = {
 };
 
 const VISIT_HORIZON_DAYS = 14;
+
+// A visit's activity type follows the kind of place it was. The account types
+// that have no visit form of their own (BUILDER, OTHER) log as OTHER rather
+// than being filed as a dealer call they were not.
+const VISIT_TYPE_BY_ACCOUNT: Record<string, string> = {
+  DEALER: "DEALER_VISIT",
+  DISTRIBUTOR: "DISTRIBUTOR_VISIT",
+  CONTRACTOR: "CONTRACTOR_MEETING",
+  ARCHITECT: "ARCHITECT_MEETING",
+};
+function visitTypeFor(accountType: string | undefined): string {
+  return (accountType && VISIT_TYPE_BY_ACCOUNT[accountType]) || "OTHER";
+}
 
 const ROUTINE_KIND_LABEL: Record<RoutineItem["kind"], [string, string]> = {
   SAMPLE_FOLLOW_UP: ["sample", "samples"],
@@ -289,6 +302,63 @@ export default function HomeClient() {
     [todayIso],
   );
 
+  // Logging a debrief from the spine. Two writes, both through the same
+  // LWW-guarded outbox /visits uses, so this works with no signal and a stale
+  // completion lands in Review rather than overwriting someone:
+  //   1. the activity — what actually happened
+  //   2. the next_action closed off, so the stop stops asking
+  const logDebrief = useCallback(
+    async (stop: TimelineStop, note: string) => {
+      if (!profile || !stop.accountId) {
+        throw new Error("This stop has no account against it — open it to log.");
+      }
+      const layer = getOfflineLayer();
+      const account = accountsById.get(stop.accountId);
+      const activityId = crypto.randomUUID();
+
+      await layer.sync.enqueue({
+        clientId: activityId,
+        entityType: "activity",
+        op: "create",
+        payload: {
+          id: activityId,
+          org_id: profile.orgId,
+          activity_type: visitTypeFor(account?.account_type),
+          primary_account_id: stop.accountId,
+          owner_id: profile.membershipId,
+          occurred_at: new Date().toISOString(),
+          was_planned: true,
+          planned_action_id: stop.id,
+          objective: stop.objective,
+          what_happened: note,
+          outcomes: [],
+          follow_up_required: false,
+        },
+        baseVersion: null,
+        blobRef: null,
+      });
+
+      await layer.sync.enqueue({
+        clientId: stop.id,
+        entityType: "next_action",
+        op: "update",
+        payload: { id: stop.id, completed_at: new Date().toISOString() },
+        baseVersion: stop.updatedAt, // D61
+        blobRef: null,
+      });
+
+      // Take it off the spine immediately; the drain and the next pull will
+      // confirm it. A rep should never watch a spinner to know they logged.
+      setAgenda((prev) =>
+        prev.map((i) =>
+          i.id === stop.id ? { ...i, completed_at: new Date().toISOString() } : i,
+        ),
+      );
+      void layer.sync.drain();
+    },
+    [profile, accountsById],
+  );
+
   // Stamped when the clock is read, never during render.
   const nowLabel = useMemo(() => {
     if (hour === null) return "today";
@@ -490,6 +560,7 @@ export default function HomeClient() {
               accountsById={accountsById}
               formatDay={spineDay}
               nowLabel={nowLabel}
+              onDebrief={logDebrief}
             />
           ) : (
             <section>
