@@ -26,7 +26,6 @@ import {
   XIcon,
 } from "@/components/icons";
 import { syncStatusLabel } from "@/components/sync-badge";
-import { humanize } from "@/lib/domain/enums";
 import { ACTIVE_QUOTE_STAGES } from "@/lib/domain/quotes";
 import { displayAccountName, formatMoney } from "@/lib/format";
 import {
@@ -62,12 +61,6 @@ const DANGER_EXCEPTION_TYPES = [
 // DISTRIBUTOR_VISIT, JOBSITE_VISIT) — phone calls, emails and follow-ups
 // aren't a visit even when they're about one.
 const VISIT_ACTIVITY_SUFFIX = "_VISIT";
-
-interface ExceptionRow {
-  exception_type: string;
-  title: string | null;
-  detail: string | null;
-}
 
 const DEFAULT_SETTINGS: RoutineSettings = {
   display_routine_months: 4,
@@ -181,9 +174,6 @@ export default function HomeClient() {
   const [quotes, setQuotes] = useState<{ count: number; value: number } | null>(
     null,
   );
-  const [attentionDetail, setAttentionDetail] = useState<ExceptionRow | null>(
-    null,
-  );
   const [query, setQuery] = useState("");
 
   const load = useCallback(async () => {
@@ -225,32 +215,20 @@ export default function HomeClient() {
     async function loadAttention() {
       try {
         // Management by exception (spec §3/§14): RLS scopes to the caller.
-        // Two queries, not one filter-after-fetch: a `limit` + client-side
-        // filter undercounts once there are more than `limit` total
-        // exceptions (danger + attention tiers mixed together). `count:
-        // "exact", head: true` with the tier filter server-side gets the
-        // real number with zero rows transferred; a second, small query
-        // gets just enough detail for the subline.
-        const supabase = getSupabaseBrowserClient();
-        const [{ count, error: countError }, { data, error: detailError }] =
-          await Promise.all([
-            supabase
-              .from("exceptions")
-              .select("*", { count: "exact", head: true })
-              .in("exception_type", DANGER_EXCEPTION_TYPES),
-            supabase
-              .from("exceptions")
-              .select("exception_type, title, detail")
-              .in("exception_type", DANGER_EXCEPTION_TYPES)
-              .order("since", { ascending: true })
-              .limit(1),
-          ]);
+        // A count, not a page of rows: `count: "exact", head: true` with the
+        // tier filter server-side gets the real number with nothing
+        // transferred, where a `limit` plus a client-side filter would
+        // undercount once there are more exceptions than the limit (the two
+        // tiers are mixed together in the view). The greeting is the only
+        // thing reading this now, and a greeting needs a number, not a row.
+        const { count, error: countError } = await getSupabaseBrowserClient()
+          .from("exceptions")
+          .select("*", { count: "exact", head: true })
+          .in("exception_type", DANGER_EXCEPTION_TYPES);
         if (countError) throw new Error(countError.message);
-        if (detailError) throw new Error(detailError.message);
         if (cancelled) return;
         const exact = count ?? 0;
         setAttention(exact);
-        setAttentionDetail((data as ExceptionRow[])?.[0] ?? null);
         void layer.local.setMeta("attention_count", String(exact));
       } catch {
         // No signal — the last count this device saw is still honest enough
@@ -544,7 +522,6 @@ export default function HomeClient() {
     return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
   }, [weekStats, reviewCount, attention]);
 
-  const attentionColor = attention && attention > 0 ? "var(--danger)" : "var(--accent-ink)";
   const searching = query.trim().length > 0;
 
   return (
@@ -672,6 +649,11 @@ export default function HomeClient() {
             </section>
           )}
 
+          {/* Two counts, not four. Leadership asked for "needs attention" and
+              "waiting your OK" to come off (14 Aug): the greeting above
+              already says how many accounts need attention, and the Review tab
+              carries its own badge — a card that repeats a sentence you just
+              read is furniture, not information. */}
           <section>
             <div className="grid grid-cols-2 gap-3">
               <Link href="/routine" className="card card-pad flex flex-col gap-0.5">
@@ -690,37 +672,6 @@ export default function HomeClient() {
                           return `${g.items.length} ${g.items.length === 1 ? singular : plural}`;
                         })
                         .join(" · ")}
-                </span>
-              </Link>
-
-              <Link href="/visits" className="card card-pad flex flex-col gap-0.5">
-                <span className="text-[26px] font-extrabold leading-none" style={{ color: attentionColor }}>
-                  {attention ?? "–"}
-                </span>
-                <span className="text-[11px] font-semibold" style={{ color: "var(--ink-secondary)" }}>
-                  Needs attention
-                </span>
-                <span className="t-meta block truncate">
-                  {attentionDetail
-                    ? displayAccountName(attentionDetail.title ?? "") ||
-                      humanize(attentionDetail.exception_type)
-                    : attention === null
-                      ? "No signal yet"
-                      : attention > 0
-                        ? "Take a look when you can"
-                        : "Nothing flagged"}
-                </span>
-              </Link>
-
-              <Link href="/review" className="card card-pad flex flex-col gap-0.5">
-                <span className="text-[26px] font-extrabold leading-none" style={{ color: "var(--accent-ink)" }}>
-                  {reviewCount}
-                </span>
-                <span className="text-[11px] font-semibold" style={{ color: "var(--ink-secondary)" }}>
-                  Waiting your OK
-                </span>
-                <span className="t-meta block">
-                  {reviewCount > 0 ? "Drafts and new contacts to confirm" : "Nothing waiting"}
                 </span>
               </Link>
 
