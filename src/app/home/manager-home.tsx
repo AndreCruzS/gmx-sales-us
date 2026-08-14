@@ -16,6 +16,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
 import { PlanLens } from "@/components/plan-lens";
+import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
+import { RolloutTimeline } from "@/components/rollout-timeline";
+import type { RolloutCounts } from "@/lib/domain/rollout";
+import { formatMoney } from "@/lib/format";
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
 import { teamNarrative } from "@/lib/domain/team";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -29,13 +33,10 @@ interface ExceptionRow {
   exception_type: string | null;
   owner_membership_id: string | null;
 }
-interface RolloutRow {
-  branches: number | null;
-  pk_done: number | null;
-  merchandiser_done: number | null;
-  display_wall_done: number | null;
-  material_done: number | null;
-  fully_through: number | null;
+interface PipelineRow {
+  stage: string;
+  opportunity_count: number;
+  total_value: number;
 }
 
 function greeting(hour: number | null): string {
@@ -51,7 +52,9 @@ export function ManagerHome({ name }: { name: string }) {
   const [channel, setChannel] = useState<ChannelRow[]>([]);
   const [scorecard, setScorecard] = useState<ScorecardRow[]>([]);
   const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
-  const [rollout, setRollout] = useState<RolloutRow | null>(null);
+  const [rollout, setRollout] = useState<RolloutCounts | null>(null);
+  const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [hour, setHour] = useState<number | null>(null);
 
@@ -63,7 +66,7 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ch, sc, ex, ro] = await Promise.all([
+    const [ch, sc, ex, ro, wm, pl] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -82,14 +85,24 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("dashboard_rollout")
         .select(
-          "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through",
+          "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through, not_started",
         )
         .maybeSingle(),
+      supabase
+        .from("dashboard_won_monthly")
+        .select("month, unit, won_qty, won_value")
+        .order("month", { ascending: false })
+        .limit(1000),
+      supabase
+        .from("dashboard_pipeline")
+        .select("stage, opportunity_count, total_value"),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
-    setRollout(ro.error ? null : ((ro.data as RolloutRow | null) ?? null));
+    setRollout(ro.error ? null : ((ro.data as RolloutCounts | null) ?? null));
+    setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
+    setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
     setLoadedAt(Date.now());
   }, []);
 
@@ -135,6 +148,23 @@ export function ManagerHome({ name }: { name: string }) {
 
   const narrative = useMemo(() => teamNarrative(team), [team]);
 
+  // The money, in the two numbers a director asks for first: what is open, and
+  // what is priced and waiting on somebody.
+  const totals = useMemo(() => {
+    let open = 0;
+    let openCount = 0;
+    let quotes = 0;
+    for (const r of pipeline) {
+      if (r.stage === "WON" || r.stage === "LOST") continue;
+      open += Number(r.total_value);
+      openCount += Number(r.opportunity_count);
+      if (r.stage === "QUOTE" || r.stage === "DECISION") {
+        quotes += Number(r.opportunity_count);
+      }
+    }
+    return { open, openCount, quotes };
+  }, [pipeline]);
+
   // Grouped by what is wrong, most of it first — the same union a rep meets one
   // row at a time, read as a list of problems with names against them.
   const slippingGroups = useMemo(() => {
@@ -153,21 +183,6 @@ export function ManagerHome({ name }: { name: string }) {
       .slice(0, 4);
   }, [slipping]);
 
-  const gates = useMemo(() => {
-    if (!rollout || (rollout.branches ?? 0) === 0) return null;
-    const total = rollout.branches ?? 0;
-    return {
-      total,
-      done: rollout.fully_through ?? 0,
-      rows: [
-        ["PK class", rollout.pk_done ?? 0],
-        ["Merchandiser", rollout.merchandiser_done ?? 0],
-        ["Display wall", rollout.display_wall_done ?? 0],
-        ["Material", rollout.material_done ?? 0],
-      ] as const,
-    };
-  }, [rollout]);
-
   return (
     <div className="stack pt-2">
       <section>
@@ -177,6 +192,25 @@ export function ManagerHome({ name }: { name: string }) {
         <p className="t-sub mt-1" style={{ maxWidth: "52ch" }}>
           {narrative}
         </p>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3">
+        <div className="card card-pad">
+          <div className="t-meta uppercase tracking-wide">Open pipeline</div>
+          <div className="mt-1 text-2xl font-bold tracking-tight">
+            {formatMoney(totals.open)}
+          </div>
+          <div className="t-meta mt-0.5">
+            {totals.openCount} open {totals.openCount === 1 ? "deal" : "deals"}
+          </div>
+        </div>
+        <div className="card card-pad">
+          <div className="t-meta uppercase tracking-wide">Out for quote</div>
+          <div className="mt-1 text-2xl font-bold tracking-tight">
+            {totals.quotes}
+          </div>
+          <div className="t-meta mt-0.5">waiting on an answer</div>
+        </div>
       </section>
 
       {/* The lens leadership marked up, on the screen they open rather than
@@ -189,6 +223,12 @@ export function ManagerHome({ name }: { name: string }) {
         nowMs={loadedAt}
         heading="The team &amp; the week"
       />
+
+      {/* Bianca's tracker, as the journey a branch walks rather than four
+          numbers in a box. */}
+      {rollout && <RolloutTimeline counts={rollout} />}
+
+      <MonthByMonth rows={wonMonths} nowMs={loadedAt} />
 
       {slippingGroups.length > 0 && (
         <section>
@@ -218,43 +258,6 @@ export function ManagerHome({ name }: { name: string }) {
         </section>
       )}
 
-      {gates && (
-        <section>
-          <div className="section-head">
-            <h2 className="t-section">Getting dealers selling</h2>
-            <span className="t-meta">
-              {gates.done}/{gates.total} through
-            </span>
-          </div>
-          <div className="card card-pad">
-            <ul className="flex flex-col gap-2.5">
-              {gates.rows.map(([label, n]) => (
-                <li key={label}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="t-sub">{label}</span>
-                    <span className="t-meta tabular-nums">
-                      {n}/{gates.total}
-                    </span>
-                  </div>
-                  <div
-                    className="mt-1 flex h-2 overflow-hidden rounded"
-                    style={{ background: "var(--rule)" }}
-                    role="img"
-                    aria-label={`${n} of ${gates.total} branches: ${label}`}
-                  >
-                    <span
-                      style={{
-                        width: gates.total === 0 ? 0 : `${(100 * n) / gates.total}%`,
-                        background: "var(--accent)",
-                      }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      )}
     </div>
   );
 }
