@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
 import { PlanLens } from "@/components/plan-lens";
+import { TeamSales, type DealerSalesRow } from "@/components/team-sales";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type { RolloutCounts } from "@/lib/domain/rollout";
@@ -55,6 +56,7 @@ export function ManagerHome({ name }: { name: string }) {
   const [rollout, setRollout] = useState<RolloutCounts | null>(null);
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
+  const [dealerSales, setDealerSales] = useState<DealerSalesRow[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [hour, setHour] = useState<number | null>(null);
 
@@ -66,7 +68,7 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ch, sc, ex, ro, wm, pl] = await Promise.all([
+    const [ch, sc, ex, ro, wm, pl, ds] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -96,6 +98,12 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("dashboard_pipeline")
         .select("stage, opportunity_count, total_value"),
+      supabase
+        .from("dashboard_dealer_sales")
+        .select(
+          "owner_id, dealer_id, dealer_name, unit, won_qty, out_qty, open_qty, won_value",
+        )
+        .limit(500),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -103,6 +111,7 @@ export function ManagerHome({ name }: { name: string }) {
     setRollout(ro.error ? null : ((ro.data as RolloutCounts | null) ?? null));
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
+    setDealerSales(ds.error ? [] : ((ds.data as DealerSalesRow[]) ?? []));
     setLoadedAt(Date.now());
   }, []);
 
@@ -212,6 +221,10 @@ export function ManagerHome({ name }: { name: string }) {
           <div className="t-meta mt-0.5">waiting on an answer</div>
         </div>
       </section>
+
+      {/* Sales first: the bar they asked for, banded by customer, opening in
+          place rather than sending anyone to another screen. */}
+      <TeamSales rows={dealerSales} repMeta={repMeta} />
 
       {/* The lens leadership marked up, on the screen they open rather than
           one they have to go and find: the same week by rep, by distributor,

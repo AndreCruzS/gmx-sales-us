@@ -404,6 +404,124 @@ body {
   font-weight: 700;
 }
 
+/* ── Sales by customer ──────────────────────────────────────────────────────
+   A composition bar, not a state bar. Everywhere else in this app colour means
+   a state — teal done, clay slipping, amber act-now — and colour is spoken
+   for. Here each band is a CUSTOMER, so it needs a categorical ramp instead,
+   and the legend has to say so or the teal band will read as "done".
+
+   The ramp is drawn from the kit's own family rather than a rainbow: the trade
+   greens and woods, spaced far enough apart to be told apart at a glance on a
+   phone in daylight. Six is the practical limit; past that the tail is
+   gathered into one "others" band rather than inventing colours nobody can
+   distinguish. */
+:root {
+  --cat-1: #2c6e6b;
+  --cat-2: #b8792c;
+  --cat-3: #4a6b8a;
+  --cat-4: #7a9a5c;
+  --cat-5: #9a5b4a;
+  --cat-6: #6b5b8a;
+  --cat-rest: #8a9299;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cat-1: #5fb3ae;
+    --cat-2: #d99b4e;
+    --cat-3: #7ea2c4;
+    --cat-4: #a3c17e;
+    --cat-5: #cc8a76;
+    --cat-6: #a08fc4;
+    --cat-rest: #8a9299;
+  }
+}
+
+.sales-row {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+.sales-row:first-of-type {
+  border-top: none;
+}
+.sales-track {
+  display: flex;
+  gap: 2px;
+  height: 26px;
+  margin-top: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+/* The whole point of the interaction: a band grows to own the bar while the
+   rest fold away, so the eye stays on the thing it just chose instead of
+   hunting for it on a new screen. */
+.sales-seg {
+  min-width: 0;
+  border: none;
+  padding: 0;
+  transition:
+    flex-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.3s ease;
+}
+.sales-seg:focus-visible {
+  outline: 2px solid var(--ink-primary);
+  outline-offset: -2px;
+}
+.sales-seg[data-dimmed="true"] {
+  opacity: 0;
+}
+.sales-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+.sales-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: inherit;
+}
+.sales-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.sales-legend button[aria-pressed="true"] {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+.sales-detail {
+  margin-top: 10px;
+  padding: 13px 14px;
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  animation: sales-open 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes sales-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sales-seg {
+    transition: none;
+  }
+  .sales-detail {
+    animation: none;
+  }
+}
+
 /* ── Planned vs actual ──────────────────────────────────────────────────────
    A rep's week as one thick bar, and the whole row is the target: leadership
    asked to be able to click these, so a 2px progress line was never going to
