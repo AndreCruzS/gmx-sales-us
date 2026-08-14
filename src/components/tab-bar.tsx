@@ -14,7 +14,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useReviewCount } from "@/lib/review/count";
 import {
   BuildingIcon,
@@ -71,10 +71,57 @@ const ADD_ITEMS: readonly {
   },
 ];
 
+// How long the fold-away takes: the last item's delay plus its own duration
+// (see .add-menu.is-closing in globals.css). The menu stays mounted for
+// exactly this long so the exit can be seen — unmounting on the click would
+// make it vanish, which is the thing that felt wrong.
+const CLOSE_MS = 280;
+
 export function TabBar() {
   const pathname = usePathname();
   const reviewCount = useReviewCount();
-  const [addOpen, setAddOpen] = useState(false);
+  // Three states, not two: a menu that is on its way out is still on screen.
+  const [addState, setAddState] = useState<"closed" | "open" | "closing">(
+    "closed",
+  );
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const addOpen = addState === "open";
+  const addVisible = addState !== "closed";
+
+  const stopTimer = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const closeAdd = useCallback(() => {
+    stopTimer();
+    // Someone who has asked for less motion gets none: it goes at once rather
+    // than sitting through an animation they turned off.
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setAddState("closed");
+      return;
+    }
+    setAddState("closing");
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      setAddState("closed");
+    }, CLOSE_MS);
+  }, [stopTimer]);
+
+  function toggleAdd() {
+    if (addState === "open") {
+      closeAdd();
+    } else {
+      // Re-opening mid-fold has to cancel the pending unmount, or the menu
+      // would open and then disappear a moment later.
+      stopTimer();
+      setAddState("open");
+    }
+  }
 
   // Escape closes it, the way any menu should. Registered from an effect but
   // only ever setting state from inside the handler — never synchronously
@@ -82,11 +129,14 @@ export function TabBar() {
   useEffect(() => {
     if (!addOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAddOpen(false);
+      if (e.key === "Escape") closeAdd();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [addOpen]);
+  }, [addOpen, closeAdd]);
+
+  // A pending unmount must not outlive the component.
+  useEffect(() => stopTimer, [stopTimer]);
 
   if (pathname === "/login") return null;
 
@@ -105,24 +155,28 @@ export function TabBar() {
 
   return (
     <>
-      {addOpen && (
+      {addVisible && (
         <>
           {/* A tap anywhere else closes it — the scrim is the affordance that
               says the rest of the screen is waiting. */}
           <button
             type="button"
-            className="add-scrim"
+            className={`add-scrim${addState === "closing" ? " is-closing" : ""}`}
             aria-label="Close the add menu"
-            onClick={() => setAddOpen(false)}
+            onClick={closeAdd}
           />
-          <div className="add-menu" role="menu" aria-label="Add to the system">
+          <div
+            className={`add-menu${addState === "closing" ? " is-closing" : ""}`}
+            role="menu"
+            aria-label="Add to the system"
+          >
             {ADD_ITEMS.map(({ href, label, hint, Icon }) => (
               <Link
                 key={href}
                 href={href}
                 role="menuitem"
                 className="add-item"
-                onClick={() => setAddOpen(false)}
+                onClick={closeAdd}
               >
                 <span className="add-item-mark">
                   <Icon size={18} />
@@ -164,7 +218,7 @@ export function TabBar() {
           aria-expanded={addOpen}
           aria-haspopup="menu"
           aria-label={addOpen ? "Close the add menu" : "Add to the system"}
-          onClick={() => setAddOpen((v) => !v)}
+          onClick={toggleAdd}
         >
           <span className="tab-fab">
             <PlusIcon size={20} />

@@ -1244,6 +1244,38 @@ body {
 .add-item:nth-child(4) {
   animation-delay: 0.14s;
 }
+
+/* Folding away is the same move run backwards, and the order reverses with it:
+   the entry unfolds outward from the button, so the exit collapses back toward
+   it — furthest away leaves first, nearest the thumb last. Vanishing on the
+   tap was the thing that felt wrong; the menu stays mounted for exactly as
+   long as this takes (CLOSE_MS in tab-bar.tsx). */
+.add-scrim.is-closing {
+  animation: add-unfade 0.18s ease-in forwards;
+  pointer-events: none;
+}
+.add-menu.is-closing {
+  pointer-events: none;
+}
+/* Written out as its own keyframes rather than running the entrance in
+   `reverse`: reversing an animation whose `to` is implicit resolves the
+   implicit keyframe against the wrong end, and every item snapped to invisible
+   the instant the class landed instead of falling away. */
+.add-menu.is-closing .add-item {
+  animation: add-fall 0.18s cubic-bezier(0.4, 0, 0.8, 0.4) forwards;
+}
+.add-menu.is-closing .add-item:nth-child(1) {
+  animation-delay: 0.09s;
+}
+.add-menu.is-closing .add-item:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.add-menu.is-closing .add-item:nth-child(3) {
+  animation-delay: 0.03s;
+}
+.add-menu.is-closing .add-item:nth-child(4) {
+  animation-delay: 0s;
+}
 .add-item:active {
   transform: scale(0.99);
 }
@@ -1278,6 +1310,18 @@ body {
 }
 @keyframes add-rise {
   from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@keyframes add-unfade {
+  to {
+    opacity: 0;
+  }
+}
+/* The mirror of add-rise: back down toward the button it came out of. */
+@keyframes add-fall {
+  to {
     opacity: 0;
     transform: translateY(10px) scale(0.98);
   }
@@ -1342,7 +1386,9 @@ body {
     transform: none;
   }
   .add-scrim,
-  .add-item {
+  .add-item,
+  .add-scrim.is-closing,
+  .add-menu.is-closing .add-item {
     animation: none;
   }
   .tab-capture .tab-fab {
