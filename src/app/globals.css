@@ -1087,6 +1087,24 @@ body {
 
 /* ── Bottom tab bar (kit layout: 56px row + home-indicator safe area) ────── */
 
+/* ── Bottom sheets ──────────────────────────────────────────────────────────
+   A sheet is modal, so it has to sit ABOVE the tab bar. Both used to be
+   z-index 30, and the tab bar wins a tie by coming later in the document —
+   which put "Save it" underneath the capture button. The click landed on the
+   FAB, the sheet closed on navigation, and the draft was silently never saved.
+   A modal that a thumb cannot reach is worse than no modal.
+
+   The panel also clears the home indicator itself: it is the bottom-most
+   surface on screen while it is open, so the safe area is its problem. */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.sheet-panel {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
 .tabbar {
   position: fixed;
   left: 0;

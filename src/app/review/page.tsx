@@ -607,6 +607,49 @@ function ReviewSheet({
             blobRef: null,
           }),
         );
+      } else {
+        // The activity already exists — the rep logged this stop inline from
+        // the day spine and the model only ran afterwards, to find the extras.
+        // Everything it found (what it heard worth keeping, the commercial
+        // read, the outcome tags) had nowhere to go before activity:update
+        // existed, and was quietly dropped: the note survived, the analysis
+        // did not.
+        //
+        // updated_at is fetched rather than cached, because CachedActivity
+        // does not carry it — and it must be the server's value, since it is
+        // the D61 LWW guard. If the read fails (no signal), the enrich is
+        // skipped rather than sinking the whole Send: the rep's own note is
+        // already recorded, and losing the model's additions is the smaller
+        // failure of the two.
+        try {
+          const { data, error: readError } = await getSupabaseBrowserClient()
+            .from("activities")
+            .select("updated_at")
+            .eq("id", existingActivityId)
+            .single();
+          if (readError || !data?.updated_at) throw new Error("no version");
+          enqueuedSeqs.push(
+            await layer.sync.enqueue({
+              clientId: existingActivityId,
+              entityType: "activity",
+              op: "update",
+              payload: {
+                id: existingActivityId,
+                what_happened: whatHappened,
+                key_information: keyInfo.trim() || null,
+                commercial_potential: potential.trim() || null,
+                outcomes,
+                follow_up_required: followUp,
+              },
+              baseVersion: data.updated_at as string,
+              blobRef: null,
+            }),
+          );
+        } catch {
+          console.warn(
+            `ReviewSheet.send: could not read a version for activity ${existingActivityId} — skipping the enrich`,
+          );
+        }
       }
       // Recording a planned visit's debrief completes its agenda item — same
       // as record/page.tsx's submit(). Rides right after the activity create
@@ -789,11 +832,11 @@ function ReviewSheet({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-end bg-black/40"
+      className="sheet-overlay flex items-end bg-black/40"
       onClick={onClose}
     >
       <div
-        className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5"
+        className="sheet-panel max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5"
         style={{ background: "var(--surface-page)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1194,11 +1237,11 @@ function CardSheet({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-end bg-black/40"
+      className="sheet-overlay flex items-end bg-black/40"
       onClick={onClose}
     >
       <div
-        className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5"
+        className="sheet-panel max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5"
         style={{ background: "var(--surface-page)" }}
         onClick={(e) => e.stopPropagation()}
       >

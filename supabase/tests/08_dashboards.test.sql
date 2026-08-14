@@ -150,7 +150,7 @@ select is(
 select is(
   (select open_next_actions::int from dashboard_rep_scorecard
     where membership_id = 'c0000000-0000-0000-0000-000000000004'),
-  5, 'rep scorecard counts open next actions'
+  2, 'rep scorecard counts open next actions'
 );
 
 select is(

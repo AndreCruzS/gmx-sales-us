@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountCreateSchema,
   accountRelationshipCreateSchema,
+  activityUpdateSchema,
   outboxPayloadSchemas,
   voiceCaptureCreateSchema,
 } from "@/lib/domain/schemas";
@@ -140,5 +141,60 @@ describe("accountRelationshipCreateSchema — the referral fan-out row (D4/D7)",
     expect(outboxPayloadSchemas["account_relationship:create"]).toBe(
       accountRelationshipCreateSchema,
     );
+  });
+});
+
+// The day spine writes the activity before the model has read the note, so the
+// draft's additions need a way onto a row that already exists. Without this op
+// the model's analysis was accepted, displayed, and then dropped.
+describe("activityUpdateSchema", () => {
+  const ACTIVITY = "aa000000-0000-0000-0000-000000000001";
+
+  it("accepts what a draft can legitimately improve", () => {
+    const parsed = activityUpdateSchema.parse({
+      id: ACTIVITY,
+      what_happened: "Walked the yard with Ray.",
+      key_information: "Ray wants 6,000 LF of Thermo-Ash.",
+      commercial_potential: "Meaningful volume if the quote lands.",
+      outcomes: ["QUOTE_REQUESTED", "OPPORTUNITY_IDENTIFIED"],
+      follow_up_required: true,
+    });
+    expect(parsed.outcomes).toEqual(["QUOTE_REQUESTED", "OPPORTUNITY_IDENTIFIED"]);
+  });
+
+  it("needs nothing but the id — a draft that found only outcomes is valid", () => {
+    expect(() =>
+      activityUpdateSchema.parse({ id: ACTIVITY, outcomes: ["TRAINING_NEEDED"] }),
+    ).not.toThrow();
+  });
+
+  it("refuses an outcome outside the commercial vocabulary", () => {
+    expect(() =>
+      activityUpdateSchema.parse({ id: ACTIVITY, outcomes: ["WENT_WELL"] }),
+    ).toThrow();
+  });
+
+  it("refuses a payload with no id to update", () => {
+    expect(() => activityUpdateSchema.parse({ key_information: "x" })).toThrow();
+  });
+
+  // The rep's own facts are not the model's to revise: which account, what
+  // kind of visit, when it happened, and the D46 link back to the plan.
+  it("does not carry the fields the rep owns", () => {
+    const parsed = activityUpdateSchema.parse({
+      id: ACTIVITY,
+      primary_account_id: "d0000000-0000-0000-0000-000000000009",
+      activity_type: "PHONE_CALL",
+      planned_action_id: "f1000000-0000-0000-0000-000000000004",
+      occurred_at: "2026-08-14T12:00:00.000Z",
+    } as never);
+    expect(parsed).not.toHaveProperty("primary_account_id");
+    expect(parsed).not.toHaveProperty("activity_type");
+    expect(parsed).not.toHaveProperty("planned_action_id");
+    expect(parsed).not.toHaveProperty("occurred_at");
+  });
+
+  it("is registered on the outbox boundary as activity:update", () => {
+    expect(outboxPayloadSchemas["activity:update"]).toBe(activityUpdateSchema);
   });
 });

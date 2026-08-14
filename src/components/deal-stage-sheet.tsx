@@ -159,11 +159,11 @@ export function DealStageSheet({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-end bg-black/40"
+      className="sheet-overlay flex items-end bg-black/40"
       onClick={onClose}
     >
       <div
-        className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5"
+        className="sheet-panel max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl p-5"
         style={{ background: "var(--surface-page)" }}
         onClick={(e) => e.stopPropagation()}
       >

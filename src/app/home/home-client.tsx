@@ -447,30 +447,47 @@ export default function HomeClient() {
         i.due_date >= start &&
         i.due_date <= end,
     );
+    const plannedIds = new Set(planned.map((i) => i.id));
     const debriefedPlannedIds = new Set(
       planned.filter((i) => i.completed_at !== null).map((i) => i.id),
     );
-    // The brief's formula is "agenda + activities": a planned visit debriefed
-    // this week is already counted above via completed_at; a walk-in — a
-    // visit-type activity recorded with no plan behind it — only shows up
-    // here. Dedupe on planned_action_id so a debriefed planned visit's own
-    // activity row isn't counted twice, and so two activities that
-    // (unusually) share a planned_action_id only add one.
+
+    // The brief's formula is "agenda + activities", and the activities half has
+    // to carry two different cases apart:
+    //
+    //   a WALK-IN has no plan behind it at all. It is a visit done, so it adds
+    //   to the numerator only — the denominator is the plan, and nobody
+    //   planned it;
+    //   an ORPHAN is a planned visit whose commitment row is no longer on this
+    //   device — the offline pull only keeps work closed in the last two days —
+    //   so it adds to BOTH, because the visit WAS planned and it WAS done.
+    //
+    // Counting an orphan as a walk-in is what made a week read "3/3 all done"
+    // with a stop still owing a debrief: the plan aged out of the cache, its
+    // activity looked unplanned, and the denominator lost a row the numerator
+    // kept. Dedupe on planned_action_id so two activities against one
+    // commitment still only count once.
     const seenPlannedIds = new Set<string>();
-    const walkIns = activities.filter((a) => {
+    let walkIns = 0;
+    let orphans = 0;
+    for (const a of activities) {
       const day = a.occurred_at.slice(0, 10);
-      if (day < start || day > end) return false;
-      if (!a.activity_type.endsWith(VISIT_ACTIVITY_SUFFIX)) return false;
-      if (a.planned_action_id) {
-        if (debriefedPlannedIds.has(a.planned_action_id)) return false;
-        if (seenPlannedIds.has(a.planned_action_id)) return false;
-        seenPlannedIds.add(a.planned_action_id);
+      if (day < start || day > end) continue;
+      if (!a.activity_type.endsWith(VISIT_ACTIVITY_SUFFIX)) continue;
+      if (a.planned_action_id === null) {
+        walkIns += 1;
+        continue;
       }
-      return true;
-    }).length;
+      // Its own commitment is cached — already counted through the agenda.
+      if (plannedIds.has(a.planned_action_id)) continue;
+      if (seenPlannedIds.has(a.planned_action_id)) continue;
+      seenPlannedIds.add(a.planned_action_id);
+      orphans += 1;
+    }
+
     return {
-      completed: debriefedPlannedIds.size + walkIns,
-      planned: planned.length,
+      completed: debriefedPlannedIds.size + walkIns + orphans,
+      planned: planned.length + orphans,
     };
   }, [agenda, activities, todayIso]);
 

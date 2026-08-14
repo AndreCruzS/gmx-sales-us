@@ -47,6 +47,29 @@ export const activityCreateSchema = z.object({
 });
 export type ActivityCreate = z.infer<typeof activityCreateSchema>;
 
+/**
+ * Enriching an activity that already exists.
+ *
+ * A rep who logs a stop from the day spine writes the note there and then, so
+ * the activity is created before the model has read it. When the draft comes
+ * back, everything the model added — what it heard worth keeping, the
+ * commercial read, the outcome tags — has nowhere to go without this op, and
+ * it was being silently dropped on the floor.
+ *
+ * Only the fields a draft can legitimately improve are here. The account, the
+ * type, the time and the D46 link are the rep's own facts and are not the
+ * model's to revise.
+ */
+export const activityUpdateSchema = z.object({
+  id: uuid,
+  what_happened: z.string().nullish(),
+  key_information: z.string().nullish(),
+  commercial_potential: z.string().nullish(),
+  outcomes: z.array(z.enum(ACTIVITY_OUTCOMES)).optional(),
+  follow_up_required: z.boolean().optional(),
+});
+export type ActivityUpdate = z.infer<typeof activityUpdateSchema>;
+
 export const nextActionCreateSchema = z.object({
   id: uuid,
   org_id: uuid,
@@ -272,6 +295,7 @@ export type EntityType = keyof typeof ENTITY_TABLES;
 
 export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "activity:create": activityCreateSchema,
+  "activity:update": activityUpdateSchema,
   "next_action:create": nextActionCreateSchema,
   "next_action:update": nextActionUpdateSchema,
   "voice_capture:create": voiceCaptureCreateSchema,

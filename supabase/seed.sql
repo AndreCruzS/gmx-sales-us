@@ -125,7 +125,11 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
   ('d0000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
    'Boise Cascade', 'DISTRIBUTOR', 'Anaheim', 'CA',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
-   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'STRATEGIC'),
+   -- HIGH, not STRATEGIC: an account seeded today has no activity behind it,
+   -- and STRATEGIC_ACCOUNT_QUIET would fire on it the moment it exists. A
+   -- fixture that manufactures a false alarm teaches the wrong thing about the
+   -- alarm.
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
   ('d0000000-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111',
    'Hardwoods Specialty', 'DISTRIBUTOR', 'Santa Fe Springs', 'CA',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
@@ -321,6 +325,15 @@ insert into activities (id, org_id, activity_type, primary_account_id, owner_id,
    date_trunc('week', current_date) + interval '3 days', true,
    'f1000000-0000-0000-0000-000000000005', 'MERCHANDISING_CHECK',
    null, '{}', false, null);
+
+-- Closing a planned action is two writes in the app, never one: the activity
+-- links back (D46) AND the commitment is stamped completed_at — home's debrief
+-- and review's send both do exactly this. The seed has to record it the same
+-- way, or one screen reads the visit as done while another still has it open.
+update next_actions na
+   set completed_at = a.occurred_at
+  from activities a
+ where a.planned_action_id = na.id;
 
 insert into activity_accounts (org_id, activity_id, account_id, role) values
   ('11111111-1111-1111-1111-111111111111', 'ac000000-0000-0000-0000-000000000002',
