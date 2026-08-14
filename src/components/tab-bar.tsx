@@ -21,6 +21,7 @@ import {
   CalendarIcon,
   ChartIcon,
   CheckIcon,
+  FileIcon,
   HomeIcon,
   MicrophoneIcon,
   PlusIcon,
@@ -35,7 +36,9 @@ const TABS = [
 ];
 
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
-// up closest to the button that opened it.
+// up closest to the button that opened it. The order is how often a rep
+// actually reaches for each — notes daily, visits weekly, quotes when the
+// conversation turns to price, a new company rarely.
 const ADD_ITEMS: readonly {
   href: string;
   label: string;
@@ -53,6 +56,12 @@ const ADD_ITEMS: readonly {
     label: "Plan a visit",
     hint: "Book a stop with an objective",
     Icon: CalendarIcon,
+  },
+  {
+    href: "/quotes/new",
+    label: "Quote",
+    hint: "Price something for an account",
+    Icon: FileIcon,
   },
   {
     href: "/accounts/new",

@@ -1241,6 +1241,9 @@ body {
 .add-item:nth-child(3) {
   animation-delay: 0.1s;
 }
+.add-item:nth-child(4) {
+  animation-delay: 0.14s;
+}
 .add-item:active {
   transform: scale(0.99);
 }
