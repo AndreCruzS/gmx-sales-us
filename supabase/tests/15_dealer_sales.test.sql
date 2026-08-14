@@ -37,20 +37,23 @@ select is(
   'volume is reported in the unit the opportunity was quoted in'
 );
 
--- 2. Won volume is what the dealer has actually taken.
+-- 2. Won volume is what the dealer has actually taken — every WON deal on the
+--    dealer, this year's 30,000 plus the two historical reorders.
 select is(
   (select won_qty from dashboard_dealer_sales
     where dealer_id = 'd0000000-0000-0000-0000-000000000001'),
-  30000::numeric,
+  61000::numeric,
   'a WON deal counts as won volume'
 );
 
--- 3. A quote sitting with the buyer is NOT won.
+-- 3. A quote sitting with the buyer is NOT won. Orange has 11,000 taken and
+--    20,000 priced and waiting; if the two were added the dealer would look
+--    like it had bought nearly three times what it has.
 select is(
   (select won_qty from dashboard_dealer_sales
     where dealer_id = 'd0000000-0000-0000-0000-000000000002'),
-  0::numeric,
-  'a dealer with only a quote out has won nothing'
+  11000::numeric,
+  'volume out for quote is never counted as won'
 );
 
 -- 4. …it is out, which is its own sentence.
@@ -87,8 +90,8 @@ set local role authenticated;
 select is(
   (select coalesce(sum(won_qty), 0) from dashboard_dealer_sales
     where dealer_id = 'd0000000-0000-0000-0000-000000000001'),
-  0::numeric,
-  'a LOST deal stops counting as won volume'
+  31000::numeric,
+  'a LOST deal stops counting as won volume — the 30,000 drops out'
 );
 
 -- 8. Value rides along for the dealers that have bought.
@@ -99,7 +102,7 @@ set local role authenticated;
 select is(
   (select won_value from dashboard_dealer_sales
     where dealer_id = 'd0000000-0000-0000-0000-000000000001'),
-  96000.00::numeric,
+  196000.00::numeric,
   'won value is reported beside won volume'
 );
 

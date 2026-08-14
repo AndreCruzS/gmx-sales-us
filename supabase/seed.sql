@@ -311,6 +311,51 @@ insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
    current_date + 4, 'd0000000-0000-0000-0000-000000000002',
    'f0000000-0000-0000-0000-000000000004', 'COLLECT_QUOTE');
 
+-- A year with a shape to it -----------------------------------------------
+--
+-- "Month by Month, Year to date" needs months to look at. These are ordinary
+-- won deals dated back across the year; the stage-event trigger stamps them at
+-- insert time, so the events are then backdated to when the sale actually
+-- happened — which is the date dashboard_won_monthly reads.
+insert into opportunities (id, org_id, name, primary_account_id, territory_id,
+                           owner_id, product, stage, current_status, lead_source,
+                           dealer_id, estimated_revenue, estimated_quantity,
+                           quantity_unit) values
+  ('f0000000-0000-0000-0000-00000000000a', '11111111-1111-1111-1111-111111111111',
+   'Anaheim spring reorder', 'd0000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'Thermo-Ash Decking', 'WON', 'Delivered', 'EXISTING_RELATIONSHIP',
+   'd0000000-0000-0000-0000-000000000001', 58000.00, 18000, 'LF'),
+  ('f0000000-0000-0000-0000-00000000000b', '11111111-1111-1111-1111-111111111111',
+   'Orange first order', 'd0000000-0000-0000-0000-000000000002',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'Thermo-Ayous', 'WON', 'Delivered', 'EXISTING_RELATIONSHIP',
+   'd0000000-0000-0000-0000-000000000002', 34000.00, 11000, 'LF'),
+  ('f0000000-0000-0000-0000-00000000000c', '11111111-1111-1111-1111-111111111111',
+   'Buffalo summer stock', 'd0000000-0000-0000-0000-000000000003',
+   'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003',
+   'Thermo-Ash Decking', 'WON', 'Delivered', 'PK_CLASS',
+   'd0000000-0000-0000-0000-000000000003', 71000.00, 22000, 'LF'),
+  ('f0000000-0000-0000-0000-00000000000d', '11111111-1111-1111-1111-111111111111',
+   'Anaheim midsummer top-up', 'd0000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'Thermo-Ayous', 'WON', 'Delivered', 'EXISTING_RELATIONSHIP',
+   'd0000000-0000-0000-0000-000000000001', 42000.00, 13000, 'LF');
+
+update opportunity_stage_events
+   set occurred_at = case opportunity_id
+     when 'f0000000-0000-0000-0000-00000000000a' then now() - interval '4 months'
+     when 'f0000000-0000-0000-0000-00000000000b' then now() - interval '3 months'
+     when 'f0000000-0000-0000-0000-00000000000c' then now() - interval '2 months'
+     when 'f0000000-0000-0000-0000-00000000000d' then now() - interval '1 month'
+   end
+ where opportunity_id in (
+   'f0000000-0000-0000-0000-00000000000a',
+   'f0000000-0000-0000-0000-00000000000b',
+   'f0000000-0000-0000-0000-00000000000c',
+   'f0000000-0000-0000-0000-00000000000d'
+ );
+
 -- Activities (planned-done + unplanned, D45/D46) ------------------------------
 
 insert into activities (id, org_id, activity_type, primary_account_id, owner_id,

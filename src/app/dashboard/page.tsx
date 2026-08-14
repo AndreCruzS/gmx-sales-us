@@ -75,6 +75,19 @@ interface RolloutRow {
   fully_through: number | null;
   not_started: number | null;
 }
+// "Análise de todo tipo de dado — Month by Month, Year to date" (the sticky
+// note on the manager mockup). Dated by the stage event that made each deal a
+// sale, not by a plan date.
+interface WonMonthRow {
+  owner_id: string;
+  dealer_id: string;
+  dealer_name: string;
+  month: string;
+  unit: string;
+  won_qty: number;
+  won_value: number;
+  deals: number;
+}
 interface ExceptionRow {
   exception_type: string | null;
   subject_type: string | null;
@@ -93,6 +106,9 @@ const LENSES: readonly (readonly [Lens, string])[] = [
   ["distributor", "By distributor"],
   ["dealer", "By dealer"],
 ];
+
+const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const MONTH_SHORT = new Intl.DateTimeFormat("en-US", { month: "short" });
 
 const LENS_NOUN: Record<Lens, string> = {
   rep: "rep",
@@ -164,6 +180,7 @@ export default function DashboardPage() {
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [rollout, setRollout] = useState<RolloutRow | null>(null);
   const [channel, setChannel] = useState<ChannelRow[]>([]);
+  const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   // Which way the team is being read. "By rep" is the opening question a
   // manager asks; the other two are the ones leadership asked for.
   const [lens, setLens] = useState<Lens>("rep");
@@ -176,7 +193,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [p, s, t, pv, f, ex, ro, ch] = await Promise.all([
+    const [p, s, t, pv, f, ex, ro, ch, wm] = await Promise.all([
       supabase
         .from("dashboard_pipeline")
         .select("owner_id, territory_id, stage, opportunity_count, total_value, weighted_value"),
@@ -223,6 +240,11 @@ export default function DashboardPage() {
         )
         .order("week_start", { ascending: false })
         .limit(1000),
+      supabase
+        .from("dashboard_won_monthly")
+        .select("owner_id, dealer_id, dealer_name, month, unit, won_qty, won_value, deals")
+        .order("month", { ascending: false })
+        .limit(1000),
     ]);
     const firstError = [p, s, t, pv, f].map((r) => r.error).find(Boolean);
     // The exception union is additive to this page — if it fails, the numbers
@@ -240,6 +262,7 @@ export default function DashboardPage() {
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
     setRollout(ro.error ? null : ((ro.data as RolloutRow | null) ?? null));
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
+    setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setLoadedAt(Date.now());
     setLoaded(true);
   }, []);
@@ -303,6 +326,67 @@ export default function DashboardPage() {
       repName,
     );
   }, [channel, channelWeek, lens, repName]);
+
+  // Twelve months back from the one we are in, every month present whether or
+  // not anything was won in it — a month with no sale is the point of the
+  // chart, and dropping it would draw a smooth line over a hole.
+  const months = useMemo(() => {
+    const empty = {
+      series: [] as { month: string; label: string; qty: number }[],
+      peak: 0,
+      ytdQty: 0,
+      ytdValue: 0,
+      unit: "LF",
+      best: null as { label: string; qty: number } | null,
+    };
+    if (loadedAt === null || wonMonths.length === 0) return empty;
+
+    const byMonth = new Map<string, { qty: number; value: number }>();
+    for (const r of wonMonths) {
+      const key = r.month.slice(0, 7);
+      const cur = byMonth.get(key) ?? { qty: 0, value: 0 };
+      cur.qty += Number(r.won_qty);
+      cur.value += Number(r.won_value);
+      byMonth.set(key, cur);
+    }
+
+    const now = new Date(loadedAt);
+    const series: { month: string; label: string; qty: number }[] = [];
+    for (let back = 11; back >= 0; back -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      series.push({
+        month: key,
+        label: MONTH_SHORT.format(d),
+        qty: byMonth.get(key)?.qty ?? 0,
+      });
+    }
+
+    const year = String(now.getFullYear());
+    let ytdQty = 0;
+    let ytdValue = 0;
+    for (const [key, v] of byMonth) {
+      if (key.startsWith(year)) {
+        ytdQty += v.qty;
+        ytdValue += v.value;
+      }
+    }
+
+    const best = series.reduce<{ label: string; qty: number } | null>(
+      (top, m) => (m.qty > (top?.qty ?? 0) ? { label: m.label, qty: m.qty } : top),
+      null,
+    );
+
+    return {
+      series,
+      peak: series.reduce((n, m) => Math.max(n, m.qty), 0),
+      ytdQty,
+      ytdValue,
+      // One unit across the book; the trade quotes in linear feet.
+      unit: wonMonths[0]?.unit ?? "LF",
+      best,
+    };
+  }, [wonMonths, loadedAt]);
 
   // Unplanned work is a rep's own number — it is a visit that never had a plan
   // to belong to, so it cannot be attributed to a distributor or a door. It
@@ -681,6 +765,57 @@ export default function DashboardPage() {
               );
             })}
           </ul>
+        </section>
+      )}
+
+      {/* Month by month — the sticky note's own words, and the first thing on
+          this page that is not "this week". Columns rather than a line: a
+          month is a bucket you either filled or did not, and twelve of them
+          fit a phone if each is a bar you can read the height of. */}
+      {months.series.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">
+              Month by month{" "}
+              <span style={{ color: "var(--ink-muted)" }}>· won volume</span>
+            </h2>
+            <span className="t-meta">
+              {QTY.format(months.ytdQty)} {months.unit} this year
+            </span>
+          </div>
+          <div className="card card-pad">
+            {/* The column needs a track of its own to grow inside: a
+                percentage height resolves against the parent's height, and a
+                list item sized by its own content has none to give. */}
+            <ul className="flex gap-1.5" style={{ height: 132 }}>
+              {months.series.map((m) => (
+                <li key={m.month} className="flex h-full flex-1 flex-col gap-1.5">
+                  <span className="flex flex-1 items-end">
+                    <span
+                      className="w-full rounded-t"
+                      style={{
+                        height: `${months.peak === 0 ? 0 : Math.max(2, (100 * m.qty) / months.peak)}%`,
+                        background: m.qty === 0 ? "var(--surface-sunken)" : "var(--accent)",
+                      }}
+                      role="img"
+                      aria-label={`${m.label}: ${QTY.format(m.qty)} ${months.unit} won`}
+                    />
+                  </span>
+                  <span className="t-meta text-center" style={{ fontSize: 9.5 }}>
+                    {m.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="t-sub mt-3">
+              {QTY.format(months.ytdQty)} {months.unit} and{" "}
+              {money.format(months.ytdValue)} won since January
+              {months.best
+                ? ` · best month ${months.best.label}, ${QTY.format(months.best.qty)} ${months.unit}`
+                : ""}
+              .
+            </p>
+          </div>
         </section>
       )}
 
