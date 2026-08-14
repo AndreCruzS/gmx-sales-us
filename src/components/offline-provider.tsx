@@ -23,6 +23,14 @@ export interface Profile {
   // null for managers/admins without a territory. Older cached profiles lack
   // the key — treat undefined as null.
   territoryId?: string | null;
+  /**
+   * What this person opens the app to do. RLS decides what they may SEE and
+   * always will; this only decides which screen they land on, because a
+   * manager reading a rep's day in the first person ("2 visits left this
+   * week", with a Done button on someone else's stop) is the wrong screen
+   * rather than the wrong permission. Older cached profiles lack the key.
+   */
+  role?: string | null;
 }
 
 interface OfflineContextValue {
@@ -78,7 +86,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       if (orgId) {
         const { data: membership } = await supabase
           .from("memberships")
-          .select("id, territory_id")
+          .select("id, territory_id, role")
           .eq("user_id", session.user.id)
           .eq("org_id", orgId)
           .eq("status", "active")
@@ -90,6 +98,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
             membershipId: membership.id,
             email: session.user.email ?? "",
             territoryId: membership.territory_id ?? null,
+            role: membership.role ?? null,
           };
           // Cache for offline cold starts — the profile is part of the D56
           // working set: capture must work with no network at all.
