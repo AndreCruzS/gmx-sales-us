@@ -220,21 +220,47 @@ insert into project_stakeholders (org_id, project_id, account_id, stakeholder_ro
 -- Opportunities + their open next actions (stage gate is deferred; they must
 -- land in the same transaction) ----------------------------------------------
 
+-- Quantities are in LINEAR FEET, the unit the trade actually quotes in and the
+-- one leadership's markup asks the dealer breakdown to be shown in. The columns
+-- were always here (estimated_quantity + quantity_unit); nothing had been
+-- putting a number in them.
 insert into opportunities (id, org_id, name, project_id, primary_account_id,
                            territory_id, owner_id, product, stage, current_status,
-                           lead_source, dealer_id, estimated_revenue) values
+                           lead_source, dealer_id, estimated_revenue,
+                           estimated_quantity, quantity_unit) values
   ('f0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
    'Tower — Thermo-Ayous Cladding', 'e0000000-0000-0000-0000-000000000001',
    'd0000000-0000-0000-0000-000000000004',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
    'Thermo-Ayous', 'IDENTIFIED', 'Sample requested at jobsite walk',
-   'JOBSITE', 'd0000000-0000-0000-0000-000000000001', 180000.00),
+   'JOBSITE', 'd0000000-0000-0000-0000-000000000001', 180000.00, 24000, 'LF'),
+  -- Won, so Ganahl Anaheim has volume behind it rather than only promises.
+  ('f0000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
+   'Anaheim counter — Thermo-Ash decking', null,
+   'd0000000-0000-0000-0000-000000000001',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'Thermo-Ash Decking', 'WON', 'Stocked and reordering',
+   'EXISTING_RELATIONSHIP', 'd0000000-0000-0000-0000-000000000001', 96000.00,
+   30000, 'LF'),
+  ('f0000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111',
+   'Orange yard — Thermo-Ash decking', null,
+   'd0000000-0000-0000-0000-000000000002',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'Thermo-Ash Decking', 'QUOTE', 'Priced, waiting on the buyer',
+   'EXISTING_RELATIONSHIP', 'd0000000-0000-0000-0000-000000000002', 64000.00,
+   20000, 'LF'),
+  ('f0000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
+   'Buffalo counter — Thermo-Ayous', null,
+   'd0000000-0000-0000-0000-000000000003',
+   'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003',
+   'Thermo-Ayous', 'WON', 'First order landed after the PK class',
+   'PK_CLASS', 'd0000000-0000-0000-0000-000000000003', 38000.00, 12000, 'LF'),
   ('f0000000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222',
    'Plaza Decking', 'e0000000-0000-0000-0000-000000000002',
    'd2000000-0000-0000-0000-000000000002',
    'b0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000007',
    'Thermo-Ash Decking', 'IDENTIFIED', 'Intro meeting done',
-   'COLD_OUTREACH', 'd2000000-0000-0000-0000-000000000001', 45000.00);
+   'COLD_OUTREACH', 'd2000000-0000-0000-0000-000000000001', 45000.00, 15000, 'LF');
 
 insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
                           opportunity_id, objective) values
@@ -277,7 +303,13 @@ insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
    'Stocking conversation with the owner',
    'c0000000-0000-0000-0000-000000000003',
    date_trunc('week', current_date)::date + 4, 'd0000000-0000-0000-0000-000000000003',
-   null, 'CONVERT_STOCKING_DEALER');
+   null, 'CONVERT_STOCKING_DEALER'),
+  -- The stage gate: a deal that is not WON or LOST must have an open next
+  -- action against it, so the Orange quote carries its own chase.
+  ('f1000000-0000-0000-0000-000000000008', '11111111-1111-1111-1111-111111111111',
+   'Chase the Orange decking quote', 'c0000000-0000-0000-0000-000000000004',
+   current_date + 4, 'd0000000-0000-0000-0000-000000000002',
+   'f0000000-0000-0000-0000-000000000004', 'COLLECT_QUOTE');
 
 -- Activities (planned-done + unplanned, D45/D46) ------------------------------
 

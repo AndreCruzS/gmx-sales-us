@@ -107,7 +107,7 @@ select is((select val from _vis where check_name = 'deon_buffalo_accounts'), 0::
 -- Manager: the manager_id chain fans out down, both reps visible.
 select is((select val from _vis where check_name = 'joao_team_activities'), 5::bigint,
   'manager sees both reps'' activities');
-select is((select val from _vis where check_name = 'joao_team_next_actions'), 7::bigint,
+select is((select val from _vis where check_name = 'joao_team_next_actions'), 8::bigint,
   'manager sees both reps'' next actions');
 
 -- Admin: org-wide.

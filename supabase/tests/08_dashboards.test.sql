@@ -121,7 +121,7 @@ select is(
   (select created::int from dashboard_stage_flow
     where owner_id = 'c0000000-0000-0000-0000-000000000004'
       and week_start = date_trunc('week', now())::date),
-  1, 'dashboard_stage_flow separates creations from advances'
+  3, 'dashboard_stage_flow separates creations from advances'
 );
 
 -- D46: planned vs actual for the current week.
@@ -150,13 +150,13 @@ select is(
 select is(
   (select open_next_actions::int from dashboard_rep_scorecard
     where membership_id = 'c0000000-0000-0000-0000-000000000004'),
-  2, 'rep scorecard counts open next actions'
+  3, 'rep scorecard counts open next actions'
 );
 
 select is(
   (select quotes_outstanding::int from dashboard_rep_scorecard
     where membership_id = 'c0000000-0000-0000-0000-000000000004'),
-  0, 'rep scorecard counts quotes outstanding'
+  1, 'rep scorecard counts quotes outstanding'
 );
 
 -- Territory rollup: SoCal holds banner + 2 branches + contractor + 2 distributors.

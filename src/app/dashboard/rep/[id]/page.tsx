@@ -45,6 +45,21 @@ interface ExceptionRow {
   subject_id: string | null;
 }
 
+// The breakdown leadership drew on the "SEE MORE" buttons, in the unit they
+// asked for: "UM BREAKDOWN DE VENDAS BY DEALER — ganhou 30.000 LF".
+interface DealerSalesRow {
+  dealer_id: string;
+  dealer_name: string;
+  unit: string;
+  won_qty: number;
+  out_qty: number;
+  open_qty: number;
+  won_value: number;
+}
+
+/** 30000 → "30,000". Volume is read as a size, not a price. */
+const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
 /** "Deon Rep" → DR; the same two-letter badge the team list uses. */
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -82,12 +97,13 @@ export default function RepPage() {
   const [channel, setChannel] = useState<ChannelRow[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [flags, setFlags] = useState<ExceptionRow[]>([]);
+  const [dealerSales, setDealerSales] = useState<DealerSalesRow[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [s, ch, acc, ex] = await Promise.all([
+    const [s, ch, acc, ex, ds] = await Promise.all([
       supabase
         .from("dashboard_rep_scorecard")
         .select(
@@ -115,11 +131,17 @@ export default function RepPage() {
         .eq("subject_type", "account")
         .eq("owner_membership_id", id)
         .limit(500),
+      supabase
+        .from("dashboard_dealer_sales")
+        .select("dealer_id, dealer_name, unit, won_qty, out_qty, open_qty, won_value")
+        .eq("owner_id", id)
+        .limit(200),
     ]);
     setRep(s.error ? null : ((s.data as Scorecard | null) ?? null));
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setAccounts(acc.error ? [] : ((acc.data as AccountRow[]) ?? []));
     setFlags(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
+    setDealerSales(ds.error ? [] : ((ds.data as DealerSalesRow[]) ?? []));
     setLoadedAt(Date.now());
     setLoaded(true);
   }, [id]);
@@ -348,6 +370,88 @@ export default function RepPage() {
           </div>
         </div>
       </section>
+
+      {/* "ESSE 'SEE MORE' NOS DARIA UM BREAKDOWN DE VENDAS BY DEALER" — the
+          note on the manager mockup, and the reason a bar was worth clicking.
+          The unit is linear feet because that is what the trade quotes in, and
+          the columns to hold it were already on the opportunity. */}
+      {dealerSales.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">
+              What their dealers <span style={{ color: "var(--ink-muted)" }}>are moving</span>
+            </h2>
+            <span className="t-meta">
+              {QTY.format(dealerSales.reduce((n, d) => n + Number(d.won_qty), 0))} LF won
+            </span>
+          </div>
+          <div className="card card-pad">
+            <ul className="flex flex-col gap-3.5">
+              {[...dealerSales]
+                // Biggest book first — a manager reads this to find the door
+                // that is carrying the patch, and the one that is not.
+                .sort(
+                  (a, b) =>
+                    Number(b.won_qty) + Number(b.out_qty) - (Number(a.won_qty) + Number(a.out_qty)),
+                )
+                .map((d) => {
+                  const won = Number(d.won_qty);
+                  const out = Number(d.out_qty);
+                  const open = Number(d.open_qty);
+                  const total = won + out + open;
+                  const seg = [
+                    ["var(--accent)", won],
+                    ["var(--warn)", out],
+                    ["var(--surface-sunken)", open],
+                  ] as const;
+                  return (
+                    <li key={d.dealer_id}>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <Link href={`/accounts/${d.dealer_id}`} className="t-title truncate">
+                          {displayAccountName(d.dealer_name)}
+                        </Link>
+                        <span className="t-meta shrink-0 tabular-nums">
+                          {QTY.format(won)} {d.unit}
+                        </span>
+                      </div>
+                      <div
+                        className="mt-1 flex h-2.5 overflow-hidden rounded"
+                        style={{ background: "var(--rule)" }}
+                        role="img"
+                        aria-label={`${QTY.format(won)} ${d.unit} won, ${QTY.format(out)} out for quote, ${QTY.format(open)} still open`}
+                      >
+                        {seg.map(([bg, n]) =>
+                          n > 0 ? (
+                            <span
+                              key={bg}
+                              style={{
+                                width: total === 0 ? 0 : `${(100 * n) / total}%`,
+                                background: bg,
+                              }}
+                            />
+                          ) : null,
+                        )}
+                      </div>
+                      <p className="t-meta mt-1">
+                        {won > 0 ? `${QTY.format(won)} won` : "nothing won yet"}
+                        {out > 0 ? ` · ${QTY.format(out)} out for quote` : ""}
+                        {open > 0 ? ` · ${QTY.format(open)} still open` : ""}
+                        {won > 0 ? ` · ${formatMoney(Number(d.won_value))}` : ""}
+                      </p>
+                    </li>
+                  );
+                })}
+            </ul>
+            {/* The distributors' report sees sell-through that never passed
+                through a quote here, so this is GMX's book and not the whole
+                truth. Saying which is better than quietly being the smaller
+                number on a screen a manager is judging people with. */}
+            <p className="t-sub mt-3">
+              GMX&rsquo;s own book. The distributors&rsquo; report isn&rsquo;t connected yet.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="section-head">
