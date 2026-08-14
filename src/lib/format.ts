@@ -60,6 +60,22 @@ export function telHref(raw: string): string {
   return `tel:${raw.replace(/[^\d+]/g, "")}`;
 }
 
+const MONEY = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+/**
+ * $180,000 — whole dollars, because a quote list is read down a column and
+ * cents are noise at that distance. Null is "—", never "$0": a deal with no
+ * number on it yet is not a deal worth nothing.
+ */
+export function formatMoney(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return MONEY.format(value);
+}
+
 /** SHOUTED names (straight off a business card) read as data, not identity. */
 export function displayAccountName(name: string): string {
   const letters = name.replace(/[^a-zA-Z]/g, "");

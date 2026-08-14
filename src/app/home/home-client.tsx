@@ -19,15 +19,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import {
   BuildingIcon,
+  CalendarIcon,
   FileIcon,
   MicrophoneIcon,
-  PlusIcon,
   SearchIcon,
   XIcon,
 } from "@/components/icons";
 import { syncStatusLabel } from "@/components/sync-badge";
 import { humanize } from "@/lib/domain/enums";
-import { displayAccountName } from "@/lib/format";
+import { ACTIVE_QUOTE_STAGES } from "@/lib/domain/quotes";
+import { displayAccountName, formatMoney } from "@/lib/format";
 import {
   getOfflineLayer,
   type CachedAccount,
@@ -177,6 +178,9 @@ export default function HomeClient() {
   const [activities, setActivities] = useState<CachedActivity[]>([]);
   const [settings, setSettings] = useState<RoutineSettings>(DEFAULT_SETTINGS);
   const [attention, setAttention] = useState<number | null>(null);
+  const [quotes, setQuotes] = useState<{ count: number; value: number } | null>(
+    null,
+  );
   const [attentionDetail, setAttentionDetail] = useState<ExceptionRow | null>(
     null,
   );
@@ -261,6 +265,49 @@ export default function HomeClient() {
       cancelled = true;
     };
   }, [profile, status.lastPulledAt]);
+
+  // Active quotes for the Quotes tile. Opportunities are not in the device
+  // cache — the cache carries doors, not money — so this is a live read with
+  // the count mirrored to meta, the same D56 shape as "Needs attention": a
+  // cold start with no signal still gets a number, just not a fresh total.
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    const layer = getOfflineLayer();
+
+    void (async () => {
+      try {
+        const { data, error } = await getSupabaseBrowserClient()
+          .from("opportunities")
+          .select("estimated_revenue")
+          .in("stage", ACTIVE_QUOTE_STAGES as unknown as string[])
+          .limit(500);
+        if (error) throw new Error(error.message);
+        if (cancelled) return;
+        const rows = (data ?? []) as { estimated_revenue: number | null }[];
+        setQuotes({
+          count: rows.length,
+          value: rows.reduce((sum, r) => sum + (r.estimated_revenue ?? 0), 0),
+        });
+        void layer.local.setMeta("quote_count", String(rows.length));
+      } catch {
+        const cached = await layer.local.getMeta("quote_count");
+        if (!cancelled && cached !== null) {
+          setQuotes({ count: Number(cached), value: 0 });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile, status.lastPulledAt]);
+
+  // Dealers come straight off the cached working set — no query needed, and it
+  // stays right with no signal.
+  const dealerCount = useMemo(
+    () => accounts.filter((a) => a.account_type === "DEALER").length,
+    [accounts],
+  );
 
   const routineItems = useMemo(
     () =>
@@ -698,9 +745,11 @@ export default function HomeClient() {
             </div>
           </section>
 
-          {/* The demo's four actions: a 2x2 of real tiles, each with the one
-              line that says why you would tap it. Four 10px labels in a row
-              read as a toolbar; these read as offers. */}
+          {/* The four ways in, as leadership marked them up on the demo
+              (13 Aug): talk, agenda, dealer, quotes. Two of them carry their
+              own actions, because "add a dealer" and "add a quote" are things
+              a rep starts from home rather than after two taps of browsing.
+              A tile is a door with its handles on it. */}
           <section>
             <div className="grid grid-cols-2 gap-2.5">
               {[
@@ -711,43 +760,68 @@ export default function HomeClient() {
                   sub: "Log a visit in 20 seconds",
                 },
                 {
-                  href: "/record?mode=card",
-                  Icon: FileIcon,
-                  title: "Scan a card",
-                  sub: "Add a contact from a card",
-                },
-                {
-                  href: "/accounts",
-                  Icon: BuildingIcon,
-                  title: "Your accounts",
+                  href: "/visits",
+                  Icon: CalendarIcon,
+                  title: "Agenda",
                   sub:
-                    attention && attention > 0
-                      ? `${attention} ${attention === 1 ? "needs" : "need"} a visit`
-                      : "Browse the territory",
-                  warn: !!attention && attention > 0,
+                    weekStats.planned === 0
+                      ? "Nothing planned this week"
+                      : weekStats.completed >= weekStats.planned
+                        ? "All done for the week"
+                        : `${weekStats.planned - weekStats.completed} still open this week`,
                 },
                 {
-                  href: "/accounts/new",
-                  Icon: PlusIcon,
-                  title: "Add an account",
-                  sub: "A new door in the patch",
+                  href: "/accounts?type=DEALER",
+                  Icon: BuildingIcon,
+                  title: "Dealer",
+                  sub:
+                    dealerCount === 0
+                      ? "None on this device yet"
+                      : `${dealerCount} in the patch`,
+                  actions: [
+                    { href: "/accounts/new", label: "Add new" },
+                    { href: "/accounts?type=DEALER", label: "Update existing" },
+                  ],
                 },
-              ].map(({ href, Icon, title, sub, warn }) => (
-                <Link key={href} href={href} className="card card-pad flex flex-col gap-2">
-                  <span
-                    className="grid h-9 w-9 place-items-center rounded-[10px]"
-                    style={{ background: "var(--surface-sunken)" }}
-                  >
-                    <Icon size={18} style={{ color: "var(--ink-secondary)" }} />
-                  </span>
-                  <span className="t-title">{title}</span>
-                  <span
-                    className="text-[12px] leading-[16px]"
-                    style={{ color: warn ? "var(--warn-ink)" : "var(--ink-muted)" }}
-                  >
-                    {sub}
-                  </span>
-                </Link>
+                {
+                  href: "/quotes",
+                  Icon: FileIcon,
+                  title: "Quotes",
+                  sub:
+                    quotes === null
+                      ? "Active quotes"
+                      : quotes.count === 0
+                        ? "Nothing out for quote"
+                        : `${quotes.count} out · ${formatMoney(quotes.value)}`,
+                  actions: [{ href: "/quotes/new", label: "Add new" }],
+                },
+              ].map(({ href, Icon, title, sub, actions }) => (
+                <div key={title} className="card card-pad flex flex-col gap-2">
+                  <Link href={href} className="flex flex-col gap-2">
+                    <span
+                      className="grid h-9 w-9 place-items-center rounded-[10px]"
+                      style={{ background: "var(--surface-sunken)" }}
+                    >
+                      <Icon size={18} style={{ color: "var(--ink-secondary)" }} />
+                    </span>
+                    <span className="t-title">{title}</span>
+                    <span
+                      className="text-[12px] leading-[16px]"
+                      style={{ color: "var(--ink-muted)" }}
+                    >
+                      {sub}
+                    </span>
+                  </Link>
+                  {actions && (
+                    <div className="tile-acts">
+                      {actions.map((a) => (
+                        <Link key={a.label} href={a.href} className="tile-act">
+                          {a.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </section>

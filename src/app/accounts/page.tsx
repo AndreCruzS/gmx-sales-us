@@ -10,6 +10,11 @@
 // is counting. RLS already decides what is visible either way, so there is no
 // second list and no second set of rules.
 //
+// `?type=DEALER` scopes it to one kind of door, which is how Home's Dealer
+// tile reaches "update an existing one". A dealer is not a separate object
+// from an account — it is an account_type — so it does not get a separate
+// screen either.
+//
 // Attention comes from the `exceptions` view rather than being recomputed here:
 // the rules for quiet, no captain and an unverified wall are defined once in
 // SQL and tested there. This screen only decides how to show them.
@@ -19,7 +24,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
-import { humanize } from "@/lib/domain/enums";
+import { ACCOUNT_TYPES, humanize, type AccountType } from "@/lib/domain/enums";
 import { groupByCompany } from "@/lib/domain/companies";
 import {
   ACCOUNT_EXCEPTION_TYPES,
@@ -67,7 +72,16 @@ export default function AccountsPage() {
 
 function AccountsView() {
   const { profile, status } = useOffline();
-  const owner = useSearchParams().get("owner");
+  const params = useSearchParams();
+  const owner = params.get("owner");
+  // Guarded against the enum, so a hand-typed ?type= can only ever narrow the
+  // list to something that exists rather than emptying it silently.
+  const typeParam = params.get("type");
+  const accountType = (ACCOUNT_TYPES as readonly string[]).includes(
+    typeParam ?? "",
+  )
+    ? (typeParam as AccountType)
+    : null;
 
   const [cached, setCached] = useState<CachedAccount[]>([]);
   const [territory, setTerritory] = useState<{
@@ -104,6 +118,7 @@ function AccountsView() {
           .order("name")
           .limit(200);
         if (owner) q = q.eq("owner_id", owner);
+        if (accountType) q = q.eq("account_type", accountType);
         const { data, error } = await q;
         if (!stale && !error && data) {
           setTerritory({ fresh: true, rows: data as CachedAccount[] });
@@ -115,7 +130,7 @@ function AccountsView() {
     return () => {
       stale = true;
     };
-  }, [profile, status.lastPulledAt, owner]);
+  }, [profile, status.lastPulledAt, owner, accountType]);
 
   // What needs a visit. One query, one place the rules live.
   useEffect(() => {
@@ -192,6 +207,7 @@ function AccountsView() {
           .ilike("name", `%${term}%`)
           .limit(20);
         if (owner) q = q.eq("owner_id", owner);
+        if (accountType) q = q.eq("account_type", accountType);
         const { data, error } = await q;
         setRemote({
           term,
@@ -201,7 +217,7 @@ function AccountsView() {
         setRemote({ term, rows: [] });
       }
     },
-    [owner],
+    [owner, accountType],
   );
 
   useEffect(() => {
@@ -222,7 +238,10 @@ function AccountsView() {
   }, [flags]);
 
   const rows = useMemo(() => {
-    const base = territory.fresh ? territory.rows : owner ? [] : cached;
+    let base = territory.fresh ? territory.rows : owner ? [] : cached;
+    // The cached working set carries account_type, so the scope survives with
+    // no signal — a rep looking for a dealer in a yard gets dealers.
+    if (accountType) base = base.filter((a) => a.account_type === accountType);
     const q = query.trim().toLowerCase();
 
     let list = base;
@@ -264,7 +283,7 @@ function AccountsView() {
       if (oa !== null && ob !== null && oa !== ob) return oa - ob;
       return a.name.localeCompare(b.name);
     });
-  }, [territory, cached, query, remote, filter, flags, owner]);
+  }, [territory, cached, query, remote, filter, flags, owner, accountType]);
 
   const flaggedTotal = useMemo(
     () => rows.filter((a) => (flags.get(a.id) ?? []).length > 0).length,
@@ -290,12 +309,14 @@ function AccountsView() {
 
   return (
     <div className="stack pt-2">
-      {owner && (
+      {(owner || accountType) && (
         <div className="flex items-center justify-between gap-2">
           <p className="t-meta">
-            {ownerName?.id === owner
-              ? `${ownerName.name}’s accounts`
-              : "One rep’s accounts"}
+            {accountType
+              ? `${humanize(accountType)}s`
+              : ownerName?.id === owner
+                ? `${ownerName.name}’s accounts`
+                : "One rep’s accounts"}
           </p>
           <Link href="/accounts" className="t-meta underline underline-offset-2">
             Show all

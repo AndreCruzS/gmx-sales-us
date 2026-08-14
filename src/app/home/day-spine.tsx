@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { MicrophoneIcon } from "@/components/icons";
+import { CalendarIcon, ChevronDownIcon, MicrophoneIcon } from "@/components/icons";
 import { humanize } from "@/lib/domain/enums";
 import { displayAccountName } from "@/lib/format";
 import type { CachedAccount } from "@/lib/offline";
@@ -198,38 +198,110 @@ export function DaySpine({
   nowLabel: string;
   onDebrief?: (stop: TimelineStop, note: string) => Promise<void>;
 }) {
+  // Folded is the phone's opening state. Below 1024px the CSS hides the spine
+  // and shows the summary; above it the whole line has room, and the same flag
+  // is inert. Keeping it in a media query rather than in `useState` means the
+  // component never has to ask the window how wide it is during a render.
+  const [folded, setFolded] = useState(true);
+
   const { before, after, stops, done, needsDebrief } = timeline;
   if (stops === 0) return null;
 
   const lastBefore = before.length > 0 ? before[before.length - 1].state : null;
 
+  // What the fold is allowed to show. A stop that owes a debrief outranks the
+  // one that is merely next, because it is the only thing on this screen the
+  // rep can still put right today.
+  const nextUp =
+    before.find((s) => s.state === "flagged") ??
+    after[0] ??
+    before[before.length - 1] ??
+    null;
+  const nextAccount = nextUp?.accountId ? accountsById.get(nextUp.accountId) : undefined;
+
   return (
-    <section>
-      <div className="section-head">
-        <h2 className="t-section">
-          Today <span style={{ color: "var(--ink-muted)" }}>&amp; what&rsquo;s next</span>
+    <section className={folded ? "is-folded" : undefined}>
+      <p className="spine-label mb-1">The route</p>
+      <div className="route-head">
+        <h2 className="day-title">
+          Today <span>&amp; what&rsquo;s next</span>
         </h2>
-        <Link href="/visits" className="t-action">
-          The whole week
-        </Link>
+        <button
+          type="button"
+          className="route-toggle"
+          aria-expanded={!folded}
+          aria-controls="day-spine"
+          aria-label={folded ? "Show the whole day" : "Fold the day away"}
+          onClick={() => setFolded(!folded)}
+        >
+          <ChevronDownIcon size={16} />
+        </button>
       </div>
 
       {/* One line of counts, so the shape of the day is legible before the
           detail. Miles are not tracked, so they are not claimed. */}
-      <p className="t-meta mb-3 px-1">
-        <b style={{ color: "var(--ink-primary)" }}>{stops}</b>{" "}
-        {stops === 1 ? "stop" : "stops"} · <b style={{ color: "var(--ink-primary)" }}>{done}</b> done
+      <p className="t-meta route-stats">
+        <span>
+          <b>{stops}</b> {stops === 1 ? "stop" : "stops"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          <b>{done}</b> done
+        </span>
         {needsDebrief > 0 && (
           <>
-            {" · "}
-            <span style={{ color: "var(--danger)", fontWeight: 700 }}>
+            <span aria-hidden="true">·</span>
+            <span className="is-owed">
               {needsDebrief} {needsDebrief === 1 ? "needs" : "need"} a debrief
             </span>
           </>
         )}
       </p>
 
-      <ol className="spine">
+      {nextUp && (
+        <button type="button" className="route-summary" onClick={() => setFolded(false)}>
+          <span className="rs-k">{nextUp.state === "planned" ? "Next up" : "Last stop"}</span>
+          <span className="rs-main">
+            {formatDay(nextUp.dueDate)} ·{" "}
+            {nextAccount ? displayAccountName(nextAccount.name) : nextUp.action}
+          </span>
+          <span className="rs-sub">
+            {nextAccount
+              ? nextUp.action
+              : nextUp.objective
+                ? humanize(nextUp.objective)
+                : ""}
+          </span>
+          {needsDebrief > 0 && (
+            <span className="rs-flag">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 21V4l14 6-14 5" />
+              </svg>
+              {needsDebrief === 1 ? "Needs a debrief" : `${needsDebrief} need a debrief`}
+            </span>
+          )}
+          <span className="rs-open">Show the whole day</span>
+        </button>
+      )}
+
+      <div className="route-week mb-4">
+        <Link href="/visits" className="btn-mini">
+          <CalendarIcon size={16} />
+          See the whole week
+        </Link>
+      </div>
+
+      <ol className="spine" id="day-spine">
         {before.map((stop, i) => (
           <Stop
             key={stop.id}

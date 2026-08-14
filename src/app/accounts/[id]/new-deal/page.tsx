@@ -10,8 +10,8 @@
 // loop on failure: one enqueue either validates and queues, or throws before
 // anything is written.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useOffline } from "@/components/offline-provider";
 import {
   LEAD_SOURCES_ALL,
@@ -43,16 +43,33 @@ interface AccountLite {
 }
 
 export default function NewDealPage() {
+  // useSearchParams needs a boundary. `?stage=QUOTE` is how Quotes → "add new"
+  // lands here already set to a priced deal, so the rep is not asked to pick
+  // the stage they just chose on the previous screen.
+  return (
+    <Suspense fallback={<div className="stack pt-2" aria-busy="true" />}>
+      <NewDealForm />
+    </Suspense>
+  );
+}
+
+function NewDealForm() {
   const { id: accountId } = useParams<{ id: string }>();
   const { profile } = useOffline();
   const router = useRouter();
+  const stageParam = useSearchParams().get("stage");
+  const initialStage: OpportunityStage = (
+    DEAL_STAGES as readonly string[]
+  ).includes(stageParam ?? "")
+    ? (stageParam as OpportunityStage)
+    : "IDENTIFIED";
 
   const [account, setAccount] = useState<AccountLite | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [name, setName] = useState("");
-  const [stage, setStage] = useState<OpportunityStage>("IDENTIFIED");
+  const [stage, setStage] = useState<OpportunityStage>(initialStage);
   const [revenue, setRevenue] = useState("");
   const [closeDate, setCloseDate] = useState("");
   const [currentStatus, setCurrentStatus] = useState("");

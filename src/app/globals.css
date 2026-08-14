@@ -344,6 +344,180 @@ body {
   margin: 0;
 }
 
+/* ── The day, folded ────────────────────────────────────────────────────────
+   The spine is the truth of the day, but it is long, and on a phone it buries
+   capture and the cards under a scroll. So the day arrives folded to one line
+   — the stop the rep is walking into next — and opens on a tap. The one thing
+   that must not hide behind a tap is a stop that still owes a debrief, so the
+   fold names it rather than counting it. Above the phone breakpoint there is
+   room for the whole line, so the fold is a phone behaviour only: it is done
+   in a media query, not in state, which also keeps the desktop rail honest. */
+.route-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-inline-start: 4px;
+}
+.day-title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink-primary);
+}
+/* "& what's next" is the quieter half of the promise — the day first, the rest
+   of the week behind it. */
+.day-title span {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+.route-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 16px;
+  padding-inline-start: 4px;
+}
+.route-stats b {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+.route-stats .is-owed {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* Actions that live INSIDE a tile. Leadership drew these on the mockup as
+   "add new" / "update existing" under the Dealer and Quotes tiles: a tile is
+   no longer just a door, it is a door with the one or two things you actually
+   came to do. They are quiet — teal on teal-soft — because the tile's own
+   title is still the primary target. */
+.tile-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.tile-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tile-act:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--rule);
+  color: var(--ink-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+.route-toggle {
+  display: none;
+}
+.route-summary {
+  display: none;
+  width: 100%;
+  text-align: left;
+  padding: 13px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
+}
+.rs-k {
+  display: block;
+  margin-bottom: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.rs-main {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.rs-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+.rs-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--danger-tint);
+  color: color-mix(in srgb, var(--danger) 78%, var(--ink-primary));
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.rs-open {
+  display: block;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 1023px) {
+  .route-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--surface-sunken);
+    border: 1px solid var(--rule);
+    color: var(--ink-primary);
+  }
+  .route-toggle svg {
+    transition: transform 0.18s ease;
+  }
+  .is-folded .route-toggle svg {
+    transform: rotate(-90deg);
+  }
+  .is-folded .spine,
+  .is-folded .route-week {
+    display: none;
+  }
+  .is-folded .route-summary {
+    display: block;
+  }
+}
+
 /* The inline debrief. A rep answers where they are standing: one line, or a
    tap, or the mic. Sending them to another screen to type a sentence is the
    friction the whole capture story exists to remove. The clay border is what
