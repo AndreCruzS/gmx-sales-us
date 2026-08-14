@@ -390,30 +390,71 @@ body {
 /* Actions that live INSIDE a tile. Leadership drew these on the mockup as
    "add new" / "update existing" under the Dealer and Quotes tiles: a tile is
    no longer just a door, it is a door with the one or two things you actually
-   came to do. They are quiet — teal on teal-soft — because the tile's own
-   title is still the primary target. */
+   came to do.
+
+   They have to LOOK pressable. A tinted pill with no edge is the shape .tag
+   already uses for a status label, so these take the app's button vocabulary
+   instead — the one that starts something is filled, the one that goes and
+   finds something is outlined, both carry an icon, both are a 34px target,
+   and both move under a thumb. */
 .tile-acts {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .tile-act {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--surface-accent);
-  color: var(--accent-ink);
-  font-size: 11.5px;
+  justify-content: center;
+  gap: 6px;
+  /* Share the row where both fit; fill it where they don't. Two buttons of
+     different widths stacked ragged-left look like leftovers. */
+  flex: 1 1 auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--r-control);
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: -0.005em;
   white-space: nowrap;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
+}
+.tile-act:active {
+  transform: scale(0.96);
 }
 .tile-act:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* Filled: this one creates something. */
+.tile-act-primary {
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-1);
+}
+.tile-act-primary:hover {
+  background: var(--accent-deep);
+}
+/* Outlined: this one takes you somewhere to pick. The hairline is what says
+   "edge of a control" on a card that is already near-white. */
+.tile-act-secondary {
+  background: var(--surface-sunken);
+  border: 1px solid var(--rule);
+  color: var(--ink-primary);
+}
+.tile-act-secondary:hover {
+  background: var(--surface-card);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-act {
+    transition: none;
+  }
+  .tile-act:active {
+    transform: none;
+  }
 }
 
 .btn-mini {

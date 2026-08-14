@@ -22,6 +22,7 @@ import {
   CalendarIcon,
   FileIcon,
   MicrophoneIcon,
+  PlusIcon,
   SearchIcon,
   XIcon,
 } from "@/components/icons";
@@ -730,8 +731,18 @@ export default function HomeClient() {
                       ? "None on this device yet"
                       : `${dealerCount} in the patch`,
                   actions: [
-                    { href: "/accounts/new", label: "Add new" },
-                    { href: "/accounts?type=DEALER", label: "Update existing" },
+                    {
+                      href: "/accounts/new",
+                      label: "Add new",
+                      Icon: PlusIcon,
+                      primary: true,
+                    },
+                    {
+                      href: "/accounts?type=DEALER",
+                      label: "Update existing",
+                      Icon: SearchIcon,
+                      primary: false,
+                    },
                   ],
                 },
                 {
@@ -744,7 +755,14 @@ export default function HomeClient() {
                       : quotes.count === 0
                         ? "Nothing out for quote"
                         : `${quotes.count} out · ${formatMoney(quotes.value)}`,
-                  actions: [{ href: "/quotes/new", label: "Add new" }],
+                  actions: [
+                    {
+                      href: "/quotes/new",
+                      label: "Add new",
+                      Icon: PlusIcon,
+                      primary: true,
+                    },
+                  ],
                 },
               ].map(({ href, Icon, title, sub, actions }) => (
                 <div key={title} className="card card-pad flex flex-col gap-2">
@@ -765,9 +783,14 @@ export default function HomeClient() {
                   </Link>
                   {actions && (
                     <div className="tile-acts">
-                      {actions.map((a) => (
-                        <Link key={a.label} href={a.href} className="tile-act">
-                          {a.label}
+                      {actions.map(({ href: to, label, Icon: ActIcon, primary }) => (
+                        <Link
+                          key={label}
+                          href={to}
+                          className={`tile-act ${primary ? "tile-act-primary" : "tile-act-secondary"}`}
+                        >
+                          <ActIcon size={14} />
+                          {label}
                         </Link>
                       ))}
                     </div>
