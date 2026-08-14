@@ -114,14 +114,20 @@ function VisitsPageInner() {
   // /visits?plan=<accountId>&objective=<VisitObjective> opens the plan form
   // prefilled. Lazy initializers read the params once, on first render —
   // no effect, no cascading setState.
+  //
+  // `plan=new` is the same door with nobody behind it: the tab bar's add menu
+  // opens the form from anywhere in the app, and at that moment the rep has
+  // not picked an account yet. Anything else is read as an account id, so the
+  // existing deep link from an account page is untouched.
   const [showPlan, setShowPlan] = useState(
     () => Boolean(searchParams.get("plan")) || Boolean(searchParams.get("objective")),
   );
   const [error, setError] = useState<string | null>(null);
 
-  const [planAccount, setPlanAccount] = useState(
-    () => searchParams.get("plan") ?? "",
-  );
+  const [planAccount, setPlanAccount] = useState(() => {
+    const plan = searchParams.get("plan");
+    return plan && plan !== "new" ? plan : "";
+  });
   const [planAction, setPlanAction] = useState("");
   const [planDate, setPlanDate] = useState(isoDate(new Date()));
   const [planObjective, setPlanObjective] = useState<VisitObjective | "">(

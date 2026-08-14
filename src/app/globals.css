@@ -1182,6 +1182,103 @@ body {
 .tab-capture:active .tab-fab {
   transform: scale(0.96);
 }
+/* Open, the plus turns into a close. Same button, same place — the icon is
+   the only thing that has to say the state changed. */
+.tab-capture[data-open="true"] .tab-fab {
+  transform: rotate(45deg);
+}
+.tab-capture .tab-fab {
+  transition: transform 0.18s ease;
+}
+
+/* ── The add menu ───────────────────────────────────────────────────────────
+   The centre button unfolds rather than navigating: a rep's hand goes to the
+   middle of the bar to put something INTO the system, and that gesture used to
+   mean "talk" and nothing else. The three things they actually add now sit one
+   tap away, stacked upward with talking nearest the thumb.
+
+   Each item is a row, not a bare label — the same shape the account lists use,
+   because a menu of unexplained verbs is a menu you have to learn. */
+.add-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100%;
+  background: color-mix(in srgb, var(--ink-primary) 34%, transparent);
+  backdrop-filter: blur(2px);
+  animation: add-fade 0.16s ease-out;
+}
+.add-menu {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 18px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+}
+.add-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+  animation: add-rise 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+/* Nearest the thumb arrives first — the stack reads as unfolding from the
+   button rather than appearing all at once. */
+.add-item:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.add-item:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.add-item:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.add-item:active {
+  transform: scale(0.99);
+}
+.add-item-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-control);
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+}
+.add-item-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.add-item-hint {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+@keyframes add-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes add-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
 
 /* ── Signature: the sync chip ──────────────────────────────────────────────
    This app's promise is that a capture made in a dead-signal back room is
@@ -1240,6 +1337,13 @@ body {
   .btn-primary:active {
     animation: none;
     transform: none;
+  }
+  .add-scrim,
+  .add-item {
+    animation: none;
+  }
+  .tab-capture .tab-fab {
+    transition: none;
   }
 }
 
@@ -1322,6 +1426,18 @@ body {
     background: transparent;
     color: var(--on-warn);
     box-shadow: none;
+  }
+
+  /* The rail runs down the left, so the menu unfolds beside it rather than
+     from the middle of the screen — a stack centred on a 1440px viewport
+     would have no relationship to the button that opened it. */
+  .add-menu {
+    left: calc(var(--rail-w) + 14px);
+    transform: none;
+    bottom: auto;
+    top: 76px;
+    flex-direction: column;
+    width: 320px;
   }
 
   /* same box as main, so the sync chip lines up with the content edge */
