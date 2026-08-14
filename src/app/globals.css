@@ -404,6 +404,81 @@ body {
   font-weight: 700;
 }
 
+/* ── Focus: the page answering for one customer ─────────────────────────────
+   Picking a band does not open a panel, it re-asks every question on the
+   screen. The sections carry the change rather than the page reloading: each
+   one re-enters as its answer changes, so the eye is told what moved instead
+   of being handed a new page and left to find its place again.
+
+   The remount is driven by a React key on the focus id, which is what makes
+   the entrance replay on every change — a CSS transition cannot animate
+   content that was replaced. */
+.adapt {
+  animation: adapt-in 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.adapt:nth-of-type(2) {
+  animation-delay: 0.04s;
+}
+.adapt:nth-of-type(3) {
+  animation-delay: 0.08s;
+}
+.adapt:nth-of-type(4) {
+  animation-delay: 0.12s;
+}
+@keyframes adapt-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* The bar that names what the screen is currently answering for. It is not a
+   filter chip: it is the subject of every number below it, so it says so in a
+   sentence and carries the way out. */
+.focus-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--r-card);
+  background: var(--fill-ink);
+  color: var(--on-ink);
+  animation: adapt-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.focus-swatch {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.focus-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.focus-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+.focus-clear {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--on-ink) 16%, transparent);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  .adapt,
+  .focus-bar {
+    animation: none;
+  }
+}
+
 /* ── Sales by customer ──────────────────────────────────────────────────────
    A composition bar, not a state bar. Everywhere else in this app colour means
    a state — teal done, clay slipping, amber act-now — and colour is spoken

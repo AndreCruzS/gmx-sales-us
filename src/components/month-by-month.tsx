@@ -13,6 +13,8 @@
 import { useMemo } from "react";
 
 export interface WonMonthRow {
+  /** Present so a page can narrow the year to one customer. */
+  customer_id?: string;
   month: string;
   unit: string;
   won_qty: number;

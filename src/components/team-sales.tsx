@@ -1,16 +1,20 @@
 "use client";
 
-// What each rep is selling, and to whom.
+// The sales dashboard: what is being sold, and to whom.
 //
 // The bar on a manager's home is SALES, not visits — leadership were explicit,
 // and they are right: a week of kept promises is how a rep works, but volume
-// through a door is what the business is. So one bar per rep, banded by
-// customer, in the linear feet the trade quotes in.
+// through a door is what the business is. So one bar per row, in the linear
+// feet the trade quotes in, banded by whoever is not the row.
+//
+// Three ways to read it, in the order they asked for: rep, distribution,
+// dealer. The measure never changes — only who the rows are.
 //
 // Tapping a band does not leave the page. The band grows to own the bar while
-// the rest fold away, and that dealer's detail opens underneath — the numbers
-// we already hold appear at once, and the visits behind them load into the
-// space the animation just made. Nobody loses their place to read one number.
+// the rest fold away, and the WHOLE SCREEN re-answers for that customer: the
+// figures above travel to their new values, the rollout narrows to that
+// branch, the year narrows to their months. Nobody loses their place to read
+// one number.
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
@@ -30,12 +34,28 @@ export interface CustomerSalesRow {
   won_value: number;
 }
 
+export interface Focus {
+  id: string;
+  name: string;
+  kind: string | null;
+  colour: string;
+}
+
 interface VisitRow {
   id: string;
   occurred_at: string;
   activity_type: string;
   what_happened: string | null;
 }
+
+type SalesLens = "rep" | "distribution" | "dealer";
+
+// The order leadership listed them in.
+const LENSES: readonly (readonly [SalesLens, string])[] = [
+  ["rep", "Rep"],
+  ["distribution", "Distribution"],
+  ["dealer", "Dealer"],
+];
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
@@ -55,77 +75,131 @@ const MAX_BANDS = 6;
 interface Band {
   id: string;
   name: string;
-  kind: string | null;
   qty: number;
   colour: string;
   row: CustomerSalesRow | null;
+  /** What the page should answer for when this band is chosen. Always a
+   *  customer: under the rep lens that is the band itself; under the other two
+   *  the row already IS the customer. */
+  focus: Focus;
+}
+
+interface Group {
+  id: string;
+  title: string;
+  sub: string;
+  unit: string;
+  total: number;
+  bands: Band[];
 }
 
 export function TeamSales({
   rows,
   repMeta,
+  focus,
+  onFocus,
 }: {
   rows: readonly CustomerSalesRow[];
   repMeta: ReadonlyMap<string, { name: string; patch: string }>;
+  /** Owned by the page: picking a customer re-asks every question on it, so
+   *  the selection cannot live inside one section. */
+  focus: Focus | null;
+  onFocus: (next: Focus | null) => void;
 }) {
-  // One selection across the whole section: two reps' bars both blown open at
-  // once would be two conversations on one screen.
-  const [picked, setPicked] = useState<{ owner: string; dealer: string } | null>(
-    null,
-  );
+  const [lens, setLens] = useState<SalesLens>("rep");
   const [visits, setVisits] = useState<VisitRow[] | null>(null);
 
-  const teams = useMemo(() => {
-    const byOwner = new Map<string, CustomerSalesRow[]>();
-    for (const r of rows) {
-      if (Number(r.won_qty) <= 0) continue;
-      const list = byOwner.get(r.owner_id) ?? [];
+  const groups = useMemo<Group[]>(() => {
+    const sold = rows.filter((r) => Number(r.won_qty) > 0);
+    const scoped =
+      lens === "rep"
+        ? sold
+        : sold.filter(
+            (r) =>
+              r.customer_type ===
+              (lens === "distribution" ? "DISTRIBUTOR" : "DEALER"),
+          );
+
+    const byGroup = new Map<string, CustomerSalesRow[]>();
+    for (const r of scoped) {
+      const key = lens === "rep" ? r.owner_id : r.customer_id;
+      const list = byGroup.get(key) ?? [];
       list.push(r);
-      byOwner.set(r.owner_id, list);
+      byGroup.set(key, list);
     }
-    return [...byOwner.entries()]
-      .map(([owner, list]) => {
+
+    return [...byGroup.entries()]
+      .map(([key, list]) => {
         const sorted = [...list].sort(
           (a, b) => Number(b.won_qty) - Number(a.won_qty),
         );
         const head = sorted.slice(0, MAX_BANDS);
         const tail = sorted.slice(MAX_BANDS);
-        const bands: Band[] = head.map((r, i) => ({
-          id: r.customer_id,
-          name: displayAccountName(r.customer_name),
-          kind: r.customer_type,
+
+        const bandFor = (r: CustomerSalesRow, colour: string): Band => ({
+          // Under rep the band is the customer; under the others the band is
+          // the rep who sold it, and the row is the customer.
+          id: lens === "rep" ? r.customer_id : r.owner_id,
+          name:
+            lens === "rep"
+              ? displayAccountName(r.customer_name)
+              : (repMeta.get(r.owner_id)?.name ?? "—"),
           qty: Number(r.won_qty),
-          colour: BAND_COLOURS[i],
+          colour,
           row: r,
-        }));
-        if (tail.length > 0) {
+          focus: {
+            id: r.customer_id,
+            name: displayAccountName(r.customer_name),
+            kind: r.customer_type,
+            colour,
+          },
+        });
+
+        const bands: Band[] = head.map((r, i) => bandFor(r, BAND_COLOURS[i]));
+        if (tail.length > 0 && lens === "rep") {
           bands.push({
             id: "rest",
             name: `${tail.length} more`,
-            kind: null,
             qty: tail.reduce((n, r) => n + Number(r.won_qty), 0),
             colour: "var(--cat-rest)",
             row: null,
+            focus: {
+              id: "rest",
+              name: `${tail.length} more`,
+              kind: null,
+              colour: "var(--cat-rest)",
+            },
           });
         }
+
+        const first = sorted[0];
         return {
-          owner,
-          meta: repMeta.get(owner),
-          bands,
+          id: key,
+          title:
+            lens === "rep"
+              ? (repMeta.get(key)?.name ?? "—")
+              : displayAccountName(first.customer_name),
+          sub:
+            lens === "rep"
+              ? (repMeta.get(key)?.patch ?? "No patch")
+              : first.customer_type === "DISTRIBUTOR"
+                ? "distributor"
+                : "dealer",
+          unit: first.unit ?? "LF",
           total: bands.reduce((n, b) => n + b.qty, 0),
-          unit: sorted[0]?.unit ?? "LF",
+          bands,
         };
       })
       .sort((a, b) => b.total - a.total);
-  }, [rows, repMeta]);
+  }, [rows, repMeta, lens]);
 
   // The visits behind the number, fetched into the space the animation makes.
-  const loadVisits = useCallback(async (dealerId: string) => {
+  const loadVisits = useCallback(async (customerId: string) => {
     try {
       const { data, error } = await getSupabaseBrowserClient()
         .from("activities")
         .select("id, occurred_at, activity_type, what_happened")
-        .eq("primary_account_id", dealerId)
+        .eq("primary_account_id", customerId)
         .order("occurred_at", { ascending: false })
         .limit(4);
       setVisits(error ? [] : ((data as VisitRow[]) ?? []));
@@ -137,50 +211,64 @@ export function TeamSales({
 
   // Driven by the tap, not by an effect watching state: the fetch is caused by
   // the person, and a render is not the place to start one.
-  function toggle(owner: string, dealer: string) {
-    const closing =
-      picked !== null && picked.owner === owner && picked.dealer === dealer;
+  function toggle(band: Band) {
     setVisits(null);
-    if (closing) {
-      setPicked(null);
+    if (focus?.id === band.focus.id) {
+      onFocus(null);
       return;
     }
-    setPicked({ owner, dealer });
-    if (dealer !== "rest") void loadVisits(dealer);
+    onFocus(band.focus);
+    if (band.focus.id !== "rest") void loadVisits(band.focus.id);
   }
 
-  if (teams.length === 0) return null;
+  if (groups.length === 0) return null;
 
   return (
     <section>
       <div className="section-head">
-        <h2 className="t-section">
-          What they&rsquo;re selling{" "}
-          <span style={{ color: "var(--ink-muted)" }}>· by customer</span>
-        </h2>
+        <h2 className="t-section">Sales dashboard</h2>
         <Link href="/quotes" className="t-action">
           Open quotes
         </Link>
       </div>
 
+      <div className="chip-row mb-3" role="group" aria-label="Read the book by">
+        {LENSES.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className="chip"
+            aria-pressed={lens === key}
+            onClick={() => {
+              setLens(key);
+              // A choice made under one lens is not a choice under the next.
+              onFocus(null);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="card card-pad">
-        {teams.map((t) => {
-          const openHere = picked?.owner === t.owner ? picked.dealer : null;
-          const band = t.bands.find((b) => b.id === openHere) ?? null;
+        {groups.map((g) => {
+          // A focused customer may sit on any row; every bar shows the choice,
+          // because the page as a whole is answering for it.
+          const open = g.bands.find((b) => b.focus.id === focus?.id) ?? null;
           return (
-            <div key={t.owner} className="sales-row">
+            <div key={g.id} className="sales-row">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="pva-name">{t.meta?.name ?? "—"}</span>
+                <span className="pva-name">{g.title}</span>
                 <span className="pva-fig">
-                  {QTY.format(t.total)} {t.unit}
+                  {QTY.format(g.total)} {g.unit}
                 </span>
               </div>
-              <span className="pva-sub">{t.meta?.patch ?? "No patch"}</span>
+              <span className="pva-sub">{g.sub}</span>
 
               <div className="sales-track">
-                {t.bands.map((b) => {
-                  const chosen = openHere !== null;
-                  const isOpen = b.id === openHere;
+                {g.bands.map((b) => {
+                  const chosen = open !== null;
+                  const isOpen = open?.id === b.id;
                   return (
                     <button
                       key={b.id}
@@ -195,8 +283,8 @@ export function TeamSales({
                       }}
                       data-dimmed={chosen && !isOpen}
                       aria-pressed={isOpen}
-                      aria-label={`${b.name}: ${QTY.format(b.qty)} ${t.unit}`}
-                      onClick={() => toggle(t.owner, b.id)}
+                      aria-label={`${b.name}: ${QTY.format(b.qty)} ${g.unit}`}
+                      onClick={() => toggle(b)}
                     />
                   );
                 })}
@@ -206,12 +294,12 @@ export function TeamSales({
                   bands, it cannot name them. It is also a second way in for a
                   thumb that would rather hit a word than a stripe. */}
               <p className="sales-legend">
-                {t.bands.map((b) => (
+                {g.bands.map((b) => (
                   <button
                     key={b.id}
                     type="button"
-                    aria-pressed={b.id === openHere}
-                    onClick={() => toggle(t.owner, b.id)}
+                    aria-pressed={open?.id === b.id}
+                    onClick={() => toggle(b)}
                   >
                     <i style={{ background: b.colour }} aria-hidden="true" />
                     {b.name} {QTY.format(b.qty)}
@@ -219,34 +307,34 @@ export function TeamSales({
                 ))}
               </p>
 
-              {band && (
+              {open && (
                 <div className="sales-detail">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="t-title">
-                      {band.name}
-                      {band.kind ? (
+                      {open.focus.name}
+                      {open.focus.kind ? (
                         <span className="t-meta ml-2">
-                          {band.kind === "DISTRIBUTOR" ? "distributor" : "dealer"}
+                          {open.focus.kind === "DISTRIBUTOR" ? "distributor" : "dealer"}
                         </span>
                       ) : null}
                     </span>
                     <span className="t-meta tabular-nums">
-                      {QTY.format(band.qty)} {t.unit} won
+                      {QTY.format(open.qty)} {g.unit} won
                     </span>
                   </div>
-                  {band.row && (
+                  {open.row && (
                     <p className="t-sub mt-1">
-                      {formatMoney(Number(band.row.won_value))}
-                      {Number(band.row.out_qty) > 0
-                        ? ` · ${QTY.format(Number(band.row.out_qty))} ${t.unit} out for quote`
+                      {formatMoney(Number(open.row.won_value))}
+                      {Number(open.row.out_qty) > 0
+                        ? ` · ${QTY.format(Number(open.row.out_qty))} ${g.unit} out for quote`
                         : ""}
-                      {Number(band.row.open_qty) > 0
-                        ? ` · ${QTY.format(Number(band.row.open_qty))} ${t.unit} still open`
+                      {Number(open.row.open_qty) > 0
+                        ? ` · ${QTY.format(Number(open.row.open_qty))} ${g.unit} still open`
                         : ""}
                     </p>
                   )}
 
-                  {band.id !== "rest" && (
+                  {open.focus.id !== "rest" && (
                     <div className="mt-2.5">
                       <p className="t-meta uppercase tracking-wide">Last seen</p>
                       {visits === null ? (
@@ -266,10 +354,10 @@ export function TeamSales({
                         </ul>
                       )}
                       <Link
-                        href={`/accounts/${band.id}`}
+                        href={`/accounts/${open.focus.id}`}
                         className="t-action mt-2 inline-block underline underline-offset-2"
                       >
-                        Open {band.name}
+                        Open {open.focus.name}
                       </Link>
                     </div>
                   )}

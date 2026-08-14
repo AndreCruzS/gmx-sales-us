@@ -15,11 +15,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
-import { TeamSales, type CustomerSalesRow } from "@/components/team-sales";
+import { TeamSales, type CustomerSalesRow, type Focus } from "@/components/team-sales";
+import { useTween } from "@/lib/ui/use-tween";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type { RolloutCounts } from "@/lib/domain/rollout";
 import { formatMoney } from "@/lib/format";
+
+const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
 import { teamNarrative } from "@/lib/domain/team";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -32,11 +35,21 @@ interface ScorecardRow {
 interface ExceptionRow {
   exception_type: string | null;
   owner_membership_id: string | null;
+  subject_id: string | null;
 }
 interface PipelineRow {
   stage: string;
   opportunity_count: number;
   total_value: number;
+}
+// One branch's own gates, for when the screen is answering for one customer
+// rather than for the book.
+interface BranchRow {
+  account_id: string;
+  pk_state: string;
+  merchandiser_state: string;
+  display_wall_state: string;
+  material_state: string;
 }
 
 function greeting(hour: number | null): string {
@@ -56,6 +69,8 @@ export function ManagerHome({ name }: { name: string }) {
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [dealerSales, setDealerSales] = useState<CustomerSalesRow[]>([]);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
+  const [focus, setFocus] = useState<Focus | null>(null);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [hour, setHour] = useState<number | null>(null);
 
@@ -67,7 +82,7 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ch, sc, ex, ro, wm, pl, ds] = await Promise.all([
+    const [ch, sc, ex, ro, wm, pl, ds, br] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -81,7 +96,7 @@ export function ManagerHome({ name }: { name: string }) {
         .order("rep_name"),
       supabase
         .from("exceptions")
-        .select("exception_type, owner_membership_id")
+        .select("exception_type, owner_membership_id, subject_id")
         .limit(1000),
       supabase
         .from("dashboard_rollout")
@@ -91,7 +106,7 @@ export function ManagerHome({ name }: { name: string }) {
         .maybeSingle(),
       supabase
         .from("dashboard_won_monthly")
-        .select("month, unit, won_qty, won_value")
+        .select("customer_id, month, unit, won_qty, won_value")
         .order("month", { ascending: false })
         .limit(1000),
       supabase
@@ -103,6 +118,12 @@ export function ManagerHome({ name }: { name: string }) {
           "owner_id, customer_id, customer_name, customer_type, unit, won_qty, out_qty, open_qty, won_value",
         )
         .limit(500),
+      supabase
+        .from("account_rollout_status")
+        .select(
+          "account_id, pk_state, merchandiser_state, display_wall_state, material_state",
+        )
+        .limit(500),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -111,6 +132,7 @@ export function ManagerHome({ name }: { name: string }) {
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
     setDealerSales(ds.error ? [] : ((ds.data as CustomerSalesRow[]) ?? []));
+    setBranches(br.error ? [] : ((br.data as BranchRow[]) ?? []));
     setLoadedAt(Date.now());
   }, []);
 
@@ -152,8 +174,23 @@ export function ManagerHome({ name }: { name: string }) {
   const narrative = useMemo(() => teamNarrative(team), [team]);
 
   // The money, in the two numbers a director asks for first: what is open, and
-  // what is priced and waiting on somebody.
+  // what is priced and waiting on somebody. When a customer is chosen these
+  // become that customer's, from the sales view rather than the org pipeline —
+  // the same figures, asked of one door.
   const totals = useMemo(() => {
+    if (focus) {
+      const mine = dealerSales.filter((r) => r.customer_id === focus.id);
+      return {
+        open: mine.reduce((n, r) => n + Number(r.won_value), 0),
+        openCount: mine.length,
+        quotes: mine.reduce((n, r) => n + Number(r.out_qty), 0),
+        openLabel: "Won with them",
+        openHint: "in this book",
+        quotesLabel: "Out for quote",
+        quotesHint: "LF waiting on an answer",
+        quotesIsMoney: false,
+      };
+    }
     let open = 0;
     let openCount = 0;
     let quotes = 0;
@@ -165,8 +202,48 @@ export function ManagerHome({ name }: { name: string }) {
         quotes += Number(r.opportunity_count);
       }
     }
-    return { open, openCount, quotes };
-  }, [pipeline]);
+    return {
+      open,
+      openCount,
+      quotes,
+      openLabel: "Open pipeline",
+      openHint: `${openCount} open ${openCount === 1 ? "deal" : "deals"}`,
+      quotesLabel: "Out for quote",
+      quotesHint: "waiting on an answer",
+      quotesIsMoney: false,
+    };
+  }, [pipeline, focus, dealerSales]);
+
+  // Month by month narrows to the chosen customer; the rollout narrows to
+  // their own branch, and simply does not apply to a distributor.
+  const monthRows = useMemo(
+    () => (focus ? wonMonths.filter((r) => r.customer_id === focus.id) : wonMonths),
+    [wonMonths, focus],
+  );
+
+  const focusedGates = useMemo(() => {
+    if (!focus) return null;
+    const b = branches.find((x) => x.account_id === focus.id);
+    if (!b) return null;
+    const on = (v: string) => (v === "OK" ? 1 : 0);
+    const pending = (v: string) => (v === "PENDING" ? 1 : 0);
+    return {
+      branches: 1,
+      pk_done: on(b.pk_state),
+      merchandiser_done: on(b.merchandiser_state),
+      display_wall_done: on(b.display_wall_state),
+      material_done: on(b.material_state),
+      pk_pending: pending(b.pk_state),
+      merchandiser_pending: pending(b.merchandiser_state),
+      display_wall_pending: pending(b.display_wall_state),
+      material_pending: pending(b.material_state),
+      fully_through:
+        on(b.pk_state) + on(b.merchandiser_state) + on(b.display_wall_state) + on(b.material_state) === 4
+          ? 1
+          : 0,
+      not_started: 0,
+    };
+  }, [focus, branches]);
 
   // Grouped by what is wrong, most of it first — the same union a rep meets one
   // row at a time, read as a list of problems with names against them.
@@ -174,6 +251,7 @@ export function ManagerHome({ name }: { name: string }) {
     const map = new Map<string, number>();
     for (const e of slipping) {
       if (!e.exception_type) continue;
+      if (focus && e.subject_id !== focus.id) continue;
       map.set(e.exception_type, (map.get(e.exception_type) ?? 0) + 1);
     }
     return [...map.entries()]
@@ -184,7 +262,12 @@ export function ManagerHome({ name }: { name: string }) {
       }))
       .sort((a, b) => Number(b.danger) - Number(a.danger) || b.count - a.count)
       .slice(0, 4);
-  }, [slipping]);
+  }, [slipping, focus]);
+
+  // The figures travel to their new value rather than jumping, so a number
+  // that changed because someone asked a different question looks like it.
+  const openTween = useTween(totals.open);
+  const quotesTween = useTween(totals.quotes);
 
   return (
     <div className="stack pt-2">
@@ -197,37 +280,71 @@ export function ManagerHome({ name }: { name: string }) {
         </p>
       </section>
 
-      <section className="grid grid-cols-2 gap-3">
+      {focus && (
+        <div className="focus-bar">
+          <span className="focus-swatch" style={{ background: focus.colour }} aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="focus-name block truncate">{focus.name}</span>
+            <span className="focus-kind">
+              {focus.kind === "DISTRIBUTOR"
+                ? "distributor · everything below is theirs"
+                : focus.kind === "DEALER"
+                  ? "dealer · everything below is theirs"
+                  : "everything below is theirs"}
+            </span>
+          </span>
+          <button type="button" className="focus-clear" onClick={() => setFocus(null)}>
+            Show all
+          </button>
+        </div>
+      )}
+
+      <section className="adapt grid grid-cols-2 gap-3" key={`tiles-${focus?.id ?? "all"}`}>
         <div className="card card-pad">
-          <div className="t-meta uppercase tracking-wide">Open pipeline</div>
+          <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
           <div className="mt-1 text-2xl font-bold tracking-tight">
-            {formatMoney(totals.open)}
+            {formatMoney(Math.round(openTween))}
           </div>
-          <div className="t-meta mt-0.5">
-            {totals.openCount} open {totals.openCount === 1 ? "deal" : "deals"}
-          </div>
+          <div className="t-meta mt-0.5">{totals.openHint}</div>
         </div>
         <div className="card card-pad">
-          <div className="t-meta uppercase tracking-wide">Out for quote</div>
+          <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
           <div className="mt-1 text-2xl font-bold tracking-tight">
-            {totals.quotes}
+            {QTY.format(Math.round(quotesTween))}
           </div>
-          <div className="t-meta mt-0.5">waiting on an answer</div>
+          <div className="t-meta mt-0.5">{totals.quotesHint}</div>
         </div>
       </section>
 
       {/* Sales first: the bar they asked for, banded by customer, opening in
           place rather than sending anyone to another screen. */}
-      <TeamSales rows={dealerSales} repMeta={repMeta} />
+      <TeamSales
+        rows={dealerSales}
+        repMeta={repMeta}
+        focus={focus}
+        onFocus={setFocus}
+      />
 
       {/* Bianca's tracker, as the journey a branch walks rather than four
           numbers in a box. */}
-      {rollout && <RolloutTimeline counts={rollout} />}
+      {/* The rollout answers for one branch when one is chosen, and steps
+          aside for a distributor — a house does not have a display wall. */}
+      <div className="adapt" key={`gates-${focus?.id ?? "all"}`}>
+        {focus ? (
+          focusedGates ? (
+            <RolloutTimeline counts={focusedGates} heading="Their rollout" />
+          ) : null
+        ) : (
+          rollout && <RolloutTimeline counts={rollout} />
+        )}
+      </div>
 
-      <MonthByMonth rows={wonMonths} nowMs={loadedAt} />
+      <div className="adapt" key={`months-${focus?.id ?? "all"}`}>
+        <MonthByMonth rows={monthRows} nowMs={loadedAt} />
+      </div>
 
       {slippingGroups.length > 0 && (
-        <section>
+        <section className="adapt" key={`slip-${focus?.id ?? "all"}`}>
           <div className="section-head">
             <h2 className="t-section">What&rsquo;s slipping</h2>
             <Link href="/dashboard" className="t-action">
