@@ -17,10 +17,12 @@ import Link from "next/link";
 import { displayAccountName, formatMoney } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export interface DealerSalesRow {
+export interface CustomerSalesRow {
   owner_id: string;
-  dealer_id: string;
-  dealer_name: string;
+  customer_id: string;
+  customer_name: string;
+  /** DEALER or DISTRIBUTOR — GMX sells to both, and the band says which. */
+  customer_type: string;
   unit: string;
   won_qty: number;
   out_qty: number;
@@ -53,16 +55,17 @@ const MAX_BANDS = 6;
 interface Band {
   id: string;
   name: string;
+  kind: string | null;
   qty: number;
   colour: string;
-  row: DealerSalesRow | null;
+  row: CustomerSalesRow | null;
 }
 
 export function TeamSales({
   rows,
   repMeta,
 }: {
-  rows: readonly DealerSalesRow[];
+  rows: readonly CustomerSalesRow[];
   repMeta: ReadonlyMap<string, { name: string; patch: string }>;
 }) {
   // One selection across the whole section: two reps' bars both blown open at
@@ -73,7 +76,7 @@ export function TeamSales({
   const [visits, setVisits] = useState<VisitRow[] | null>(null);
 
   const teams = useMemo(() => {
-    const byOwner = new Map<string, DealerSalesRow[]>();
+    const byOwner = new Map<string, CustomerSalesRow[]>();
     for (const r of rows) {
       if (Number(r.won_qty) <= 0) continue;
       const list = byOwner.get(r.owner_id) ?? [];
@@ -88,8 +91,9 @@ export function TeamSales({
         const head = sorted.slice(0, MAX_BANDS);
         const tail = sorted.slice(MAX_BANDS);
         const bands: Band[] = head.map((r, i) => ({
-          id: r.dealer_id,
-          name: displayAccountName(r.dealer_name),
+          id: r.customer_id,
+          name: displayAccountName(r.customer_name),
+          kind: r.customer_type,
           qty: Number(r.won_qty),
           colour: BAND_COLOURS[i],
           row: r,
@@ -98,6 +102,7 @@ export function TeamSales({
           bands.push({
             id: "rest",
             name: `${tail.length} more`,
+            kind: null,
             qty: tail.reduce((n, r) => n + Number(r.won_qty), 0),
             colour: "var(--cat-rest)",
             row: null,
@@ -217,7 +222,14 @@ export function TeamSales({
               {band && (
                 <div className="sales-detail">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="t-title">{band.name}</span>
+                    <span className="t-title">
+                      {band.name}
+                      {band.kind ? (
+                        <span className="t-meta ml-2">
+                          {band.kind === "DISTRIBUTOR" ? "distributor" : "dealer"}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="t-meta tabular-nums">
                       {QTY.format(band.qty)} {t.unit} won
                     </span>

@@ -48,8 +48,9 @@ interface ExceptionRow {
 // The breakdown leadership drew on the "SEE MORE" buttons, in the unit they
 // asked for: "UM BREAKDOWN DE VENDAS BY DEALER — ganhou 30.000 LF".
 interface DealerSalesRow {
-  dealer_id: string;
-  dealer_name: string;
+  customer_id: string;
+  customer_name: string;
+  customer_type: string;
   unit: string;
   won_qty: number;
   out_qty: number;
@@ -132,8 +133,8 @@ export default function RepPage() {
         .eq("owner_membership_id", id)
         .limit(500),
       supabase
-        .from("dashboard_dealer_sales")
-        .select("dealer_id, dealer_name, unit, won_qty, out_qty, open_qty, won_value")
+        .from("dashboard_customer_sales")
+        .select("customer_id, customer_name, customer_type, unit, won_qty, out_qty, open_qty, won_value")
         .eq("owner_id", id)
         .limit(200),
     ]);
@@ -379,7 +380,7 @@ export default function RepPage() {
         <section>
           <div className="section-head">
             <h2 className="t-section">
-              What their dealers <span style={{ color: "var(--ink-muted)" }}>are moving</span>
+              What their customers <span style={{ color: "var(--ink-muted)" }}>are moving</span>
             </h2>
             <span className="t-meta">
               {QTY.format(dealerSales.reduce((n, d) => n + Number(d.won_qty), 0))} LF won
@@ -405,10 +406,10 @@ export default function RepPage() {
                     ["var(--surface-sunken)", open],
                   ] as const;
                   return (
-                    <li key={d.dealer_id}>
+                    <li key={d.customer_id}>
                       <div className="flex items-baseline justify-between gap-3">
-                        <Link href={`/accounts/${d.dealer_id}`} className="t-title truncate">
-                          {displayAccountName(d.dealer_name)}
+                        <Link href={`/accounts/${d.customer_id}`} className="t-title truncate">
+                          {displayAccountName(d.customer_name)}
                         </Link>
                         <span className="t-meta shrink-0 tabular-nums">
                           {QTY.format(won)} {d.unit}

@@ -15,8 +15,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
-import { PlanLens } from "@/components/plan-lens";
-import { TeamSales, type DealerSalesRow } from "@/components/team-sales";
+import { TeamSales, type CustomerSalesRow } from "@/components/team-sales";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type { RolloutCounts } from "@/lib/domain/rollout";
@@ -56,7 +55,7 @@ export function ManagerHome({ name }: { name: string }) {
   const [rollout, setRollout] = useState<RolloutCounts | null>(null);
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
-  const [dealerSales, setDealerSales] = useState<DealerSalesRow[]>([]);
+  const [dealerSales, setDealerSales] = useState<CustomerSalesRow[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [hour, setHour] = useState<number | null>(null);
 
@@ -99,9 +98,9 @@ export function ManagerHome({ name }: { name: string }) {
         .from("dashboard_pipeline")
         .select("stage, opportunity_count, total_value"),
       supabase
-        .from("dashboard_dealer_sales")
+        .from("dashboard_customer_sales")
         .select(
-          "owner_id, dealer_id, dealer_name, unit, won_qty, out_qty, open_qty, won_value",
+          "owner_id, customer_id, customer_name, customer_type, unit, won_qty, out_qty, open_qty, won_value",
         )
         .limit(500),
     ]);
@@ -111,7 +110,7 @@ export function ManagerHome({ name }: { name: string }) {
     setRollout(ro.error ? null : ((ro.data as RolloutCounts | null) ?? null));
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
-    setDealerSales(ds.error ? [] : ((ds.data as DealerSalesRow[]) ?? []));
+    setDealerSales(ds.error ? [] : ((ds.data as CustomerSalesRow[]) ?? []));
     setLoadedAt(Date.now());
   }, []);
 
@@ -138,11 +137,6 @@ export function ManagerHome({ name }: { name: string }) {
     () => new Map([...repMeta].map(([id, v]) => [id, v.name])),
     [repMeta],
   );
-  const repPatch = useMemo(
-    () => new Map([...repMeta].map(([id, v]) => [id, v.patch])),
-    [repMeta],
-  );
-
   const week = useMemo(
     () => (loadedAt === null ? null : latestStartedWeek(channel, loadedAt)),
     [channel, loadedAt],
@@ -225,17 +219,6 @@ export function ManagerHome({ name }: { name: string }) {
       {/* Sales first: the bar they asked for, banded by customer, opening in
           place rather than sending anyone to another screen. */}
       <TeamSales rows={dealerSales} repMeta={repMeta} />
-
-      {/* The lens leadership marked up, on the screen they open rather than
-          one they have to go and find: the same week by rep, by distributor,
-          by dealer. Tapping a row opens whoever or whatever it names. */}
-      <PlanLens
-        rows={channel}
-        repName={repName}
-        repPatch={repPatch}
-        nowMs={loadedAt}
-        heading="The team &amp; the week"
-      />
 
       {/* Bianca's tracker, as the journey a branch walks rather than four
           numbers in a box. */}

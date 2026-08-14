@@ -121,7 +121,7 @@ select is(
   (select created::int from dashboard_stage_flow
     where owner_id = 'c0000000-0000-0000-0000-000000000004'
       and week_start = date_trunc('week', now())::date),
-  3, 'dashboard_stage_flow separates creations from advances'
+  4, 'dashboard_stage_flow separates creations from advances'
 );
 
 -- D46: planned vs actual for the current week.
