@@ -118,6 +118,22 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
    'REFERRAL_DEALER', null, 'd0000000-0000-0000-0000-000000000001',
    null, false, null, 'HIGH'),
+  -- Distributors. Leadership's markup of the manager view (13 Aug 2026) splits
+  -- a rep's week by whose distributor business it was — Boise and Hardwoods on
+  -- Deon's bar, Russin on TJ's — so the channel above the dealer has to exist
+  -- in the data before the chart can say anything.
+  ('d0000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
+   'Boise Cascade', 'DISTRIBUTOR', 'Anaheim', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'STRATEGIC'),
+  ('d0000000-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111',
+   'Hardwoods Specialty', 'DISTRIBUTOR', 'Santa Fe Springs', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
+  ('d0000000-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111',
+   'Russin Lumber', 'DISTRIBUTOR', 'Montgomery', 'NY',
+   'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
   -- org2
   ('d2000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222',
    'Acme Dealer Central', 'DEALER', 'Springfield', 'IL',
@@ -161,7 +177,23 @@ insert into account_relationships (id, org_id, account_a_id, relationship_type,
   ('d3200000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222',
    'd2000000-0000-0000-0000-000000000002', 'REFERRED_BY',
    'd2000000-0000-0000-0000-000000000001', 'WEAK',
-   'c0000000-0000-0000-0000-000000000007');
+   'c0000000-0000-0000-0000-000000000007'),
+  -- Who supplies which branch. Stated as "A SUPPLIES B", the direction
+  -- dashboard_plan_by_channel reads to put a visit under a distributor.
+  -- Anaheim and Orange run through different houses on purpose: that is the
+  -- case the banner lens cannot see and the distributor lens can.
+  ('d3000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
+   'd0000000-0000-0000-0000-000000000005', 'SUPPLIES',
+   'd0000000-0000-0000-0000-000000000001', 'STRONG',
+   'c0000000-0000-0000-0000-000000000004'),
+  ('d3000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111',
+   'd0000000-0000-0000-0000-000000000006', 'SUPPLIES',
+   'd0000000-0000-0000-0000-000000000002', 'MODERATE',
+   'c0000000-0000-0000-0000-000000000004'),
+  ('d3000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
+   'd0000000-0000-0000-0000-000000000007', 'SUPPLIES',
+   'd0000000-0000-0000-0000-000000000003', 'STRONG',
+   'c0000000-0000-0000-0000-000000000003');
 
 -- Projects (D5: project ≠ opportunity) ----------------------------------------
 
@@ -215,7 +247,33 @@ insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
   ('f1200000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222',
    'Send decking quote', 'c0000000-0000-0000-0000-000000000007', current_date + 3,
    'd2000000-0000-0000-0000-000000000002',
-   'f0000000-0000-0000-0000-000000000002', 'COLLECT_QUOTE');
+   'f0000000-0000-0000-0000-000000000002', 'COLLECT_QUOTE'),
+  -- A week with a shape to it, so the manager view has something to divide.
+  -- Dated off date_trunc so they stay inside one week whenever the seed runs,
+  -- rather than drifting across the Monday boundary on a Friday reset.
+  -- Deon runs two banners through two different houses; TJ runs one.
+  ('f1000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
+   'Counter refresh — Thermo-Ash facings',
+   'c0000000-0000-0000-0000-000000000004',
+   date_trunc('week', current_date)::date, 'd0000000-0000-0000-0000-000000000002',
+   null, 'MERCHANDISING_CHECK'),
+  ('f1000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111',
+   'Walk the yard with the buyer', 'c0000000-0000-0000-0000-000000000004',
+   date_trunc('week', current_date)::date + 3, 'd0000000-0000-0000-0000-000000000002',
+   null, 'RELATIONSHIP_MAINTENANCE'),
+  ('f1000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
+   'Restock sample box', 'c0000000-0000-0000-0000-000000000004',
+   date_trunc('week', current_date)::date + 2, 'd0000000-0000-0000-0000-000000000001',
+   null, 'MERCHANDISING_CHECK'),
+  ('f1000000-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111',
+   'Follow up the PK leads', 'c0000000-0000-0000-0000-000000000003',
+   date_trunc('week', current_date)::date + 1, 'd0000000-0000-0000-0000-000000000003',
+   null, 'FOLLOW_UP_LEAD'),
+  ('f1000000-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111',
+   'Stocking conversation with the owner',
+   'c0000000-0000-0000-0000-000000000003',
+   date_trunc('week', current_date)::date + 3, 'd0000000-0000-0000-0000-000000000003',
+   null, 'CONVERT_STOCKING_DEALER');
 
 -- Activities (planned-done + unplanned, D45/D46) ------------------------------
 
@@ -238,7 +296,22 @@ insert into activities (id, org_id, activity_type, primary_account_id, owner_id,
   ('ac200000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222',
    'PHONE_CALL', 'd2000000-0000-0000-0000-000000000001',
    'c0000000-0000-0000-0000-000000000007', now(), false, null, null,
-   'Intro call with Casey', '{RELATIONSHIP_DEVELOPMENT}', false, null);
+   'Intro call with Casey', '{RELATIONSHIP_DEVELOPMENT}', false, null),
+  -- Half of the week above kept, half still owed: the gap is the whole point
+  -- of the chart, so the seed has to contain one.
+  ('ac000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
+   'DEALER_VISIT', 'd0000000-0000-0000-0000-000000000002',
+   'c0000000-0000-0000-0000-000000000004',
+   date_trunc('week', current_date) + interval '1 day', true,
+   'f1000000-0000-0000-0000-000000000003', 'MERCHANDISING_CHECK',
+   'Facings redone, took a decking enquiry', '{OPPORTUNITY_IDENTIFIED}',
+   true, null),
+  ('ac000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111',
+   'DEALER_VISIT', 'd0000000-0000-0000-0000-000000000003',
+   'c0000000-0000-0000-0000-000000000003',
+   date_trunc('week', current_date) + interval '2 days', true,
+   'f1000000-0000-0000-0000-000000000006', 'FOLLOW_UP_LEAD',
+   'Chased both PK leads; one wants a quote', '{QUOTE_REQUESTED}', true, null);
 
 insert into activity_accounts (org_id, activity_id, account_id, role) values
   ('11111111-1111-1111-1111-111111111111', 'ac000000-0000-0000-0000-000000000002',

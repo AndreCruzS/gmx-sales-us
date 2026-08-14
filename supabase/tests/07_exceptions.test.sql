@@ -127,15 +127,18 @@ update account_relationships set last_confirmed_at = now()
 select is(pg_temp.exc('CONTRACTOR_RELATIONSHIP_STALE', 'd3000000-0000-0000-0000-000000000001'),
   0, 'CONTRACTOR_RELATIONSHIP_STALE clears on reconfirmation');
 
--- ── 8. New account with no follow-up (seeded Ganahl Orange has none) ────────
-select is(pg_temp.exc('NEW_ACCOUNT_NO_FOLLOW_UP', 'd0000000-0000-0000-0000-000000000002'),
+-- ── 8. New account with no follow-up (seeded Boise Cascade has none) ───────
+-- Boise, not Ganahl Orange: the seed now books Orange twice a week so the
+-- manager view has a distributor split to draw, and a door with visits on it
+-- is exactly what this rule is meant NOT to fire for.
+select is(pg_temp.exc('NEW_ACCOUNT_NO_FOLLOW_UP', 'd0000000-0000-0000-0000-000000000005'),
   1, 'NEW_ACCOUNT_NO_FOLLOW_UP fires for a fresh account with no next action');
 
 insert into next_actions (id, org_id, action, owner_id, due_date, account_id)
 values ('f1000000-0000-0000-0000-0000000000b8', '11111111-1111-1111-1111-111111111111',
-        'Intro visit to Orange branch', 'c0000000-0000-0000-0000-000000000004',
-        current_date + 3, 'd0000000-0000-0000-0000-000000000002');
-select is(pg_temp.exc('NEW_ACCOUNT_NO_FOLLOW_UP', 'd0000000-0000-0000-0000-000000000002'),
+        'Intro call to the Boise desk', 'c0000000-0000-0000-0000-000000000004',
+        current_date + 3, 'd0000000-0000-0000-0000-000000000005');
+select is(pg_temp.exc('NEW_ACCOUNT_NO_FOLLOW_UP', 'd0000000-0000-0000-0000-000000000005'),
   0, 'NEW_ACCOUNT_NO_FOLLOW_UP clears once a next action is scheduled');
 
 -- ── 9. Next week not planned (D47) — deadline weekday is org-configurable ───

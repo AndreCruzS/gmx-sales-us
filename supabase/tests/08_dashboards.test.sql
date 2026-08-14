@@ -129,14 +129,14 @@ select is(
   (select planned_total::int from dashboard_planned_vs_actual
     where owner_id = 'c0000000-0000-0000-0000-000000000004'
       and week_start = date_trunc('week', current_date)::date),
-  1, 'planned_total counts this week''s agenda commitments'
+  4, 'planned_total counts this week''s agenda commitments'
 );
 
 select is(
   (select planned_done::int from dashboard_planned_vs_actual
     where owner_id = 'c0000000-0000-0000-0000-000000000004'
       and week_start = date_trunc('week', current_date)::date),
-  1, 'planned_done counts agenda items an activity linked back to (D46)'
+  2, 'planned_done counts agenda items an activity linked back to (D46)'
 );
 
 select is(
@@ -150,7 +150,7 @@ select is(
 select is(
   (select open_next_actions::int from dashboard_rep_scorecard
     where membership_id = 'c0000000-0000-0000-0000-000000000004'),
-  2, 'rep scorecard counts open next actions'
+  5, 'rep scorecard counts open next actions'
 );
 
 select is(
@@ -159,18 +159,18 @@ select is(
   0, 'rep scorecard counts quotes outstanding'
 );
 
--- Territory rollup: SoCal holds banner + 2 branches + contractor.
+-- Territory rollup: SoCal holds banner + 2 branches + contractor + 2 distributors.
 select is(
   (select account_count::int from dashboard_territory
     where territory_id = 'b0000000-0000-0000-0000-000000000002'),
-  4, 'territory rollup counts its accounts'
+  6, 'territory rollup counts its accounts'
 );
 
 -- Weekly review inputs.
 select is(
   (select count(*)::int from weekly_review_recent_activity
     where org_id = '11111111-1111-1111-1111-111111111111'),
-  2, 'weekly review picks up both reps'' recent activity'
+  4, 'weekly review picks up both reps'' recent activity'
 );
 
 select cmp_ok(

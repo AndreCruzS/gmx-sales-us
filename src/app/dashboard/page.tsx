@@ -9,6 +9,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
+import {
+  groupFor,
+  latestStartedWeek,
+  type ChannelRow,
+  type Lens,
+} from "@/lib/domain/channel";
 import { formatDay } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -80,6 +86,24 @@ interface ExceptionRow {
 // you sit in, so they read as tiles rather than funnel rows.
 const FUNNEL = ["IDENTIFIED", "QUALIFIED", "DEVELOPMENT", "QUOTE", "DECISION"];
 
+// The three ways leadership asked to read the team (13 Aug markup): the rep,
+// the house the product comes through, and the door it is sold at.
+const LENSES: readonly (readonly [Lens, string])[] = [
+  ["rep", "By rep"],
+  ["distributor", "By distributor"],
+  ["dealer", "By dealer"],
+];
+
+// Steps of the SAME teal, not a categorical palette. Kept work is teal on this
+// page and clay means slipping; handing distributors their own hues would put
+// a second meaning on colour and break both. The legend names the segments.
+const SEGMENT_TINT = [
+  "var(--accent)",
+  "color-mix(in srgb, var(--accent) 62%, var(--surface-card))",
+  "var(--accent-deep)",
+  "color-mix(in srgb, var(--accent) 38%, var(--surface-card))",
+];
+
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -133,6 +157,11 @@ export default function DashboardPage() {
   const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [rollout, setRollout] = useState<RolloutRow | null>(null);
+  const [channel, setChannel] = useState<ChannelRow[]>([]);
+  // Which way the team is being read. "By rep" is the opening question a
+  // manager asks; the other two are the ones leadership asked for.
+  const [lens, setLens] = useState<Lens>("rep");
+  const [opened, setOpened] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Admin-only card (Task 13); the route 403s reps, and we render nothing
@@ -142,7 +171,7 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [p, s, t, pv, f, ex, ro] = await Promise.all([
+    const [p, s, t, pv, f, ex, ro, ch] = await Promise.all([
       supabase
         .from("dashboard_pipeline")
         .select("owner_id, territory_id, stage, opportunity_count, total_value, weighted_value"),
@@ -180,6 +209,15 @@ export default function DashboardPage() {
           "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through, not_started",
         )
         .maybeSingle(),
+      // The same plan, one row per account, carrying the distributor behind
+      // each door — this is what lets the bars split and the lens switch.
+      supabase
+        .from("dashboard_plan_by_channel")
+        .select(
+          "owner_id, week_start, account_id, account_name, account_type, distributor_id, distributor_name, distributor_options, planned_total, planned_done",
+        )
+        .order("week_start", { ascending: false })
+        .limit(1000),
     ]);
     const firstError = [p, s, t, pv, f].map((r) => r.error).find(Boolean);
     // The exception union is additive to this page — if it fails, the numbers
@@ -196,6 +234,7 @@ export default function DashboardPage() {
     setFlow((f.data as FlowRow[]) ?? []);
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
     setRollout(ro.error ? null : ((ro.data as RolloutRow | null) ?? null));
+    setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setLoadedAt(Date.now());
     setLoaded(true);
   }, []);
@@ -231,51 +270,46 @@ export default function DashboardPage() {
     return m;
   }, [scorecard]);
 
-  // "Did they do what they said", per rep, for the most recent week the view
-  // reports. The weekly table below still answers the trend question; this
-  // answers the one a manager actually opens with — who is behind, right now.
-  const thisWeek = useMemo(() => {
-    if (planned.length === 0 || loadedAt === null) {
-      return { week: null as string | null, rows: [] };
-    }
-    // Only weeks that have actually started. The view also reports next week's
-    // plan, and the newest row is often that — asking "did they do what they
-    // said" about a week nobody has lived yet accuses people of nothing.
-    const started = planned.filter((r) => Date.parse(r.week_start) <= loadedAt);
-    if (started.length === 0) return { week: null as string | null, rows: [] };
-    const week = started.reduce(
-      (max, r) => (r.week_start > max ? r.week_start : max),
-      started[0].week_start,
+  // The same week, read through whichever lens is selected. The week comes
+  // from the channel rows themselves so the bars and the caption can never
+  // disagree, and the future-week guard is the same one thisWeek applies:
+  // asking "did they do what they said" about a week nobody has lived yet
+  // accuses people of nothing.
+  const channelWeek = useMemo(
+    () => (loadedAt === null ? null : latestStartedWeek(channel, loadedAt)),
+    [channel, loadedAt],
+  );
+
+  const groups = useMemo(() => {
+    if (!channelWeek) return [];
+    return groupFor(
+      lens,
+      channel.filter((r) => r.week_start === channelWeek),
+      repName,
     );
-    const rows = started
-      .filter((r) => r.week_start === week)
-      .map((r) => {
-        const total = Number(r.planned_total);
-        const done = Number(r.planned_done);
-        return {
-          owner: r.owner_id,
-          name: repName.get(r.owner_id) ?? "—",
-          total,
-          done,
-          // What is left of a plan is "still to come" mid-week and "never
-          // happened" once the week is behind us. Calling it the wrong one is
-          // the difference between a nudge and an accusation.
-          outstanding: Math.max(0, total - done),
-          unplanned: Number(r.unplanned),
-        };
-      })
-      .sort((a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name));
-    return { week, rows };
-  }, [planned, repName, loadedAt]);
+  }, [channel, channelWeek, lens, repName]);
+
+  // Unplanned work is a rep's own number — it is a visit that never had a plan
+  // to belong to, so it cannot be attributed to a distributor or a door. It
+  // rides along on the rep lens only, from the view that does count it.
+  const unplannedByRep = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!channelWeek) return m;
+    for (const r of planned) {
+      if (r.week_start !== channelWeek) continue;
+      m.set(r.owner_id, (m.get(r.owner_id) ?? 0) + Number(r.unplanned));
+    }
+    return m;
+  }, [planned, channelWeek]);
 
   // Stamped when the data loads, not read during render — the clock is an
   // external system, and reading it mid-render makes the label flip on any
   // unrelated re-render.
   const weekIsCurrent = useMemo(() => {
-    if (!thisWeek.week || loadedAt === null) return false;
-    const start = new Date(thisWeek.week).getTime();
+    if (!channelWeek || loadedAt === null) return false;
+    const start = new Date(channelWeek).getTime();
     return loadedAt - start < 7 * 24 * 60 * 60 * 1000;
-  }, [thisWeek.week, loadedAt]);
+  }, [channelWeek, loadedAt]);
 
   // Grouped by what is wrong, with the people it belongs to — the demo's
   // "what's slipping", which is a manager's read of the same exception union
@@ -427,8 +461,10 @@ export default function DashboardPage() {
 
       {/* Did they do what they said. A manager's day is people before money,
           so this sits above the pipeline. One bar per rep, the plan they made
-          against the part of it they kept. */}
-      {thisWeek.rows.length > 0 && (
+          against the part of it they kept — and, since the 13 Aug markup, the
+          kept part split by whose distributor business it was. The lens turns
+          the same week inside out: by rep, by distributor, by dealer. */}
+      {groups.length > 0 && (
         <section>
           <div className="section-head">
             <h2 className="t-section">Did they do what they said</h2>
@@ -436,45 +472,131 @@ export default function DashboardPage() {
                 days"), which is right on a due date and nonsense after
                 "week of". */}
             <span className="t-meta">
-              {thisWeek.week ? `week of ${weekOf(thisWeek.week)}` : ""}
+              {channelWeek ? `week of ${weekOf(channelWeek)}` : ""}
             </span>
           </div>
+
+          <div className="chip-row mb-3" role="group" aria-label="Look at the week by">
+            {LENSES.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className="chip"
+                aria-pressed={lens === key}
+                onClick={() => {
+                  setLens(key);
+                  setOpened(null);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <ul className="stack-sm">
-            {thisWeek.rows.map((r) => {
-              const pct = r.total === 0 ? 0 : Math.round((100 * r.done) / r.total);
+            {groups.map((g) => {
+              const isOpen = opened === g.id;
+              const unplanned = lens === "rep" ? (unplannedByRep.get(g.id) ?? 0) : 0;
               return (
-                <li key={r.owner}>
-                  <Link
-                    href={`/accounts?owner=${r.owner}`}
-                    className="block py-2"
+                <li key={g.id}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    {lens === "rep" ? (
+                      <Link href={`/accounts?owner=${g.id}`} className="t-title">
+                        {g.label}
+                      </Link>
+                    ) : (
+                      <span className="t-title">{g.label}</span>
+                    )}
+                    <span className="t-meta tabular-nums">
+                      {g.done}/{g.total}
+                      {unplanned > 0 ? ` · ${unplanned} unplanned` : ""}
+                    </span>
+                  </div>
+
+                  {/* One bar, segmented by what the lens is NOT grouping on.
+                      Kept work is teal in step tints; what is still owed stays
+                      the empty track, so the bar reads the same as every other
+                      bar on this page. */}
+                  <div
+                    className="mt-1 flex h-2 overflow-hidden rounded"
+                    style={{ background: "var(--rule)" }}
+                    role="img"
+                    aria-label={`${g.done} of ${g.total} planned visits done, split ${g.segments
+                      .map((s) => `${s.label} ${s.done} of ${s.total}`)
+                      .join(", ")}`}
                   >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="t-title">{r.name}</span>
-                      <span className="t-meta tabular-nums">
-                        {r.done}/{r.total}
-                        {r.unplanned > 0 ? ` · ${r.unplanned} unplanned` : ""}
-                      </span>
-                    </div>
-                    <div
-                      className="mt-1 flex h-2 overflow-hidden rounded"
-                      style={{ background: "var(--rule)" }}
-                      role="img"
-                      aria-label={`${r.done} of ${r.total} planned visits done`}
-                    >
+                    {g.segments.map((s, i) => (
                       <span
+                        key={s.id}
                         style={{
-                          width: `${pct}%`,
-                          background: "var(--accent, currentColor)",
+                          width: g.total === 0 ? 0 : `${(100 * s.done) / g.total}%`,
+                          background: SEGMENT_TINT[i % SEGMENT_TINT.length],
                         }}
                       />
+                    ))}
+                  </div>
+
+                  {/* The legend is what carries identity — a tint can only
+                      separate segments, it cannot name them. */}
+                  {g.segments.length > 0 && (
+                    <p className="t-meta mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                      {g.segments.map((s, i) => (
+                        <span key={s.id} className="inline-flex items-center gap-1.5">
+                          <span
+                            aria-hidden="true"
+                            className="inline-block h-2 w-2 rounded-full"
+                            style={{ background: SEGMENT_TINT[i % SEGMENT_TINT.length] }}
+                          />
+                          {s.label} <span className="tabular-nums">{s.done}/{s.total}</span>
+                        </span>
+                      ))}
+                    </p>
+                  )}
+
+                  {g.outstanding > 0 && (
+                    <span className="t-sub">
+                      {g.outstanding}{" "}
+                      {weekIsCurrent ? "still to come" : "never happened"}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    className="t-action mt-1 block underline underline-offset-2"
+                    aria-expanded={isOpen}
+                    onClick={() => setOpened(isOpen ? null : g.id)}
+                  >
+                    {isOpen ? "Less" : "See more"}
+                  </button>
+
+                  {isOpen && (
+                    <div className="card card-pad mt-2">
+                      <p className="t-meta uppercase tracking-wide">
+                        {lens === "distributor" ? "By door" : "By distributor"}
+                      </p>
+                      <ul className="mt-2 flex flex-col gap-1.5">
+                        {g.segments.map((s) => (
+                          <li
+                            key={s.id}
+                            className="flex items-baseline justify-between gap-3"
+                          >
+                            <span className="t-sub truncate">{s.label}</span>
+                            <span className="t-meta tabular-nums shrink-0">
+                              {s.done}/{s.total} visits
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      {/* The breakdown leadership asked for is in linear feet,
+                          and those figures live in the distributors' shared
+                          spreadsheet, not here. Saying so beats an empty column
+                          that looks like a zero. */}
+                      <p className="t-sub mt-3">
+                        Volume in LF comes from the distributors&rsquo; report —
+                        not connected yet.
+                      </p>
                     </div>
-                    {r.outstanding > 0 && (
-                      <span className="t-sub">
-                        {r.outstanding}{" "}
-                        {weekIsCurrent ? "still to come" : "never happened"}
-                      </span>
-                    )}
-                  </Link>
+                  )}
                 </li>
               );
             })}

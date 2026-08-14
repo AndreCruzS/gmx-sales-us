@@ -19,15 +19,17 @@ select has_column('public', 'voice_captures', 'account_id', 'captures link accou
 select has_column('public', 'voice_captures', 'planned_action_id', 'captures link plan');
 
 -- ── Backfill fixtures (test 4) ───────────────────────────────────────────────
--- The seed's own next_actions (f1000000…0001/0002) were backfilled to VISIT
+-- The seed's own next_actions (every f1000000… row) were backfilled to VISIT
 -- when this migration first ran against the already-seeded local stack; they
--- would pollute the exact-count assertion below, so clear them first. Null
--- the activity's planned_action_id first (immediate FK, not deferrable).
+-- would pollute the exact-count assertion below, so clear them first. Matched
+-- by prefix rather than listed by id: the seed's week grows whenever the demo
+-- needs more shape, and a hardcoded list silently stops covering it. Null the
+-- activities' planned_action_id first (immediate FK, not deferrable).
 update activities set planned_action_id = null
- where id = 'ac000000-0000-0000-0000-000000000002';
-delete from next_actions
- where id in ('f1000000-0000-0000-0000-000000000001',
-              'f1000000-0000-0000-0000-000000000002');
+ where planned_action_id in (
+   select id from next_actions where id::text like 'f1000000-%'
+ );
+delete from next_actions where id::text like 'f1000000-%';
 
 insert into next_actions (id, org_id, action, owner_id, due_date) values
   ('f9000000-0000-0000-0000-000000000001', :'org_a',

@@ -90,32 +90,32 @@ end;
 $$;
 
 -- Rep: own rows, never a peer's (TJ=Buffalo, Deon=SoCal).
-select is((select val from _vis where check_name = 'tj_own_activities'),  1::bigint, 'rep sees own activities');
+select is((select val from _vis where check_name = 'tj_own_activities'),  2::bigint, 'rep sees own activities');
 select is((select val from _vis where check_name = 'tj_peer_activities'), 0::bigint, 'rep sees zero peer activities');
-select is((select val from _vis where check_name = 'tj_all_activities'),  1::bigint, 'rep unfiltered feed is own rows only');
+select is((select val from _vis where check_name = 'tj_all_activities'),  2::bigint, 'rep unfiltered feed is own rows only');
 select is((select val from _vis where check_name = 'tj_buffalo_accounts'), 1::bigint, 'rep sees own-territory account');
 select is((select val from _vis where check_name = 'tj_socal_accounts'),  0::bigint, 'rep cannot see peer-territory account');
 select is((select val from _vis where check_name = 'tj_peer_next_actions'), 0::bigint, 'rep sees zero peer next actions');
 select is((select sqlstate from _dml where check_name = 'tj_insert_for_peer'), '42501',
   'rep cannot insert a record owned by a peer');
 
-select is((select val from _vis where check_name = 'deon_socal_accounts'), 4::bigint,
-  'rep sees all accounts in own territory (banner + 2 branches + contractor)');
+select is((select val from _vis where check_name = 'deon_socal_accounts'), 6::bigint,
+  'rep sees all accounts in own territory (banner + 2 branches + contractor + 2 distributors)');
 select is((select val from _vis where check_name = 'deon_buffalo_accounts'), 0::bigint,
   'SoCal rep cannot see Buffalo account');
 
 -- Manager: the manager_id chain fans out down, both reps visible.
-select is((select val from _vis where check_name = 'joao_team_activities'), 2::bigint,
+select is((select val from _vis where check_name = 'joao_team_activities'), 4::bigint,
   'manager sees both reps'' activities');
-select is((select val from _vis where check_name = 'joao_team_next_actions'), 2::bigint,
+select is((select val from _vis where check_name = 'joao_team_next_actions'), 7::bigint,
   'manager sees both reps'' next actions');
 
 -- Admin: org-wide.
-select is((select val from _vis where check_name = 'admin_all_activities'), 2::bigint, 'admin sees all org activities');
-select is((select val from _vis where check_name = 'admin_all_accounts'), 5::bigint, 'admin sees all org accounts');
+select is((select val from _vis where check_name = 'admin_all_activities'), 4::bigint, 'admin sees all org activities');
+select is((select val from _vis where check_name = 'admin_all_accounts'), 8::bigint, 'admin sees all org accounts');
 
 -- Support (D53): assigned rep only, read AND write.
-select is((select val from _vis where check_name = 'eric_tj_activities'), 1::bigint, 'support sees assigned rep''s activities');
+select is((select val from _vis where check_name = 'eric_tj_activities'), 2::bigint, 'support sees assigned rep''s activities');
 select is((select val from _vis where check_name = 'eric_deon_activities'), 0::bigint, 'support sees zero unassigned-rep activities');
 select is(
   (select string_agg(check_name || '=' || sqlstate, ',' order by check_name)
