@@ -1041,6 +1041,12 @@ body {
 .navbar-icon:active {
   background: var(--surface-card);
 }
+/* The review count, homeless since Quotes took its tab. Same badge as the tab
+   bar wore, so a rep who learned that mark learns nothing new. */
+.navbar-review {
+  position: relative;
+  color: var(--ink-primary);
+}
 .navbar-back:focus-visible,
 .navbar-icon:focus-visible {
   outline: 2px solid var(--accent);

@@ -11,13 +11,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { ChevronRightIcon, SearchIcon } from "./icons";
+import { CheckIcon, ChevronRightIcon, SearchIcon } from "./icons";
 import { useOffline } from "./offline-provider";
 import { SyncBadge } from "./sync-badge";
+import { useReviewCount } from "@/lib/review/count";
 
 const TITLES: Record<string, string> = {
   "/": "Home",
-  "/visits": "Visits",
+  "/visits": "Agenda",
   "/routine": "Routine",
   "/accounts": "Accounts",
   "/accounts/new": "New account",
@@ -41,6 +42,7 @@ function nameFromEmail(email: string): string {
 
 export function NavBar() {
   const pathname = usePathname();
+  const reviewCount = useReviewCount();
   const router = useRouter();
   const { profile } = useOffline();
   const [territory, setTerritory] = useState<string | null>(null);
@@ -117,6 +119,23 @@ export function NavBar() {
         )}
 
         <div className="navbar-actions">
+          {/* Review lost its tab when Quotes took the slot, and Home's "waiting
+              your OK" card came off at leadership's request — so without this
+              a rep would have no way of learning a draft is waiting except by
+              being on Home. It follows them here instead, on every screen, and
+              only when there is actually something to answer for. */}
+          {reviewCount > 0 && !pathname.startsWith("/review") && (
+            <Link
+              href="/review"
+              className="navbar-icon navbar-review"
+              aria-label={`${reviewCount} waiting for your OK`}
+            >
+              <CheckIcon size={19} />
+              <span className="tab-badge" aria-hidden="true">
+                {reviewCount > 9 ? "9+" : reviewCount}
+              </span>
+            </Link>
+          )}
           {/* search lives on the Accounts tab now — the icon is a shortcut */}
           {!pathname.startsWith("/accounts") && (
             <Link href="/accounts" className="navbar-icon" aria-label="Find an account">

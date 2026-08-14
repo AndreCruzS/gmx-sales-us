@@ -1,8 +1,13 @@
 "use client";
 
 // Bottom tab bar — five destinations drawn from the rep's day, not from the
-// system's modules: my day, my accounts, add something, things waiting on me,
-// how it's going.
+// system's modules: my day, my week, add something, my patch, my money.
+//
+// The demo's own bar was Today · Card · [Talk] · Plan · Patch, and Card and
+// Talk have both moved inside the plus — which freed the two slots this now
+// spends on the week and on quotes. Review and Insights lost their tabs with
+// it: Review's count moved to the nav bar so it still follows a rep from
+// screen to screen, and Insights is a desk screen reached from Home.
 //
 // The centre is the elevated action, and it is a PLUS rather than a mic. A
 // rep's hand goes to the middle of the bar to put something into the system,
@@ -15,12 +20,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useReviewCount } from "@/lib/review/count";
 import {
   BuildingIcon,
   CalendarIcon,
-  ChartIcon,
-  CheckIcon,
   FileIcon,
   HomeIcon,
   MicrophoneIcon,
@@ -30,9 +32,9 @@ import {
 
 const TABS = [
   { href: "/", label: "Home", Icon: HomeIcon },
+  { href: "/visits", label: "Agenda", Icon: CalendarIcon },
   { href: "/accounts", label: "Accounts", Icon: BuildingIcon },
-  { href: "/review", label: "Review", Icon: CheckIcon },
-  { href: "/dashboard", label: "Insights", Icon: ChartIcon },
+  { href: "/quotes", label: "Quotes", Icon: FileIcon },
 ];
 
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
@@ -79,7 +81,6 @@ const CLOSE_MS = 280;
 
 export function TabBar() {
   const pathname = usePathname();
-  const reviewCount = useReviewCount();
   // Three states, not two: a menu that is on its way out is still on screen.
   const [addState, setAddState] = useState<"closed" | "open" | "closing">(
     "closed",
@@ -140,18 +141,16 @@ export function TabBar() {
 
   if (pathname === "/login") return null;
 
-  // /visits and /routine are both one tap behind Home (the day list moved to
-  // /visits in Task 4; the chore list is /routine, Task 8) but neither is its
-  // own tab destination — the Home tab stays lit while on either, same as how
-  // "/accounts/[id]" keeps the Accounts tab lit via startsWith.
+  // The week has its own tab now, so Home no longer claims /visits. /routine
+  // still has no tab of its own — it is a chore list a rep opens from Home and
+  // clears — so the Home tab stays lit while on it, the same way
+  // "/accounts/[id]" keeps Accounts lit via startsWith.
   const isActive = (href: string) =>
     href === "/"
-      ? pathname === "/" ||
-        pathname.startsWith("/visits") ||
-        pathname.startsWith("/routine")
+      ? pathname === "/" || pathname.startsWith("/routine")
       : pathname.startsWith(href);
 
-  const [today, accounts, review, insights] = TABS;
+  const [today, agenda, accounts, quotes] = TABS;
 
   return (
     <>
@@ -198,7 +197,7 @@ export function TabBar() {
           Commercial OS
         </Link>
 
-        {[today, accounts].map(({ href, label, Icon }) => (
+        {[today, agenda].map(({ href, label, Icon }) => (
           <Link
             key={href}
             href={href}
@@ -226,7 +225,7 @@ export function TabBar() {
           Add
         </button>
 
-        {[review, insights].map(({ href, label, Icon }) => (
+        {[accounts, quotes].map(({ href, label, Icon }) => (
           <Link
             key={href}
             href={href}
@@ -234,14 +233,7 @@ export function TabBar() {
             data-active={isActive(href)}
             aria-current={isActive(href) ? "page" : undefined}
           >
-            <span className="tab-icon">
-              <Icon size={21} />
-              {href === "/review" && reviewCount > 0 && (
-                <span className="tab-badge" aria-label={`${reviewCount} waiting for your review`}>
-                  {reviewCount > 9 ? "9+" : reviewCount}
-                </span>
-              )}
-            </span>
+            <Icon size={21} />
             {label}
           </Link>
         ))}
