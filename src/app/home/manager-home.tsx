@@ -85,7 +85,7 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("dashboard_rollout")
         .select(
-          "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through, not_started",
+          "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through, not_started, pk_pending, merchandiser_pending, display_wall_pending, material_pending",
         )
         .maybeSingle(),
       supabase

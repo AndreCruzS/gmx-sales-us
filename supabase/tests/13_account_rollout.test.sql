@@ -22,7 +22,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(14);
 
 select tests.set_claims('deon@gmxgroup.com', 'gmx-us');
 set local role authenticated;
@@ -103,10 +103,13 @@ select is(
 );
 
 -- 7. The aggregate the manager funnel reads.
+-- Ganahl Anaheim is genuinely through all four in the seed; the three-gate
+-- fixture above is not. If the aggregate counted a partial branch this would
+-- read 2 rather than 1.
 select is(
   (select fully_through from dashboard_rollout
     where org_id = '11111111-1111-1111-1111-111111111111'),
-  0::bigint,
+  1::bigint,
   'a branch three gates in is not counted as fully through'
 );
 
@@ -128,6 +131,33 @@ select is(
     where org_id = '22222222-2222-2222-2222-222222222222'),
   0::bigint,
   'RLS keeps another org''s rollout out of the view'
+);
+
+-- ── Three states, not two ───────────────────────────────────────────────────
+-- Her sheet records ok / pending / no, and counting only the "ok"s made a
+-- branch with a merchandiser being hired look like one where nobody had
+-- started. Pending is its own count.
+select is(
+  (select merchandiser_pending from dashboard_rollout
+    where org_id = '11111111-1111-1111-1111-111111111111'),
+  1::bigint,
+  'a gate in progress is counted as pending, not as done and not as nothing'
+);
+
+select is(
+  (select merchandiser_done from dashboard_rollout
+    where org_id = '11111111-1111-1111-1111-111111111111'),
+  1::bigint,
+  'a pending gate is never counted among the done'
+);
+
+-- A distributor is not a branch. The tracker's sections are dealer banners,
+-- and counting the houses would inflate every denominator on the book.
+select is(
+  (select count(*) from account_rollout_status
+    where account_id = 'd0000000-0000-0000-0000-000000000005'),
+  0::bigint,
+  'a DISTRIBUTOR never appears as a rollout branch'
 );
 
 select * from finish();

@@ -14,6 +14,12 @@ export interface RolloutCounts {
   material_done: number | null;
   fully_through: number | null;
   not_started?: number | null;
+  // Her sheet records ok / pending / no. Counting only the "ok"s made a branch
+  // with a merchandiser being hired look like one where nobody had started.
+  pk_pending?: number | null;
+  merchandiser_pending?: number | null;
+  display_wall_pending?: number | null;
+  material_pending?: number | null;
 }
 
 export type GateKey =
@@ -22,28 +28,39 @@ export type GateKey =
   | "display_wall_done"
   | "material_done";
 
+export type GatePendingKey =
+  | "pk_pending"
+  | "merchandiser_pending"
+  | "display_wall_pending"
+  | "material_pending";
+
 export const PIPELINE_GATES: readonly {
   key: GateKey;
+  pendingKey: GatePendingKey;
   label: string;
   hint: string;
 }[] = [
   {
     key: "pk_done",
+    pendingKey: "pk_pending",
     label: "PK class done",
     hint: "The counter staff know what they are selling",
   },
   {
     key: "merchandiser_done",
+    pendingKey: "merchandiser_pending",
     label: "Merchandiser assigned",
     hint: "Somebody owns the bay",
   },
   {
     key: "display_wall_done",
+    pendingKey: "display_wall_pending",
     label: "Display wall up",
     hint: "There is something to point at",
   },
   {
     key: "material_done",
+    pendingKey: "material_pending",
     label: "Material in stock",
     hint: "They can sell it the day it is asked for",
   },

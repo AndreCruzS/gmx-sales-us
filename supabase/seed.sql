@@ -199,6 +199,26 @@ insert into account_relationships (id, org_id, account_a_id, relationship_type,
    'd0000000-0000-0000-0000-000000000003', 'STRONG',
    'c0000000-0000-0000-0000-000000000003');
 
+-- Rollout gates (Bianca's CA tracker) -----------------------------------------
+--
+-- Three states, as her sheet records them: ok / pending / no. The display wall
+-- is NOT here — it derives from accounts.has_display_wall and its verification
+-- date, so one question never gets two answers.
+--
+-- Buffalo is the shape worth seeding: material in stock and no merchandiser
+-- behind it. The real tracker has four Dixie Line branches exactly like that,
+-- and it is the finding a funnel would hide.
+insert into account_rollout (account_id, org_id, pk_state, merchandiser_state,
+                             material_state, product) values
+  ('d0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
+   'OK', 'OK', 'OK', 'Ayous Flutted/Ayous Vjoint'),
+  ('d0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
+   'OK', 'PENDING', 'PENDING', 'Ayous Vjoint'),
+  ('d0000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
+   'OK', 'NO', 'OK', 'Thermo-Ash Decking'),
+  ('d0000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
+   'PENDING', 'NO', 'NO', null);
+
 -- Projects (D5: project ≠ opportunity) ----------------------------------------
 
 insert into projects (id, org_id, name, location, project_type, status, created_by) values

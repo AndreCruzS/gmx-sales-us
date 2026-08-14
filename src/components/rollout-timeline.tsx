@@ -28,10 +28,11 @@ export function RolloutTimeline({
   const total = counts.branches ?? 0;
   if (total === 0) return null;
 
-  const gates = PIPELINE_GATES.map((g) => ({
-    ...g,
-    done: counts[g.key] ?? 0,
-  }));
+  const gates = PIPELINE_GATES.map((g) => {
+    const done = counts[g.key] ?? 0;
+    const pending = counts[g.pendingKey] ?? 0;
+    return { ...g, done, pending };
+  });
 
   return (
     <section>
@@ -44,7 +45,8 @@ export function RolloutTimeline({
 
       <ol className="spine">
         {gates.map((g, i) => {
-          const pct = total === 0 ? 0 : Math.round((100 * g.done) / total);
+          const donePct = total === 0 ? 0 : (100 * g.done) / total;
+          const pendingPct = total === 0 ? 0 : (100 * g.pending) / total;
           // The RAIL is a connector, not a state. Colouring it by progress
           // would say each gate follows from the one above, and they do not —
           // that is the whole reason this is not a funnel. Clay in particular
@@ -54,7 +56,8 @@ export function RolloutTimeline({
           // The NODE carries the state, because it belongs to the gate itself:
           // filled when every branch is through, hollow when none is, and a
           // ring while it is being worked.
-          const nodeState = g.done >= total ? "is-done" : g.done === 0 ? "is-future" : "";
+          const nodeState =
+            g.done >= total ? "is-done" : g.done === 0 && g.pending === 0 ? "is-future" : "";
           return (
             <li key={g.key} className="spine-item">
               <div className="spine-rail" aria-hidden="true">
@@ -71,25 +74,45 @@ export function RolloutTimeline({
                     {g.done}/{total}
                   </span>
                 </div>
+                {/* Three states, because her sheet has three. Amber is work in
+                    flight — the merchandiser being hired, the wall going up —
+                    and it is the column that tells her whether anything is
+                    moving at all. */}
                 <div
                   className="mt-1.5 flex h-2 overflow-hidden rounded"
                   style={{ background: "var(--rule)" }}
                   role="img"
-                  aria-label={`${g.done} of ${total} branches: ${g.label}`}
+                  aria-label={`${g.done} of ${total} branches done${
+                    g.pending > 0 ? `, ${g.pending} in progress` : ""
+                  }: ${g.label}`}
                 >
-                  <span
-                    style={{
-                      width: `${pct}%`,
-                      background: "var(--accent)",
-                    }}
-                  />
+                  <span style={{ width: `${donePct}%`, background: "var(--accent)" }} />
+                  <span style={{ width: `${pendingPct}%`, background: "var(--warn)" }} />
                 </div>
-                <p className="t-sub mt-1">{g.hint}</p>
+                <p className="t-sub mt-1">
+                  {g.pending > 0 ? `${g.pending} in progress · ` : ""}
+                  {g.hint}
+                </p>
               </div>
             </li>
           );
         })}
       </ol>
+
+      <p className="pva-legend mb-1">
+        <span>
+          <i className="pva-seg is-done" />
+          done
+        </span>
+        <span>
+          <i style={{ background: "var(--warn)" }} />
+          in progress
+        </span>
+        <span>
+          <i className="pva-seg is-left" />
+          not started
+        </span>
+      </p>
 
       <p className="t-sub px-1">
         <b style={{ color: "var(--ink-primary)" }}>{counts.fully_through ?? 0}</b>{" "}
