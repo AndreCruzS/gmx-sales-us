@@ -32,7 +32,10 @@ const TITLES: Record<string, string> = {
 };
 
 // The tab-bar destinations — these are roots, so they carry no back button.
-const ROOTS = new Set(["/", "/accounts", "/record", "/review", "/dashboard"]);
+// Kept in step with TABS in tab-bar.tsx: /record, /review and /dashboard are
+// reached from somewhere now rather than tapped into, so they need the way
+// back that a root does not.
+const ROOTS = new Set(["/", "/visits", "/accounts", "/quotes"]);
 
 /** "deon@gmxgroup.com" → "Deon". The cache never holds a display name. */
 function nameFromEmail(email: string): string {
@@ -45,7 +48,14 @@ export function NavBar() {
   const reviewCount = useReviewCount();
   const router = useRouter();
   const { profile } = useOffline();
-  const [territory, setTerritory] = useState<string | null>(null);
+  // Stored WITH the id it belongs to. Keeping just the name let one session's
+  // patch survive into the next: Bianca is an admin with no territory at all,
+  // and the effect's early return left Deon's "SOCAL" sitting under her name.
+  // Comparing the id is also why this needs no reset — a name that does not
+  // match the current profile is simply not shown.
+  const [territory, setTerritory] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   // The patch name is the rep's own address in the business, so it is worth
   // one small query. It is not on the cached profile (only its id is).
@@ -60,7 +70,7 @@ export function NavBar() {
           .select("name")
           .eq("id", id)
           .maybeSingle();
-        if (!stale && data?.name) setTerritory(data.name);
+        if (!stale && data?.name) setTerritory({ id, name: data.name });
       } catch {
         // offline — the identity block falls back to the screen name
       }
@@ -69,6 +79,9 @@ export function NavBar() {
       stale = true;
     };
   }, [profile?.territoryId]);
+
+  const patch =
+    territory && territory.id === profile?.territoryId ? territory.name : null;
 
   if (pathname === "/login") return null;
 
@@ -111,7 +124,7 @@ export function NavBar() {
             </span>
             <span className="min-w-0">
               <h1 className="navbar-title truncate">{person}</h1>
-              <span className="navbar-patch truncate">{territory ?? title}</span>
+              <span className="navbar-patch truncate">{patch ?? title}</span>
             </span>
           </div>
         ) : (
