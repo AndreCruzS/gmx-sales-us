@@ -363,7 +363,7 @@ function AccountsView() {
             aria-pressed={lens === k}
             onClick={() => setLens(k)}
           >
-            {k === "account" ? "By account" : "By company"}
+            {k === "account" ? "Accounts" : "Companies"}
           </button>
         ))}
       </div>

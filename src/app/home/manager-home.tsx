@@ -14,10 +14,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { ChevronRightIcon } from "@/components/icons";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
+import { PlanLens } from "@/components/plan-lens";
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
-import { compareByNeed, repState, teamNarrative } from "@/lib/domain/team";
+import { teamNarrative } from "@/lib/domain/team";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ScorecardRow {
@@ -28,9 +28,6 @@ interface ScorecardRow {
 interface ExceptionRow {
   exception_type: string | null;
   owner_membership_id: string | null;
-}
-interface TodayRow {
-  owner_id: string;
 }
 interface RolloutRow {
   branches: number | null;
@@ -54,7 +51,6 @@ export function ManagerHome({ name }: { name: string }) {
   const [channel, setChannel] = useState<ChannelRow[]>([]);
   const [scorecard, setScorecard] = useState<ScorecardRow[]>([]);
   const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
-  const [todayRows, setTodayRows] = useState<TodayRow[]>([]);
   const [rollout, setRollout] = useState<RolloutRow | null>(null);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [hour, setHour] = useState<number | null>(null);
@@ -67,11 +63,7 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-      now.getDate(),
-    ).padStart(2, "0")}`;
-    const [ch, sc, ex, td, ro] = await Promise.all([
+    const [ch, sc, ex, ro] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -87,9 +79,6 @@ export function ManagerHome({ name }: { name: string }) {
         .from("exceptions")
         .select("exception_type, owner_membership_id")
         .limit(1000),
-      // Who has stops on today — the only "where they are" this database can
-      // actually answer for.
-      supabase.from("next_actions").select("owner_id").eq("due_date", todayIso),
       supabase
         .from("dashboard_rollout")
         .select(
@@ -100,7 +89,6 @@ export function ManagerHome({ name }: { name: string }) {
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
-    setTodayRows(td.error ? [] : ((td.data as TodayRow[]) ?? []));
     setRollout(ro.error ? null : ((ro.data as RolloutRow | null) ?? null));
     setLoadedAt(Date.now());
   }, []);
@@ -124,39 +112,26 @@ export function ManagerHome({ name }: { name: string }) {
     return m;
   }, [scorecard]);
 
-  const stopsToday = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of todayRows) m.set(r.owner_id, (m.get(r.owner_id) ?? 0) + 1);
-    return m;
-  }, [todayRows]);
+  const repName = useMemo(
+    () => new Map([...repMeta].map(([id, v]) => [id, v.name])),
+    [repMeta],
+  );
+  const repPatch = useMemo(
+    () => new Map([...repMeta].map(([id, v]) => [id, v.patch])),
+    [repMeta],
+  );
 
   const week = useMemo(
     () => (loadedAt === null ? null : latestStartedWeek(channel, loadedAt)),
     [channel, loadedAt],
   );
 
+  // Only the week's numbers, for the sentence above. The rows themselves are
+  // the lens's job now.
   const team = useMemo(() => {
     if (!week) return [];
-    const names = new Map([...repMeta].map(([id, v]) => [id, v.name]));
-    return groupByRep(
-      channel.filter((r) => r.week_start === week),
-      names,
-    )
-      .map((g) => {
-        const meta = repMeta.get(g.id);
-        return {
-          ...g,
-          name: meta?.name ?? g.label,
-          patch: meta?.patch ?? "No patch",
-          state: repState({
-            todayStops: stopsToday.get(g.id) ?? 0,
-            owed: g.owed,
-            missed: g.missed,
-          }),
-        };
-      })
-      .sort(compareByNeed);
-  }, [channel, week, repMeta, stopsToday]);
+    return groupByRep(channel.filter((r) => r.week_start === week), repName);
+  }, [channel, week, repName]);
 
   const narrative = useMemo(() => teamNarrative(team), [team]);
 
@@ -204,74 +179,16 @@ export function ManagerHome({ name }: { name: string }) {
         </p>
       </section>
 
-      <section>
-        <div className="section-head">
-          <h2 className="t-section">
-            The team <span style={{ color: "var(--ink-muted)" }}>&amp; where they are</span>
-          </h2>
-          <Link href="/dashboard" className="t-action">
-            The whole book
-          </Link>
-        </div>
-        {team.length === 0 ? (
-          <p className="t-sub px-1">No plans on the book this week.</p>
-        ) : (
-          <ul className="list">
-            {team.map((r) => {
-              const bar = [
-                ["is-done", r.done - r.owed],
-                ["is-owed", r.owed],
-                ["is-missed", r.missed],
-                ["is-left", r.left],
-              ] as const;
-              return (
-                <li key={r.id}>
-                  <Link href={`/dashboard/rep/${r.id}`} className="row">
-                    <span
-                      className="navbar-avatar shrink-0"
-                      aria-hidden="true"
-                      style={{ width: 36, height: 36, fontSize: 12 }}
-                    >
-                      {r.name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span className="row-body">
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="t-title truncate">{r.name}</span>
-                        <span className="t-meta shrink-0 tabular-nums">
-                          {r.done}/{r.total}
-                        </span>
-                      </span>
-                      <span className="t-sub block truncate">{r.patch}</span>
-                      <span
-                        className="mt-1.5 flex h-2 overflow-hidden rounded"
-                        style={{ background: "var(--rule)" }}
-                        role="img"
-                        aria-label={`${r.done} of ${r.total} planned visits done`}
-                      >
-                        {bar.map(([cls, n]) =>
-                          n > 0 ? (
-                            <span key={cls} className={`pva-seg ${cls}`} style={{ flex: n }} />
-                          ) : null,
-                        )}
-                      </span>
-                      <span
-                        className="t-meta mt-1 block"
-                        style={{ color: r.state.alarm ? "var(--danger)" : undefined }}
-                      >
-                        {r.state.label}
-                      </span>
-                    </span>
-                    <ChevronRightIcon
-                      size={16}
-                      style={{ color: "var(--ink-muted)", flexShrink: 0 }}
-                    />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {/* The lens leadership marked up, on the screen they open rather than
+          one they have to go and find: the same week by rep, by distributor,
+          by dealer. Tapping a row opens whoever or whatever it names. */}
+      <PlanLens
+        rows={channel}
+        repName={repName}
+        repPatch={repPatch}
+        nowMs={loadedAt}
+        heading="The team &amp; the week"
+      />
 
       {slippingGroups.length > 0 && (
         <section>

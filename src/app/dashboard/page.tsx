@@ -9,12 +9,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
-import {
-  groupFor,
-  latestStartedWeek,
-  type ChannelRow,
-  type Lens,
-} from "@/lib/domain/channel";
+import { latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
+import { PlanLens } from "@/components/plan-lens";
 import { formatDay } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -99,32 +95,8 @@ interface ExceptionRow {
 // you sit in, so they read as tiles rather than funnel rows.
 const FUNNEL = ["IDENTIFIED", "QUALIFIED", "DEVELOPMENT", "QUOTE", "DECISION"];
 
-// The three ways leadership asked to read the team (13 Aug markup): the rep,
-// the house the product comes through, and the door it is sold at.
-const LENSES: readonly (readonly [Lens, string])[] = [
-  ["rep", "By rep"],
-  ["distributor", "By distributor"],
-  ["dealer", "By dealer"],
-];
-
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const MONTH_SHORT = new Intl.DateTimeFormat("en-US", { month: "short" });
-
-const LENS_NOUN: Record<Lens, string> = {
-  rep: "rep",
-  distributor: "distributor",
-  dealer: "dealer",
-};
-
-/** Where a bar goes when it is clicked. A rep opens their own week; a
- *  distributor or a dealer is an account, and the account page is already the
- *  place that answers "who is this and what is happening there". */
-function rowHref(lens: Lens, id: string): string {
-  if (lens === "rep") return `/dashboard/rep/${id}`;
-  return id === "none" || id === "several" || id === "unassigned"
-    ? "/accounts"
-    : `/accounts/${id}`;
-}
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -135,16 +107,6 @@ const timeOfDay = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit",
 });
-const MONTH_DAY = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-});
-/** The Monday a week began, as a date a manager can put against a calendar. */
-function weekOf(iso: string): string {
-  const d = iso.length === 10 ? new Date(`${iso}T00:00:00`) : new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : MONTH_DAY.format(d);
-}
-
 interface HubspotHealth {
   configured: boolean;
   unresolvedErrors: number;
@@ -181,9 +143,6 @@ export default function DashboardPage() {
   const [rollout, setRollout] = useState<RolloutRow | null>(null);
   const [channel, setChannel] = useState<ChannelRow[]>([]);
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
-  // Which way the team is being read. "By rep" is the opening question a
-  // manager asks; the other two are the ones leadership asked for.
-  const [lens, setLens] = useState<Lens>("rep");
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Admin-only card (Task 13); the route 403s reps, and we render nothing
@@ -318,18 +277,6 @@ export default function DashboardPage() {
     [channel, loadedAt],
   );
 
-  const groups = useMemo(() => {
-    if (!channelWeek) return [];
-    return groupFor(
-      lens,
-      channel.filter((r) => r.week_start === channelWeek),
-      repName,
-    );
-  }, [channel, channelWeek, lens, repName]);
-
-  // Twelve months back from the one we are in, every month present whether or
-  // not anything was won in it — a month with no sale is the point of the
-  // chart, and dropping it would draw a smooth line over a hole.
   const months = useMemo(() => {
     const empty = {
       series: [] as { month: string; label: string; qty: number }[],
@@ -549,120 +496,16 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* Did they do what they said. A manager's day is people before money,
-          so this sits above the pipeline. One bar per rep, the plan they made
-          against the part of it they kept — and, since the 13 Aug markup, the
-          kept part split by whose distributor business it was. The lens turns
-          the same week inside out: by rep, by distributor, by dealer. */}
-      {groups.length > 0 && (
-        <section>
-          <div className="section-head">
-            <h2 className="t-section">Did they do what they said</h2>
-            {/* An absolute date, not formatDay: that one is relative ("in 5
-                days"), which is right on a due date and nonsense after
-                "week of". */}
-            <span className="t-meta">
-              {channelWeek ? `week of ${weekOf(channelWeek)}` : ""}
-            </span>
-          </div>
-
-          <div className="chip-row mb-3" role="group" aria-label="Look at the week by">
-            {LENSES.map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className="chip"
-                aria-pressed={lens === key}
-                onClick={() => setLens(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <p className="t-sub mb-1 px-1">
-            Every bar is one {LENS_NOUN[lens]}&rsquo;s week. Mileage is
-            reimbursed, so a visit that was planned and never happened is a cost
-            as well as a gap.
-          </p>
-
-          <ul className="card card-pad">
-            {groups.map((g) => {
-              const unplanned = lens === "rep" ? (unplannedByRep.get(g.id) ?? 0) : 0;
-              // done already contains owed: the solid teal is the part that was
-              // written up, and the clay beside it is the part that was not.
-              const bar: readonly (readonly [string, number])[] = [
-                ["is-done", g.done - g.owed],
-                ["is-owed", g.owed],
-                ["is-missed", g.missed],
-                ["is-left", g.left],
-              ];
-              const note = g.missed
-                ? `${g.missed} never happened`
-                : g.owed
-                  ? `${g.owed} owes a note`
-                  : g.left
-                    ? `${g.left} still to come`
-                    : "all logged";
-              return (
-                <li key={g.id}>
-                  <Link href={rowHref(lens, g.id)} className="pva-row">
-                    <span>
-                      <span className="pva-name">{g.label}</span>
-                      <span className="pva-sub">
-                        {lens === "rep"
-                          ? (repPatch.get(g.id) ?? "—")
-                          : `${g.segments.length} ${g.segments.length === 1 ? "door" : "doors"}`}
-                      </span>
-                    </span>
-                    <span
-                      className="pva-track"
-                      role="img"
-                      aria-label={`${g.done} of ${g.total} planned visits done; ${note}`}
-                    >
-                      {bar.map(([cls, n]) =>
-                        n > 0 ? (
-                          <span
-                            key={cls}
-                            className={`pva-seg ${cls}`}
-                            style={{ flex: n }}
-                          />
-                        ) : null,
-                      )}
-                    </span>
-                    <span className="pva-fig">
-                      {g.done}/{g.total}
-                      <small>
-                        {note}
-                        {unplanned > 0 ? ` · ${unplanned} unplanned` : ""}
-                      </small>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          <p className="pva-legend">
-            <span>
-              <i className="pva-seg is-done" />
-              done and logged
-            </span>
-            <span>
-              <i className="pva-seg is-owed" />
-              done, owes a note
-            </span>
-            <span>
-              <i className="pva-seg is-missed" />
-              never happened
-            </span>
-            <span>
-              <i className="pva-seg is-left" />
-              still to come
-            </span>
-          </p>
-        </section>
-      )}
+      {/* The same lens the manager's home leads with — one component, so the
+          landing and the report can never show different numbers for the same
+          week. */}
+      <PlanLens
+        rows={channel}
+        repName={repName}
+        repPatch={repPatch}
+        unplannedByRep={unplannedByRep}
+        nowMs={loadedAt}
+      />
 
       {/* Getting dealers selling. Four gates from the rollout tracker, shown
           as four independent bars rather than a funnel, because they complete
