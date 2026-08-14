@@ -22,24 +22,42 @@ export interface ChannelRow {
   distributor_options: number;
   planned_total: number;
   planned_done: number;
+  /** Done, but the activity carries no note. */
+  planned_owed: number;
+  /** The day is behind us and nothing was ever recorded. */
+  planned_missed: number;
 }
 
-export interface Segment {
-  id: string;
-  label: string;
+export interface Tally {
   total: number;
   done: number;
+  owed: number;
+  missed: number;
+  /** Planned, and the day has not arrived — derived, never stored, so the four
+   *  states can never add up to more than the plan. */
+  left: number;
 }
 
-export interface ChannelGroup {
+export interface Segment extends Tally {
   id: string;
   label: string;
-  total: number;
-  done: number;
-  /** What is left of the plan — still to come mid-week, never happened after. */
-  outstanding: number;
+}
+
+export interface ChannelGroup extends Tally {
+  id: string;
+  label: string;
   /** The split shown inside the bar, and the rows behind "see more". */
   segments: Segment[];
+}
+
+function tally(total: number, done: number, owed: number, missed: number): Tally {
+  return {
+    total,
+    done,
+    owed,
+    missed,
+    left: Math.max(0, total - done - missed),
+  };
 }
 
 export type Lens = "rep" | "distributor" | "dealer";
@@ -64,12 +82,24 @@ function accountKey(row: ChannelRow): { id: string; label: string } {
   return { id: "unassigned", label: "No account" };
 }
 
-interface Bucket {
-  id: string;
-  label: string;
+interface Raw {
   total: number;
   done: number;
-  segments: Map<string, Segment>;
+  owed: number;
+  missed: number;
+}
+
+interface Bucket extends Raw {
+  id: string;
+  label: string;
+  segments: Map<string, Raw & { id: string; label: string }>;
+}
+
+function add(into: Raw, row: ChannelRow): void {
+  into.total += row.planned_total;
+  into.done += row.planned_done;
+  into.owed += row.planned_owed;
+  into.missed += row.planned_missed;
 }
 
 function collect(
@@ -82,43 +112,52 @@ function collect(
     const g = group(row);
     let bucket = buckets.get(g.id);
     if (!bucket) {
-      bucket = { id: g.id, label: g.label, total: 0, done: 0, segments: new Map() };
+      bucket = {
+        id: g.id,
+        label: g.label,
+        total: 0,
+        done: 0,
+        owed: 0,
+        missed: 0,
+        segments: new Map(),
+      };
       buckets.set(g.id, bucket);
     }
-    bucket.total += row.planned_total;
-    bucket.done += row.planned_done;
+    add(bucket, row);
 
     const s = segment(row);
-    const seen = bucket.segments.get(s.id);
-    if (seen) {
-      seen.total += row.planned_total;
-      seen.done += row.planned_done;
-    } else {
-      bucket.segments.set(s.id, {
-        id: s.id,
-        label: s.label,
-        total: row.planned_total,
-        done: row.planned_done,
-      });
+    let seg = bucket.segments.get(s.id);
+    if (!seg) {
+      seg = { id: s.id, label: s.label, total: 0, done: 0, owed: 0, missed: 0 };
+      bucket.segments.set(s.id, seg);
     }
+    add(seg, row);
   }
 
   return [...buckets.values()]
     .map((b) => ({
       id: b.id,
       label: b.label,
-      total: b.total,
-      done: b.done,
-      outstanding: Math.max(0, b.total - b.done),
+      ...tally(b.total, b.done, b.owed, b.missed),
       // Biggest share first, so the bar's segments read left to right in the
       // order the legend lists them.
-      segments: [...b.segments.values()].sort(
-        (a, c) => c.total - a.total || a.label.localeCompare(c.label),
-      ),
+      segments: [...b.segments.values()]
+        .map((s) => ({
+          id: s.id,
+          label: s.label,
+          ...tally(s.total, s.done, s.owed, s.missed),
+        }))
+        .sort((a, c) => c.total - a.total || a.label.localeCompare(c.label)),
     }))
-    // Whoever owes the most comes first — a manager opens this to find the gap,
-    // not to read an alphabet.
-    .sort((a, b) => b.outstanding - a.outstanding || a.label.localeCompare(b.label));
+    // A visit that was planned and never happened is a cost as well as a gap —
+    // mileage is reimbursed either way — so it outranks work merely still to
+    // come. A manager opens this to find the gap, not to read an alphabet.
+    .sort(
+      (a, b) =>
+        b.missed - a.missed ||
+        b.left - a.left ||
+        a.label.localeCompare(b.label),
+    );
 }
 
 /** One bar per rep, split by the distributor each visit belongs to. */

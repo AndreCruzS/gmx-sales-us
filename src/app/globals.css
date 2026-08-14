@@ -404,6 +404,116 @@ body {
   font-weight: 700;
 }
 
+/* ── Planned vs actual ──────────────────────────────────────────────────────
+   A rep's week as one thick bar, and the whole row is the target: leadership
+   asked to be able to click these, so a 2px progress line was never going to
+   do. 22px, the demo's own height, is a bar you can hit with a thumb and read
+   across a boardroom.
+
+   Four states, not two. Collapsing "never happened" into "still to come" is the
+   mistake worth avoiding — mileage is reimbursed, so a visit that was planned
+   and never happened is a cost as well as a gap, while one still ahead is
+   neither. Hence the hatch: it is the only fill on this page that means
+   something was lost rather than something is pending. */
+.pva-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 82px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 13px 0;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+.pva-row:first-of-type {
+  border-top: none;
+}
+.pva-row:hover .pva-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pva-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-control);
+}
+.pva-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.pva-sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.pva-track {
+  display: flex;
+  gap: 3px;
+  height: 22px;
+  align-items: stretch;
+}
+.pva-seg {
+  border-radius: 3px;
+  min-width: 10px;
+}
+.pva-seg.is-done {
+  background: var(--accent);
+}
+.pva-seg.is-owed {
+  background: var(--danger);
+}
+.pva-seg.is-left {
+  background: var(--surface-sunken);
+}
+/* Hatched, not solid: a stripe reads as absence where a fill reads as a value,
+   and this segment is the one that stands for work that did not happen. */
+.pva-seg.is-missed {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--danger) 45%, var(--surface-card)) 0 4px,
+    color-mix(in srgb, var(--danger) 16%, var(--surface-card)) 4px 8px
+  );
+}
+.pva-fig {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--ink-primary);
+}
+.pva-fig small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
+.pva-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 15px;
+  margin-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+.pva-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pva-legend i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+
 /* Actions that live INSIDE a tile. Leadership drew these on the mockup as
    "add new" / "update existing" under the Dealer and Quotes tiles: a tile is
    no longer just a door, it is a door with the one or two things you actually

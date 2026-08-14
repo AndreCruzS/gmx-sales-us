@@ -19,6 +19,8 @@ const row = (over: Partial<ChannelRow> = {}): ChannelRow => ({
   distributor_options: 1,
   planned_total: 1,
   planned_done: 1,
+  planned_owed: 0,
+  planned_missed: 0,
   ...over,
 });
 
@@ -48,11 +50,31 @@ describe("groupByRep", () => {
     expect(groups[0].label).toBe("Deon");
     expect(groups[0].total).toBe(5);
     expect(groups[0].done).toBe(3);
-    expect(groups[0].outstanding).toBe(2);
+    expect(groups[0].left).toBe(2);
     expect(groups[0].segments.map((s) => [s.label, s.total, s.done])).toEqual([
       ["Boise Cascade", 3, 2],
       ["Hardwoods Specialty", 2, 1],
     ]);
+  });
+
+  it("splits the plan four ways and never over-counts it", () => {
+    const groups = groupByRep(
+      [row({ planned_total: 5, planned_done: 3, planned_owed: 1, planned_missed: 1 })],
+      NAMES,
+    );
+    const g = groups[0];
+    expect([g.done, g.owed, g.missed, g.left]).toEqual([3, 1, 1, 1]);
+    // done already contains owed — the bar draws (done - owed) alongside owed,
+    // so done + missed + left is the whole plan and not a row more.
+    expect(g.done + g.missed + g.left).toBe(g.total);
+  });
+
+  it("never lets the derived remainder go negative on messy data", () => {
+    const groups = groupByRep(
+      [row({ planned_total: 1, planned_done: 1, planned_missed: 1 })],
+      NAMES,
+    );
+    expect(groups[0].left).toBe(0);
   });
 
   it("adds two visits to the same distributor into one segment", () => {
@@ -61,11 +83,24 @@ describe("groupByRep", () => {
     expect(groups[0].segments[0].total).toBe(2);
   });
 
-  it("puts whoever owes the most at the top", () => {
+  it("puts the biggest gap at the top", () => {
     const groups = groupByRep(
       [
         row({ owner_id: "deon", planned_total: 5, planned_done: 5 }),
-        row({ owner_id: "tj", planned_total: 5, planned_done: 1 }),
+        row({ owner_id: "tj", planned_total: 5, planned_done: 1, planned_missed: 4 }),
+      ],
+      NAMES,
+    );
+    expect(groups.map((g) => g.label)).toEqual(["TJ", "Deon"]);
+  });
+
+  it("ranks a week that never happened above one still to come", () => {
+    const groups = groupByRep(
+      [
+        // four visits still ahead of them — not yet a failure
+        row({ owner_id: "deon", planned_total: 5, planned_done: 1 }),
+        // one visit the day has already passed on — a cost, not just a gap
+        row({ owner_id: "tj", planned_total: 5, planned_done: 4, planned_missed: 1 }),
       ],
       NAMES,
     );

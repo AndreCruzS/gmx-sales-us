@@ -272,7 +272,7 @@ insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
   ('f1000000-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111',
    'Stocking conversation with the owner',
    'c0000000-0000-0000-0000-000000000003',
-   date_trunc('week', current_date)::date + 3, 'd0000000-0000-0000-0000-000000000003',
+   date_trunc('week', current_date)::date + 4, 'd0000000-0000-0000-0000-000000000003',
    null, 'CONVERT_STOCKING_DEALER');
 
 -- Activities (planned-done + unplanned, D45/D46) ------------------------------
@@ -311,7 +311,16 @@ insert into activities (id, org_id, activity_type, primary_account_id, owner_id,
    'c0000000-0000-0000-0000-000000000003',
    date_trunc('week', current_date) + interval '2 days', true,
    'f1000000-0000-0000-0000-000000000006', 'FOLLOW_UP_LEAD',
-   'Chased both PK leads; one wants a quote', '{QUOTE_REQUESTED}', true, null);
+   'Chased both PK leads; one wants a quote', '{QUOTE_REQUESTED}', true, null),
+  -- Done, but nothing written down: the stop was closed against its plan and
+  -- what_happened was left empty. This is the "owes a note" segment, and the
+  -- state the rep's own debrief prompt exists to clear.
+  ('ac000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
+   'DEALER_VISIT', 'd0000000-0000-0000-0000-000000000001',
+   'c0000000-0000-0000-0000-000000000004',
+   date_trunc('week', current_date) + interval '3 days', true,
+   'f1000000-0000-0000-0000-000000000005', 'MERCHANDISING_CHECK',
+   null, '{}', false, null);
 
 insert into activity_accounts (org_id, activity_id, account_id, role) values
   ('11111111-1111-1111-1111-111111111111', 'ac000000-0000-0000-0000-000000000002',

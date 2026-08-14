@@ -136,7 +136,7 @@ select is(
   (select planned_done::int from dashboard_planned_vs_actual
     where owner_id = 'c0000000-0000-0000-0000-000000000004'
       and week_start = date_trunc('week', current_date)::date),
-  2, 'planned_done counts agenda items an activity linked back to (D46)'
+  3, 'planned_done counts agenda items an activity linked back to (D46)'
 );
 
 select is(
@@ -170,7 +170,7 @@ select is(
 select is(
   (select count(*)::int from weekly_review_recent_activity
     where org_id = '11111111-1111-1111-1111-111111111111'),
-  4, 'weekly review picks up both reps'' recent activity'
+  5, 'weekly review picks up both reps'' recent activity'
 );
 
 select cmp_ok(

@@ -105,13 +105,13 @@ select is((select val from _vis where check_name = 'deon_buffalo_accounts'), 0::
   'SoCal rep cannot see Buffalo account');
 
 -- Manager: the manager_id chain fans out down, both reps visible.
-select is((select val from _vis where check_name = 'joao_team_activities'), 4::bigint,
+select is((select val from _vis where check_name = 'joao_team_activities'), 5::bigint,
   'manager sees both reps'' activities');
 select is((select val from _vis where check_name = 'joao_team_next_actions'), 7::bigint,
   'manager sees both reps'' next actions');
 
 -- Admin: org-wide.
-select is((select val from _vis where check_name = 'admin_all_activities'), 4::bigint, 'admin sees all org activities');
+select is((select val from _vis where check_name = 'admin_all_activities'), 5::bigint, 'admin sees all org activities');
 select is((select val from _vis where check_name = 'admin_all_accounts'), 8::bigint, 'admin sees all org accounts');
 
 -- Support (D53): assigned rep only, read AND write.

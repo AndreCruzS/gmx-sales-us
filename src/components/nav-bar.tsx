@@ -26,6 +26,7 @@ const TITLES: Record<string, string> = {
   "/record": "Record",
   "/review": "Review",
   "/dashboard": "Insights",
+  "/dashboard/rep": "Rep",
   "/weekly": "Weekly review",
 };
 
@@ -71,7 +72,11 @@ export function NavBar() {
 
   const title =
     TITLES[pathname] ??
-    (pathname.startsWith("/accounts/") ? "Account" : "Commercial OS");
+    (pathname.startsWith("/accounts/")
+      ? "Account"
+      : pathname.startsWith("/dashboard/rep/")
+        ? "Rep"
+        : "Commercial OS");
   const isRoot = ROOTS.has(pathname);
 
   // On a root screen the demo puts the person there, not the page name: a rep

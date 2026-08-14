@@ -27,7 +27,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(10);
+select plan(14);
 
 select tests.set_claims('deon@gmxgroup.com', 'gmx-us');
 set local role authenticated;
@@ -151,6 +151,61 @@ select is(
     where account_id = 'd2000000-0000-0000-0000-000000000002'),
   0::bigint,
   'RLS still scopes the view — org2 plan is invisible to a gmx-us rep'
+);
+
+-- ── The four states of a planned visit ──────────────────────────────────────
+-- Collapsing "never happened" into "still to come" is the mistake these hold
+-- against: mileage is reimbursed, so a visit that was planned and never made is
+-- a cost, while one still ahead is not yet anything.
+
+-- 11. A visit closed with a note is done and NOT owed.
+select is(
+  (select planned_owed from dashboard_plan_by_channel
+    where account_id = 'd0000000-0000-0000-0000-000000000002'
+      and week_start = date_trunc('week', current_date)::date),
+  0::bigint,
+  'an activity carrying a note owes nothing'
+);
+
+-- 12. A visit closed with an EMPTY note is done and owed. The seed has one, so
+--     the state is exercised by the demo data as well as by this assertion.
+select is(
+  (select planned_owed from dashboard_plan_by_channel
+    where account_id = 'd0000000-0000-0000-0000-000000000001'
+      and week_start = date_trunc('week', current_date)::date),
+  1::bigint,
+  'an activity with no what_happened is done but owes a note'
+);
+
+-- 13. Whitespace is not a debrief.
+reset role;
+update activities set what_happened = '   '
+ where id = 'ac000000-0000-0000-0000-000000000003';
+set local role authenticated;
+select is(
+  (select planned_owed from dashboard_plan_by_channel
+    where account_id = 'd0000000-0000-0000-0000-000000000002'
+      and week_start = date_trunc('week', current_date)::date),
+  1::bigint,
+  'a note of only spaces still owes a note'
+);
+
+-- 14. Today is not yet a miss — the rep still has the afternoon. A commitment
+--     dated today with nothing against it counts as still to come, not lost.
+reset role;
+insert into next_actions (id, org_id, action, owner_id, due_date, account_id, objective)
+values ('f1000000-0000-0000-0000-0000000000c1',
+        '11111111-1111-1111-1111-111111111111',
+        'Late call', 'c0000000-0000-0000-0000-000000000004',
+        current_date, 'd0000000-0000-0000-0000-000000000002',
+        'RELATIONSHIP_MAINTENANCE');
+set local role authenticated;
+select is(
+  (select planned_missed from dashboard_plan_by_channel
+    where account_id = 'd0000000-0000-0000-0000-000000000002'
+      and week_start = date_trunc('week', current_date)::date),
+  1::bigint,
+  'a commitment due today is not counted as never happened'
 );
 
 select * from finish();

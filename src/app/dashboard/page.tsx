@@ -94,15 +94,21 @@ const LENSES: readonly (readonly [Lens, string])[] = [
   ["dealer", "By dealer"],
 ];
 
-// Steps of the SAME teal, not a categorical palette. Kept work is teal on this
-// page and clay means slipping; handing distributors their own hues would put
-// a second meaning on colour and break both. The legend names the segments.
-const SEGMENT_TINT = [
-  "var(--accent)",
-  "color-mix(in srgb, var(--accent) 62%, var(--surface-card))",
-  "var(--accent-deep)",
-  "color-mix(in srgb, var(--accent) 38%, var(--surface-card))",
-];
+const LENS_NOUN: Record<Lens, string> = {
+  rep: "rep",
+  distributor: "distributor",
+  dealer: "dealer",
+};
+
+/** Where a bar goes when it is clicked. A rep opens their own week; a
+ *  distributor or a dealer is an account, and the account page is already the
+ *  place that answers "who is this and what is happening there". */
+function rowHref(lens: Lens, id: string): string {
+  if (lens === "rep") return `/dashboard/rep/${id}`;
+  return id === "none" || id === "several" || id === "unassigned"
+    ? "/accounts"
+    : `/accounts/${id}`;
+}
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -161,7 +167,6 @@ export default function DashboardPage() {
   // Which way the team is being read. "By rep" is the opening question a
   // manager asks; the other two are the ones leadership asked for.
   const [lens, setLens] = useState<Lens>("rep");
-  const [opened, setOpened] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   // Admin-only card (Task 13); the route 403s reps, and we render nothing
@@ -214,7 +219,7 @@ export default function DashboardPage() {
       supabase
         .from("dashboard_plan_by_channel")
         .select(
-          "owner_id, week_start, account_id, account_name, account_type, distributor_id, distributor_name, distributor_options, planned_total, planned_done",
+          "owner_id, week_start, account_id, account_name, account_type, distributor_id, distributor_name, distributor_options, planned_total, planned_done, planned_owed, planned_missed",
         )
         .order("week_start", { ascending: false })
         .limit(1000),
@@ -270,6 +275,16 @@ export default function DashboardPage() {
     return m;
   }, [scorecard]);
 
+  // The patch under the name, as the demo has it — a rep is a person in a
+  // place, and "SoCal" is what tells a manager which week they are reading.
+  const repPatch = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of scorecard) {
+      if (r.membership_id) m.set(r.membership_id, r.territory_name ?? "No territory");
+    }
+    return m;
+  }, [scorecard]);
+
   // The same week, read through whichever lens is selected. The week comes
   // from the channel rows themselves so the bars and the caption can never
   // disagree, and the future-week guard is the same one thisWeek applies:
@@ -301,15 +316,6 @@ export default function DashboardPage() {
     }
     return m;
   }, [planned, channelWeek]);
-
-  // Stamped when the data loads, not read during render — the clock is an
-  // external system, and reading it mid-render makes the label flip on any
-  // unrelated re-render.
-  const weekIsCurrent = useMemo(() => {
-    if (!channelWeek || loadedAt === null) return false;
-    const start = new Date(channelWeek).getTime();
-    return loadedAt - start < 7 * 24 * 60 * 60 * 1000;
-  }, [channelWeek, loadedAt]);
 
   // Grouped by what is wrong, with the people it belongs to — the demo's
   // "what's slipping", which is a manager's read of the same exception union
@@ -483,124 +489,94 @@ export default function DashboardPage() {
                 type="button"
                 className="chip"
                 aria-pressed={lens === key}
-                onClick={() => {
-                  setLens(key);
-                  setOpened(null);
-                }}
+                onClick={() => setLens(key)}
               >
                 {label}
               </button>
             ))}
           </div>
 
-          <ul className="stack-sm">
+          <p className="t-sub mb-1 px-1">
+            Every bar is one {LENS_NOUN[lens]}&rsquo;s week. Mileage is
+            reimbursed, so a visit that was planned and never happened is a cost
+            as well as a gap.
+          </p>
+
+          <ul className="card card-pad">
             {groups.map((g) => {
-              const isOpen = opened === g.id;
               const unplanned = lens === "rep" ? (unplannedByRep.get(g.id) ?? 0) : 0;
+              // done already contains owed: the solid teal is the part that was
+              // written up, and the clay beside it is the part that was not.
+              const bar: readonly (readonly [string, number])[] = [
+                ["is-done", g.done - g.owed],
+                ["is-owed", g.owed],
+                ["is-missed", g.missed],
+                ["is-left", g.left],
+              ];
+              const note = g.missed
+                ? `${g.missed} never happened`
+                : g.owed
+                  ? `${g.owed} owes a note`
+                  : g.left
+                    ? `${g.left} still to come`
+                    : "all logged";
               return (
                 <li key={g.id}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    {lens === "rep" ? (
-                      <Link href={`/accounts?owner=${g.id}`} className="t-title">
-                        {g.label}
-                      </Link>
-                    ) : (
-                      <span className="t-title">{g.label}</span>
-                    )}
-                    <span className="t-meta tabular-nums">
-                      {g.done}/{g.total}
-                      {unplanned > 0 ? ` · ${unplanned} unplanned` : ""}
+                  <Link href={rowHref(lens, g.id)} className="pva-row">
+                    <span>
+                      <span className="pva-name">{g.label}</span>
+                      <span className="pva-sub">
+                        {lens === "rep"
+                          ? (repPatch.get(g.id) ?? "—")
+                          : `${g.segments.length} ${g.segments.length === 1 ? "door" : "doors"}`}
+                      </span>
                     </span>
-                  </div>
-
-                  {/* One bar, segmented by what the lens is NOT grouping on.
-                      Kept work is teal in step tints; what is still owed stays
-                      the empty track, so the bar reads the same as every other
-                      bar on this page. */}
-                  <div
-                    className="mt-1 flex h-2 overflow-hidden rounded"
-                    style={{ background: "var(--rule)" }}
-                    role="img"
-                    aria-label={`${g.done} of ${g.total} planned visits done, split ${g.segments
-                      .map((s) => `${s.label} ${s.done} of ${s.total}`)
-                      .join(", ")}`}
-                  >
-                    {g.segments.map((s, i) => (
-                      <span
-                        key={s.id}
-                        style={{
-                          width: g.total === 0 ? 0 : `${(100 * s.done) / g.total}%`,
-                          background: SEGMENT_TINT[i % SEGMENT_TINT.length],
-                        }}
-                      />
-                    ))}
-                  </div>
-
-                  {/* The legend is what carries identity — a tint can only
-                      separate segments, it cannot name them. */}
-                  {g.segments.length > 0 && (
-                    <p className="t-meta mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                      {g.segments.map((s, i) => (
-                        <span key={s.id} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="pva-track"
+                      role="img"
+                      aria-label={`${g.done} of ${g.total} planned visits done; ${note}`}
+                    >
+                      {bar.map(([cls, n]) =>
+                        n > 0 ? (
                           <span
-                            aria-hidden="true"
-                            className="inline-block h-2 w-2 rounded-full"
-                            style={{ background: SEGMENT_TINT[i % SEGMENT_TINT.length] }}
+                            key={cls}
+                            className={`pva-seg ${cls}`}
+                            style={{ flex: n }}
                           />
-                          {s.label} <span className="tabular-nums">{s.done}/{s.total}</span>
-                        </span>
-                      ))}
-                    </p>
-                  )}
-
-                  {g.outstanding > 0 && (
-                    <span className="t-sub">
-                      {g.outstanding}{" "}
-                      {weekIsCurrent ? "still to come" : "never happened"}
+                        ) : null,
+                      )}
                     </span>
-                  )}
-
-                  <button
-                    type="button"
-                    className="t-action mt-1 block underline underline-offset-2"
-                    aria-expanded={isOpen}
-                    onClick={() => setOpened(isOpen ? null : g.id)}
-                  >
-                    {isOpen ? "Less" : "See more"}
-                  </button>
-
-                  {isOpen && (
-                    <div className="card card-pad mt-2">
-                      <p className="t-meta uppercase tracking-wide">
-                        {lens === "distributor" ? "By door" : "By distributor"}
-                      </p>
-                      <ul className="mt-2 flex flex-col gap-1.5">
-                        {g.segments.map((s) => (
-                          <li
-                            key={s.id}
-                            className="flex items-baseline justify-between gap-3"
-                          >
-                            <span className="t-sub truncate">{s.label}</span>
-                            <span className="t-meta tabular-nums shrink-0">
-                              {s.done}/{s.total} visits
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                      {/* The breakdown leadership asked for is in linear feet,
-                          and those figures live in the distributors' shared
-                          spreadsheet, not here. Saying so beats an empty column
-                          that looks like a zero. */}
-                      <p className="t-sub mt-3">
-                        Volume in LF comes from the distributors&rsquo; report —
-                        not connected yet.
-                      </p>
-                    </div>
-                  )}
+                    <span className="pva-fig">
+                      {g.done}/{g.total}
+                      <small>
+                        {note}
+                        {unplanned > 0 ? ` · ${unplanned} unplanned` : ""}
+                      </small>
+                    </span>
+                  </Link>
                 </li>
               );
             })}
           </ul>
+
+          <p className="pva-legend">
+            <span>
+              <i className="pva-seg is-done" />
+              done and logged
+            </span>
+            <span>
+              <i className="pva-seg is-owed" />
+              done, owes a note
+            </span>
+            <span>
+              <i className="pva-seg is-missed" />
+              never happened
+            </span>
+            <span>
+              <i className="pva-seg is-left" />
+              still to come
+            </span>
+          </p>
         </section>
       )}
 
