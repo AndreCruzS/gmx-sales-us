@@ -16,7 +16,7 @@
 // branch, the year narrows to their months. Nobody loses their place to read
 // one number.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { displayAccountName, formatMoney } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -57,6 +57,14 @@ const LENSES: readonly (readonly [SalesLens, string])[] = [
   ["dealer", "Dealer"],
 ];
 
+// The pick is two movements, not one. First the bands in front of the chosen
+// one fold away, which SLIDES it to the start of the track — ease-in, because
+// a thing that is setting off should look like it is gathering speed. Only
+// then does it stretch to fill, on a soft ease-out, the way something arriving
+// settles rather than slams. Doing both at once reads as a bar being yanked;
+// doing them in order reads as the chosen customer stepping forward.
+const SLIDE_MS = 340;
+
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
@@ -76,6 +84,9 @@ interface Band {
   id: string;
   name: string;
   qty: number;
+  /** This band's share of its bar, as a percentage — the width it holds while
+   *  it slides to the start. */
+  share: number;
   colour: string;
   row: CustomerSalesRow | null;
   /** What the page should answer for when this band is chosen. Always a
@@ -108,6 +119,18 @@ export function TeamSales({
 }) {
   const [lens, setLens] = useState<SalesLens>("rep");
   const [visits, setVisits] = useState<VisitRow[] | null>(null);
+  // "slide" = travelling to the start, "fill" = stretching to own the bar.
+  const [phase, setPhase] = useState<"idle" | "slide" | "fill">("idle");
+  const phaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A pending stage must not outlive the component, or fire into a bar that is
+  // no longer the one that was tapped.
+  useEffect(
+    () => () => {
+      if (phaseTimer.current !== null) clearTimeout(phaseTimer.current);
+    },
+    [],
+  );
 
   const groups = useMemo<Group[]>(() => {
     const sold = rows.filter((r) => Number(r.won_qty) > 0);
@@ -145,6 +168,7 @@ export function TeamSales({
               ? displayAccountName(r.customer_name)
               : (repMeta.get(r.owner_id)?.name ?? "—"),
           qty: Number(r.won_qty),
+          share: 0,
           colour,
           row: r,
           focus: {
@@ -161,6 +185,7 @@ export function TeamSales({
             id: "rest",
             name: `${tail.length} more`,
             qty: tail.reduce((n, r) => n + Number(r.won_qty), 0),
+            share: 0,
             colour: "var(--cat-rest)",
             row: null,
             focus: {
@@ -170,6 +195,11 @@ export function TeamSales({
               colour: "var(--cat-rest)",
             },
           });
+        }
+
+        const barTotal = bands.reduce((n, b) => n + b.qty, 0);
+        for (const b of bands) {
+          b.share = barTotal === 0 ? 0 : (100 * b.qty) / barTotal;
         }
 
         const first = sorted[0];
@@ -213,11 +243,21 @@ export function TeamSales({
   // the person, and a render is not the place to start one.
   function toggle(band: Band) {
     setVisits(null);
+    if (phaseTimer.current !== null) clearTimeout(phaseTimer.current);
+
     if (focus?.id === band.focus.id) {
+      // Letting go: everything returns to its share of the bar together.
+      setPhase("idle");
       onFocus(null);
       return;
     }
+
     onFocus(band.focus);
+    setPhase("slide");
+    phaseTimer.current = setTimeout(() => {
+      phaseTimer.current = null;
+      setPhase("fill");
+    }, SLIDE_MS);
     if (band.focus.id !== "rest") void loadVisits(band.focus.id);
   }
 
@@ -265,7 +305,7 @@ export function TeamSales({
               </div>
               <span className="pva-sub">{g.sub}</span>
 
-              <div className="sales-track">
+              <div className="sales-track" data-phase={open ? phase : "idle"}>
                 {g.bands.map((b) => {
                   const chosen = open !== null;
                   const isOpen = open?.id === b.id;
@@ -275,10 +315,25 @@ export function TeamSales({
                       type="button"
                       className="sales-seg"
                       style={{
-                        // flex-grow carries the animation: the chosen band
-                        // takes the whole bar, the rest fold to nothing.
-                        flexGrow: chosen ? (isOpen ? 1 : 0.0001) : b.qty,
-                        flexBasis: 0,
+                        // Every band is sized by flex-BASIS, at rest as well
+                        // as in motion, and that is the whole trick: a width
+                        // can only travel from a value it already has. Sizing
+                        // by flex-grow at rest left nothing to transition
+                        // from, so the chosen band collapsed to nothing and
+                        // grew back rather than sliding.
+                        //
+                        // Sliding: the chosen band HOLDS its share while the
+                        // others fold to zero, which carries it to the start
+                        // at the size it already was. Filling: it stretches to
+                        // the whole bar. Doing both at once read as a lurch.
+                        flexGrow: 0,
+                        flexBasis: !chosen
+                          ? `${b.share}%`
+                          : isOpen
+                            ? phase === "slide"
+                              ? `${b.share}%`
+                              : "100%"
+                            : "0%",
                         background: b.colour,
                       }}
                       data-dimmed={chosen && !isOpen}
@@ -307,7 +362,9 @@ export function TeamSales({
                 ))}
               </p>
 
-              {open && (
+              {/* The detail waits for the bar to arrive; opening it mid-slide
+                  would give the eye two things to follow at once. */}
+              {open && phase !== "slide" && (
                 <div className="sales-detail">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="t-title">

@@ -414,16 +414,18 @@ body {
    the entrance replay on every change — a CSS transition cannot animate
    content that was replaced. */
 .adapt {
-  animation: adapt-in 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Held back by roughly the slide, so the page settles after the bar has
+     moved rather than everything lurching together. */
+  animation: adapt-in 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) 0.18s both;
 }
 .adapt:nth-of-type(2) {
-  animation-delay: 0.04s;
+  animation-delay: 0.24s;
 }
 .adapt:nth-of-type(3) {
-  animation-delay: 0.08s;
+  animation-delay: 0.3s;
 }
 .adapt:nth-of-type(4) {
-  animation-delay: 0.12s;
+  animation-delay: 0.36s;
 }
 @keyframes adapt-in {
   from {
@@ -530,16 +532,32 @@ body {
   overflow: hidden;
   background: var(--surface-sunken);
 }
-/* The whole point of the interaction: a band grows to own the bar while the
-   rest fold away, so the eye stays on the thing it just chose instead of
-   hunting for it on a new screen. */
+/* Two movements, in order. The bands in front of the chosen one fold away
+   first, which carries it to the START of the track; only then does it stretch
+   to fill. Doing both at once reads as a bar being yanked — in sequence it
+   reads as the chosen customer stepping forward.
+
+   The easings say which movement is which: setting off gathers speed (ease-in),
+   arriving settles (ease-out). Letting go is one gentle move back to everyone's
+   share. */
 .sales-seg {
   min-width: 0;
   border: none;
   padding: 0;
   transition:
-    flex-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 0.3s ease;
+    flex-basis 0.42s cubic-bezier(0.22, 0.68, 0.24, 1),
+    flex-grow 0.42s cubic-bezier(0.22, 0.68, 0.24, 1),
+    opacity 0.34s ease;
+}
+.sales-track[data-phase="slide"] .sales-seg {
+  transition:
+    flex-basis 0.34s cubic-bezier(0.5, 0, 0.75, 0.2),
+    opacity 0.26s cubic-bezier(0.5, 0, 0.75, 0.2);
+}
+.sales-track[data-phase="fill"] .sales-seg {
+  transition:
+    flex-basis 0.46s cubic-bezier(0.16, 0.84, 0.32, 1),
+    opacity 0.2s ease;
 }
 .sales-seg:focus-visible {
   outline: 2px solid var(--ink-primary);
