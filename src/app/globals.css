@@ -416,21 +416,21 @@ body {
 .adapt {
   /* Held back by roughly the slide, so the page settles after the bar has
      moved rather than everything lurching together. */
-  animation: adapt-in 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) 0.18s both;
+  animation: adapt-in 0.52s cubic-bezier(0.25, 0.6, 0.35, 1) 0.2s both;
 }
 .adapt:nth-of-type(2) {
-  animation-delay: 0.24s;
+  animation-delay: 0.28s;
 }
 .adapt:nth-of-type(3) {
-  animation-delay: 0.3s;
+  animation-delay: 0.36s;
 }
 .adapt:nth-of-type(4) {
-  animation-delay: 0.36s;
+  animation-delay: 0.44s;
 }
 @keyframes adapt-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
 }
 
@@ -445,7 +445,7 @@ body {
   border-radius: var(--r-card);
   background: var(--fill-ink);
   color: var(--on-ink);
-  animation: adapt-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: adapt-in 0.44s cubic-bezier(0.25, 0.6, 0.35, 1) both;
 }
 .focus-swatch {
   flex-shrink: 0;
@@ -609,12 +609,16 @@ body {
   border-radius: var(--r-control);
   background: var(--surface-card);
   border: 1px solid var(--rule);
-  animation: sales-open 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Unfolds from under the bar on the same mild ease-out as the bands. At a
+     third of a second over six pixels it was a twitch — too quick to read as
+     movement, just enough to register as a flicker. Given room to travel and
+     time to settle, it reads as the panel arriving. */
+  animation: sales-open 0.52s cubic-bezier(0.25, 0.6, 0.35, 1) both;
 }
 @keyframes sales-open {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-12px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1456,7 +1460,7 @@ body {
   background: var(--surface-card);
   border: 1px solid var(--rule);
   box-shadow: var(--shadow-2);
-  animation: add-rise 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+  animation: add-rise 0.34s cubic-bezier(0.25, 0.6, 0.35, 1) backwards;
 }
 /* Nearest the thumb arrives first — the stack reads as unfolding from the
    button rather than appearing all at once. */
