@@ -58,11 +58,13 @@ const LENSES: readonly (readonly [SalesLens, string])[] = [
 ];
 
 // The pick is two movements, not one. First the bands in front of the chosen
-// one fold away, which SLIDES it to the start of the track — ease-in, because
-// a thing that is setting off should look like it is gathering speed. Only
-// then does it stretch to fill, on a soft ease-out, the way something arriving
-// settles rather than slams. Doing both at once reads as a bar being yanked;
-// doing them in order reads as the chosen customer stepping forward.
+// one fold away, which SLIDES it to the start of the track. Only then does it
+// stretch to fill. Doing both at once reads as a bar being yanked; doing them
+// in order reads as the chosen customer stepping forward.
+//
+// Both beats ease out — see the note on .sales-seg. The slide leaves at once
+// and settles into the start rather than gathering speed, which is what makes
+// it read as soft rather than late.
 const SLIDE_MS = 340;
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });

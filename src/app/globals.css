@@ -537,9 +537,11 @@ body {
    to fill. Doing both at once reads as a bar being yanked — in sequence it
    reads as the chosen customer stepping forward.
 
-   The easings say which movement is which: setting off gathers speed (ease-in),
-   arriving settles (ease-out). Letting go is one gentle move back to everyone's
-   share. */
+   Both movements ease OUT: they leave at once and settle into place. Easing
+   the slide IN was the obvious reading of "sets off", but it makes the band sit
+   still for a third of the move and then bolt — the eye reads the pause as lag
+   rather than as intent. Leaving immediately and slowing into the start is what
+   actually feels soft. */
 .sales-seg {
   min-width: 0;
   border: none;
@@ -551,8 +553,8 @@ body {
 }
 .sales-track[data-phase="slide"] .sales-seg {
   transition:
-    flex-basis 0.34s cubic-bezier(0.5, 0, 0.75, 0.2),
-    opacity 0.26s cubic-bezier(0.5, 0, 0.75, 0.2);
+    flex-basis 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sales-track[data-phase="fill"] .sales-seg {
   transition:
