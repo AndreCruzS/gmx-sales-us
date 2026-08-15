@@ -65,7 +65,7 @@ const LENSES: readonly (readonly [SalesLens, string])[] = [
 // Both beats ease out — see the note on .sales-seg. The slide leaves at once
 // and settles into the start rather than gathering speed, which is what makes
 // it read as soft rather than late.
-const SLIDE_MS = 340;
+const SLIDE_MS = 420;
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });

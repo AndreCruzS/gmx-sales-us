@@ -531,35 +531,44 @@ body {
   border-radius: 4px;
   overflow: hidden;
   background: var(--surface-sunken);
+  /* The gap has to close with the bands. Folded neighbours are zero WIDE but
+     their gaps remain, so a chosen band could only ever reach 4px short of the
+     start and 4px short of full — near the edges but never on them, which is
+     exactly the sort of miss the eye notices without being able to name. */
+  transition: gap 0.42s cubic-bezier(0.25, 0.6, 0.35, 1);
+}
+.sales-track[data-phase="slide"],
+.sales-track[data-phase="fill"] {
+  gap: 0;
 }
 /* Two movements, in order. The bands in front of the chosen one fold away
    first, which carries it to the START of the track; only then does it stretch
    to fill. Doing both at once reads as a bar being yanked — in sequence it
    reads as the chosen customer stepping forward.
 
-   Both movements ease OUT: they leave at once and settle into place. Easing
-   the slide IN was the obvious reading of "sets off", but it makes the band sit
-   still for a third of the move and then bolt — the eye reads the pause as lag
-   rather than as intent. Leaving immediately and slowing into the start is what
-   actually feels soft. */
+   Both movements ease OUT, and gently. Easing the slide IN made the band sit
+   still for a third of the move and then bolt, which the eye reads as lag. A
+   hard ease-out fixed the lag and bought a new problem — two thirds of the
+   distance gone in the first eighty milliseconds reads as a snap. The curve
+   here is a mild one: away without hesitating, and slowing into the mark
+   rather than arriving at it. */
 .sales-seg {
   min-width: 0;
   border: none;
   padding: 0;
   transition:
-    flex-basis 0.42s cubic-bezier(0.22, 0.68, 0.24, 1),
-    flex-grow 0.42s cubic-bezier(0.22, 0.68, 0.24, 1),
+    flex-basis 0.5s cubic-bezier(0.25, 0.6, 0.35, 1),
     opacity 0.34s ease;
 }
 .sales-track[data-phase="slide"] .sales-seg {
   transition:
-    flex-basis 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    flex-basis 0.42s cubic-bezier(0.25, 0.6, 0.35, 1),
+    opacity 0.32s ease;
 }
 .sales-track[data-phase="fill"] .sales-seg {
   transition:
-    flex-basis 0.46s cubic-bezier(0.16, 0.84, 0.32, 1),
-    opacity 0.2s ease;
+    flex-basis 0.46s cubic-bezier(0.25, 0.6, 0.35, 1),
+    opacity 0.24s ease;
 }
 .sales-seg:focus-visible {
   outline: 2px solid var(--ink-primary);
