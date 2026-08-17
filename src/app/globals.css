@@ -1660,9 +1660,15 @@ input[type="datetime-local"] {
   border-radius: 999px;
   background: var(--ink-primary);
   color: var(--surface-card);
-  font-family: var(--font-mono);
-  font-size: 13px;
+  /* ONE LETTER, so it can have the room. At 13px mono two characters filled this
+     circle and one rattled around inside it — and a monogram is a name, not a
+     figure, so it takes the text face like every other name in the app (see WHICH
+     FACE). 17px in a 38px circle is the proportion a monogram wants: clearly
+     inside the disc, clearly the biggest thing in it. */
+  font-size: 17px;
   font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
 }
 .navbar-patch {
   display: block;

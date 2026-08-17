@@ -86,3 +86,26 @@ export function displayAccountName(name: string): string {
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
     .join(" ");
 }
+
+/**
+ * The single letter that stands for a person in their own avatar.
+ *
+ * It used to take the first two CHARACTERS of the name, which is not the same
+ * thing as initials and looked it: "Bianca Admin" came out as "BI", a word
+ * fragment rather than a monogram. Two letters earn their place in a LIST, where
+ * they tell one row from the next — an accounts list of Ganahl yards would be all
+ * "G" and useless. An avatar in a header has nothing to differentiate from: there
+ * is one person on that screen and they already know who they are.
+ *
+ * Iterated as code points, not indexed as UTF-16. name[0] on a name beginning
+ * with an astral character returns half a surrogate pair and renders as a
+ * replacement glyph — rare, and a person's own name is the worst place for it.
+ */
+export function avatarLetter(name: string): string {
+  for (const ch of name.trim()) {
+    // Skip anything that is not a letter, so a quoted or bracketed name gives the
+    // letter a reader would expect rather than the punctuation in front of it.
+    if (/\p{L}|\p{N}/u.test(ch)) return ch.toLocaleUpperCase();
+  }
+  return "?";
+}

@@ -18,7 +18,7 @@ import { useParams } from "next/navigation";
 import { useOffline } from "@/components/offline-provider";
 import { ChevronRightIcon } from "@/components/icons";
 import { groupByRep, type ChannelRow } from "@/lib/domain/channel";
-import { displayAccountName, formatMoney } from "@/lib/format";
+import { displayAccountName, formatMoney, avatarLetter } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface Scorecard {
@@ -60,13 +60,6 @@ interface DealerSalesRow {
 
 /** 30000 → "30,000". Volume is read as a size, not a price. */
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-
-/** "Deon Rep" → DR; the same two-letter badge the team list uses. */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-}
 
 function Stat({
   label,
@@ -240,7 +233,7 @@ export default function RepPage() {
       <section>
         <div className="flex items-center gap-3">
           <span className="navbar-avatar" aria-hidden="true">
-            {initials(rep.rep_name)}
+            {avatarLetter(rep.rep_name)}
           </span>
           <span>
             <h1 className="text-[24px] font-extrabold tracking-tight">

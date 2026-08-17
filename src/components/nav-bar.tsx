@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { avatarLetter } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CheckIcon, ChevronRightIcon, SearchIcon } from "./icons";
@@ -120,7 +121,7 @@ export function NavBar() {
         {showIdentity ? (
           <div className="navbar-identity">
             <span className="navbar-avatar" aria-hidden="true">
-              {person.slice(0, 2).toUpperCase()}
+              {avatarLetter(person)}
             </span>
             <span className="min-w-0">
               <h1 className="navbar-title truncate">{person}</h1>
