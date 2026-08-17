@@ -449,23 +449,40 @@ describe("the summary row", () => {
     expect(summary.sub).toBe("2 reps");
     expect(summary.total).toBe(step.total);
     expect(summary.total).toBe(20300);
-    // Boise across BOTH reps — 16,300 of Deon's plus TJ's 2,200 — which is the
-    // whole reason it exists next to the identical name on the rows below.
+    // Banded by the ROWS, not by the next link down. Under the Rep lens that
+    // makes the total answer "who is carrying this month" — the question a
+    // manager opens the screen with — rather than repeating the house split the
+    // rows below already give twice over.
+    expect(step.bandDim).toBe("distributor");
     expect(summary.bands.map((b) => [b.name, b.qty])).toEqual([
-      ["Boise Cascade", 18500],
-      ["Hardwoods Specialty", 1800],
+      ["Deon Rep", 18100],
+      ["TJ Rep", 2200],
     ]);
+    // And the shares are what a comparison is read off.
+    expect(Math.round(summary.bands[0].share)).toBe(89);
   });
 
-  it("carries the month before, aggregated the same way", () => {
-    const summary = buildStep(JULY, JUNE, "rep", [], BRANCHES).summary!;
-    expect(summary.prevTotal).toBe(14100);
-    expect(summary.bands[0].prevQty).toBe(14100);
+  it("bands the houses under Distribution and the dealers under Dealer", () => {
+    expect(
+      buildStep(JULY, JUNE, "distribution", [], BRANCHES).summary!.bands.map((b) => b.name),
+    ).toEqual(["Boise Cascade", "Hardwoods Specialty"]);
+    expect(
+      buildStep(JULY, JUNE, "dealer", [], BRANCHES).summary!.bands[0].name,
+    ).toBe("Ganahl Anaheim");
   });
 
-  it("has no doors: its bands stand for every row, so there is nowhere to walk", () => {
-    // At depth 0 the walk's next link is the ROW dimension, and "Boise across all
-    // reps" is not a step in any chain. They select and open their own detail.
+  it("agrees with the row it stands for, to the linear foot", () => {
+    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const deonRow = step.groups.find((g) => g.title === "Deon Rep")!;
+    const deonBand = step.summary!.bands.find((b) => b.name === "Deon Rep")!;
+    expect(deonBand.qty).toBe(deonRow.total);
+    expect(deonBand.prevQty).toBe(deonRow.prevTotal);
+    expect(step.summary!.prevTotal).toBe(14100);
+  });
+
+  it("has no doors: every band already has a row of its own below it", () => {
+    // Two ways into the same place that behaved differently would be worse than
+    // one. They select and open their own detail.
     const summary = buildStep(JULY, JUNE, "rep", [], BRANCHES).summary!;
     expect(summary.bands.every((b) => b.drillable)).toBe(false);
   });

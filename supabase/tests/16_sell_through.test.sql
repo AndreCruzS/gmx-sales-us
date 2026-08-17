@@ -27,7 +27,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(12);
+select plan(13);
 
 -- ── 1. A branch is not an account ───────────────────────────────────────────
 
@@ -96,17 +96,28 @@ select is(
   'a rep is not shown volume whose dealer nobody could identify'
 );
 
--- TJ owns no Californian dealer, so the Californian book is not his to see.
--- This is the leak test: the rows exist, and he gets none of them.
+-- TJ has a book of his own — Russin's Montgomery yard selling to Buffalo Lumber
+-- Co — and owns no Californian dealer. So this is the leak test in its strongest
+-- form: he sees his own rows, and not one of the Californian ones sitting beside
+-- them. Asserting he sees NOTHING would have passed just as happily with a view
+-- that returned nothing to anybody.
 reset role;
 select tests.clear_auth();
 select tests.set_claims('tj@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 
-select is(
+select isnt(
   (select count(*) from sell_through),
   0::bigint,
-  'a peer with no dealers in the book sees none of it'
+  'a peer sees his own patch'
+);
+
+select is(
+  (select count(*) from sell_through st
+    join distributor_branches b on b.id = st.branch_id
+    where b.state <> 'NY'),
+  0::bigint,
+  'and not one row of anybody else''s, however many sit beside his'
 );
 
 -- The admin who uploaded the file sees all of it, unmatched included.

@@ -471,12 +471,15 @@ export interface SellStep {
   bandDim: SellDim | null;
   groups: readonly SellGroup[];
   /**
-   * The whole step as one row: the same header, the same bar, the same bands —
-   * only aggregated across every row instead of belonging to one of them.
+   * The whole step as one row: the same header, the same bar — the FIRST bar on
+   * the card, because a total with no bar beside a column of bars reads as the
+   * one number left out of the picture.
    *
-   * It is the FIRST bar on the card, and it is there because a total with no bar
-   * beside a column of bars reads as a number that was left out of the picture.
-   * The mix of the month is the first thing worth seeing, before whose mix it is.
+   * ITS BANDS ARE THE ROWS. Under the Rep lens the rows are reps, so the total is
+   * banded by rep: one bar that answers "who is carrying this month", which is
+   * the question a manager opens the screen with. Banding it by the NEXT link
+   * down — houses, under the Rep lens — answered a question the rows below
+   * already answer twice over, and never answered that one at all.
    *
    * Null when there is only one row, because then that row already IS the total
    * and a summary above it would be the same bar drawn twice.
@@ -522,8 +525,6 @@ export function buildStep(
   // Previous month, keyed the same way, so a band can find its own history.
   const prevByRowBand = new Map<string, number>();
   const prevByRow = new Map<string, number>();
-  // The same again with the row ignored, for the summary's own bands.
-  const prevByBand = new Map<string, number>();
   for (const r of scopedPrev) {
     const rowKey = entityAt(r, rowDim).key;
     prevByRow.set(rowKey, (prevByRow.get(rowKey) ?? 0) + num(r.quantity));
@@ -531,8 +532,6 @@ export function buildStep(
       const bandKey = entityAt(r, bandDim).key;
       const k = `${rowKey}::${bandKey}`;
       prevByRowBand.set(k, (prevByRowBand.get(k) ?? 0) + num(r.quantity));
-      const all = `${ALL_ROWS}::${bandKey}`;
-      prevByBand.set(all, (prevByBand.get(all) ?? 0) + num(r.quantity));
     }
   }
 
@@ -575,16 +574,29 @@ export function buildStep(
 
   const total = groups.reduce((n, g) => n + g.total, 0);
 
-  // The summary row. Its bands are aggregated across every row of the step, so
-  // they are NOT doors: at depth 0 the walk's next link is the row dimension,
-  // and "Boise across all reps" has no step in the chain to land on. They select
-  // and open their own detail, which is the same thing every terminal band on
-  // this screen does — so the missing chevron already says it.
+  // The summary row: the total, banded by the rows themselves.
+  //
+  // Its bands are NOT doors. Each one already has a row of its own directly
+  // below, with its own bar and its own way in, so a second door to the same
+  // place would be two ways in that behave differently. They select and open
+  // their own detail — what every terminal band here does, which is what the
+  // missing chevron already says.
   let summary: SellGroup | null = null;
-  if (groups.length > 1 && bandDim) {
-    const bands = buildBands(scoped, bandDim, ALL_ROWS, prevByBand, chain, depth).map(
-      (b) => ({ ...b, drillable: false }),
-    );
+  if (groups.length > 1) {
+    // Banded by the ROW dimension, and the month before keyed the same way — so
+    // the summary's Deon band and Deon's own row agree to the linear foot.
+    const prevBySummaryBand = new Map<string, number>();
+    for (const [rowKey, qty] of prevByRow) {
+      prevBySummaryBand.set(`${ALL_ROWS}::${rowKey}`, qty);
+    }
+    const bands = buildBands(
+      scoped,
+      rowDim,
+      ALL_ROWS,
+      prevBySummaryBand,
+      chain,
+      depth,
+    ).map((b) => ({ ...b, drillable: false }));
     const summaryTotal = bands.reduce((n, b) => n + b.qty, 0);
     const priced = scoped.filter((r) => r.value !== null && r.value !== undefined);
     summary = {

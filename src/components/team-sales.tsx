@@ -330,7 +330,9 @@ export function TeamSales({
   // With nothing chosen there is no single colour to show, so the rail becomes a
   // miniature of the bar itself: the whole step's composition, stacked. Picking a
   // band collapses it to one colour — the same move the bar makes, in 4 pixels.
-  const counterRail = counterColour ?? compositionRail(step.groups);
+  const counterRail =
+    counterColour ??
+    compositionRail(step.summary !== null ? [step.summary] : step.groups);
 
   const month = periodLabel(latest);
 
@@ -395,9 +397,12 @@ export function TeamSales({
             className="chip"
             aria-pressed={lens === key}
             onClick={() => {
-              if (lens === key) return;
-              setLens(key);
-              // A walk taken under one lens is not a walk under the next.
+              // Tapping the lens you are already in is how you get back to the
+              // start of it. Three links deep, the chip is the thing a thumb
+              // reaches for first — it should not be the one control on the
+              // screen that does nothing.
+              if (lens !== key) setLens(key);
+              // And a walk taken under one lens is not a walk under the next.
               goTo([]);
             }}
           >
@@ -521,7 +526,7 @@ export function TeamSales({
                         }}
                         data-dimmed={chosenHere && !isOpen}
                         aria-pressed={isOpen}
-                        aria-label={`${seg.name}: ${QTY.format(seg.qty)} ${step.unit} across the whole month`}
+                        aria-label={`${seg.name}: ${QTY.format(seg.qty)} ${step.unit} of the total`}
                         disabled={band === null}
                         onClick={() => band && tap(step.summary!, band)}
                       />
@@ -538,10 +543,10 @@ export function TeamSales({
                       </span>
                     </div>
                     <p className="t-sub mt-1">
-                      {/* The whole month, not one row's share of it — which is
-                          the only reason this band exists separately from the
-                          identical name on the rows below. */}
-                      Everything through {summaryOpen.name} in {month}
+                      {/* Their share of the month, which is what the total bar is
+                          for: not what they bought, but how much of it was
+                          theirs. */}
+                      {Math.round(summaryOpen.share)}% of {month}
                       {(() => {
                         const m = movementLabel(
                           summaryOpen.qty,

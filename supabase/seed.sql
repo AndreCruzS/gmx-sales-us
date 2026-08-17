@@ -631,7 +631,11 @@ select
   lower(replace(a.name, ' ', '-')) || '-' || to_char(p.period, 'YYYY-MM') || '.xlsx'
 from (values
   ('d0000000-0000-0000-0000-000000000005'::uuid),
-  ('d0000000-0000-0000-0000-000000000006'::uuid)
+  ('d0000000-0000-0000-0000-000000000006'::uuid),
+  -- Russin, so the Rep lens has a second rep in it. A total bar banded by rep
+  -- exists to answer "who is carrying this month", and a book with one rep in it
+  -- cannot demonstrate the question, let alone the answer.
+  ('d0000000-0000-0000-0000-000000000007'::uuid)
 ) as dd(id)
 join accounts a on a.id = dd.id
 cross join (
@@ -679,6 +683,40 @@ from (values
   -- Hardwoods San Diego reaches the county line.
   ('HW-SAN', 'Ganahl Escondido',    'HARDWOODS/GANAHL ESCONDIDO',         'Thermo-Ayous',        1500, 3.28, 0.94),
   ('HW-SAN', 'BFS National City',   'HARDWOODS/BFS NATIONAL CITY',        'Thermo-Ash Decking',  2900, 3.55, 1.12)
+) as pr(code, dealer_name, label, product, base, price, trend)
+join distributor_branches b
+  on b.external_code = pr.code
+join accounts a
+  on a.name = pr.dealer_name
+ and a.org_id = '11111111-1111-1111-1111-111111111111'
+cross join (values (1), (2), (3)) as m(ord)
+join sell_through_uploads u
+  on u.distributor_id = b.distributor_id
+ and u.period = (date_trunc('month', current_date) - ((4 - m.ord) || ' months')::interval)::date;
+
+-- Buffalo, through Russin. TJ's patch is a different rep's book entirely: a
+-- different house, a different yard, a different state — which is what makes the
+-- Rep lens a comparison rather than a single column, and what makes the RLS test
+-- in 16_sell_through mean something (TJ sees THIS and none of California).
+
+insert into sell_through (org_id, upload_id, branch_id, dealer_id, dealer_label,
+                          period, product, quantity, unit, value)
+select
+  '11111111-1111-1111-1111-111111111111',
+  u.id,
+  b.id,
+  a.id,
+  pr.label,
+  u.period,
+  pr.product,
+  round(pr.base * power(pr.trend, m.ord - 3)),
+  'LF',
+  round(pr.base * power(pr.trend, m.ord - 3) * pr.price, 2)
+from (values
+  -- Buffalo Lumber Co is the only dealer TJ owns, so it is the only one here.
+  -- Acme Dealer Central belongs to the OTHER organisation; naming it would look
+  -- like a second row and load as nothing, which is worse than a short list.
+  ('RU-MON', 'Buffalo Lumber Co', 'BUFFALO LUMBER CO - MAIN', 'Thermo-Ayous', 9400, 3.42, 1.18)
 ) as pr(code, dealer_name, label, product, base, price, trend)
 join distributor_branches b
   on b.external_code = pr.code
