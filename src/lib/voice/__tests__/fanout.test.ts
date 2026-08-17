@@ -13,7 +13,8 @@ import type { DebriefDraft } from "../draft";
 
 function baseDraft(overrides: Partial<DebriefDraft> = {}): DebriefDraft {
   return {
-    summary: "Visited the dealer, discussed samples.",
+    account_id: null,
+  summary: "Visited the dealer, discussed samples.",
     activity_type: "DEALER_VISIT",
     what_happened: "Talked about display wall placement.",
     key_information: null,

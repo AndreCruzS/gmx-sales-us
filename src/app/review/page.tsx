@@ -5,8 +5,18 @@
 //     record without review; Send fans out through the outbox, D10)
 //   · saves that didn't land (LWW conflicts / rejected writes, D61/D62) —
 //     surfaced, never silently dropped
+//
+// WAITING ON THE REP'S DECISION IS THE POINT. WAITING ON THEIR BUTTON IS NOT.
+// This screen used to show a voice note sitting under "Waiting to be written up"
+// with a "Write them up now" button beneath it — so a rep who had just finished
+// talking had to ask the system to listen. That is a seam in the one flow that
+// has to have none: a rep records in a truck, in a yard, between visits, and the
+// gap between saying it and seeing it is the whole product.
+//
+// The writing-up now starts by itself, the moment a note lands here. The button
+// only comes back if that failed — which offline it will, and honestly should.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline, type Profile } from "@/components/offline-provider";
 import { AlertIcon, ChevronDownIcon, FileIcon, XIcon } from "@/components/icons";
 import {
@@ -78,7 +88,10 @@ interface CandidateRow {
 
 // Status labels in the rep's language, not the pipeline's.
 const STATUS_LABEL: Record<string, string> = {
-  UPLOADED: "Waiting to be written up",
+  // Not "waiting to be written up" any more, because nothing is waiting: by the
+  // time a row can be seen in this state the request is already out. A label that
+  // says "waiting" invites the reader to look for the thing to press.
+  UPLOADED: "Being written up…",
   PROCESSING: "Being written up…",
   DRAFTED: "Ready for your OK",
   SENT: "Saved",
@@ -97,7 +110,70 @@ export default function ReviewPage() {
   const [reviewingCard, setReviewingCard] = useState<CandidateRow | null>(null);
   const [processing, setProcessing] = useState(false);
   const [reading, setReading] = useState(false);
+  // Which captures and cards this screen has already offered to the model on its
+  // own. A ref, not state: it must not cause a render, and it must survive the
+  // reload that drafting triggers — otherwise a note the model cannot write up
+  // would be sent back to it on every refresh, forever.
+  const autoTried = useRef<Set<string>>(new Set());
+  // Set only when the automatic attempt actually failed, which is what brings the
+  // manual button back. Offline that is the honest state and the rep needs the
+  // retry; online it should never be seen.
+  const [autoFailed, setAutoFailed] = useState<"voice" | "cards" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Ask the model to write up whatever is waiting, and say whether it managed to.
+   *
+   * `auto` is the difference between the system doing its job and the rep asking
+   * it to, and it changes exactly one thing: an automatic run that fails stays
+   * QUIET. The note is already saved and will be written the moment there is
+   * signal, so a red error would be telling the rep something is broken when
+   * nothing is. It raises the retry button instead, which is the only useful
+   * thing to show and the thing they would have wanted anyway.
+   *
+   * Deliberately knows nothing about reloading. That is what lets it be stable,
+   * which is what lets load() call it without the two becoming each other's
+   * dependency — the caller reloads.
+   */
+  const postDraft = useCallback(async (auto: boolean) => {
+    setProcessing(true);
+    if (!auto) setError(null);
+    try {
+      const res = await fetch("/api/voice/process", { method: "POST" });
+      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+      setAutoFailed((f) => (f === "voice" ? null : f));
+      return true;
+    } catch (err) {
+      if (auto) setAutoFailed("voice");
+      else setError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      setProcessing(false);
+    }
+  }, []);
+
+  /** Same contract, for a photographed card. */
+  const postCards = useCallback(async (auto: boolean) => {
+    setReading(true);
+    if (!auto) setError(null);
+    try {
+      const res = await fetch("/api/cards/process", { method: "POST" });
+      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+      setAutoFailed((f) => (f === "cards" ? null : f));
+      return true;
+    } catch (err) {
+      if (auto) setAutoFailed("cards");
+      else setError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      setReading(false);
+    }
+  }, []);
+
+  // load() needs to run again once the model has written something up, and it
+  // cannot name itself inside its own definition. Held in a ref rather than
+  // rebuilt on every render, which also keeps it out of its own dependency list.
+  const loadRef = useRef<() => Promise<void>>(async () => {});
 
   const load = useCallback(async () => {
     const layer = getOfflineLayer();
@@ -142,10 +218,50 @@ export default function ReviewPage() {
           }),
         );
       }
+      // ── The work starts here, not on a tap ────────────────────────────────
+      //
+      // Anything that arrived undrafted goes to the model now. Fired from load()
+      // rather than from an effect on purpose: an effect watching `captures`
+      // would be setting state in response to state it just set, which this
+      // codebase's lint rules forbid for good reason — and it would race the
+      // reload that drafting itself triggers.
+      //
+      // Each id is marked BEFORE the call, so a note the model cannot handle is
+      // offered exactly once. Without that, a capture stuck at UPLOADED would be
+      // resubmitted on every refresh and every pull.
+      if (caps.data) {
+        const undrafted = (caps.data as CaptureRow[]).filter(
+          (c) => c.status === "UPLOADED" && !autoTried.current.has(c.id),
+        );
+        if (undrafted.length > 0) {
+          for (const c of undrafted) autoTried.current.add(c.id);
+          void postDraft(true).then((ok) => (ok ? loadRef.current() : undefined));
+        }
+      }
+      // A photographed card is the same promise as a spoken note — something the
+      // rep handed over and should not have to ask twice about. Same rule, same
+      // guard; leaving one of the two behind a button would just move the seam.
+      if (cands.data) {
+        const unread = (cands.data as CandidateRow[]).filter(
+          (c) => !c.extracted && !autoTried.current.has(c.id),
+        );
+        if (unread.length > 0) {
+          for (const c of unread) autoTried.current.add(c.id);
+          void postCards(true).then((ok) => (ok ? loadRef.current() : undefined));
+        }
+      }
     } catch {
       // offline — rejected saves still show; drafts need signal
     }
-  }, []);
+  }, [postDraft, postCards]);
+
+  // Assigned in an effect, never during render: mutating a ref while rendering is
+  // the kind of impurity this codebase's lint rules exist to catch. The first
+  // load() runs from a timer, which fires after effects, so this is always set by
+  // the time anything reads it.
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
 
   useEffect(() => {
     const t = setTimeout(() => void load(), 0);
@@ -153,17 +269,7 @@ export default function ReviewPage() {
   }, [load, status.lastPulledAt, status.rejected]);
 
   async function draftPending() {
-    setProcessing(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/voice/process", { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setProcessing(false);
-    }
+    if (await postDraft(false)) await load();
   }
 
   async function discardRejected(seq: number) {
@@ -190,17 +296,7 @@ export default function ReviewPage() {
   }
 
   async function readCards() {
-    setReading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/cards/process", { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setReading(false);
-    }
+    if (await postCards(false)) await load();
   }
 
   const toConfirm = captures.filter((c) => c.status === "DRAFTED");
@@ -343,17 +439,16 @@ export default function ReviewPage() {
               </li>
             ))}
           </ul>
-          {cardsUnread.some(
-            (c) => c.created_by === profile?.membershipId,
-          ) && (
-            <button
-              onClick={readCards}
-              disabled={reading}
-              className="btn-secondary mt-2 w-full"
-            >
-              {reading ? "Reading…" : "Read my cards now"}
-            </button>
-          )}
+          {autoFailed === "cards" &&
+            cardsUnread.some((c) => c.created_by === profile?.membershipId) && (
+              <button
+                onClick={() => void readCards()}
+                disabled={reading}
+                className="btn-secondary mt-2 w-full"
+              >
+                {reading ? "Reading…" : "Try reading them again"}
+              </button>
+            )}
         </section>
       )}
 
@@ -377,13 +472,15 @@ export default function ReviewPage() {
               </li>
             ))}
           </ul>
-          {inFlight.some((c) => c.status === "UPLOADED") && (
+          {/* Only after the automatic attempt failed — offline, usually. Then it
+              is not a step in the flow, it is the one useful thing on screen. */}
+          {autoFailed === "voice" && inFlight.some((c) => c.status === "UPLOADED") && (
             <button
-              onClick={draftPending}
+              onClick={() => void draftPending()}
               disabled={processing}
               className="btn-secondary mt-2 w-full"
             >
-              {processing ? "Writing up…" : "Write them up now"}
+              {processing ? "Writing up…" : "Try writing them up again"}
             </button>
           )}
         </section>
@@ -530,7 +627,16 @@ function ReviewSheet({
 }) {
   const { profile } = useOffline();
   const draft = capture.ai_draft as DebriefDraft;
-  const [accountId, setAccountId] = useState(capture.account_id ?? "");
+  // What the rep said, then what the system worked out, then nothing.
+  //
+  // capture.account_id first because it is a fact: the rep picked it, or the
+  // agenda deep link named it. The draft's proposal only fills a blank — it never
+  // overrides somebody who already answered. And it is a DEFAULT, not a decision:
+  // it lands in the same dropdown, editable, because nothing becomes a record
+  // without the rep looking at it (D9).
+  const [accountId, setAccountId] = useState(
+    capture.account_id ?? draft.account_id ?? "",
+  );
   const [activityType, setActivityType] = useState<ActivityType>(
     draft.activity_type,
   );
@@ -853,18 +959,30 @@ function ReviewSheet({
         )}
 
         <div className="mt-4 flex flex-col gap-3">
-          <select
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="field"
-          >
-            <option value="">Which account is this?</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <div>
+            <select
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              className="field"
+            >
+              <option value="">Which account is this?</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            {/* Say so when the account is the system's guess rather than the
+                rep's answer. A silently pre-filled dropdown reads as something
+                they already confirmed, and this is the one field where being
+                wrong files a visit against a company they never went to — so it
+                gets one line asking for a glance, and only when it was guessed. */}
+            {!capture.account_id && draft.account_id === accountId && (
+              <p className="t-sub mt-1">
+                Picked from what you said &mdash; change it if that&apos;s not right.
+              </p>
+            )}
+          </div>
 
           <select
             value={activityType}

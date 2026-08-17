@@ -14,6 +14,7 @@ import {
 
 function baseDraft(overrides: Partial<DebriefDraft> = {}): DebriefDraft {
   return {
+    account_id: null,
     summary: "Visited the dealer, discussed samples.",
     activity_type: "DEALER_VISIT",
     what_happened: "Talked about display wall placement.",
@@ -115,5 +116,60 @@ describe("extractionPrompt", () => {
     expect(prompt).toContain(
       "Propose a disposition ONLY for items the rep explicitly mentioned. Never invent item ids.",
     );
+  });
+});
+
+describe("the account the system proposes", () => {
+  it("keeps an account it was actually offered", () => {
+    const draft = baseDraft({ account_id: "acct-1" });
+    expect(sanitizeDraft(draft, [], ["acct-1", "acct-2"]).account_id).toBe("acct-1");
+  });
+
+  it("drops one it invented", () => {
+    // The sharp edge: an id nobody offered either fails a foreign key on Send or,
+    // worse, lands on a real account that happens to match. Null costs the rep one
+    // dropdown; a wrong account files a visit against a company they never visited.
+    const draft = baseDraft({ account_id: "acct-99" });
+    expect(sanitizeDraft(draft, [], ["acct-1"]).account_id).toBeNull();
+  });
+
+  it("drops it when the caller cannot say what was offered", () => {
+    // A caller that does not pass the list cannot vouch for the answer, so the
+    // default has to be refusal rather than trust.
+    const draft = baseDraft({ account_id: "acct-1" });
+    expect(sanitizeDraft(draft, []).account_id).toBeNull();
+  });
+
+  it("leaves a null alone", () => {
+    expect(sanitizeDraft(baseDraft({ account_id: null }), [], ["acct-1"]).account_id).toBeNull();
+  });
+});
+
+describe("the prompt that asks for it", () => {
+  it("lists the rep's accounts and forbids anything else", () => {
+    const p = extractionPrompt("2026-08-17T10:00:00Z", "en", undefined, [
+      { account_id: "acct-1", name: "Ganahl Anaheim" },
+      { account_id: "acct-2", name: "Buffalo Lumber Co" },
+    ]);
+    expect(p).toContain("acct-1 — Ganahl Anaheim");
+    expect(p).toContain("acct-2 — Buffalo Lumber Co");
+    expect(p).toContain("Never return an id that is not on this list");
+    // Null has to be presented as the safe answer, or the model will always guess.
+    expect(p).toContain("null is always the safer");
+  });
+
+  it("says nothing about accounts when there are none to offer", () => {
+    const p = extractionPrompt("2026-08-17T10:00:00Z", "en");
+    expect(p).not.toContain("account_id to the id");
+  });
+
+  it("carries both kinds of context at once", () => {
+    const p = extractionPrompt(
+      "2026-08-17T10:00:00Z", "en",
+      [{ item_id: "r1", kind: "DISPLAY_CHECK", action: "Check the wall" }],
+      [{ account_id: "acct-1", name: "Ganahl Anaheim" }],
+    );
+    expect(p).toContain("Ganahl Anaheim");
+    expect(p).toContain("Check the wall");
   });
 });

@@ -18,6 +18,7 @@ import {
   debriefDraftSchema,
   extractionPrompt,
   sanitizeDraft,
+  type AccountContextItem,
   type RoutineContextItem,
 } from "@/lib/voice/draft";
 
@@ -31,6 +32,11 @@ const EXTRACT_MODEL =
   process.env.VOICE_EXTRACT_MODEL ?? "anthropic/claude-sonnet-4.6";
 
 const BATCH_LIMIT = 5;
+// How many of the rep's accounts the model is shown when it has to work out which
+// one a note is about. Enough that the answer is nearly always in the list, small
+// enough that the list stays readable to the model — and the failure mode past it
+// is a null, which costs the rep one dropdown, not a wrong record.
+const ACCOUNT_CONTEXT_LIMIT = 120;
 
 function mimeFromPath(path: string): string {
   if (path.endsWith(".mp4") || path.endsWith(".m4a")) return "audio/mp4";
@@ -176,10 +182,57 @@ export async function POST() {
         }
       }
 
+      // ── Which business is this about ─────────────────────────────────────
+      //
+      // The one field the rep could not be spared. Every other part of the
+      // debrief was already drafted, so recording without picking an account
+      // produced a finished write-up with one empty dropdown in front of Save —
+      // the model had read the note and had never been asked.
+      //
+      // Skipped entirely when the capture already carries an account: it was
+      // picked at capture time or came in on a deep link from the agenda, and a
+      // guess cannot improve on the rep having said so.
+      //
+      // Only THIS rep's accounts, so the model cannot propose a company that is
+      // not theirs to visit. Capped, and the cap is honest about its cost: the
+      // most recently touched accounts are the ones a debrief is likely about,
+      // and a note about the 121st would come back null rather than wrong.
+      let accountContext: AccountContextItem[] | undefined;
+      let accountIds: string[] = [];
+      if (!capture.account_id) {
+        const { data: accountRows, error: accountError } = await service
+          .from("accounts")
+          .select("id, name")
+          .eq("org_id", orgId)
+          .eq("owner_id", membership.id)
+          .order("updated_at", { ascending: false })
+          .limit(ACCOUNT_CONTEXT_LIMIT);
+        if (accountError) {
+          // Context, not the job. A failure here means the rep picks the account
+          // by hand exactly as they did before — but it must be visible, or it is
+          // indistinguishable from a rep with no accounts.
+          console.error(
+            `accounts lookup failed for capture ${capture.id}:`,
+            accountError.message,
+          );
+        } else if (accountRows && accountRows.length > 0) {
+          accountContext = accountRows.map((a) => ({
+            account_id: a.id as string,
+            name: a.name as string,
+          }));
+          accountIds = accountContext.map((a) => a.account_id);
+        }
+      }
+
       const { object: rawDraft } = await generateObject({
         model: EXTRACT_MODEL,
         schema: debriefDraftSchema,
-        system: extractionPrompt(capture.created_at, language, routineContext),
+        system: extractionPrompt(
+          capture.created_at,
+          language,
+          routineContext,
+          accountContext,
+        ),
         prompt: transcript,
         providerOptions: {
           gateway: {
@@ -190,7 +243,7 @@ export async function POST() {
       });
       // Hallucination guard (Task 9): never trust the model to keep to the
       // item ids it was offered — drop anything it invented before storing.
-      const draft = sanitizeDraft(rawDraft, openItemIds);
+      const draft = sanitizeDraft(rawDraft, openItemIds, accountIds);
 
       await service
         .from("voice_captures")

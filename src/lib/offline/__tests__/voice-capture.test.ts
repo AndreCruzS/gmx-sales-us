@@ -105,7 +105,8 @@ describe("voice capture through the outbox", () => {
 describe("debrief draft schema (the shape the review gate trusts)", () => {
   it("accepts a well-formed draft", () => {
     const draft = debriefDraftSchema.parse({
-      summary: "PK class went well; two quote leads.",
+      account_id: null,
+    summary: "PK class went well; two quote leads.",
       activity_type: "PK_TRAINING",
       what_happened: "Delivered PK to 8 counter staff",
       key_information: "They stock a competitor's ash boards",
