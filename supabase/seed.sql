@@ -58,10 +58,57 @@ values
 
 -- Territories -----------------------------------------------------------------
 
-insert into territories (id, org_id, name, region) values
-  ('b0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Buffalo', 'Northeast'),
-  ('b0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'SoCal',   'West'),
-  ('b0000000-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Acme Metro', 'Central');
+-- The client's Master Territory Map, ten regions, their names not mine. Only
+-- three have a Market Owner today; the other seven read TBD on their sheet and
+-- so are simply unowned here. An unowned region is a fact about the business,
+-- not a hole in the fixture.
+--
+-- territories.region is null throughout: it was a coarser second grouping I
+-- invented ("West", "Northeast") and the client's map has no such level — their
+-- Region IS this name.
+
+insert into territories (id, org_id, name) values
+  ('b0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Northeast'),
+  ('b0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Southern California'),
+  ('b0000000-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111', 'Pacific Northwest'),
+  ('b0000000-0000-0000-0000-000000000011', '11111111-1111-1111-1111-111111111111', 'Northern California'),
+  ('b0000000-0000-0000-0000-000000000012', '11111111-1111-1111-1111-111111111111', 'Mountain'),
+  ('b0000000-0000-0000-0000-000000000013', '11111111-1111-1111-1111-111111111111', 'Southwest'),
+  ('b0000000-0000-0000-0000-000000000014', '11111111-1111-1111-1111-111111111111', 'Texas'),
+  ('b0000000-0000-0000-0000-000000000015', '11111111-1111-1111-1111-111111111111', 'Midwest'),
+  ('b0000000-0000-0000-0000-000000000016', '11111111-1111-1111-1111-111111111111', 'South Central'),
+  ('b0000000-0000-0000-0000-000000000017', '11111111-1111-1111-1111-111111111111', 'Southeast'),
+  -- The second org, which exists only to prove one org cannot read another's
+  -- book. It keeps its own made-up geography.
+  ('b0000000-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'Acme Metro');
+
+-- Which region covers which state, straight off the map's "States Covered"
+-- column. CALIFORNIA IS ABSENT ON PURPOSE: the client splits it north/south by
+-- geography, and no two-letter code can tell Stockton from Riverside. Hawaii is
+-- absent because their map does not mention it.
+
+insert into territory_states (org_id, state, territory_id)
+select '11111111-1111-1111-1111-111111111111', s.state, t.id
+from (values
+  ('WA', 'Pacific Northwest'), ('OR', 'Pacific Northwest'), ('AK', 'Pacific Northwest'),
+  ('ID', 'Mountain'), ('UT', 'Mountain'), ('CO', 'Mountain'),
+  ('MT', 'Mountain'), ('WY', 'Mountain'),
+  ('AZ', 'Southwest'), ('NV', 'Southwest'), ('NM', 'Southwest'),
+  ('TX', 'Texas'),
+  ('ND', 'Midwest'), ('SD', 'Midwest'), ('NE', 'Midwest'), ('KS', 'Midwest'),
+  ('MN', 'Midwest'), ('IA', 'Midwest'), ('MO', 'Midwest'), ('WI', 'Midwest'),
+  ('OH', 'Midwest'), ('IL', 'Midwest'), ('IN', 'Midwest'), ('MI', 'Midwest'),
+  ('OK', 'South Central'), ('AR', 'South Central'), ('LA', 'South Central'),
+  ('FL', 'Southeast'), ('GA', 'Southeast'), ('SC', 'Southeast'), ('NC', 'Southeast'),
+  ('KY', 'Southeast'), ('AL', 'Southeast'), ('MS', 'Southeast'), ('TN', 'Southeast'),
+  ('ME', 'Northeast'), ('NH', 'Northeast'), ('VT', 'Northeast'), ('MA', 'Northeast'),
+  ('RI', 'Northeast'), ('CT', 'Northeast'), ('NY', 'Northeast'), ('NJ', 'Northeast'),
+  ('PA', 'Northeast'), ('DE', 'Northeast'), ('MD', 'Northeast'), ('VA', 'Northeast'),
+  ('WV', 'Northeast')
+) as s(state, region)
+join territories t
+  on t.org_id = '11111111-1111-1111-1111-111111111111'
+ and t.name = s.region;
 
 -- Memberships (hierarchy: João manages TJ + Deon; Eric supports TJ) -----------
 
@@ -653,22 +700,31 @@ insert into distributor_branches (org_id, distributor_id, name, city, state, ext
   -- TJ's house in the northeast.
   ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000007', 'Russin - Montgomery', 'Montgomery', 'NY', 'RU-MON');
 
--- Which region each branch sits in — the edge Bianca's hierarchy needs.
+-- Which region each branch sits in.
 --
--- Only where it is genuinely known. Riverside, Perris, Los Angeles and San Diego
--- are southern California and belong to Deon's patch; Stockton and Windsor are
--- NORTHERN California and deliberately stay unknown, because "any CA branch is
--- SoCal" is the kind of rule that puts a rep's name on volume five hundred miles
--- away. Russin's Montgomery yard goes to Buffalo, the New York region we hold.
---
--- Boise's seven out-of-state branches stay null on purpose: they are the queue
--- Bianca fills, and an empty region there is a question rather than a defect.
+-- CALIFORNIA BY HAND, EVERYWHERE ELSE BY RULE — which is exactly the shape of
+-- the client's own map. Riverside, Perris, Los Angeles and San Diego are
+-- southern California; Stockton and Windsor are NORTHERN California, five
+-- hundred miles away, and go to the other region rather than to whoever happens
+-- to be nearest on the list.
 
 update distributor_branches set territory_id = 'b0000000-0000-0000-0000-000000000002'
  where name in ('Riverside Branch', 'Hardwoods - Perris', 'Hardwoods - Los Angeles',
                 'Hardwoods - San Diego');
-update distributor_branches set territory_id = 'b0000000-0000-0000-0000-000000000001'
- where name = 'Russin - Montgomery';
+update distributor_branches set territory_id = 'b0000000-0000-0000-0000-000000000011'
+ where name in ('Hardwoods - Stockton', 'Hardwoods - Windsor');
+
+-- Everything else places itself off its own state. Dallas and Houston land in
+-- Texas, Memphis, Nashville and Atlanta in the Southeast, Salt Lake in the
+-- Mountain region, Detroit in the Midwest — and none of those regions has a
+-- Market Owner yet, which is the point: the volume now sits against a named
+-- region nobody covers instead of against a rep who never sold it.
+
+update distributor_branches b
+   set territory_id = public.territory_for_state(b.org_id, b.state)
+ where b.territory_id is null
+   and b.state is not null
+   and public.territory_for_state(b.org_id, b.state) is not null;
 
 -- One upload per distributor per month. The newest is LAST month, because that
 -- is when the file arrives — the lag is the truth, not a gap in the fixture.
