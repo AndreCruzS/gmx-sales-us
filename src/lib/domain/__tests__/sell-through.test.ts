@@ -747,3 +747,100 @@ describe("a row's own colour", () => {
     expect(step.groups[0].colour).toBeNull();
   });
 });
+
+describe("one colour per company, for the whole step", () => {
+  it("gives the same band the same colour on every row it appears on", () => {
+    // The bug: colour was rank-within-a-row, so the biggest band on every line
+    // was teal — and teal meant Boise on one row and Russin on the next.
+    const step = buildStep(JULY, JUNE, "dealer", []);
+    const byKey = new Map<string, Set<string>>();
+    for (const g of step.groups) {
+      for (const b of g.bands) {
+        const seen = byKey.get(b.key) ?? new Set<string>();
+        seen.add(b.colour);
+        byKey.set(b.key, seen);
+      }
+    }
+    expect(byKey.size).toBeGreaterThan(1);
+    for (const [key, colours] of byKey) {
+      expect(colours, `${key} wears more than one colour`).toHaveLength(1);
+    }
+  });
+
+  it("gives two different companies two different colours, alone on their rows", () => {
+    // Every dealer here buys from exactly one house, so every bar is solid. The
+    // question is whether a solid bar still says WHICH house.
+    const single = [
+      row({ dealer_id: "a", dealer_name: "Buys Boise", quantity: 900 }),
+      row({
+        dealer_id: "b",
+        dealer_name: "Buys Hardwoods",
+        distributor_id: "hardwoods",
+        distributor_name: "Hardwoods Specialty",
+        branch_id: "perris",
+        quantity: 800,
+      }),
+    ];
+    const step = buildStep(single, [], "dealer", []);
+    expect(step.groups.every((g) => g.bands.length === 1)).toBe(true);
+    const colours = step.groups.map((g) => g.bands[0].colour);
+    expect(colours[0]).not.toBe(colours[1]);
+  });
+
+  it("ranks by the whole step, not by the row it happens to be on", () => {
+    // Hardwoods is the bigger house overall, but on this one row it is the
+    // smaller band. Rank-within-row would make it teal here; identity keeps it
+    // the colour it has everywhere else.
+    const rows = [
+      row({ dealer_id: "x", quantity: 100 }),
+      row({
+        dealer_id: "x",
+        distributor_id: "hardwoods",
+        distributor_name: "Hardwoods Specialty",
+        branch_id: "perris",
+        quantity: 90,
+      }),
+      row({
+        dealer_id: "y",
+        distributor_id: "hardwoods",
+        distributor_name: "Hardwoods Specialty",
+        branch_id: "perris",
+        quantity: 5000,
+      }),
+    ];
+    const step = buildStep(rows, [], "dealer", []);
+    const x = step.groups.find((g) => g.key === "x")!;
+    const boise = x.bands.find((b) => b.key === "boise")!;
+    const hardwoods = x.bands.find((b) => b.key === "hardwoods")!;
+    // Boise leads this row on volume...
+    expect(boise.qty).toBeGreaterThan(hardwoods.qty);
+    // ...and still does not get the first colour, because Hardwoods is bigger
+    // across the step.
+    const y = step.groups.find((g) => g.key === "y")!;
+    expect(hardwoods.colour).toBe(y.bands[0].colour);
+    expect(boise.colour).not.toBe(hardwoods.colour);
+  });
+
+  it("gathers exactly the bands it greys out, and never strands one", () => {
+    // Nine dealers off one branch, so the bands are dealers: six keep a colour
+    // and the remaining three become one grey segment.
+    const many = Array.from({ length: 9 }, (_, i) =>
+      row({ dealer_id: `d${i}`, dealer_name: `Dealer ${i}`, quantity: 1000 - i * 10 }),
+    );
+    const step = buildStep(many, [], "distribution", [
+      { key: "boise", dim: "distributor", name: "Boise Cascade", colour: "x" },
+      { key: "riverside", dim: "branch", name: "Riverside", colour: "y" },
+    ] as PathStep[]);
+    const g = step.groups[0];
+    const greys = g.bands.filter((b) => b.colour === "var(--cat-rest)");
+    const rest = g.segments.find((s) => s.key === "rest");
+    expect(greys).toHaveLength(3);
+    expect(rest?.count).toBe(3);
+    // No band is drawn as its own grey stripe beside the gathered one.
+    expect(g.segments.filter((s) => s.colour === "var(--cat-rest)")).toHaveLength(1);
+    // And the gathered segment is worth exactly what it gathered.
+    expect(rest?.qty).toBe(greys.reduce((n, b) => n + b.qty, 0));
+    // Every band still has a row of its own, gathered or not.
+    expect(g.bands).toHaveLength(9);
+  });
+});

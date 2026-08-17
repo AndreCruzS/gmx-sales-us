@@ -450,9 +450,9 @@ export interface SellGroup {
  *
  * Aggregated across every row of the step, because at depth 0 the same band
  * (Boise, say) appears on more than one row and the counter is answering for all
- * of them. The first colour seen for a key wins: colours are assigned per row by
- * rank, so a band can carry two in a four-pixel stripe, and picking one is
- * better than blending them.
+ * of them. Taking the first colour seen for a key is exact rather than a pick:
+ * a band's colour belongs to the band, so every row that shows Boise shows the
+ * same teal and there is nothing to choose between.
  */
 export function compositionRail(groups: readonly SellGroup[]): string {
   const acc = new Map<string, { qty: number; colour: string }>();
@@ -549,6 +549,40 @@ export function buildStep(
     }
   }
 
+  // ── One colour per company, for the whole step ────────────────────────────
+  //
+  // Colours used to be handed out by RANK INSIDE EACH ROW, which meant the
+  // strongest colour was whatever happened to be biggest on that line. On the
+  // dealer lens that produced fifteen rows of solid teal: Ganahl buys only from
+  // Boise, BFS Los Angeles only from Hardwoods, Buffalo only from Russin — three
+  // different houses, all rank 1 on their own row, all drawn identically. The
+  // colour was claiming those rows had something in common. They had nothing in
+  // common except being alone.
+  //
+  // So a band is coloured by WHO IT IS, ranked across the whole step. Boise is
+  // teal in every row that shows Boise, and a bar that is solid teal now says
+  // "all of this dealer's volume came from Boise" instead of "this row has one
+  // band in it".
+  //
+  // Ranked by the band's total across the step and not by its size on one row,
+  // because the ranking has to be a property of the step or the whole point is
+  // lost. Ties break on name so the legend is stable between renders.
+  const bandColour = new Map<string, string>();
+  if (bandDim) {
+    const totals = new Map<string, { name: string; qty: number }>();
+    for (const r of scoped) {
+      const e = entityAt(r, bandDim);
+      const seen = totals.get(e.key);
+      if (seen) seen.qty += num(r.quantity);
+      else totals.set(e.key, { name: e.name, qty: num(r.quantity) });
+    }
+    [...totals.entries()]
+      .sort((a, b) => b[1].qty - a[1].qty || a[1].name.localeCompare(b[1].name))
+      .forEach(([key], i) => {
+        bandColour.set(key, i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR);
+      });
+  }
+
   const byRow = new Map<string, SellThroughRow[]>();
   for (const r of scoped) {
     const key = entityAt(r, rowDim).key;
@@ -559,7 +593,9 @@ export function buildStep(
 
   const groups: SellGroup[] = [...byRow.entries()].map(([rowKey, list]) => {
     const entity = entityAt(list[0], rowDim);
-    const bands = bandDim ? buildBands(list, bandDim, rowKey, prevByRowBand, chain, depth) : [];
+    const bands = bandDim
+      ? buildBands(list, bandDim, rowKey, prevByRowBand, chain, depth, bandColour)
+      : [];
     const total = bandDim
       ? bands.reduce((n, b) => n + b.qty, 0)
       : list.reduce((n, r) => n + num(r.quantity), 0);
@@ -677,6 +713,10 @@ function buildBands(
   prevByRowBand: ReadonlyMap<string, number>,
   chain: readonly SellDim[],
   depth: number,
+  /** One colour per band identity for the whole step. Omitted for the summary,
+   *  whose bands ARE the rows and so appear exactly once — there the position in
+   *  this one list is already the identity ranking. */
+  bandColour?: ReadonlyMap<string, string>,
 ): SellBand[] {
   const acc = new Map<
     string,
@@ -719,7 +759,9 @@ function buildBands(
     qty: x.qty,
     prevQty: prevByRowBand.get(`${rowKey}::${x.entity.key}`) ?? 0,
     share: barTotal === 0 ? 0 : (100 * x.qty) / barTotal,
-    colour: i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR,
+    colour:
+      bandColour?.get(x.entity.key) ??
+      (i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR),
     entity: x.entity,
     drillable: canWalk && !isUnmatched(x.entity),
     products: [...x.products].sort((a, b) => a.localeCompare(b)),
@@ -731,30 +773,35 @@ function buildSegments(
   bands: readonly SellBand[],
   total: number,
 ): SellSegment[] {
-  if (bands.length <= MAX_BANDS + 1) {
-    return bands.map((b) => ({
-      key: b.key,
-      name: b.name,
-      qty: b.qty,
-      share: b.share,
-      colour: b.colour,
-      band: b,
-      count: 1,
-    }));
-  }
-  const head = bands.slice(0, MAX_BANDS);
-  const tail = bands.slice(MAX_BANDS);
+  const seg = (b: SellBand) => ({
+    key: b.key,
+    name: b.name,
+    qty: b.qty,
+    share: b.share,
+    colour: b.colour,
+    band: b,
+    count: 1,
+  });
+
+  // WHICH BANDS GET GATHERED IS DECIDED BY THE COLOUR, not by the position.
+  //
+  // It used to be "everything past the sixth", which was the same set only
+  // because colour was also handed out by position. Now that a band is coloured
+  // by who it is, the two can disagree — and if they did, a band would be drawn
+  // as its own grey stripe right next to the gathered grey one, which reads as
+  // a single stripe that has been cut in half for no reason.
+  //
+  // Keyed off REST_COLOUR keeps them one decision: grey MEANS gathered. The
+  // outcome is unchanged wherever it used to hold, because the greys were the
+  // tail of a list sorted by size and they still are.
+  const tail = bands.filter((b) => b.colour === REST_COLOUR);
+  // One straggler stays itself. Collapsing a single band into "1 more" hides a
+  // name to save nothing.
+  if (tail.length <= 1) return bands.map(seg);
+
   const tailQty = tail.reduce((n, b) => n + b.qty, 0);
   return [
-    ...head.map((b) => ({
-      key: b.key,
-      name: b.name,
-      qty: b.qty,
-      share: b.share,
-      colour: b.colour,
-      band: b,
-      count: 1,
-    })),
+    ...bands.filter((b) => b.colour !== REST_COLOUR).map(seg),
     {
       key: "rest",
       name: `${tail.length} more`,
