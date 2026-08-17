@@ -30,10 +30,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { formatMoney } from "@/lib/format";
+import { useTween } from "@/lib/ui/use-tween";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
   buildStep,
+  compositionRail,
   focusAccount,
   movementLabel,
   moveDir,
@@ -282,6 +284,48 @@ export function TeamSales({
     if (band.entity.accountId) void loadVisits(band.entity.accountId);
   }
 
+  // The chosen band, lifted out of the render loop: the counter above the card
+  // has to answer for it as well as the row it sits in. Two array lookups over a
+  // handful of items, so plain — memoising it buys nothing and the compiler
+  // cannot preserve a memo whose value is assembled from two chained finds.
+  const chosenGroup =
+    selected !== null && selected.pathKey === pathKey
+      ? (step.groups.find((g) => g.key === selected.group) ?? null)
+      : null;
+  const chosenBand =
+    chosenGroup === null || selected === null
+      ? null
+      : (chosenGroup.bands.find((b) => b.key === selected.band) ?? null);
+
+  // THE COUNTER, which is the whole point of the fill.
+  //
+  // The animation says "this fraction is now the entire bar". The figure above
+  // it has to say the same thing or the two are telling different stories: the
+  // band takes the whole track while the number it belongs to sits there
+  // unchanged, still totalling everything the band just displaced.
+  //
+  // It travels on the FILL, not on the tap. During the slide the band is still
+  // holding its own share and the total above it is still true; the moment the
+  // band starts stretching to own the bar is the moment its number becomes the
+  // answer. Counting earlier would anticipate a claim the bar has not made yet.
+  const counterTarget =
+    chosenBand !== null && phase !== "slide" ? chosenBand.qty : step.total;
+  const counterQty = useTween(counterTarget);
+
+  // And it carries the colour, so the figure and the stripe are visibly the
+  // same thing. Deeper in the walk that colour is the one the walk came in on,
+  // which is what keeps the rail from reverting to a stack the instant a drill
+  // completes.
+  const counterColour =
+    (chosenBand !== null && phase !== "slide" ? chosenBand.colour : null) ??
+    path[path.length - 1]?.colour ??
+    null;
+
+  // With nothing chosen there is no single colour to show, so the rail becomes a
+  // miniature of the bar itself: the whole step's composition, stacked. Picking a
+  // band collapses it to one colour — the same move the bar makes, in 4 pixels.
+  const counterRail = counterColour ?? compositionRail(step.groups);
+
   const month = periodLabel(latest);
 
   const backPath = backFrom(path);
@@ -377,16 +421,27 @@ export function TeamSales({
       {/* Keyed on the walk, so each level enters rather than swapping in place —
           the same remount trick the page sections use. */}
       <div className="sales-step" key={`${lens}-${pathKey}`}>
-        <p className="sales-month">
-          {QTY.format(step.total)} {step.unit} · {month}
+        <p className="sales-count">
+          <span
+            className="sales-count-rail"
+            style={{ background: counterRail }}
+            aria-hidden="true"
+          />
+          {/* aria-hidden on the travelling figure and the true one announced
+              once: a screen reader being read sixty intermediate numbers is not
+              being told anything. */}
+          <span className="sales-count-qty" aria-hidden="true">
+            {QTY.format(Math.round(counterQty))} {step.unit}
+          </span>
+          <span className="sr-only">
+            {QTY.format(counterTarget)} {step.unit}
+          </span>
+          <span className="sales-count-when">· {month}</span>
         </p>
 
         <div className="card card-pad">
           {step.groups.map((g) => {
-            const open =
-              selected?.pathKey === pathKey && selected.group === g.key
-                ? (g.bands.find((b) => b.key === selected.band) ?? null)
-                : null;
+            const open = chosenGroup?.key === g.key ? chosenBand : null;
             const moved = movementLabel(g.total, g.prevTotal, previous);
             const openMoved = open
               ? movementLabel(open.qty, open.prevQty, previous)

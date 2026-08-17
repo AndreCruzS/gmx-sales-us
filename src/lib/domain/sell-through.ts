@@ -407,6 +407,45 @@ export interface SellGroup {
   coverage: SellCoverage | null;
 }
 
+/**
+ * The whole step's composition as one stacked stripe, for the counter's rail.
+ *
+ * With a band chosen the rail is that band's single colour. With nothing chosen
+ * there is no single colour to show, so it becomes a miniature of the bar — and
+ * picking a band collapses it to one colour, which is the counter's half of the
+ * fill.
+ *
+ * Aggregated across every row of the step, because at depth 0 the same band
+ * (Boise, say) appears on more than one row and the counter is answering for all
+ * of them. The first colour seen for a key wins: colours are assigned per row by
+ * rank, so a band can carry two in a four-pixel stripe, and picking one is
+ * better than blending them.
+ */
+export function compositionRail(groups: readonly SellGroup[]): string {
+  const acc = new Map<string, { qty: number; colour: string }>();
+  for (const g of groups) {
+    for (const b of g.bands) {
+      const seen = acc.get(b.key);
+      if (seen) seen.qty += b.qty;
+      else acc.set(b.key, { qty: b.qty, colour: b.colour });
+    }
+  }
+  const parts = [...acc.values()].sort((a, b) => b.qty - a.qty);
+  const total = parts.reduce((n, x) => n + x.qty, 0);
+  if (total === 0) return REST_COLOUR;
+  if (parts.length === 1) return parts[0].colour;
+
+  const stops: string[] = [];
+  let at = 0;
+  for (const part of parts) {
+    const from = (100 * at) / total;
+    at += part.qty;
+    const to = (100 * at) / total;
+    stops.push(`${part.colour} ${from.toFixed(2)}% ${to.toFixed(2)}%`);
+  }
+  return `linear-gradient(to bottom, ${stops.join(", ")})`;
+}
+
 export interface SellStep {
   depth: number;
   rowDim: SellDim;

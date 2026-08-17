@@ -846,14 +846,47 @@ body {
 .sales-step {
   animation: adapt-in 0.44s cubic-bezier(0.25, 0.6, 0.35, 1) both;
 }
-.sales-month {
-  margin-bottom: 6px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--ink-muted);
-  letter-spacing: 0.02em;
+/* THE COUNTER. It is the figure the whole card adds up to, and when a band is
+   chosen it becomes that band's figure — travelling there rather than swapping,
+   because the bar underneath is travelling too and a number that jumps while a
+   bar slides reads as two unrelated events.
+
+   The rail beside it is the same 4px stripe the rows use, in the same colour, so
+   the figure and the band are visibly one thing. With nothing chosen it is a
+   miniature of the bar: the step's whole composition, stacked. */
+.sales-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  padding-inline-start: 1px;
 }
+.sales-count-rail {
+  flex-shrink: 0;
+  width: 4px;
+  height: 17px;
+  border-radius: 2px;
+  /* Deliberately NOT transitioned. A gradient lives in background-image, which
+     browsers cannot interpolate, so any transition here would be a promise the
+     rail could not keep. The snap is also the better reading: the colour commits
+     the instant the fill begins, and the number is what travels. */
+}
+.sales-count-qty {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.sales-count-when {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+
 
 /* Who is NOT buying. A coverage map that only shows volume flatters the patch;
    the quiet branches are the ones worth a phone call. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   backFrom,
   buildStep,
+  compositionRail,
   entityAt,
   focusAccount,
   isUnmatched,
@@ -437,6 +438,31 @@ describe("scopeVolume", () => {
 
   it("is the whole book when nothing has been chosen", () => {
     expect(scopeVolume(JULY, [])).toBe(20300);
+  });
+});
+
+describe("compositionRail", () => {
+  it("stacks the whole step, aggregated across every row", () => {
+    // Boise appears on both Deon's row and TJ's; the counter answers for both,
+    // so its rail has to as well.
+    const rail = compositionRail(buildStep(JULY, JUNE, "rep", [], BRANCHES).groups);
+    expect(rail).toMatch(/^linear-gradient\(to bottom, /);
+    // Boise 18,500 of 20,300 — the first stop runs from 0 to ~91%.
+    expect(rail).toContain("var(--cat-1) 0.00% 91.13%");
+    expect(rail).toContain("91.13% 100.00%");
+  });
+
+  it("is one flat colour when there is only one thing in it", () => {
+    // No gradient for a single band: a four-pixel stripe of one colour with a
+    // hard stop at 100% is the same picture with more CSS.
+    const one = compositionRail(
+      buildStep([row({})], [], "rep", [], BRANCHES).groups,
+    );
+    expect(one).toBe("var(--cat-1)");
+  });
+
+  it("falls back to grey rather than dividing by zero", () => {
+    expect(compositionRail([])).toBe("var(--cat-rest)");
   });
 });
 
