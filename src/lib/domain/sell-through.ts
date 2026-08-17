@@ -367,6 +367,47 @@ const BAND_COLOURS = [
 ];
 export const REST_COLOUR = "var(--cat-rest)";
 
+/**
+ * A row's bands as shades of the row's own colour.
+ *
+ * The rule Andre picked, and it is a rule about what a colour is FOR. A row now
+ * owns a tone: the thin stripe beside its name, the long bar under it, and every
+ * band inside that bar are all one hue. Nothing on a row can be mistaken for
+ * belonging to a different row, and the eye reads down the card by colour
+ * instead of decoding two schemes stacked on top of each other.
+ *
+ * The price is real and worth stating: THE SAME HOUSE CHANGES COLOUR BETWEEN
+ * ROWS. Boise is the dark teal on Deon's row and the dark amber on TJ's. The
+ * colour answers "how much of this row" and no longer answers "which company",
+ * which is why the band rows underneath carry the names — the bar was never the
+ * legend, and pretending it was is what made this confusing in the first place.
+ *
+ * Step 0 IS the base, exactly, because it has to equal the thin stripe to the
+ * pixel; a "nearly" there would read as a mistake rather than as a shade.
+ *
+ * Mixed toward the card and never toward the track. The track is --surface-sunken
+ * and the palest step has to stay off it — mixing toward the track would make the
+ * smallest band dissolve into the empty part of the bar, which is precisely the
+ * band whose size is hardest to see already. The 2px gutters between segments
+ * carry the separation the tints cannot at the pale end.
+ */
+const SHADE_MIX = [100, 80, 64, 51, 41, 33];
+/** Everything past the sixth, gathered. One step paler than the sixth so the
+ *  gathered segment cannot be mistaken for another band. */
+const REST_MIX = 24;
+
+function shadeOf(base: string, mix: number): string {
+  if (mix >= 100) return base;
+  return `color-mix(in srgb, ${base} ${mix}%, var(--surface-card))`;
+}
+
+/** The tone a row's gathered tail wears. Its own function because two places
+ *  need to agree on it exactly: the band that gets the colour, and the segment
+ *  builder that decides which bands to gather. */
+function restShade(hue: string): string {
+  return shadeOf(hue, REST_MIX);
+}
+
 export interface SellBand {
   key: string;
   name: string;
@@ -549,29 +590,22 @@ export function buildStep(
     }
   }
 
-  // ── One colour per company, for the whole step ────────────────────────────
+  // ── Each row's own tone, decided once ─────────────────────────────────────
   //
-  // Colours used to be handed out by RANK INSIDE EACH ROW, which meant the
-  // strongest colour was whatever happened to be biggest on that line. On the
-  // dealer lens that produced fifteen rows of solid teal: Ganahl buys only from
-  // Boise, BFS Los Angeles only from Hardwoods, Buffalo only from Russin — three
-  // different houses, all rank 1 on their own row, all drawn identically. The
-  // colour was claiming those rows had something in common. They had nothing in
-  // common except being alone.
+  // Everything coloured on this step reads from this one map: the segments of
+  // the total bar at the top, the thin stripe beside each row's name, and the
+  // shades of every band inside that row's bar. One source, so the three can
+  // never disagree — which they did, visibly, when each worked it out for itself.
   //
-  // So a band is coloured by WHO IT IS, ranked across the whole step. Boise is
-  // teal in every row that shows Boise, and a bar that is solid teal now says
-  // "all of this dealer's volume came from Boise" instead of "this row has one
-  // band in it".
-  //
-  // Ranked by the band's total across the step and not by its size on one row,
-  // because the ranking has to be a property of the step or the whole point is
-  // lost. Ties break on name so the legend is stable between renders.
-  const bandColour = new Map<string, string>();
-  if (bandDim) {
+  // Ranked by the row's volume, ties broken on name so the legend does not
+  // reshuffle between renders. Past the sixth, rows share the neutral: that is
+  // the same set the total bar gathers into its grey tail, so a grey stripe and
+  // a grey bar are saying the identical thing about that row.
+  const rowColour = new Map<string, string>();
+  {
     const totals = new Map<string, { name: string; qty: number }>();
     for (const r of scoped) {
-      const e = entityAt(r, bandDim);
+      const e = entityAt(r, rowDim);
       const seen = totals.get(e.key);
       if (seen) seen.qty += num(r.quantity);
       else totals.set(e.key, { name: e.name, qty: num(r.quantity) });
@@ -579,9 +613,16 @@ export function buildStep(
     [...totals.entries()]
       .sort((a, b) => b[1].qty - a[1].qty || a[1].name.localeCompare(b[1].name))
       .forEach(([key], i) => {
-        bandColour.set(key, i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR);
+        rowColour.set(key, i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR);
       });
   }
+
+  // One row and no total bar above it, so there is nothing to be consistent
+  // WITH — but the bar still needs a hue to shade. Below depth 0 that hue is the
+  // colour of the band that was tapped to get here, which is what makes the walk
+  // read as one continuous thing: tap the teal band and the level it opens is
+  // teal all the way down.
+  const soloHue = path[path.length - 1]?.colour ?? BAND_COLOURS[0];
 
   const byRow = new Map<string, SellThroughRow[]>();
   for (const r of scoped) {
@@ -593,8 +634,13 @@ export function buildStep(
 
   const groups: SellGroup[] = [...byRow.entries()].map(([rowKey, list]) => {
     const entity = entityAt(list[0], rowDim);
+    // byRow.size, not groups.length: the groups are what this expression is
+    // building, and a solo row is the case where the hue comes from the walk.
+    const hue = byRow.size > 1 ? (rowColour.get(rowKey) ?? REST_COLOUR) : soloHue;
     const bands = bandDim
-      ? buildBands(list, bandDim, rowKey, prevByRowBand, chain, depth, bandColour)
+      ? buildBands(list, bandDim, rowKey, prevByRowBand, chain, depth, (i) =>
+          shadeOf(hue, SHADE_MIX[i] ?? REST_MIX),
+        )
       : [];
     const total = bandDim
       ? bands.reduce((n, b) => n + b.qty, 0)
@@ -611,11 +657,9 @@ export function buildStep(
       prevTotal: prevByRow.get(rowKey) ?? 0,
       value,
       entity,
-      // Filled in below, from the summary, so a row and its segment can never be
-      // given their colours by two separate rules that drift apart.
-      colour: null,
+      colour: hue,
       bands,
-      segments: buildSegments(bands, total),
+      segments: buildSegments(bands, total, restShade(hue)),
       coverage:
         bandDim === "branch" && entity.dim === "distributor"
           ? coverageFor(entity, bands, branches)
@@ -649,6 +693,9 @@ export function buildStep(
       prevBySummaryBand,
       chain,
       depth,
+      // The SAME map the rows read, so a segment of the total bar and the stripe
+      // beside the row it stands for are one decision rather than two that agree.
+      (_, key) => rowColour.get(key) ?? REST_COLOUR,
     ).map((b) => ({ ...b, drillable: false }));
     const summaryTotal = bands.reduce((n, b) => n + b.qty, 0);
     const priced = scoped.filter((r) => r.value !== null && r.value !== undefined);
@@ -671,28 +718,11 @@ export function buildStep(
       // The total is every colour at once, so it has none of its own.
       colour: null,
       bands,
-      segments: buildSegments(bands, summaryTotal),
+      segments: buildSegments(bands, summaryTotal, REST_COLOUR),
       // A denominator across two networks is not a coverage figure, it is two
       // coverage figures added together. The per-house rows carry it instead.
       coverage: null,
     };
-  }
-
-  // ── Every row learns the colour it wears in the bar above it ──────────────
-  //
-  // Matched BY KEY and never by position, even though both lists are sorted the
-  // same way today. They are sorted by two different quantities — a group by its
-  // banded total, a summary band by its own — and the tie-breaks are separate
-  // lines of code. Pairing them by index would work until the day two rows tie,
-  // and then it would silently swap two people's colours rather than fail.
-  if (summary) {
-    const byKey = new Map(summary.bands.map((b) => [b.key, b.colour]));
-    for (const g of groups) g.colour = byKey.get(g.key) ?? null;
-  } else if (depth > 0) {
-    // One row, and it is the band that was tapped to get here. It keeps the
-    // colour it was tapped WITH, so the band that slid across and filled the bar
-    // is recognisably the same thing as the row now standing at the top.
-    if (groups[0]) groups[0].colour = path[path.length - 1]?.colour ?? null;
   }
 
   return {
@@ -713,10 +743,10 @@ function buildBands(
   prevByRowBand: ReadonlyMap<string, number>,
   chain: readonly SellDim[],
   depth: number,
-  /** One colour per band identity for the whole step. Omitted for the summary,
-   *  whose bands ARE the rows and so appear exactly once — there the position in
-   *  this one list is already the identity ranking. */
-  bandColour?: ReadonlyMap<string, string>,
+  /** What colour the band at rank `i` wears. A row shades its own hue by rank;
+   *  the total bar looks each row up by key. Passed in rather than decided here
+   *  because those are two different questions and this function asks neither. */
+  colourAt: (i: number, key: string) => string,
 ): SellBand[] {
   const acc = new Map<
     string,
@@ -759,9 +789,7 @@ function buildBands(
     qty: x.qty,
     prevQty: prevByRowBand.get(`${rowKey}::${x.entity.key}`) ?? 0,
     share: barTotal === 0 ? 0 : (100 * x.qty) / barTotal,
-    colour:
-      bandColour?.get(x.entity.key) ??
-      (i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR),
+    colour: colourAt(i, x.entity.key),
     entity: x.entity,
     drillable: canWalk && !isUnmatched(x.entity),
     products: [...x.products].sort((a, b) => a.localeCompare(b)),
@@ -772,6 +800,9 @@ function buildBands(
 function buildSegments(
   bands: readonly SellBand[],
   total: number,
+  /** The tone this bar's gathered tail wears — the row's palest shade, or the
+   *  neutral for the total bar. */
+  restColour: string,
 ): SellSegment[] {
   const seg = (b: SellBand) => ({
     key: b.key,
@@ -794,20 +825,20 @@ function buildSegments(
   // Keyed off REST_COLOUR keeps them one decision: grey MEANS gathered. The
   // outcome is unchanged wherever it used to hold, because the greys were the
   // tail of a list sorted by size and they still are.
-  const tail = bands.filter((b) => b.colour === REST_COLOUR);
+  const tail = bands.filter((b) => b.colour === restColour);
   // One straggler stays itself. Collapsing a single band into "1 more" hides a
   // name to save nothing.
   if (tail.length <= 1) return bands.map(seg);
 
   const tailQty = tail.reduce((n, b) => n + b.qty, 0);
   return [
-    ...bands.filter((b) => b.colour !== REST_COLOUR).map(seg),
+    ...bands.filter((b) => b.colour !== restColour).map(seg),
     {
       key: "rest",
       name: `${tail.length} more`,
       qty: tailQty,
       share: total === 0 ? 0 : (100 * tailQty) / total,
-      colour: REST_COLOUR,
+      colour: restColour,
       band: null,
       count: tail.length,
     },

@@ -685,162 +685,103 @@ describe("SELL_CHAIN", () => {
   });
 });
 
-describe("a row's own colour", () => {
-  it("is the colour it wears in the total bar above it", () => {
-    // The bug this locks down: the total bar split into colours, and the rows
-    // underneath it named the same things in black. Matching a segment to a row
-    // meant counting segments left to right and rows top to bottom.
-    const step = buildStep(JULY, JUNE, "rep", []);
-    expect(step.summary).not.toBeNull();
+describe("one tone per row", () => {
+  // The rule Andre chose: a row owns a colour, and the thin stripe beside its
+  // name, its long bar and every band in that bar are all shades of it. Two
+  // schemes stacked on one card is what made the screen unreadable.
+  const isShadeOf = (colour: string, hue: string) =>
+    colour === hue || colour.startsWith(`color-mix(in srgb, ${hue} `);
 
-    for (const g of step.groups) {
-      const band = step.summary!.bands.find((b) => b.key === g.key);
-      expect(band).toBeDefined();
-      expect(g.colour).toBe(band!.colour);
-    }
-    // And they are actually different colours, or none of this says anything.
-    expect(new Set(step.groups.map((g) => g.colour)).size).toBe(step.groups.length);
-  });
-
-  it("holds under every lens, not just the one it was noticed on", () => {
+  it("shades every band on a row from the row's own colour", () => {
     for (const lens of ["rep", "distribution", "dealer"] as const) {
-      const step = buildStep(JULY, JUNE, lens, []);
-      if (!step.summary) continue;
+      const step = buildStep(JULY, JUNE, lens, [], BRANCHES);
       for (const g of step.groups) {
-        expect(g.colour).toBe(step.summary.bands.find((b) => b.key === g.key)!.colour);
+        expect(g.colour).not.toBeNull();
+        for (const b of g.bands) {
+          expect(
+            isShadeOf(b.colour, g.colour!),
+            `${lens}: ${b.name} on ${g.title} is not a shade of the row`,
+          ).toBe(true);
+        }
       }
     }
   });
 
-  it("pairs by key, so a tie cannot swap two people's colours", () => {
-    // Two reps with exactly equal volume. Paired by position this passes or
-    // fails on sort stability; paired by key it simply holds.
-    const tied = [
-      row({ rep_id: "deon", rep_name: "Deon Rep", quantity: 5000 }),
-      row({ rep_id: "tj", rep_name: "TJ Rep", dealer_id: "buffalo", quantity: 5000 }),
-    ];
-    const step = buildStep(tied, [], "rep", []);
+  it("makes the first band exactly the row's colour, not nearly", () => {
+    // It sits directly under the thin stripe. A near-match reads as a mistake
+    // where an exact one reads as the same thing continuing.
+    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    for (const g of step.groups) expect(g.bands[0].colour).toBe(g.colour);
+  });
+
+  it("gives the total bar the same colours as the rows it stands for", () => {
+    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    expect(step.summary).not.toBeNull();
     for (const g of step.groups) {
-      expect(g.colour).toBe(step.summary!.bands.find((b) => b.key === g.key)!.colour);
+      const band = step.summary!.bands.find((b) => b.key === g.key);
+      expect(band?.colour).toBe(g.colour);
     }
   });
 
-  it("keeps the colour of the band that was tapped, one level in", () => {
-    // The band slides across, fills the bar, and becomes the row at the top of
-    // the next step. It should still be recognisably the same thing.
-    const top = buildStep(JULY, JUNE, "rep", []);
+  it("lets the same house wear a different colour on a different row", () => {
+    // The cost of the rule, stated as a test so nobody 'fixes' it later. Boise
+    // is the lead shade on Deon's row and on TJ's, and those rows have different
+    // hues, so it is two different colours on purpose.
+    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const deon = step.groups.find((g) => g.key === "deon")!;
+    const tj = step.groups.find((g) => g.key === "tj")!;
+    const boiseOnDeon = deon.bands.find((b) => b.key === "boise")!;
+    const boiseOnTj = tj.bands.find((b) => b.key === "boise")!;
+    expect(boiseOnDeon.colour).not.toBe(boiseOnTj.colour);
+    expect(boiseOnDeon.colour).toBe(deon.colour);
+    expect(boiseOnTj.colour).toBe(tj.colour);
+  });
+
+  it("carries the tapped band's colour into the level it opens", () => {
+    const top = buildStep(JULY, JUNE, "rep", [], BRANCHES);
     const deon = top.groups.find((g) => g.key === "deon")!;
-    const boise = deon.bands.find((b) => b.key === "boise")!;
+    const hardwoods = deon.bands.find((b) => b.key === "hardwoods")!;
 
     const inside = buildStep(JULY, JUNE, "rep", [
       { key: "deon", dim: "rep", name: "Deon Rep", colour: deon.colour! },
-      { key: "boise", dim: "distributor", name: "Boise Cascade", colour: boise.colour },
-    ] as PathStep[]);
+      { key: "hardwoods", dim: "distributor", name: "Hardwoods", colour: hardwoods.colour },
+    ] as PathStep[], BRANCHES);
     expect(inside.groups).toHaveLength(1);
-    expect(inside.groups[0].colour).toBe(boise.colour);
-  });
-
-  it("is null when there is no bar to be consistent with", () => {
-    // One rep, so no total bar is drawn. A colour there would be decoration.
-    const step = buildStep([row({ quantity: 1000 })], [], "rep", []);
-    expect(step.summary).toBeNull();
-    expect(step.groups[0].colour).toBeNull();
-  });
-});
-
-describe("one colour per company, for the whole step", () => {
-  it("gives the same band the same colour on every row it appears on", () => {
-    // The bug: colour was rank-within-a-row, so the biggest band on every line
-    // was teal — and teal meant Boise on one row and Russin on the next.
-    const step = buildStep(JULY, JUNE, "dealer", []);
-    const byKey = new Map<string, Set<string>>();
-    for (const g of step.groups) {
-      for (const b of g.bands) {
-        const seen = byKey.get(b.key) ?? new Set<string>();
-        seen.add(b.colour);
-        byKey.set(b.key, seen);
-      }
-    }
-    expect(byKey.size).toBeGreaterThan(1);
-    for (const [key, colours] of byKey) {
-      expect(colours, `${key} wears more than one colour`).toHaveLength(1);
+    expect(inside.groups[0].colour).toBe(hardwoods.colour);
+    for (const b of inside.groups[0].bands) {
+      expect(isShadeOf(b.colour, hardwoods.colour)).toBe(true);
     }
   });
 
-  it("gives two different companies two different colours, alone on their rows", () => {
-    // Every dealer here buys from exactly one house, so every bar is solid. The
-    // question is whether a solid bar still says WHICH house.
-    const single = [
-      row({ dealer_id: "a", dealer_name: "Buys Boise", quantity: 900 }),
-      row({
-        dealer_id: "b",
-        dealer_name: "Buys Hardwoods",
-        distributor_id: "hardwoods",
-        distributor_name: "Hardwoods Specialty",
-        branch_id: "perris",
-        quantity: 800,
-      }),
-    ];
-    const step = buildStep(single, [], "dealer", []);
-    expect(step.groups.every((g) => g.bands.length === 1)).toBe(true);
-    const colours = step.groups.map((g) => g.bands[0].colour);
-    expect(colours[0]).not.toBe(colours[1]);
-  });
-
-  it("ranks by the whole step, not by the row it happens to be on", () => {
-    // Hardwoods is the bigger house overall, but on this one row it is the
-    // smaller band. Rank-within-row would make it teal here; identity keeps it
-    // the colour it has everywhere else.
-    const rows = [
-      row({ dealer_id: "x", quantity: 100 }),
-      row({
-        dealer_id: "x",
-        distributor_id: "hardwoods",
-        distributor_name: "Hardwoods Specialty",
-        branch_id: "perris",
-        quantity: 90,
-      }),
-      row({
-        dealer_id: "y",
-        distributor_id: "hardwoods",
-        distributor_name: "Hardwoods Specialty",
-        branch_id: "perris",
-        quantity: 5000,
-      }),
-    ];
-    const step = buildStep(rows, [], "dealer", []);
-    const x = step.groups.find((g) => g.key === "x")!;
-    const boise = x.bands.find((b) => b.key === "boise")!;
-    const hardwoods = x.bands.find((b) => b.key === "hardwoods")!;
-    // Boise leads this row on volume...
-    expect(boise.qty).toBeGreaterThan(hardwoods.qty);
-    // ...and still does not get the first colour, because Hardwoods is bigger
-    // across the step.
-    const y = step.groups.find((g) => g.key === "y")!;
-    expect(hardwoods.colour).toBe(y.bands[0].colour);
-    expect(boise.colour).not.toBe(hardwoods.colour);
-  });
-
-  it("gathers exactly the bands it greys out, and never strands one", () => {
-    // Nine dealers off one branch, so the bands are dealers: six keep a colour
-    // and the remaining three become one grey segment.
+  it("gathers the tail into one segment wearing the row's palest shade", () => {
+    // Nine dealers off one branch: six keep a shade of their own and the last
+    // three become a single segment.
     const many = Array.from({ length: 9 }, (_, i) =>
       row({ dealer_id: `d${i}`, dealer_name: `Dealer ${i}`, quantity: 1000 - i * 10 }),
     );
     const step = buildStep(many, [], "distribution", [
-      { key: "boise", dim: "distributor", name: "Boise Cascade", colour: "x" },
-      { key: "riverside", dim: "branch", name: "Riverside", colour: "y" },
+      { key: "boise", dim: "distributor", name: "Boise Cascade", colour: "var(--cat-3)" },
+      { key: "riverside", dim: "branch", name: "Riverside", colour: "var(--cat-3)" },
     ] as PathStep[]);
     const g = step.groups[0];
-    const greys = g.bands.filter((b) => b.colour === "var(--cat-rest)");
     const rest = g.segments.find((s) => s.key === "rest");
-    expect(greys).toHaveLength(3);
-    expect(rest?.count).toBe(3);
-    // No band is drawn as its own grey stripe beside the gathered one.
-    expect(g.segments.filter((s) => s.colour === "var(--cat-rest)")).toHaveLength(1);
-    // And the gathered segment is worth exactly what it gathered.
-    expect(rest?.qty).toBe(greys.reduce((n, b) => n + b.qty, 0));
-    // Every band still has a row of its own, gathered or not.
+
     expect(g.bands).toHaveLength(9);
+    expect(rest?.count).toBe(3);
+    expect(rest?.qty).toBe(g.bands.slice(6).reduce((n, b) => n + b.qty, 0));
+    // Still the row's hue, so the tail belongs to the row rather than reading as
+    // a neutral borrowed from somewhere else.
+    expect(isShadeOf(rest!.colour, "var(--cat-3)")).toBe(true);
+    // And exactly one segment wears it — no stray band drawn beside the gathered
+    // one in the same tone.
+    expect(g.segments.filter((s) => s.colour === rest!.colour)).toHaveLength(1);
+  });
+
+  it("still gives a lone row a hue to shade", () => {
+    // No total bar is drawn, but the row's own bar still has to be some colour.
+    const step = buildStep([row({ quantity: 1000 })], [], "rep", []);
+    expect(step.summary).toBeNull();
+    expect(step.groups[0].colour).toBe("var(--cat-1)");
+    expect(step.groups[0].bands[0].colour).toBe("var(--cat-1)");
   });
 });

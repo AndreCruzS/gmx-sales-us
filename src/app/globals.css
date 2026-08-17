@@ -174,6 +174,27 @@ body {
   color: var(--accent-ink);
 }
 
+/* ── WHICH FACE, AND WHY ─────────────────────────────────────────────────────
+   Two typefaces, one rule, because two faces with no rule is what "the fonts
+   are not uniform" actually means:
+
+     MONO carries FIGURES — and the small uppercase eyebrow that labels one
+     ("OPEN PIPELINE" over "$244,000"), plus the status pills, which are tokens
+     rather than sentences.
+
+     THE TEXT FACE carries everything a person reads as WORDS — headings, prose,
+     names, and the labels on things you press or navigate by.
+
+   Three places were breaking it, and Andre named all three: the lens tabs
+   (Rep / Distribution / Dealer), the crumb trail ("All reps"), and the movement
+   line under every figure. The movement line was the clearest tell — in one
+   slot it said "up 11% on Jun", which is a figure, and "no earlier file", which
+   is a sentence, both in the face reserved for numbers. Mono there was not
+   saying "this is data"; it was just a second font.
+
+   The test for anything new: could you read it aloud as a sentence? Then it is
+   words. Would you compare it down a column? Then it is a figure. */
+
 /* ── Figures ─────────────────────────────────────────────────────────────────
    EVERY number this app displays is mono and tabular. There were four different
    treatments for the same thing — the home tiles at 24px proportional sans, the
@@ -783,11 +804,14 @@ body {
 /* Movement. Teal is "good" in this language and clay is "slipping", so a figure
    that fell says so in clay — and a figure that is simply new says nothing in
    colour at all, because coming from nothing has no direction. */
+/* Words, so the text face — see WHICH FACE above. It reads "up 11% on Jun" and
+   also "no earlier file", and a slot that has to hold both is prose with a
+   number in it, exactly like the line under the greeting. Half a point larger
+   than the mono it replaced: the same size in the text face sits smaller. */
 .sales-move {
   display: block;
   margin-top: 1px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ink-muted);
 }
 .sales-move[data-dir="up"] {
@@ -842,8 +866,9 @@ body {
   align-items: center;
   gap: 6px;
   margin-bottom: 9px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  /* "All reps › Boise Cascade › Riverside" is navigation: names of places, and
+     something you press. Words, so the text face. */
+  font-size: 11.5px;
   color: var(--ink-muted);
 }
 .sales-trail {
@@ -1394,8 +1419,9 @@ body {
   border-radius: 999px;
   background: var(--surface-sunken);
   color: var(--ink-secondary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  /* The label on a control is a word you press, not a value you compare, so it
+     takes the text face — here and on every other chip row in the app. */
+  font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1409,8 +1435,13 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* The count inside a chip IS a figure — "Slipping 4" — so it keeps the mono
+   while the label beside it does not. That split is the rule, not an exception
+   to it. */
 .chip-count {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
   opacity: 0.75;
 }
 /* The chip row scrolls rather than wrapping to three lines on a narrow phone;
