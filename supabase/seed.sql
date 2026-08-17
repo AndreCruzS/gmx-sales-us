@@ -594,22 +594,56 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
    'BFS National City', 'DEALER', 'National City', 'CA',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
    'EXISTING_RELATIONSHIP', null, null,
-   'd0000000-0000-0000-0000-000000000200', false, null, 'MEDIUM');
+   'd0000000-0000-0000-0000-000000000200', false, null, 'MEDIUM'),
+  -- Californian names off Boise Cascade's real report (17 Aug 2026), held as
+  -- accounts so their volume has somewhere to land. The out-of-state customers in
+  -- that file — Lee Roy Jordan in Dallas, Maximus in Memphis, N A Mans in Detroit
+  -- — are deliberately NOT here: they sit outside every territory GMX covers, and
+  -- inventing a rep for them would hide the most useful thing the report says.
+  ('d0000000-0000-0000-0000-000000000300', '11111111-1111-1111-1111-111111111111',
+   'Valencia Lumber & Panel', 'DEALER', 'Valencia', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
+  ('d0000000-0000-0000-0000-000000000301', '11111111-1111-1111-1111-111111111111',
+   'Orange Coast Hardware', 'DEALER', 'Costa Mesa', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'MEDIUM'),
+  ('d0000000-0000-0000-0000-000000000302', '11111111-1111-1111-1111-111111111111',
+   'Austin Hardwoods', 'DEALER', 'Santa Ana', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'MEDIUM'),
+  ('d0000000-0000-0000-0000-000000000303', '11111111-1111-1111-1111-111111111111',
+   'DG Lumber Group', 'DEALER', 'Chatsworth', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'LOW'),
+  ('d0000000-0000-0000-0000-000000000304', '11111111-1111-1111-1111-111111111111',
+   'Saroyan Lumber', 'DEALER', 'Los Angeles', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'LOW');
 
 -- Their branch networks ------------------------------------------------------
 
 insert into distributor_branches (org_id, distributor_id, name, city, state, external_code) values
-  -- Boise Cascade BMD. The two Californian centres are the ones that serve
-  -- these dealers; the rest are real BMD locations, here so the coverage map
-  -- has a country on it rather than one state.
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Riverside',      'Riverside',      'CA', 'BC-RIV'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Modesto',        'Modesto',        'CA', 'BC-MOD'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Phoenix',        'Phoenix',        'AZ', 'BC-PHX'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Salt Lake City', 'Salt Lake City', 'UT', 'BC-SLC'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Denver',         'Denver',         'CO', 'BC-DEN'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Vancouver',      'Vancouver',      'WA', 'BC-VAN'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Spokane',        'Spokane',        'WA', 'BC-SPO'),
-  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Albuquerque',    'Albuquerque',    'NM', 'BC-ABQ'),
+  -- BOISE CASCADE, AS BOISE CASCADE WRITES IT. These eight are the branches that
+  -- appear in the client's first real BC report (17 Aug 2026) — not a guess at
+  -- their network, which is what stood here before and got Modesto, Phoenix,
+  -- Denver, Vancouver, Spokane and Albuquerque wrong.
+  --
+  -- The names are spelled the way THEIR file spells them, and that is functional
+  -- rather than cosmetic: their report carries no branch-code column, so the
+  -- loader can only match on name. "Boise Cascade - Riverside" against their
+  -- "Riverside Branch" matches nothing and would have the importer creating a
+  -- duplicate of every yard on the first load.
+  --
+  -- external_code is null for the same reason: we have never been given one.
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Riverside Branch',  'Riverside',   'CA', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Dallas Branch',     'Dallas',      'TX', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Memphis Branch',    'Memphis',     'TN', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Salt Lake Branch',  'Salt Lake City', 'UT', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Detroit Branch',    'Detroit',     'MI', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Atlanta Branch',    'Atlanta',     'GA', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Houston Branch',    'Houston',     'TX', null),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Nashville Branch',  'Nashville',   'TN', null),
   -- Hardwoods / ADENTRA.
   ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - Perris',      'Perris',      'CA', 'HW-PER'),
   ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - Los Angeles', 'Los Angeles', 'CA', 'HW-LAX'),
@@ -643,10 +677,17 @@ cross join (
   from generate_series(1, 3) as n
 ) as p;
 
--- The rows. One list of branch-to-dealer pairs, walked across the three months
--- with a per-month factor, so the book grows the way a real one does instead of
--- repeating itself. dealer_label is written the way a distributor's system
--- would write it, because that is what the matcher will have to cope with.
+-- ── Hardwoods, which reports the YARD ────────────────────────────────────────
+--
+-- Two houses, two granularities, and the difference is the whole reason this is
+-- split into two inserts.
+--
+-- Hardwoods names the ship-to: "HARDWOODS/GANAHL LAGUNA BEACH". That is what
+-- lets a rep be asked about one door. Boise, below, names only the banner, and
+-- the client is still chasing them for location-level detail.
+--
+-- Hardwoods' figures are still invented — no file from them yet. Boise's are the
+-- real ones.
 
 insert into sell_through (org_id, upload_id, branch_id, dealer_id, dealer_label,
                           period, product, quantity, unit, value)
@@ -666,13 +707,6 @@ select
   'LF',
   round(pr.base * power(pr.trend, m.ord - 3) * pr.price, 2)
 from (values
-  -- Boise Riverside serves Orange County and the Inland Empire.
-  ('BC-RIV', 'Ganahl Anaheim',      'GANAHL LUMBER - ANAHEIM #4471',      'Thermo-Ayous',        9800, 3.15, 1.09),
-  ('BC-RIV', 'Ganahl Buena Park',   'GANAHL LUMBER - BUENA PARK #4472',   'Thermo-Ayous',        4200, 3.15, 0.91),
-  ('BC-RIV', 'Ganahl Corona',       'GANAHL LUMBER - CORONA #4478',       'Thermo-Ash Decking',  6100, 3.40, 1.24),
-  ('BC-RIV', 'Ganahl Costa Mesa',   'GANAHL LUMBER - COSTA MESA #4473',   'Thermo-Ayous',        7400, 3.15, 1.00),
-  ('BC-RIV', 'Ganahl Los Alamitos', 'GANAHL LUMBER - LOS ALAMITOS #4479', 'Thermo-Ash Decking',  3300, 3.40, 0.78),
-  ('BC-RIV', 'BFS Santa Clarita',   'BUILDERS FIRSTSOURCE SANTA CLARITA', 'Thermo-Ayous',        5200, 3.15, 1.16),
   -- Hardwoods Perris covers south Orange County.
   ('HW-PER', 'Ganahl Laguna Beach', 'HARDWOODS/GANAHL LAGUNA BEACH',      'Thermo-Ayous',        2600, 3.28, 0.86),
   ('HW-PER', 'Ganahl Lake Forest',  'HARDWOODS/GANAHL LAKE FOREST',       'Thermo-Ash Decking',  3100, 3.55, 1.05),
@@ -682,7 +716,11 @@ from (values
   ('HW-LAX', 'BFS Los Angeles',     'HARDWOODS/BFS LOS ANGELES',          'Thermo-Ash Decking', 12400, 3.55, 1.31),
   -- Hardwoods San Diego reaches the county line.
   ('HW-SAN', 'Ganahl Escondido',    'HARDWOODS/GANAHL ESCONDIDO',         'Thermo-Ayous',        1500, 3.28, 0.94),
-  ('HW-SAN', 'BFS National City',   'HARDWOODS/BFS NATIONAL CITY',        'Thermo-Ash Decking',  2900, 3.55, 1.12)
+  ('HW-SAN', 'BFS National City',   'HARDWOODS/BFS NATIONAL CITY',        'Thermo-Ash Decking',  2900, 3.55, 1.12),
+  -- A dealer served by BOTH houses, which is the case that would double if the
+  -- chain were read wrongly. Valencia takes cladding off Boise's Riverside yard
+  -- as well, so it appears under each — see 16_sell_through.
+  ('HW-LAX', 'Valencia Lumber & Panel', 'HARDWOODS/VALENCIA LUMBER',        'Thermo-Ayous',        2100, 3.28, 1.07)
 ) as pr(code, dealer_name, label, product, base, price, trend)
 join distributor_branches b
   on b.external_code = pr.code
@@ -728,9 +766,28 @@ join sell_through_uploads u
   on u.distributor_id = b.distributor_id
  and u.period = (date_trunc('month', current_date) - ((4 - m.ord) || ' months')::interval)::date;
 
--- A row nobody could match. Boise's file names a yard we hold no account for,
--- so the volume is kept and counted as unmatched rather than dropped — the
--- difference between "they bought nothing" and "we could not read the name".
+-- ── Boise Cascade: the real book ─────────────────────────────────────────────
+--
+-- These 27 branch-to-customer pairs and their volumes are the client's FIRST REAL
+-- BC report (17 Aug 2026), aggregated out of 397 spreadsheet lines. Nothing here
+-- is invented: 83,153 LF, which is BC's own 10,700 pieces-and-feet converted
+-- through the length carried in each item name.
+--
+-- THE CUSTOMER IS THE BANNER, NOT THE YARD, because that is all BC sends.
+-- "GANLUGG - GANAHL LUMBER", 18,564 LF, with no way to know which of Ganahl's
+-- nine yards bought it. The fixture says so rather than inventing a split, so
+-- what the screens show is what the data can actually support — and the client is
+-- chasing BC for location-level detail on exactly this basis. Hardwoods, above,
+-- DOES name the yard, which is why the two houses are seeded separately.
+--
+-- NO PRICE. BC's report has no value column at all, so value is null throughout.
+-- Every dollar figure on a Boise row would be a fabrication.
+--
+-- WHAT IS MATCHED AND WHAT IS NOT. We hold accounts for the Californian names;
+-- Dallas, Memphis, Detroit, Atlanta, Houston and Nashville sit outside any
+-- territory GMX covers, so their volume lands unmatched and shows under "Nobody
+-- yet". That is not a gap in the fixture — 36,700 of BC's 83,153 LF has no GMX rep
+-- behind it, and a manager seeing that is the entire point of the screen.
 
 insert into sell_through (org_id, upload_id, branch_id, dealer_id, dealer_label,
                           period, product, quantity, unit, value)
@@ -738,18 +795,58 @@ select
   '11111111-1111-1111-1111-111111111111',
   u.id,
   b.id,
-  null,
-  'ORCO BLOCK & HARDSCAPE - STANTON',
+  a.id,
+  pr.label,
   u.period,
-  'Thermo-Ayous',
-  2400,
+  pr.product,
+  round(pr.lf * power(pr.trend, m.ord - 3)),
   'LF',
-  7560.00
-from distributor_branches b
+  null
+from (values
+  -- Riverside: Deon's patch, and the only one of the eight branches inside it.
+  ('Riverside Branch', 'Ganahl Lumber (Banner)',        'GANLUGG - GANAHL LUMBER',                  'Thermo-Ayous Cladding', 18564, 1.11),
+  ('Riverside Branch', 'Builders FirstSource (Banner)', 'BUIFIDE - BUILDERS FIRSTSOURCE',           'Thermo-Ayous Cladding', 11885, 1.26),
+  ('Riverside Branch', 'Valencia Lumber & Panel',       'VALLUPVN - VALENCIA LUMBER & PANEL',       'Thermo-Ayous Cladding',  6607, 0.93),
+  ('Riverside Branch', null,                            'LUMMEWA - LUMBERMENS MERCHANDISING',       'Thermo-Ayous Cladding',  3058, 1.04),
+  ('Riverside Branch', null,                            'USLBHGB - US LBM HOLDINGS LLC',            'Thermo-Ayous Cladding',  2602, 0.88),
+  ('Riverside Branch', null,                            'ORGME - ORGILL INC',                       'Thermo-Ayous S4S',        882, 1.15),
+  ('Riverside Branch', null,                            'LABHOGGA - LABL HOLDINGS GROUP INC',       'Thermo-Ayous Cladding',   854, 1.00),
+  ('Riverside Branch', null,                            'LOWCONW - LOWE''S COMPANIES INC',          'Thermo-Ash Decking',      772, 0.79),
+  ('Riverside Branch', 'Orange Coast Hardware',         'ORACOHSA - ORANGE COAST HARDWARE',         'Thermo-Ayous Cladding',   508, 1.08),
+  ('Riverside Branch', 'Austin Hardwoods',              'AUSHASA - AUSTIN HARDWOODS INC',           'Thermo-Ayous S4S',        389, 0.91),
+  ('Riverside Branch', 'DG Lumber Group',               'DGLUGCH - DG LUMBER GROUP INC',            'Thermo-Ayous Cladding',   247, 1.20),
+  ('Riverside Branch', 'Saroyan Lumber',                'SARLUHP - SAROYAN LUMBER COMPANY',         'Thermo-Ayous S4S',         69, 0.85),
+  -- Memphis: one customer, and the second largest figure in the whole report.
+  ('Memphis Branch',   null,                            'THRBUSCO - MAXIMUS BUILDING SUPPLY',       'Thermo-Ayous S4S',      14000, 1.34),
+  -- Dallas: a real market with nobody of ours in it.
+  ('Dallas Branch',    null,                            'LEEROJDA - LEE ROY JORDAN REDWOOD LUMBER', 'Thermo-Ayous Cladding',  9763, 1.09),
+  ('Dallas Branch',    null,                            'CASJOLLO - CASSITY JONES LBR & BLDG MTLS', 'Thermo-Ayous Cladding',  3508, 0.96),
+  ('Dallas Branch',    null,                            'MASHAIR - MASTER-HALCO INC',               'Thermo-Ayous Cladding',  1585, 1.18),
+  ('Dallas Branch',    null,                            'BIGDLURI - BIG D LUMBER CO LLC',           'Thermo-Ayous S4S',       1468, 0.90),
+  ('Dallas Branch',    null,                            'OWEADCA - OWEN-ADAMS INC',                 'Thermo-Ayous S4S',       1006, 1.05),
+  ('Dallas Branch',    'Builders FirstSource (Banner)', 'BUIFIDE - BUILDERS FIRSTSOURCE',           'Thermo-Ayous Cladding',   180, 1.00),
+  ('Dallas Branch',    null,                            'LBMADNW - LBM ADVANTAGE',                  'Thermo-Ayous Cladding',   110, 1.00),
+  ('Salt Lake Branch', null,                            'TIMEXOG - TIMBERLINE EXTERIORS',           'Thermo-Ayous Cladding',  1973, 1.22),
+  ('Salt Lake Branch', null,                            'LANBUPRI - LANSING BUILDING PRODUCTS LLC', 'Thermo-Ayous Cladding',   371, 1.00),
+  ('Detroit Branch',   null,                            'NAMASTR - N A MANS & SONS INC',            'Thermo-Ayous Cladding',  1000, 1.00),
+  ('Detroit Branch',   'Builders FirstSource (Banner)', 'BUIFIDE - BUILDERS FIRSTSOURCE',           'Thermo-Ayous Cladding',   504, 1.00),
+  ('Atlanta Branch',   null,                            'NORSUNO - NORCROSS SUPPLY CO',             'Thermo-Ayous Cladding',   556, 1.00),
+  ('Houston Branch',   null,                            'LUMMEWA - LUMBERMENS MERCHANDISING',       'Thermo-Ayous Cladding',   350, 1.00),
+  ('Nashville Branch', null,                            'CHABUMCH - CUSTOM BLDG SPLY CHATTANOOGA',  'Thermo-Ayous Cladding',   344, 1.00)
+) as pr(branch, dealer_name, label, product, lf, trend)
+join distributor_branches b
+  on b.name = pr.branch
+ and b.distributor_id = 'd0000000-0000-0000-0000-000000000005'
+-- LEFT, not inner: a customer we hold no account for still gets its volume
+-- loaded, under the label BC gave it. An inner join here would silently drop 44%
+-- of the report and call what was left the month.
+left join accounts a
+  on a.name = pr.dealer_name
+ and a.org_id = '11111111-1111-1111-1111-111111111111'
+cross join (values (1), (2), (3)) as m(ord)
 join sell_through_uploads u
   on u.distributor_id = b.distributor_id
- and u.period = (date_trunc('month', current_date) - interval '1 month')::date
-where b.external_code = 'BC-RIV';
+ and u.period = (date_trunc('month', current_date) - ((4 - m.ord) || ' months')::interval)::date;
 
 -- Keep each upload honest about what it carries.
 

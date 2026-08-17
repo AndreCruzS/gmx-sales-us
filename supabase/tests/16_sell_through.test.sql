@@ -22,7 +22,7 @@
 -- tj          = c0000000-0000-0000-0000-000000000003 (Buffalo, no CA dealers)
 -- boise       = d0000000-0000-0000-0000-000000000005
 -- hardwoods   = d0000000-0000-0000-0000-000000000006
--- corona      = d0000000-0000-0000-0000-000000000110 (buys from BOTH houses)
+-- valencia    = d0000000-0000-0000-0000-000000000300 (buys from BOTH houses)
 
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -49,25 +49,32 @@ select is(
 
 -- ── 2. The chain resolves ───────────────────────────────────────────────────
 
+-- Named the way BOISE names it, because that is how the branch is stored: their
+-- report has no code column, so the loader can only match on name.
 select is(
   (select distributor_name from sell_through_rows
-    where branch_name = 'Boise Cascade - Riverside' limit 1),
+    where branch_name = 'Riverside Branch' limit 1),
   'Boise Cascade',
   'a branch rolls up to the distributor it belongs to'
 );
 
+-- Boise reports the BANNER, not the yard: "GANLUGG - GANAHL LUMBER" with no way
+-- to know which of Ganahl's nine yards bought it. So the account this attributes
+-- to is the banner, and the rep is whoever owns that.
 select is(
   (select rep_name from sell_through_rows
-    where dealer_name = 'Ganahl Anaheim' limit 1),
+    where dealer_name = 'Ganahl Lumber (Banner)' limit 1),
   'Deon Rep',
   'a row is attributed to the rep who owns the dealer'
 );
 
 -- A dealer served by two houses is counted under both, and summed once per
 -- house — this is the case that would silently double if the chain were wrong.
+-- Valencia Lumber & Panel takes cladding off Boise's Riverside yard and off
+-- Hardwoods' Los Angeles one.
 select is(
   (select count(distinct distributor_name) from sell_through_rows
-    where dealer_id = 'd0000000-0000-0000-0000-000000000110'),
+    where dealer_id = 'd0000000-0000-0000-0000-000000000300'),
   2::bigint,
   'a dealer buying from two houses appears under each of them'
 );
@@ -126,17 +133,27 @@ select tests.clear_auth();
 select tests.set_claims('bianca@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 
-select is(
+-- Boise's real report is full of these: every customer outside a territory GMX
+-- covers — Lee Roy Jordan in Dallas, Maximus in Memphis — has volume and no
+-- account. Asserted as "there are some and an admin can see them" rather than a
+-- count, which would only be measuring how many the fixture happens to carry.
+select isnt(
   (select count(*) from sell_through where dealer_id is null),
-  1::bigint,
-  'an admin sees the unmatched row, because somebody has to map it'
+  0::bigint,
+  'an admin sees the unmatched rows, because somebody has to map them'
 );
 
+-- The invariant, not a number: what the upload CLAIMS it could not match is what
+-- it actually holds. A hardcoded figure here would pass while the counter drifted.
 select is(
-  (select unmatched_count from sell_through_uploads
-    where distributor_id = 'd0000000-0000-0000-0000-000000000005'
-      and period = (date_trunc('month', current_date) - interval '1 month')::date),
-  1,
+  (select u.unmatched_count from sell_through_uploads u
+    where u.distributor_id = 'd0000000-0000-0000-0000-000000000005'
+      and u.period = (date_trunc('month', current_date) - interval '1 month')::date),
+  (select count(*)::int from sell_through st
+    join sell_through_uploads u on u.id = st.upload_id
+    where u.distributor_id = 'd0000000-0000-0000-0000-000000000005'
+      and u.period = (date_trunc('month', current_date) - interval '1 month')::date
+      and st.dealer_id is null),
   'the upload says how many rows it could not match'
 );
 
