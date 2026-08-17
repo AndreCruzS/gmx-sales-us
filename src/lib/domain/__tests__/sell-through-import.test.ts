@@ -166,6 +166,22 @@ describe("normaliseName", () => {
     expect(normaliseName("Ganahl Lumber (Anaheim)")).toBe("ganahl lumber anaheim");
   });
 
+  it("drops OUR OWN annotations, not just theirs", () => {
+    // The account is "Ganahl Lumber (Banner)" — "(Banner)" is a label we invented
+    // to mark a banner-level account. The distributor has never heard of it, so
+    // leaving it in meant every Ganahl row in a real file matched nothing.
+    expect(normaliseName("Ganahl Lumber (Banner)")).toBe("ganahl lumber");
+    expect(normaliseName("Builders FirstSource (Banner)")).toBe("builders firstsource");
+  });
+
+  it("keeps a bracket that holds a real place", () => {
+    // A distributor writing "(Anaheim)" is putting the YARD in there. Stripping
+    // every bracket to fix "(Banner)" would merge nine Ganahl yards into one —
+    // only our own labels go.
+    expect(normaliseName("Ganahl Lumber (Anaheim) #4471")).toBe("ganahl lumber anaheim");
+    expect(normaliseName("Banner Lumber Co")).toBe("banner lumber");
+  });
+
   it("drops the words a trade name carries for legal reasons", () => {
     expect(normaliseName("Buffalo Lumber Co.")).toBe("buffalo lumber");
     expect(normaliseName("BUFFALO LUMBER, INC")).toBe("buffalo lumber");
@@ -261,6 +277,16 @@ describe("matchDealer", () => {
     { id: "corona", norm: "ganahl corona", tokens: ["ganahl", "corona"] },
     { id: "banner", norm: "ganahl lumber", tokens: ["ganahl", "lumber"] },
   ];
+
+  it("matches a banner account against the banner the file names", () => {
+    // The case that was silently returning nothing on the client's real data:
+    // 186 rows, 83,153 LF, and not one of them attached to an account.
+    const withBanner = [
+      { id: "banner", norm: normaliseName("Ganahl Lumber (Banner)"),
+        tokens: normaliseName("Ganahl Lumber (Banner)").split(" ") },
+    ];
+    expect(matchDealer("GANLUGG - GANAHL LUMBER", withBanner)).toBe("banner");
+  });
 
   it("sees our yard inside the distributor's banner-plus-yard", () => {
     expect(matchDealer("GANAHL LUMBER - ANAHEIM #4471", index)).toBe("anaheim");

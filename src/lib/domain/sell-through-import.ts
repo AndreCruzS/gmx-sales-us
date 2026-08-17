@@ -217,7 +217,18 @@ export function guessMapping(headers: readonly string[]): Mapping {
 export function normaliseName(raw: string): string {
   return raw
     .toLowerCase()
-    // "#4471", "- 4471" and "(4471)" are store numbers, not part of the name.
+    // OUR OWN annotations, and only ours. An account called
+    // "Ganahl Lumber (Banner)" has to match a file that says
+    // "GANLUGG - GANAHL LUMBER" — before this it matched nothing at all, because
+    // "banner" is a word no distributor has ever heard of.
+    //
+    // Deliberately NOT every bracket. A distributor writing
+    // "Ganahl Lumber (Anaheim)" is putting the YARD in there, and throwing that
+    // away would merge nine yards into one. Only the labels this codebase itself
+    // writes are removed, and a dealer genuinely called Banner Lumber survives
+    // because the word is only stripped when it is the whole bracket.
+    .replace(/\(\s*(banner|hq|head office|group)\s*\)/g, " ")
+    // "#4471", "(4471)" and "- 4471" are store numbers, not part of the name.
     .replace(/[#(]\s*\d+\s*\)?/g, " ")
     .replace(/\b(inc|llc|ltd|co|company|corp|the)\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
