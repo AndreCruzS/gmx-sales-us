@@ -104,7 +104,7 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
    'EXISTING_RELATIONSHIP', null, null,
    'd0000000-0000-0000-0000-000000000000', true, now() - interval '2 months', 'STRATEGIC'),
   ('d0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
-   'Ganahl Orange', 'DEALER', 'Orange', 'CA',
+   'Ganahl Buena Park', 'DEALER', 'Buena Park', 'CA',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
    'EXISTING_RELATIONSHIP', null, null,
    'd0000000-0000-0000-0000-000000000000', false, null, 'HIGH'),
@@ -334,9 +334,13 @@ insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
    null, 'CONVERT_STOCKING_DEALER'),
   -- The stage gate: a deal that is not WON or LOST must have an open next
   -- action against it, so the Orange quote carries its own chase.
+  -- Deliberately dated into NEXT week, off date_trunc for the same reason as the
+  -- block above: `current_date + 4` lands next week on a Friday but inside this
+  -- week on a Monday, which silently changes what "this week's commitments"
+  -- means depending on the day the seed happens to run.
   ('f1000000-0000-0000-0000-000000000008', '11111111-1111-1111-1111-111111111111',
    'Chase the Orange decking quote', 'c0000000-0000-0000-0000-000000000004',
-   current_date + 4, 'd0000000-0000-0000-0000-000000000002',
+   date_trunc('week', current_date)::date + 8, 'd0000000-0000-0000-0000-000000000002',
    'f0000000-0000-0000-0000-000000000004', 'COLLECT_QUOTE');
 
 -- A year with a shape to it -----------------------------------------------
@@ -513,6 +517,211 @@ insert into email_sync_state (org_id, membership_id, history_id, last_synced_at)
 insert into org_email_exclusions (org_id, pattern, reason) values
   ('11111111-1111-1111-1111-111111111111', 'payroll.example.com', 'HR safety net'),
   ('22222222-2222-2222-2222-222222222222', 'benefits.acme.test', 'HR safety net');
+
+-- ── Sell-through: the distributors' own books ────────────────────────────────
+--
+-- Real networks, because the shape of the real thing is the point. Sources:
+--   Boise Cascade BMD    — 39 distribution centres; California at Riverside and
+--                          Modesto (Modesto replaced Lathrop in Nov 2023).
+--   Hardwoods (ADENTRA)  — 32 centres; California at Perris (the US West
+--                          office), Stockton (which merged Livermore, Modesto
+--                          and Rancho Cordova), Los Angeles, San Diego, and
+--                          Windsor (Mount Storm, joined August 2026).
+--   Ganahl Lumber        — fourteen SoCal yards.
+--   Builders FirstSource — California yards including Los Angeles, Santa
+--                          Clarita and National City.
+--
+-- Branches carry no territory and no owner on purpose: they are locations in
+-- somebody else's network, so Boise's whole footprint costs a rep nothing.
+
+-- The rest of Ganahl's real yards, and BFS as a second banner ----------------
+
+insert into accounts (id, org_id, name, account_type, city, state, territory_id,
+                      owner_id, lead_source, source_detail, referring_account_id,
+                      parent_account_id, has_display_wall, display_last_verified_at,
+                      strategic_importance) values
+  ('d0000000-0000-0000-0000-000000000110', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Corona', 'DEALER', 'Corona', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', true, now() - interval '3 months', 'HIGH'),
+  ('d0000000-0000-0000-0000-000000000111', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Costa Mesa', 'DEALER', 'Costa Mesa', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', true, now() - interval '1 month', 'STRATEGIC'),
+  ('d0000000-0000-0000-0000-000000000112', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Laguna Beach', 'DEALER', 'Laguna Beach', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', false, null, 'MEDIUM'),
+  ('d0000000-0000-0000-0000-000000000113', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Los Alamitos', 'DEALER', 'Los Alamitos', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', true, now() - interval '5 months', 'HIGH'),
+  ('d0000000-0000-0000-0000-000000000114', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Pasadena', 'DEALER', 'Pasadena', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', false, null, 'MEDIUM'),
+  ('d0000000-0000-0000-0000-000000000115', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Lake Forest', 'DEALER', 'Lake Forest', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', false, null, 'MEDIUM'),
+  ('d0000000-0000-0000-0000-000000000116', '11111111-1111-1111-1111-111111111111',
+   'Ganahl Escondido', 'DEALER', 'Escondido', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000000', false, null, 'LOW'),
+  -- Builders FirstSource, the second banner in Bianca's tracker.
+  ('d0000000-0000-0000-0000-000000000200', '11111111-1111-1111-1111-111111111111',
+   'Builders FirstSource (Banner)', 'DEALER', null, 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null, null, false, null, 'STRATEGIC'),
+  ('d0000000-0000-0000-0000-000000000201', '11111111-1111-1111-1111-111111111111',
+   'BFS Los Angeles', 'DEALER', 'Los Angeles', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000200', true, now() - interval '2 months', 'STRATEGIC'),
+  ('d0000000-0000-0000-0000-000000000202', '11111111-1111-1111-1111-111111111111',
+   'BFS Santa Clarita', 'DEALER', 'Santa Clarita', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000200', false, null, 'HIGH'),
+  ('d0000000-0000-0000-0000-000000000203', '11111111-1111-1111-1111-111111111111',
+   'BFS National City', 'DEALER', 'National City', 'CA',
+   'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
+   'EXISTING_RELATIONSHIP', null, null,
+   'd0000000-0000-0000-0000-000000000200', false, null, 'MEDIUM');
+
+-- Their branch networks ------------------------------------------------------
+
+insert into distributor_branches (org_id, distributor_id, name, city, state, external_code) values
+  -- Boise Cascade BMD. The two Californian centres are the ones that serve
+  -- these dealers; the rest are real BMD locations, here so the coverage map
+  -- has a country on it rather than one state.
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Riverside',      'Riverside',      'CA', 'BC-RIV'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Modesto',        'Modesto',        'CA', 'BC-MOD'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Phoenix',        'Phoenix',        'AZ', 'BC-PHX'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Salt Lake City', 'Salt Lake City', 'UT', 'BC-SLC'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Denver',         'Denver',         'CO', 'BC-DEN'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Vancouver',      'Vancouver',      'WA', 'BC-VAN'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Spokane',        'Spokane',        'WA', 'BC-SPO'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000005', 'Boise Cascade - Albuquerque',    'Albuquerque',    'NM', 'BC-ABQ'),
+  -- Hardwoods / ADENTRA.
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - Perris',      'Perris',      'CA', 'HW-PER'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - Los Angeles', 'Los Angeles', 'CA', 'HW-LAX'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - San Diego',   'San Diego',   'CA', 'HW-SAN'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - Stockton',    'Stockton',    'CA', 'HW-STK'),
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000006', 'Hardwoods - Windsor',     'Windsor',     'CA', 'HW-WIN'),
+  -- TJ's house in the northeast.
+  ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000007', 'Russin - Montgomery', 'Montgomery', 'NY', 'RU-MON');
+
+-- One upload per distributor per month. The newest is LAST month, because that
+-- is when the file arrives — the lag is the truth, not a gap in the fixture.
+
+insert into sell_through_uploads (org_id, distributor_id, period, uploaded_by, filename)
+select
+  '11111111-1111-1111-1111-111111111111',
+  dd.id,
+  p.period,
+  'c0000000-0000-0000-0000-000000000001',
+  lower(replace(a.name, ' ', '-')) || '-' || to_char(p.period, 'YYYY-MM') || '.xlsx'
+from (values
+  ('d0000000-0000-0000-0000-000000000005'::uuid),
+  ('d0000000-0000-0000-0000-000000000006'::uuid)
+) as dd(id)
+join accounts a on a.id = dd.id
+cross join (
+  select (date_trunc('month', current_date) - (n || ' months')::interval)::date as period
+  from generate_series(1, 3) as n
+) as p;
+
+-- The rows. One list of branch-to-dealer pairs, walked across the three months
+-- with a per-month factor, so the book grows the way a real one does instead of
+-- repeating itself. dealer_label is written the way a distributor's system
+-- would write it, because that is what the matcher will have to cope with.
+
+insert into sell_through (org_id, upload_id, branch_id, dealer_id, dealer_label,
+                          period, product, quantity, unit, value)
+select
+  '11111111-1111-1111-1111-111111111111',
+  u.id,
+  b.id,
+  a.id,
+  pr.label,
+  u.period,
+  pr.product,
+  round(pr.base * m.factor),
+  'LF',
+  round(pr.base * m.factor * pr.price, 2)
+from (values
+  -- Boise Riverside serves Orange County and the Inland Empire.
+  ('BC-RIV', 'Ganahl Anaheim',      'GANAHL LUMBER - ANAHEIM #4471',      'Thermo-Ayous',        9800, 3.15),
+  ('BC-RIV', 'Ganahl Buena Park',   'GANAHL LUMBER - BUENA PARK #4472',   'Thermo-Ayous',        4200, 3.15),
+  ('BC-RIV', 'Ganahl Corona',       'GANAHL LUMBER - CORONA #4478',       'Thermo-Ash Decking',  6100, 3.40),
+  ('BC-RIV', 'Ganahl Costa Mesa',   'GANAHL LUMBER - COSTA MESA #4473',   'Thermo-Ayous',        7400, 3.15),
+  ('BC-RIV', 'Ganahl Los Alamitos', 'GANAHL LUMBER - LOS ALAMITOS #4479', 'Thermo-Ash Decking',  3300, 3.40),
+  ('BC-RIV', 'BFS Santa Clarita',   'BUILDERS FIRSTSOURCE SANTA CLARITA', 'Thermo-Ayous',        5200, 3.15),
+  -- Hardwoods Perris covers south Orange County.
+  ('HW-PER', 'Ganahl Laguna Beach', 'HARDWOODS/GANAHL LAGUNA BEACH',      'Thermo-Ayous',        2600, 3.28),
+  ('HW-PER', 'Ganahl Lake Forest',  'HARDWOODS/GANAHL LAKE FOREST',       'Thermo-Ash Decking',  3100, 3.55),
+  ('HW-PER', 'Ganahl Corona',       'HARDWOODS/GANAHL CORONA',            'Thermo-Ayous',        1800, 3.28),
+  -- Hardwoods Los Angeles covers the LA basin.
+  ('HW-LAX', 'Ganahl Pasadena',     'HARDWOODS/GANAHL PASADENA',          'Thermo-Ayous',        4100, 3.28),
+  ('HW-LAX', 'BFS Los Angeles',     'HARDWOODS/BFS LOS ANGELES',          'Thermo-Ash Decking', 12400, 3.55),
+  -- Hardwoods San Diego reaches the county line.
+  ('HW-SAN', 'Ganahl Escondido',    'HARDWOODS/GANAHL ESCONDIDO',         'Thermo-Ayous',        1500, 3.28),
+  ('HW-SAN', 'BFS National City',   'HARDWOODS/BFS NATIONAL CITY',        'Thermo-Ash Decking',  2900, 3.55)
+) as pr(code, dealer_name, label, product, base, price)
+join distributor_branches b
+  on b.external_code = pr.code
+join accounts a
+  on a.name = pr.dealer_name
+ and a.org_id = '11111111-1111-1111-1111-111111111111'
+cross join (values (1, 0.82), (2, 0.94), (3, 1.0)) as m(ord, factor)
+join sell_through_uploads u
+  on u.distributor_id = b.distributor_id
+ and u.period = (date_trunc('month', current_date) - ((4 - m.ord) || ' months')::interval)::date;
+
+-- A row nobody could match. Boise's file names a yard we hold no account for,
+-- so the volume is kept and counted as unmatched rather than dropped — the
+-- difference between "they bought nothing" and "we could not read the name".
+
+insert into sell_through (org_id, upload_id, branch_id, dealer_id, dealer_label,
+                          period, product, quantity, unit, value)
+select
+  '11111111-1111-1111-1111-111111111111',
+  u.id,
+  b.id,
+  null,
+  'ORCO BLOCK & HARDSCAPE - STANTON',
+  u.period,
+  'Thermo-Ayous',
+  2400,
+  'LF',
+  7560.00
+from distributor_branches b
+join sell_through_uploads u
+  on u.distributor_id = b.distributor_id
+ and u.period = (date_trunc('month', current_date) - interval '1 month')::date
+where b.external_code = 'BC-RIV';
+
+-- Keep each upload honest about what it carries.
+
+update sell_through_uploads u
+   set row_count = c.n,
+       unmatched_count = c.unmatched
+  from (
+    select upload_id,
+           count(*) as n,
+           count(*) filter (where dealer_id is null) as unmatched
+    from sell_through
+    group by upload_id
+  ) c
+ where c.upload_id = u.id;
 
 commit;
 

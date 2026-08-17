@@ -78,6 +78,7 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
   ('d9000000-0000-0000-0000-000000000002', :'org_a', 'Stale Display Co', 'DEALER',
    'Anaheim', 'CA', :'soc_territory', :'deon', 'EXISTING_RELATIONSHIP',
    true, now() - interval '7 months', 'MEDIUM');
+\set routine_display_acct d9000000-0000-0000-0000-000000000001
 \set stale_display_acct d9000000-0000-0000-0000-000000000002
 
 -- 5-9 run as the owning rep (D24-style scoping, suite 07 pattern).
@@ -86,7 +87,11 @@ select set_config('role', 'authenticated', true);
 
 -- 5-7: routine_items content
 select is((select count(*) from routine_items where kind = 'SAMPLE_FOLLOW_UP')::int, 1, 'sample chore listed');
-select is((select count(*) from routine_items where kind = 'DISPLAY_CHECK')::int, 1,
+-- Asserted on the fixture account, not on a total: the seed carries real dealers
+-- with real display dates (Ganahl Los Alamitos is legitimately overdue), so a
+-- global count would measure the seed rather than the rule.
+select is((select count(*) from routine_items
+           where kind = 'DISPLAY_CHECK' and account_id = :'routine_display_acct')::int, 1,
   'display unverified 5 months → routine (window 4, threshold 6)');
 select is((select count(*) from routine_items where kind = 'VISIT')::int, 0, 'visits are not chores');
 

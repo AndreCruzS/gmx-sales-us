@@ -99,8 +99,13 @@ select is((select val from _vis where check_name = 'tj_peer_next_actions'), 0::b
 select is((select sqlstate from _dml where check_name = 'tj_insert_for_peer'), '42501',
   'rep cannot insert a record owned by a peer');
 
-select is((select val from _vis where check_name = 'deon_socal_accounts'), 6::bigint,
-  'rep sees all accounts in own territory (banner + 2 branches + contractor + 2 distributors)');
+-- SoCal now carries the real Californian book: 2 distributors (Boise,
+-- Hardwoods), 14 dealers (the Ganahl banner + 9 yards, the BFS banner + 3
+-- yards) and 1 contractor. Distributor BRANCHES are deliberately absent — they
+-- live in distributor_branches, not here, so Boise's whole footprint costs a
+-- rep's account list nothing (see 16_sell_through).
+select is((select val from _vis where check_name = 'deon_socal_accounts'), 17::bigint,
+  'rep sees all accounts in own territory (2 distributors + 14 dealers + contractor)');
 select is((select val from _vis where check_name = 'deon_buffalo_accounts'), 0::bigint,
   'SoCal rep cannot see Buffalo account');
 
@@ -112,7 +117,9 @@ select is((select val from _vis where check_name = 'joao_team_next_actions'), 8:
 
 -- Admin: org-wide.
 select is((select val from _vis where check_name = 'admin_all_activities'), 5::bigint, 'admin sees all org activities');
-select is((select val from _vis where check_name = 'admin_all_accounts'), 8::bigint, 'admin sees all org accounts');
+-- 17 in SoCal + Buffalo's dealer, Russin, Acme Dealer Central and Acme
+-- Contractor LLC. The other org's accounts stay invisible, which is the point.
+select is((select val from _vis where check_name = 'admin_all_accounts'), 19::bigint, 'admin sees all org accounts');
 
 -- Support (D53): assigned rep only, read AND write.
 select is((select val from _vis where check_name = 'eric_tj_activities'), 2::bigint, 'support sees assigned rep''s activities');

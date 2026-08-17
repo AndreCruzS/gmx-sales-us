@@ -159,11 +159,12 @@ select is(
   1, 'rep scorecard counts quotes outstanding'
 );
 
--- Territory rollup: SoCal holds banner + 2 branches + contractor + 2 distributors.
+-- Territory rollup: SoCal holds 2 distributors + 14 dealers + 1 contractor.
+-- Distributor branches are not accounts, so they never inflate this.
 select is(
   (select account_count::int from dashboard_territory
     where territory_id = 'b0000000-0000-0000-0000-000000000002'),
-  6, 'territory rollup counts its accounts'
+  17, 'territory rollup counts its accounts'
 );
 
 -- Weekly review inputs.

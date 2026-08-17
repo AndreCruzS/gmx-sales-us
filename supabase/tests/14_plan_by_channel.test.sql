@@ -192,7 +192,18 @@ select is(
 
 -- 14. Today is not yet a miss — the rep still has the afternoon. A commitment
 --     dated today with nothing against it counts as still to come, not lost.
+--
+--     Measured as a DELTA rather than against a fixed number. The seed's own
+--     misses depend on how far into the week the suite runs (on a Monday nothing
+--     has gone past yet), so an absolute figure here would assert the calendar
+--     instead of the rule.
 reset role;
+create temp table _missed_before as
+select coalesce(planned_missed, 0) as val from dashboard_plan_by_channel
+ where account_id = 'd0000000-0000-0000-0000-000000000002'
+   and week_start = date_trunc('week', current_date)::date;
+grant select on _missed_before to authenticated;
+
 insert into next_actions (id, org_id, action, owner_id, due_date, account_id, objective)
 values ('f1000000-0000-0000-0000-0000000000c1',
         '11111111-1111-1111-1111-111111111111',
@@ -204,7 +215,7 @@ select is(
   (select planned_missed from dashboard_plan_by_channel
     where account_id = 'd0000000-0000-0000-0000-000000000002'
       and week_start = date_trunc('week', current_date)::date),
-  1::bigint,
+  (select val from _missed_before),
   'a commitment due today is not counted as never happened'
 );
 
