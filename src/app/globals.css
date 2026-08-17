@@ -1404,6 +1404,25 @@ body {
   font-weight: 600;
 }
 
+/* ── 16px IS A FLOOR, NOT A PREFERENCE ──────────────────────────────────────
+   iOS Safari zooms the viewport whenever a focused control's computed font-size
+   is under 16px — and it never zooms back out. In a single-page app that is
+   permanent: signing in is a client-side navigation, so nothing reloads to reset
+   the scale, and the whole platform stays magnified for the rest of the session.
+   .field was 15px. One pixel, and every rep who typed their password spent the
+   day inside a zoomed screen.
+
+   The fix is the font size, NOT maximum-scale on the viewport. Locking the scale
+   would stop somebody enlarging a screen they are reading in a truck in daylight,
+   which is a worse problem than the one it solves and fails WCAG 1.4.4.
+
+   The element selector is the floor for anything added later that forgets. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 /* A field needs a stroke of its own. Filling it with the card colour made it
    invisible the moment it sat ON a card — the debrief box was a placeholder
    floating in white with nothing to say "type here". The border does that work
@@ -1415,10 +1434,25 @@ body {
   border-radius: var(--r-control);
   background: var(--surface-card);
   color: var(--ink-primary);
-  font-size: 15px;
+  /* See the floor above: 15px here is what caused the permanent zoom. */
+  font-size: 16px;
 }
 .field::placeholder {
   color: var(--ink-muted);
+}
+
+/* The paste target for a distributor's sheet. Mono, because it is columns, and
+   dense enough to see the shape of what was pasted — but only where density is
+   free. A mouse cannot trigger the zoom, so the desktop box is small and the
+   touch box stays on the 16px floor. */
+.paste-box {
+  font-family: var(--font-mono);
+  line-height: 1.4;
+}
+@media (hover: hover) and (pointer: fine) {
+  .paste-box {
+    font-size: 12px;
+  }
 }
 /* Focus moves the stroke as well as drawing the ring, so the field a keyboard
    is in is obvious without relying on the ring alone. */

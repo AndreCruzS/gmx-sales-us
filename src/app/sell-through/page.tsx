@@ -357,10 +357,9 @@ export default function SellThroughPage() {
             <textarea
               value={pasted}
               onChange={(e) => setPasted(e.target.value)}
-              className="field"
+              className="field paste-box"
               rows={6}
               placeholder={"Branch\tCustomer\tProduct\tQty\tValue\n…"}
-              style={{ fontFamily: "var(--font-mono)", fontSize: "12px" }}
             />
           </label>
 
