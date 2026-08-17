@@ -94,6 +94,7 @@ const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 const DIM_NOUN: Record<string, string> = {
+  region: "region",
   rep: "rep",
   distributor: "distributor",
   branch: "branch",
@@ -132,7 +133,7 @@ export function TeamSales({
   onPath: (next: PathStep[]) => void;
   onFocus: (next: Focus | null) => void;
 }) {
-  const [lens, setLens] = useState<SellLens>("rep");
+  const [lens, setLens] = useState<SellLens>("region");
   const [selected, setSelected] = useState<Selection | null>(null);
   // "slide" = travelling to the start, "fill" = stretching to own the bar.
   const [phase, setPhase] = useState<"idle" | "slide" | "fill">("idle");
@@ -594,9 +595,10 @@ export function TeamSales({
                       )}
                       <span className="sales-head-body">
                         <span className="sales-head-name">{g.title}</span>
-                        {/* No dim noun here: under the Rep lens the rows are
-                            obviously reps, and "rep" under a rep's name is a
-                            word that costs a line and says nothing. */}
+                        {/* Under the Region lens this second line is the Market
+                            Owner — the one place on the screen where "Texas ·
+                            no Market Owner yet" can be read, which is the whole
+                            reason the region is the top of the walk. */}
                         {/* The money keeps the mono, so a figure inside a
                             sentence still reads as a figure and not as a word. */}
                         <span className="sales-head-sub">

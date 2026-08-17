@@ -59,13 +59,21 @@ select is(
 );
 
 -- Boise reports the BANNER, not the yard: "GANLUGG - GANAHL LUMBER" with no way
--- to know which of Ganahl's nine yards bought it. So the account this attributes
--- to is the banner, and the rep is whoever owns that.
+-- to know which of Ganahl's nine yards bought it. So the dealer this attributes
+-- to is the banner.
+--
+-- THE REP IS NO LONGER THE BANNER'S OWNER, and that is the whole point of the
+-- territory map: a banner spans the country, so whoever owns the banner would
+-- otherwise be credited with sales from every state it operates in. It is the
+-- owner of the region the goods SHIPPED FROM. Here they shipped from Riverside,
+-- which is Southern California, which is Deonn's — so the answer is the same as
+-- it always was, by a rule that no longer breaks in Texas.
 select is(
   (select rep_name from sell_through_rows
-    where dealer_name = 'Ganahl Lumber (Banner)' limit 1),
-  'Deon Rep',
-  'a row is attributed to the rep who owns the dealer'
+    where dealer_name = 'Ganahl Lumber (Banner)'
+      and branch_name = 'Riverside Branch' limit 1),
+  'Deonn Deford',
+  'a row is attributed to the owner of the region it shipped from'
 );
 
 -- A dealer served by two houses is counted under both, and summed once per

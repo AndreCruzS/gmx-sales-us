@@ -130,7 +130,7 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("sell_through_rows")
         .select(
-          "period, rep_id, rep_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value",
+          "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value",
         )
         .order("period", { ascending: false })
         .limit(2000),

@@ -220,8 +220,11 @@ select is((select val from _scope where check_name = 'tj_sees_deon_pipeline'), 0
   'a rep sees no peer pipeline in the dashboard views');
 select is((select val from _scope where check_name = 'tj_scorecard_rows'), 1,
   'a rep''s scorecard shows only themselves');
-select is((select val from _scope where check_name = 'manager_scorecard_rows'), 3,
-  'a manager sees their whole chain (both reps + self)');
+-- Four reps now, not two: the client's territory map named Jason and Anthony
+-- Peca as Market Owners and they sit under João like the others. The figure is
+-- reps + self, so it moves whenever the map names somebody new.
+select is((select val from _scope where check_name = 'manager_scorecard_rows'), 5,
+  'a manager sees their whole chain (every rep under them + self)');
 select is((select val from _scope where check_name = 'org2_foreign_pipeline'), 0,
   'dashboards never leak across tenants');
 select cmp_ok((select val from _scope where check_name = 'org2_own_pipeline'), '>', 0,

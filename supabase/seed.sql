@@ -41,7 +41,7 @@ values
    now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000004',
    'authenticated', 'authenticated', 'deon@gmxgroup.com', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"full_name":"Deon Rep"}',
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Deonn Deford"}',
    now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000005',
    'authenticated', 'authenticated', 'eric@gmxgroup.com', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
@@ -50,6 +50,17 @@ values
   ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000006',
    'authenticated', 'authenticated', 'alex@acme.test', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Alex AcmeAdmin"}',
+   now(), now(), '', '', '', ''),
+  -- The two Market Owners the client's map names who had no account here. Same
+  -- development password as everybody else: this is the local fixture, and the
+  -- live project deliberately gives them no working password at all.
+  ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000010',
+   'authenticated', 'authenticated', 'jason@gmxgroup.com', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Jason"}',
+   now(), now(), '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000011',
+   'authenticated', 'authenticated', 'anthony@gmxgroup.com', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Anthony Peca"}',
    now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000007',
    'authenticated', 'authenticated', 'riley@acme.test', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
@@ -117,12 +128,25 @@ insert into memberships (id, org_id, user_id, role, territory_id, manager_id) va
    'a0000000-0000-0000-0000-000000000001', 'admin',   null, null),
   ('c0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
    'a0000000-0000-0000-0000-000000000002', 'manager', null, null),
+  -- TJ was a rep I invented, and the client's map gives the Northeast to Anthony
+  -- Peca. TJ keeps his membership because Buffalo Lumber Co's owner_id points at
+  -- it, but he holds no region — which is the honest record rather than a tidier
+  -- fiction.
   ('c0000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
    'a0000000-0000-0000-0000-000000000003', 'rep',
-   'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000002'),
+   null, 'c0000000-0000-0000-0000-000000000002'),
   ('c0000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111',
    'a0000000-0000-0000-0000-000000000004', 'rep',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000002'),
+  -- The other two Market Owners the map names. The remaining seven regions are
+  -- TBD on their sheet and so have nobody here: an unowned region reads as a gap
+  -- somebody can fill, which is the whole point.
+  ('c0000000-0000-0000-0000-000000000010', '11111111-1111-1111-1111-111111111111',
+   'a0000000-0000-0000-0000-000000000010', 'rep',
+   'b0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002'),
+  ('c0000000-0000-0000-0000-000000000011', '11111111-1111-1111-1111-111111111111',
+   'a0000000-0000-0000-0000-000000000011', 'rep',
+   'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000002'),
   ('c0000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
    'a0000000-0000-0000-0000-000000000005', 'support', null, null),
   ('c0000000-0000-0000-0000-000000000006', '22222222-2222-2222-2222-222222222222',

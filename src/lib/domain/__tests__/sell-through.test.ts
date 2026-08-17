@@ -30,7 +30,12 @@ function row(o: Partial<SellThroughRow>): SellThroughRow {
   return {
     period: JUL,
     rep_id: "deon",
-    rep_name: "Deon Rep",
+    rep_name: "Deonn Deford",
+    // The region mirrors the rep one-for-one in this fixture, so the walk has
+    // the same shape it always had and every total below is unchanged.
+    region_id: "socal",
+    region_name: "Southern California",
+    market_owner_name: "Deonn Deford",
     distributor_id: "boise",
     distributor_name: "Boise Cascade",
     branch_id: "riverside",
@@ -88,7 +93,10 @@ const JULY: SellThroughRow[] = [
   }),
   row({
     rep_id: "tj",
-    rep_name: "TJ Rep",
+    rep_name: "Anthony Peca",
+    region_id: "ne",
+    region_name: "Northeast",
+    market_owner_name: "Anthony Peca",
     branch_id: "phoenix",
     branch_name: "Boise Cascade - Phoenix",
     branch_city: "Phoenix",
@@ -107,7 +115,7 @@ const JUNE: SellThroughRow[] = [
 describe("entityAt", () => {
   it("reads each link of the chain off one row", () => {
     const r = row({});
-    expect(entityAt(r, "rep").name).toBe("Deon Rep");
+    expect(entityAt(r, "rep").name).toBe("Deonn Deford");
     expect(entityAt(r, "distributor").name).toBe("Boise Cascade");
     // The house is already the row above it, so the branch says the place only.
     expect(entityAt(r, "branch").name).toBe("Riverside");
@@ -172,7 +180,7 @@ describe("shortBranchName", () => {
 
 describe("rowMatchesPath", () => {
   const path: PathStep[] = [
-    { dim: "rep", key: "deon", name: "Deon Rep" },
+    { dim: "region", key: "socal", name: "Southern California" },
     { dim: "distributor", key: "boise", name: "Boise Cascade" },
   ];
 
@@ -181,17 +189,17 @@ describe("rowMatchesPath", () => {
   });
 
   it("drops a row that disagrees with any of them", () => {
-    expect(rowMatchesPath(row({ rep_id: "tj" }), path)).toBe(false);
+    expect(rowMatchesPath(row({ region_id: "ne" }), path)).toBe(false);
     expect(rowMatchesPath(row({ distributor_id: "hardwoods" }), path)).toBe(false);
   });
 });
 
 describe("buildStep · the rep lens", () => {
   it("opens on reps, banded by the houses they sell through", () => {
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
-    expect(step.rowDim).toBe("rep");
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
+    expect(step.rowDim).toBe("region");
     expect(step.bandDim).toBe("distributor");
-    expect(step.groups.map((g) => g.title)).toEqual(["Deon Rep", "TJ Rep"]);
+    expect(step.groups.map((g) => g.title)).toEqual(["Southern California", "Northeast"]);
 
     const deon = step.groups[0];
     expect(deon.total).toBe(18100);
@@ -204,7 +212,7 @@ describe("buildStep · the rep lens", () => {
   });
 
   it("carries the month before, so a figure can be read as moving", () => {
-    const deon = buildStep(JULY, JUNE, "rep", [], BRANCHES).groups[0];
+    const deon = buildStep(JULY, JUNE, "region", [], BRANCHES).groups[0];
     expect(deon.prevTotal).toBe(14100);
     expect(deon.bands[0].prevQty).toBe(14100);
     // Hardwoods sold nothing in June: new, not "up infinitely".
@@ -214,10 +222,10 @@ describe("buildStep · the rep lens", () => {
 
   it("walks rep → distributor → branch, and names the quiet branches", () => {
     const path: PathStep[] = [
-      { dim: "rep", key: "deon", name: "Deon Rep" },
+      { dim: "region", key: "socal", name: "Southern California" },
       { dim: "distributor", key: "boise", name: "Boise Cascade" },
     ];
-    const step = buildStep(JULY, JUNE, "rep", path, BRANCHES);
+    const step = buildStep(JULY, JUNE, "region", path, BRANCHES);
     expect(step.rowDim).toBe("distributor");
     expect(step.bandDim).toBe("branch");
     expect(step.groups).toHaveLength(1);
@@ -232,11 +240,11 @@ describe("buildStep · the rep lens", () => {
 
   it("walks on to the dealers under that branch, and stops there", () => {
     const path: PathStep[] = [
-      { dim: "rep", key: "deon", name: "Deon Rep" },
+      { dim: "region", key: "socal", name: "Southern California" },
       { dim: "distributor", key: "boise", name: "Boise Cascade" },
       { dim: "branch", key: "riverside", name: "Riverside" },
     ];
-    const step = buildStep(JULY, JUNE, "rep", path, BRANCHES);
+    const step = buildStep(JULY, JUNE, "region", path, BRANCHES);
     expect(step.rowDim).toBe("branch");
     expect(step.bandDim).toBe("dealer");
     expect(step.groups[0].bands.map((b) => [b.name, b.qty])).toEqual([
@@ -302,7 +310,7 @@ describe("buildStep · the dealer lens", () => {
 
 describe("what a band row needs to be readable", () => {
   it("names the products, so a band is a business and not just a number", () => {
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
     const boise = step.groups[0].bands[0];
     // Deon's Boise volume is decking AND cladding; the leaf rows below carry one
     // each, which is where naming the product actually decides a conversation.
@@ -311,9 +319,9 @@ describe("what a band row needs to be readable", () => {
     const leaf = buildStep(
       JULY,
       JUNE,
-      "rep",
+      "region",
       [
-        { dim: "rep", key: "deon", name: "Deon Rep" },
+        { dim: "region", key: "socal", name: "Southern California" },
         { dim: "distributor", key: "boise", name: "Boise Cascade" },
         { dim: "branch", key: "riverside", name: "Riverside" },
       ],
@@ -428,7 +436,7 @@ describe("scopeVolume", () => {
     { dim: "distributor", key: "boise", name: "Boise Cascade", accountId: "boise", kind: "DISTRIBUTOR" },
   ];
   const boiseUnderDeon: PathStep[] = [
-    { dim: "rep", key: "deon", name: "Deon Rep", accountId: null, kind: null },
+    { dim: "region", key: "socal", name: "Southern California", accountId: null, kind: null },
     ...boiseAlone,
   ];
 
@@ -444,10 +452,10 @@ describe("scopeVolume", () => {
 
 describe("the summary row", () => {
   it("is the whole step as one row, aggregated across all of them", () => {
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
     const summary = step.summary!;
-    expect(summary.title).toBe("All reps");
-    expect(summary.sub).toBe("2 reps");
+    expect(summary.title).toBe("All regions");
+    expect(summary.sub).toBe("2 regions");
     expect(summary.total).toBe(step.total);
     expect(summary.total).toBe(20300);
     // Banded by the ROWS, not by the next link down. Under the Rep lens that
@@ -456,8 +464,8 @@ describe("the summary row", () => {
     // rows below already give twice over.
     expect(step.bandDim).toBe("distributor");
     expect(summary.bands.map((b) => [b.name, b.qty])).toEqual([
-      ["Deon Rep", 18100],
-      ["TJ Rep", 2200],
+      ["Southern California", 18100],
+      ["Northeast", 2200],
     ]);
     // And the shares are what a comparison is read off.
     expect(Math.round(summary.bands[0].share)).toBe(89);
@@ -473,9 +481,9 @@ describe("the summary row", () => {
   });
 
   it("agrees with the row it stands for, to the linear foot", () => {
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
-    const deonRow = step.groups.find((g) => g.title === "Deon Rep")!;
-    const deonBand = step.summary!.bands.find((b) => b.name === "Deon Rep")!;
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
+    const deonRow = step.groups.find((g) => g.title === "Southern California")!;
+    const deonBand = step.summary!.bands.find((b) => b.name === "Southern California")!;
     expect(deonBand.qty).toBe(deonRow.total);
     expect(deonBand.prevQty).toBe(deonRow.prevTotal);
     expect(step.summary!.prevTotal).toBe(14100);
@@ -484,7 +492,7 @@ describe("the summary row", () => {
   it("has no doors: every band already has a row of its own below it", () => {
     // Two ways into the same place that behaved differently would be worse than
     // one. They select and open their own detail.
-    const summary = buildStep(JULY, JUNE, "rep", [], BRANCHES).summary!;
+    const summary = buildStep(JULY, JUNE, "region", [], BRANCHES).summary!;
     expect(summary.bands.every((b) => b.drillable)).toBe(false);
   });
 
@@ -492,9 +500,9 @@ describe("the summary row", () => {
     const deep = buildStep(
       JULY,
       JUNE,
-      "rep",
+      "region",
       [
-        { dim: "rep", key: "deon", name: "Deon Rep" },
+        { dim: "region", key: "socal", name: "Southern California" },
         { dim: "distributor", key: "boise", name: "Boise Cascade" },
       ],
       BRANCHES,
@@ -513,7 +521,7 @@ describe("compositionRail", () => {
   it("stacks the whole step, aggregated across every row", () => {
     // Boise appears on both Deon's row and TJ's; the counter answers for both,
     // so its rail has to as well.
-    const rail = compositionRail(buildStep(JULY, JUNE, "rep", [], BRANCHES).groups);
+    const rail = compositionRail(buildStep(JULY, JUNE, "region", [], BRANCHES).groups);
     expect(rail).toMatch(/^linear-gradient\(to bottom, /);
     // Boise 18,500 of 20,300 — the first stop runs from 0 to ~91%.
     expect(rail).toContain("var(--cat-1) 0.00% 91.13%");
@@ -524,7 +532,7 @@ describe("compositionRail", () => {
     // No gradient for a single band: a four-pixel stripe of one colour with a
     // hard stop at 100% is the same picture with more CSS.
     const one = compositionRail(
-      buildStep([row({})], [], "rep", [], BRANCHES).groups,
+      buildStep([row({})], [], "region", [], BRANCHES).groups,
     );
     expect(one).toBe("var(--cat-1)");
   });
@@ -535,7 +543,7 @@ describe("compositionRail", () => {
 });
 
 describe("backFrom", () => {
-  const deon: PathStep = { dim: "rep", key: "deon", name: "Deon Rep" };
+  const deon: PathStep = { dim: "region", key: "socal", name: "Southern California" };
   const boise: PathStep = { dim: "distributor", key: "boise", name: "Boise Cascade" };
   const riverside: PathStep = { dim: "branch", key: "riverside", name: "Riverside" };
 
@@ -544,7 +552,7 @@ describe("backFrom", () => {
   });
 
   it("drops BOTH links of the first tap, because it recorded two", () => {
-    // Going back to [Deon Rep] alone would land on a step nobody was ever
+    // Going back to [Southern California] alone would land on a step nobody was ever
     // shown: one rep, banded by nothing.
     expect(backFrom([deon, boise])).toEqual([]);
   });
@@ -555,7 +563,7 @@ describe("backFrom", () => {
 });
 
 describe("focusAccount", () => {
-  const deon: PathStep = { dim: "rep", key: "deon", name: "Deon Rep", accountId: null, kind: null };
+  const deon: PathStep = { dim: "region", key: "socal", name: "Southern California", accountId: null, kind: null };
   const boise: PathStep = {
     dim: "distributor",
     key: "boise",
@@ -679,7 +687,7 @@ describe("movement", () => {
 
 describe("SELL_CHAIN", () => {
   it("is the same walk down the chain from three different ends", () => {
-    expect(SELL_CHAIN.rep).toEqual(["rep", "distributor", "branch", "dealer"]);
+    expect(SELL_CHAIN.region).toEqual(["region", "distributor", "branch", "dealer"]);
     expect(SELL_CHAIN.distribution).toEqual(["distributor", "branch", "dealer"]);
     expect(SELL_CHAIN.dealer).toEqual(["dealer", "distributor", "branch"]);
   });
@@ -693,7 +701,7 @@ describe("one tone per row", () => {
     colour === hue || colour.startsWith(`color-mix(in srgb, ${hue} `);
 
   it("shades every band on a row from the row's own colour", () => {
-    for (const lens of ["rep", "distribution", "dealer"] as const) {
+    for (const lens of ["region", "distribution", "dealer"] as const) {
       const step = buildStep(JULY, JUNE, lens, [], BRANCHES);
       for (const g of step.groups) {
         expect(g.colour).not.toBeNull();
@@ -710,12 +718,12 @@ describe("one tone per row", () => {
   it("makes the first band exactly the row's colour, not nearly", () => {
     // It sits directly under the thin stripe. A near-match reads as a mistake
     // where an exact one reads as the same thing continuing.
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
     for (const g of step.groups) expect(g.bands[0].colour).toBe(g.colour);
   });
 
   it("gives the total bar the same colours as the rows it stands for", () => {
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
     expect(step.summary).not.toBeNull();
     for (const g of step.groups) {
       const band = step.summary!.bands.find((b) => b.key === g.key);
@@ -727,9 +735,9 @@ describe("one tone per row", () => {
     // The cost of the rule, stated as a test so nobody 'fixes' it later. Boise
     // is the lead shade on Deon's row and on TJ's, and those rows have different
     // hues, so it is two different colours on purpose.
-    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
-    const deon = step.groups.find((g) => g.key === "deon")!;
-    const tj = step.groups.find((g) => g.key === "tj")!;
+    const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
+    const deon = step.groups.find((g) => g.key === "socal")!;
+    const tj = step.groups.find((g) => g.key === "ne")!;
     const boiseOnDeon = deon.bands.find((b) => b.key === "boise")!;
     const boiseOnTj = tj.bands.find((b) => b.key === "boise")!;
     expect(boiseOnDeon.colour).not.toBe(boiseOnTj.colour);
@@ -738,12 +746,12 @@ describe("one tone per row", () => {
   });
 
   it("carries the tapped band's colour into the level it opens", () => {
-    const top = buildStep(JULY, JUNE, "rep", [], BRANCHES);
-    const deon = top.groups.find((g) => g.key === "deon")!;
+    const top = buildStep(JULY, JUNE, "region", [], BRANCHES);
+    const deon = top.groups.find((g) => g.key === "socal")!;
     const hardwoods = deon.bands.find((b) => b.key === "hardwoods")!;
 
-    const inside = buildStep(JULY, JUNE, "rep", [
-      { key: "deon", dim: "rep", name: "Deon Rep", colour: deon.colour! },
+    const inside = buildStep(JULY, JUNE, "region", [
+      { key: "socal", dim: "region", name: "Southern California", colour: deon.colour! },
       { key: "hardwoods", dim: "distributor", name: "Hardwoods", colour: hardwoods.colour },
     ] as PathStep[], BRANCHES);
     expect(inside.groups).toHaveLength(1);
@@ -779,7 +787,7 @@ describe("one tone per row", () => {
 
   it("still gives a lone row a hue to shade", () => {
     // No total bar is drawn, but the row's own bar still has to be some colour.
-    const step = buildStep([row({ quantity: 1000 })], [], "rep", []);
+    const step = buildStep([row({ quantity: 1000 })], [], "region", []);
     expect(step.summary).toBeNull();
     expect(step.groups[0].colour).toBe("var(--cat-1)");
     expect(step.groups[0].bands[0].colour).toBe("var(--cat-1)");

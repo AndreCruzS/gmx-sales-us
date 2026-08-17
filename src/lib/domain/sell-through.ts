@@ -31,6 +31,13 @@ export interface SellThroughRow {
   period: string;
   rep_id: string | null;
   rep_name: string | null;
+  /** The region the BRANCH sits in, from the client's Master Territory Map, and
+   *  the Market Owner of it. Null region means we hold no region covering that
+   *  state; null owner means the region exists and their map still reads TBD —
+   *  two different gaps, and a screen that showed them as one showed neither. */
+  region_id: string | null;
+  region_name: string | null;
+  market_owner_name: string | null;
   distributor_id: string;
   distributor_name: string;
   branch_id: string;
@@ -57,12 +64,12 @@ export interface BranchRef {
   state: string | null;
 }
 
-export type SellDim = "rep" | "distributor" | "branch" | "dealer";
-export type SellLens = "rep" | "distribution" | "dealer";
+export type SellDim = "region" | "rep" | "distributor" | "branch" | "dealer";
+export type SellLens = "region" | "distribution" | "dealer";
 
 /** The order leadership listed them in. */
 export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
-  ["rep", "Rep"],
+  ["region", "Region"],
   ["distribution", "Distribution"],
   ["dealer", "Dealer"],
 ];
@@ -70,13 +77,14 @@ export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
 /** What "all of it" is called, per lens. Shared by the crumb trail and by the
  *  summary row, so the two can never disagree about what the top of the walk is. */
 export const SELL_ROOT_LABEL: Record<SellLens, string> = {
-  rep: "All reps",
+  region: "All regions",
   distribution: "All houses",
   dealer: "All dealers",
 };
 
 /** The plural of a row, for the summary's second line. */
 const DIM_PLURAL: Record<SellDim, string> = {
+  region: "regions",
   rep: "reps",
   distributor: "distributors",
   branch: "branches",
@@ -84,7 +92,14 @@ const DIM_PLURAL: Record<SellDim, string> = {
 };
 
 export const SELL_CHAIN: Record<SellLens, readonly SellDim[]> = {
-  rep: ["rep", "distributor", "branch", "dealer"],
+  // THE TOP OF THE WALK IS THE REGION, not the rep, and that is the client's own
+  // hierarchy: Region → Market Owner (Rep) → Distributor → Branch → Dealer. It
+  // also fixes the least useful row on the screen. Grouping by rep put Texas,
+  // the Southeast, the Mountain region and the Midwest into one "Nobody yet" row
+  // worth 36,718 LF — a number nobody could act on, because it did not say WHERE
+  // the gap was. Four named regions with no Market Owner is four decisions
+  // waiting to be made.
+  region: ["region", "distributor", "branch", "dealer"],
   distribution: ["distributor", "branch", "dealer"],
   dealer: ["dealer", "distributor", "branch"],
 };
@@ -115,6 +130,22 @@ export function isUnmatched(e: SellEntity): boolean {
 
 export function entityAt(row: SellThroughRow, dim: SellDim): SellEntity {
   switch (dim) {
+    case "region":
+      // TWO DIFFERENT ABSENCES, and they must never share a row. No region means
+      // the goods shipped from a state the client's map does not cover, which is
+      // a question for whoever maintains the map. A region with no Market Owner
+      // is a place the map DOES cover and nobody has been given yet — the volume
+      // is real, it is located, and it is unclaimed.
+      return {
+        key: row.region_id ?? "unmapped",
+        name: row.region_name ?? "Region not on the map",
+        dim,
+        accountId: null,
+        kind: null,
+        sub: row.region_id
+          ? (row.market_owner_name ?? "no Market Owner yet")
+          : `${row.branch_state ?? "nowhere"} is not covered yet`,
+      };
     case "rep":
       // An unmatched row has no dealer, so it has no owner either. Grouping it
       // under "Nobody yet" is honest; hiding it would lose the volume.
