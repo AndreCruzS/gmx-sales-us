@@ -32,6 +32,7 @@ import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  backFrom,
   buildStep,
   focusAccount,
   movementLabel,
@@ -283,6 +284,14 @@ export function TeamSales({
 
   const month = periodLabel(latest);
 
+  const backPath = backFrom(path);
+  const backLabel =
+    backPath === null
+      ? null
+      : backPath.length === 0
+        ? ROOT_CRUMB[lens]
+        : backPath[backPath.length - 1].name;
+
   if (rows.length === 0) {
     return (
       <section>
@@ -328,26 +337,41 @@ export function TeamSales({
         ))}
       </div>
 
-      {/* Where the walk has got to, and the way back out of it. Three links deep
-          with no way back is a trap, however good the animation is. */}
+      {/* Where the walk has got to, and TWO ways back out of it.
+
+          The trail alone was not enough. Going in is a thumb landing on a row;
+          coming out was an eleven-point word in a line of other words, and the
+          shape of that is a screen you can enter and not leave. So the way out
+          is a control — ink, pill, thumb-sized, and it names where it goes —
+          with the trail beside it for jumping more than one link at a time. */}
       <nav className="sales-crumbs" aria-label="Where you are">
-        <button
-          type="button"
-          onClick={() => goTo([])}
-          aria-current={path.length === 0 ? "step" : undefined}
-        >
-          {ROOT_CRUMB[lens]}
-        </button>
-        {path.map((s, i) => (
-          <button
-            key={`${s.dim}-${s.key}`}
-            type="button"
-            onClick={() => goTo(path.slice(0, i + 1))}
-            aria-current={i === path.length - 1 ? "step" : undefined}
-          >
-            {s.name}
+        {backPath !== null && (
+          <button type="button" className="sales-back" onClick={() => goTo(backPath)}>
+            <span className="sales-back-arrow" aria-hidden="true">
+              &#8249;
+            </span>
+            {backLabel}
           </button>
-        ))}
+        )}
+        <span className="sales-trail">
+          <button
+            type="button"
+            onClick={() => goTo([])}
+            aria-current={path.length === 0 ? "step" : undefined}
+          >
+            {ROOT_CRUMB[lens]}
+          </button>
+          {path.map((s, i) => (
+            <button
+              key={`${s.dim}-${s.key}`}
+              type="button"
+              onClick={() => goTo(path.slice(0, i + 1))}
+              aria-current={i === path.length - 1 ? "step" : undefined}
+            >
+              {s.name}
+            </button>
+          ))}
+        </span>
       </nav>
 
       {/* Keyed on the walk, so each level enters rather than swapping in place —
@@ -369,30 +393,58 @@ export function TeamSales({
               : null;
             return (
               <div key={g.key} className="sales-row">
-                <div className="sales-head">
-                  <span className="sales-head-body">
-                    <span className="sales-head-name">{g.title}</span>
-                    {/* No dim noun here: under the Rep lens the rows are
-                        obviously reps, and "rep" under a rep's name is a word
-                        that costs a line and says nothing. */}
-                    <span className="sales-head-sub">
-                      {[
-                        g.sub,
-                        g.value !== null ? formatMoney(Math.round(g.value)) : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                  <span className="sales-head-fig">
-                    <span className="sales-head-qty">
-                      {QTY.format(g.total)} {g.unit}
-                    </span>
-                    <span className="sales-move" data-dir={moveDir(g.total, g.prevTotal, previous)}>
-                      {moved ?? "no earlier file"}
-                    </span>
-                  </span>
-                </div>
+                {(() => {
+                  const body = (
+                    <>
+                      <span className="sales-head-body">
+                        <span className="sales-head-name">{g.title}</span>
+                        {/* No dim noun here: under the Rep lens the rows are
+                            obviously reps, and "rep" under a rep's name is a
+                            word that costs a line and says nothing. */}
+                        <span className="sales-head-sub">
+                          {[
+                            g.sub,
+                            g.value !== null ? formatMoney(Math.round(g.value)) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                      <span className="sales-head-fig">
+                        <span className="sales-head-qty">
+                          {QTY.format(g.total)} {g.unit}
+                        </span>
+                        <span
+                          className="sales-move"
+                          data-dir={moveDir(g.total, g.prevTotal, previous)}
+                        >
+                          {moved ?? "no earlier file"}
+                        </span>
+                      </span>
+                    </>
+                  );
+
+                  // Below depth 0 there is exactly one row, and it is the thing
+                  // that was tapped to get here — so it is also the way out. The
+                  // gesture mirrors itself: a row with a chevron on the RIGHT
+                  // goes in, the row you are standing in wears one on the LEFT
+                  // and comes back out. Nobody has to be taught that.
+                  return backPath !== null ? (
+                    <button
+                      type="button"
+                      className="sales-head sales-head-back"
+                      onClick={() => goTo(backPath)}
+                      aria-label={`Back to ${backLabel}`}
+                    >
+                      <span className="sales-head-up" aria-hidden="true">
+                        &#8249;
+                      </span>
+                      {body}
+                    </button>
+                  ) : (
+                    <div className="sales-head">{body}</div>
+                  );
+                })()}
 
                 <div className="sales-track" data-phase={open ? phase : "idle"}>
                   {g.segments.map((s) => {

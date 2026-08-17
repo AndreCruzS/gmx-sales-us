@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  backFrom,
   buildStep,
   entityAt,
   focusAccount,
@@ -436,6 +437,26 @@ describe("scopeVolume", () => {
 
   it("is the whole book when nothing has been chosen", () => {
     expect(scopeVolume(JULY, [])).toBe(20300);
+  });
+});
+
+describe("backFrom", () => {
+  const deon: PathStep = { dim: "rep", key: "deon", name: "Deon Rep" };
+  const boise: PathStep = { dim: "distributor", key: "boise", name: "Boise Cascade" };
+  const riverside: PathStep = { dim: "branch", key: "riverside", name: "Riverside" };
+
+  it("has nowhere to go from the top", () => {
+    expect(backFrom([])).toBeNull();
+  });
+
+  it("drops BOTH links of the first tap, because it recorded two", () => {
+    // Going back to [Deon Rep] alone would land on a step nobody was ever
+    // shown: one rep, banded by nothing.
+    expect(backFrom([deon, boise])).toEqual([]);
+  });
+
+  it("drops one link at a time after that", () => {
+    expect(backFrom([deon, boise, riverside])).toEqual([deon, boise]);
   });
 });
 

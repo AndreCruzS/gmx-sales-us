@@ -225,6 +225,18 @@ export function stepFor(entity: SellEntity, colour?: string): PathStep {
   };
 }
 
+/**
+ * Where "back" goes from here, or null when there is nowhere to go.
+ *
+ * Depth 0 is the only step with many rows, so the first tap records TWO links —
+ * the row it was on and the band itself. Coming back out has to drop both, or
+ * back would land on a step that was never shown: one rep, banded by nothing.
+ */
+export function backFrom(path: readonly PathStep[]): PathStep[] | null {
+  if (path.length === 0) return null;
+  return path.length <= 2 ? [] : path.slice(0, -1);
+}
+
 export interface SellFocus {
   /** The deepest thing on the walk, account or not — what the page is reading. */
   key: string;

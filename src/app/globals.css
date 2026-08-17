@@ -585,6 +585,25 @@ body {
   align-items: flex-start;
   gap: 12px;
 }
+/* The row you are standing in, which is also the way out of it. A chevron on
+   the LEFT against the band rows' chevron on the right: in on one side, out on
+   the other, and the whole row is the target either way. */
+.sales-head-back {
+  width: 100%;
+  text-align: left;
+}
+.sales-head-up {
+  flex-shrink: 0;
+  width: 11px;
+  margin-inline-start: -3px;
+  font-size: 19px;
+  line-height: 20px;
+  color: var(--ink-muted);
+}
+.sales-head-back:active .sales-head-up,
+.sales-head-back:focus-visible .sales-head-up {
+  color: var(--ink-primary);
+}
 .sales-head-body {
   flex: 1 0 0;
   min-width: 0;
@@ -756,29 +775,69 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 2px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 9px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--ink-muted);
 }
-.sales-crumbs button {
-  padding: 3px 8px;
+.sales-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 2px;
+  min-width: 0;
+}
+.sales-trail button {
+  padding: 4px 8px;
   border-radius: 999px;
   font: inherit;
   color: inherit;
 }
-.sales-crumbs button + button::before {
+.sales-trail button + button::before {
   /* The separator belongs to the crumb that follows it, so it never lands
      alone at the end of a wrapped line. */
   content: "›";
   margin-inline-end: 6px;
   opacity: 0.55;
 }
-.sales-crumbs button[aria-current="step"] {
-  background: var(--surface-sunken);
+.sales-trail button[aria-current="step"] {
+  /* Ink and weight, no fill. The separator is a ::before on the crumb that
+     follows it, so a filled pill would swallow the "›" that belongs between
+     them and read as "› Riverside" rather than "Boise Cascade › Riverside".
+     There is a solid control for the way out now; this only has to say where
+     you are. */
   color: var(--ink-primary);
   font-weight: 700;
+}
+
+/* THE WAY OUT, as a control rather than a word among words. Ink, because in
+   this language ink is the "do this" fill and getting back out is the one thing
+   a reader three links deep actually needs to do. It names its destination:
+   "‹ Boise Cascade" beats "‹ Back", which makes you guess how far you go. */
+.sales-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 999px;
+  background: var(--fill-ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-weight: 700;
+}
+.sales-back-arrow {
+  font-size: 17px;
+  line-height: 1;
+  /* Optical: the glyph sits high in its box, so it needs nudging down to sit
+     on the same line as the word beside it. */
+  transform: translateY(-1px);
+}
+.sales-back:focus-visible {
+  outline: 2px solid var(--ink-primary);
+  outline-offset: 2px;
 }
 
 /* Each level of the walk enters rather than swapping in place, on the same
