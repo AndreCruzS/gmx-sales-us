@@ -508,9 +508,10 @@ export default function HomeClient() {
     hour === null ? "Hello" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const firstName = profile ? firstNameFromEmail(profile.email) : "";
 
-  // The exact string SyncBadge renders (D58) — both live on this same
-  // screen (NavBar wraps Home), so they must never tell two different
-  // stories about the same outbox.
+  // The exact string SyncBadge renders (D58) — both live on this same screen
+  // (NavBar wraps Home), so they must never tell two different stories about the
+  // same outbox. Null when there is nothing to report, and the date then stands
+  // on its own rather than gaining a permanent "· Saved" that says nothing.
   const syncLine = syncStatusLabel(status);
 
   // One sentence about the state of the day, assembled from the same numbers

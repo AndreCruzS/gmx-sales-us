@@ -1907,6 +1907,10 @@ select {
    safe (D58), so the status gets the one piece of deliberate expression:
    a dot that pulses only while work is genuinely queued. */
 
+/* Present only when it has something to say — see sync-badge.tsx. The synced
+   state is a brief confirmation as a queue drains, not the chip's resting
+   condition, so it arrives on the same curve as everything else rather than
+   blinking into place. */
 .sync-chip {
   display: inline-flex;
   align-items: center;
@@ -1917,6 +1921,18 @@ select {
   font-weight: 600;
   background: var(--surface-card);
   color: var(--ink-secondary);
+  animation: sync-in 0.32s cubic-bezier(0.25, 0.6, 0.35, 1) both;
+}
+@keyframes sync-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-chip {
+    animation: none;
+  }
 }
 .sync-dot {
   width: 7px;
