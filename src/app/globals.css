@@ -657,6 +657,18 @@ body {
 .sales-head-back:focus-visible .sales-head-up {
   color: var(--ink-primary);
 }
+/* The row's own colour, one level up from the band rows' rail and deliberately
+   the same object: .sales-item-rail carries the shape, this only fixes the
+   spacing, so the two can never drift into being two different stripes.
+   Slightly taller because the row it labels is taller. */
+.sales-head-rail {
+  min-height: 32px;
+}
+/* Against the chevron on a back row, 12px twice over is a lot of furniture
+   before the name starts. The rail tucks in beside the chevron instead. */
+.sales-head-back .sales-head-rail {
+  margin-inline-start: -4px;
+}
 .sales-head-body {
   flex: 1 0 0;
   min-width: 0;

@@ -421,6 +421,20 @@ export interface SellGroup {
   /** Null when the file carried no price for any of it. */
   value: number | null;
   entity: SellEntity;
+  /**
+   * The row's OWN colour — the one it wears as a band in the total bar above it.
+   *
+   * A row already carries its children's colours, in its bar and down its list.
+   * It carried nothing of its own, so the total bar split into six colours and
+   * then the rows underneath named six things in black: the reader had to count
+   * segments left to right and count rows top to bottom and trust that the two
+   * orders agreed. Now the row wears its segment's colour and the total is
+   * legible by looking, not by counting.
+   *
+   * Null when there is no colour to be consistent WITH: a step with a single
+   * row draws no total bar, so a colour on it would be decoration.
+   */
+  colour: string | null;
   bands: readonly SellBand[];
   segments: readonly SellSegment[];
   coverage: SellCoverage | null;
@@ -561,6 +575,9 @@ export function buildStep(
       prevTotal: prevByRow.get(rowKey) ?? 0,
       value,
       entity,
+      // Filled in below, from the summary, so a row and its segment can never be
+      // given their colours by two separate rules that drift apart.
+      colour: null,
       bands,
       segments: buildSegments(bands, total),
       coverage:
@@ -615,12 +632,31 @@ export function buildStep(
         kind: null,
         sub: null,
       },
+      // The total is every colour at once, so it has none of its own.
+      colour: null,
       bands,
       segments: buildSegments(bands, summaryTotal),
       // A denominator across two networks is not a coverage figure, it is two
       // coverage figures added together. The per-house rows carry it instead.
       coverage: null,
     };
+  }
+
+  // ── Every row learns the colour it wears in the bar above it ──────────────
+  //
+  // Matched BY KEY and never by position, even though both lists are sorted the
+  // same way today. They are sorted by two different quantities — a group by its
+  // banded total, a summary band by its own — and the tie-breaks are separate
+  // lines of code. Pairing them by index would work until the day two rows tie,
+  // and then it would silently swap two people's colours rather than fail.
+  if (summary) {
+    const byKey = new Map(summary.bands.map((b) => [b.key, b.colour]));
+    for (const g of groups) g.colour = byKey.get(g.key) ?? null;
+  } else if (depth > 0) {
+    // One row, and it is the band that was tapped to get here. It keeps the
+    // colour it was tapped WITH, so the band that slid across and filled the bar
+    // is recognisably the same thing as the row now standing at the top.
+    if (groups[0]) groups[0].colour = path[path.length - 1]?.colour ?? null;
   }
 
   return {

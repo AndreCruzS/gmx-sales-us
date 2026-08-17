@@ -684,3 +684,66 @@ describe("SELL_CHAIN", () => {
     expect(SELL_CHAIN.dealer).toEqual(["dealer", "distributor", "branch"]);
   });
 });
+
+describe("a row's own colour", () => {
+  it("is the colour it wears in the total bar above it", () => {
+    // The bug this locks down: the total bar split into colours, and the rows
+    // underneath it named the same things in black. Matching a segment to a row
+    // meant counting segments left to right and rows top to bottom.
+    const step = buildStep(JULY, JUNE, "rep", []);
+    expect(step.summary).not.toBeNull();
+
+    for (const g of step.groups) {
+      const band = step.summary!.bands.find((b) => b.key === g.key);
+      expect(band).toBeDefined();
+      expect(g.colour).toBe(band!.colour);
+    }
+    // And they are actually different colours, or none of this says anything.
+    expect(new Set(step.groups.map((g) => g.colour)).size).toBe(step.groups.length);
+  });
+
+  it("holds under every lens, not just the one it was noticed on", () => {
+    for (const lens of ["rep", "distribution", "dealer"] as const) {
+      const step = buildStep(JULY, JUNE, lens, []);
+      if (!step.summary) continue;
+      for (const g of step.groups) {
+        expect(g.colour).toBe(step.summary.bands.find((b) => b.key === g.key)!.colour);
+      }
+    }
+  });
+
+  it("pairs by key, so a tie cannot swap two people's colours", () => {
+    // Two reps with exactly equal volume. Paired by position this passes or
+    // fails on sort stability; paired by key it simply holds.
+    const tied = [
+      row({ rep_id: "deon", rep_name: "Deon Rep", quantity: 5000 }),
+      row({ rep_id: "tj", rep_name: "TJ Rep", dealer_id: "buffalo", quantity: 5000 }),
+    ];
+    const step = buildStep(tied, [], "rep", []);
+    for (const g of step.groups) {
+      expect(g.colour).toBe(step.summary!.bands.find((b) => b.key === g.key)!.colour);
+    }
+  });
+
+  it("keeps the colour of the band that was tapped, one level in", () => {
+    // The band slides across, fills the bar, and becomes the row at the top of
+    // the next step. It should still be recognisably the same thing.
+    const top = buildStep(JULY, JUNE, "rep", []);
+    const deon = top.groups.find((g) => g.key === "deon")!;
+    const boise = deon.bands.find((b) => b.key === "boise")!;
+
+    const inside = buildStep(JULY, JUNE, "rep", [
+      { key: "deon", dim: "rep", name: "Deon Rep", colour: deon.colour! },
+      { key: "boise", dim: "distributor", name: "Boise Cascade", colour: boise.colour },
+    ] as PathStep[]);
+    expect(inside.groups).toHaveLength(1);
+    expect(inside.groups[0].colour).toBe(boise.colour);
+  });
+
+  it("is null when there is no bar to be consistent with", () => {
+    // One rep, so no total bar is drawn. A colour there would be decoration.
+    const step = buildStep([row({ quantity: 1000 })], [], "rep", []);
+    expect(step.summary).toBeNull();
+    expect(step.groups[0].colour).toBeNull();
+  });
+});

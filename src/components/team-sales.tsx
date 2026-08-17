@@ -579,6 +579,19 @@ export function TeamSales({
                 {(() => {
                   const body = (
                     <>
+                      {/* The row's own colour, the one it has in the total bar
+                          above. Same 4px stripe the band rows wear, because it
+                          is the same idea one level up: this stripe is that
+                          slice. Without it the total split into six colours and
+                          the rows named six things in black, and matching them
+                          up meant counting segments. */}
+                      {g.colour && (
+                        <span
+                          className="sales-item-rail sales-head-rail"
+                          style={{ background: g.colour }}
+                          aria-hidden="true"
+                        />
+                      )}
                       <span className="sales-head-body">
                         <span className="sales-head-name">{g.title}</span>
                         {/* No dim noun here: under the Rep lens the rows are
