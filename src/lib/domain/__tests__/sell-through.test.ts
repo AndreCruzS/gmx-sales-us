@@ -793,3 +793,97 @@ describe("one tone per row", () => {
     expect(step.groups[0].bands[0].colour).toBe("var(--cat-1)");
   });
 });
+
+describe("region and rep are both lenses", () => {
+  // Dropping the rep lens when the region arrived was a mistake: they answer
+  // different questions and one is not the other relabelled.
+  it("offers both, and the same walk under each", () => {
+    expect(SELL_CHAIN.region).toEqual(["region", "distributor", "branch", "dealer"]);
+    expect(SELL_CHAIN.rep).toEqual(["rep", "distributor", "branch", "dealer"]);
+    const region = buildStep(JULY, JUNE, "region", [], BRANCHES);
+    const rep = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    // Same book read two ways: the totals have to agree to the linear foot or one
+    // of the two screens is lying.
+    expect(rep.total).toBe(region.total);
+  });
+
+  it("adds a rep's regions back up when they hold more than one", () => {
+    // The case that makes the rep lens irreplaceable. One rep, two regions.
+    const rows = [
+      row({ quantity: 1000 }),
+      row({
+        region_id: "norcal",
+        region_name: "Northern California",
+        branch_id: "modesto",
+        branch_name: "Boise Cascade - Modesto",
+        dealer_id: "costamesa",
+        dealer_name: "Ganahl Costa Mesa",
+        quantity: 400,
+      }),
+    ];
+    // Two rows by region...
+    expect(buildStep(rows, [], "region", []).groups).toHaveLength(2);
+    // ...one by rep, worth both of them.
+    const byRep = buildStep(rows, [], "rep", []).groups;
+    expect(byRep).toHaveLength(1);
+    expect(byRep[0].total).toBe(1400);
+  });
+
+  it("says why nobody owns a row, in the language the map uses", () => {
+    // The old answer was "no dealer matched, so no owner", which stopped being
+    // true the moment attribution started following the region.
+    const unowned = entityAt(
+      row({ rep_id: null, rep_name: null, region_id: "tx", region_name: "Texas" }),
+      "rep",
+    );
+    expect(unowned.name).toBe("Nobody yet");
+    expect(unowned.sub).toBe("Texas has no Market Owner yet");
+
+    // And the other absence, which is somebody else's problem entirely.
+    const offMap = entityAt(
+      row({ rep_id: null, rep_name: null, region_id: null, region_name: null, branch_state: "HI" }),
+      "rep",
+    );
+    expect(offMap.sub).toBe("HI is not on the territory map");
+  });
+});
+
+describe("a row's second line describes the whole row", () => {
+  const unowned = (region: string, branch: string, qty: number) =>
+    row({
+      rep_id: null, rep_name: null,
+      region_id: region.toLowerCase(), region_name: region,
+      market_owner_name: null,
+      branch_id: branch, branch_name: branch, quantity: qty,
+    });
+
+  it("names both regions when the ownerless row holds two", () => {
+    // It used to borrow the first row's subtitle and say "Texas has no Market
+    // Owner yet" while holding Texas AND the Midwest — which looks like an answer.
+    const step = buildStep(
+      [unowned("Texas", "Dallas", 500), unowned("Midwest", "Detroit", 200)],
+      [], "rep", [],
+    );
+    const nobody = step.groups.find((g) => g.key === "unowned")!;
+    expect(nobody.total).toBe(700);
+    expect(nobody.sub).toBe("Midwest and Texas have no Market Owner yet");
+  });
+
+  it("counts them once there are too many to read", () => {
+    const step = buildStep(
+      ["Texas", "Midwest", "Mountain", "Southeast"].map((r, i) =>
+        unowned(r, `b${i}`, 100),
+      ),
+      [], "rep", [],
+    );
+    expect(step.groups[0].sub).toBe("4 regions have no Market Owner yet");
+  });
+
+  it("keeps the shared line when the rows do agree", () => {
+    const step = buildStep(
+      [unowned("Texas", "Dallas", 500), unowned("Texas", "Houston", 200)],
+      [], "rep", [],
+    );
+    expect(step.groups[0].sub).toBe("Texas has no Market Owner yet");
+  });
+});

@@ -65,11 +65,12 @@ export interface BranchRef {
 }
 
 export type SellDim = "region" | "rep" | "distributor" | "branch" | "dealer";
-export type SellLens = "region" | "distribution" | "dealer";
+export type SellLens = "region" | "rep" | "distribution" | "dealer";
 
 /** The order leadership listed them in. */
 export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
   ["region", "Region"],
+  ["rep", "Rep"],
   ["distribution", "Distribution"],
   ["dealer", "Dealer"],
 ];
@@ -78,6 +79,7 @@ export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
  *  summary row, so the two can never disagree about what the top of the walk is. */
 export const SELL_ROOT_LABEL: Record<SellLens, string> = {
   region: "All regions",
+  rep: "All reps",
   distribution: "All houses",
   dealer: "All dealers",
 };
@@ -100,6 +102,13 @@ export const SELL_CHAIN: Record<SellLens, readonly SellDim[]> = {
   // the gap was. Four named regions with no Market Owner is four decisions
   // waiting to be made.
   region: ["region", "distributor", "branch", "dealer"],
+  // THE REP LENS IS NOT THE REGION LENS WITH DIFFERENT LABELS, and dropping it
+  // when the region arrived was a mistake. A rep can hold more than one region,
+  // in which case the region lens splits their number in two and only this one
+  // adds it back up. And the two answer different questions: "who is performing
+  // better" is about people and is what leadership asked for, "which ground is
+  // covered" is about the map. Same walk, both valid.
+  rep: ["rep", "distributor", "branch", "dealer"],
   distribution: ["distributor", "branch", "dealer"],
   dealer: ["dealer", "distributor", "branch"],
 };
@@ -147,15 +156,27 @@ export function entityAt(row: SellThroughRow, dim: SellDim): SellEntity {
           : `${row.branch_state ?? "nowhere"} is not covered yet`,
       };
     case "rep":
-      // An unmatched row has no dealer, so it has no owner either. Grouping it
-      // under "Nobody yet" is honest; hiding it would lose the volume.
+      // "Nobody yet" is honest and hiding the volume would not be — but WHY
+      // nobody changed when the territory map landed, and the old reason is now
+      // simply false. It used to be that an unmatched dealer left a row with no
+      // owner. Attribution follows the REGION now, so an ownerless row is either
+      // ground the client has not given to anybody or ground their map does not
+      // reach. Both are answerable; "no dealer matched" was not.
+      //
+      // This row is also the reason the Region lens exists: under this lens every
+      // unowned region collapses into one "Nobody yet", so the subtitle points at
+      // where the detail is instead of pretending there is none.
       return {
         key: row.rep_id ?? "unowned",
         name: row.rep_name ?? "Nobody yet",
         dim,
         accountId: null,
         kind: null,
-        sub: row.rep_id ? null : "no dealer matched, so no owner",
+        sub: row.rep_id
+          ? null
+          : row.region_id
+            ? `${row.region_name} has no Market Owner yet`
+            : `${row.branch_state ?? "somewhere"} is not on the territory map`,
       };
     case "distributor":
       return {
@@ -682,7 +703,7 @@ export function buildStep(
     return {
       key: rowKey,
       title: entity.name,
-      sub: entity.sub,
+      sub: groupSub(list, rowDim),
       unit,
       total,
       prevTotal: prevByRow.get(rowKey) ?? 0,
@@ -765,6 +786,40 @@ export function buildStep(
     total,
     unit,
   };
+}
+
+/**
+ * A row's second line, taken from the WHOLE row rather than from its first entry.
+ *
+ * Every group used to borrow the subtitle of list[0], which is right whenever a
+ * group's rows agree about what they are — a dealer group is one dealer, a branch
+ * group is one branch. Exactly one row breaks that, and it is the important one:
+ * "Nobody yet" under the rep lens gathers every region the client has not given
+ * to anybody, so it read "Texas has no Market Owner yet" while holding Texas AND
+ * the Midwest. Naming one of several is worse than naming none, because it looks
+ * like an answer.
+ *
+ * So the shared subtitle is used when it IS shared, the regions are named when
+ * there are few enough to read, and counted when there are not. For any other
+ * dimension a disagreement cannot happen — and if it ever does, no subtitle beats
+ * a wrong one.
+ */
+function groupSub(
+  list: readonly SellThroughRow[],
+  rowDim: SellDim,
+): string | null {
+  const subs = new Set<string>();
+  for (const r of list) {
+    const sub = entityAt(r, rowDim).sub;
+    if (sub) subs.add(sub);
+  }
+  if (subs.size <= 1) return entityAt(list[0], rowDim).sub;
+  if (rowDim !== "rep") return null;
+
+  const regions = [...new Set(list.map((r) => r.region_name ?? "off the map"))].sort();
+  return regions.length <= 2
+    ? `${regions.join(" and ")} have no Market Owner yet`
+    : `${regions.length} regions have no Market Owner yet`;
 }
 
 function buildBands(

@@ -11,10 +11,17 @@
 // and is ALWAYS A MONTH BEHIND. Every figure here names its month for that
 // reason.
 //
-// Three ways to read it, in the order they asked for: rep, distribution,
-// dealer. They are the same walk down the chain started from different ends, so
-// one bar serves all three — the ROWS are one link and the BANDS are the next
-// link down. See src/lib/domain/sell-through.ts for the walk itself.
+// Four ways to read it — region, rep, distribution, dealer — and they are the
+// same walk down the chain started from different ends, so one bar serves them
+// all: the ROWS are one link and the BANDS are the next link down. See
+// src/lib/domain/sell-through.ts for the walk itself.
+//
+// REGION AND REP ARE NOT THE SAME LENS. A rep can hold more than one region, so
+// the region lens splits a number the rep lens adds up, and they answer different
+// questions: which ground is covered against who is performing. Region leads
+// because it is the top of the client's own hierarchy and because it is the only
+// place the unclaimed volume has a NAME — grouped by rep, four uncovered regions
+// collapse into one "Nobody yet" that nobody can act on.
 //
 // Tapping a band does not leave the page, and this is the part leadership liked:
 // the band slides to the start of the track, stretches to own the whole bar —
