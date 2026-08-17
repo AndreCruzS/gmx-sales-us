@@ -654,34 +654,38 @@ select
   pr.label,
   u.period,
   pr.product,
-  round(pr.base * m.factor),
+  -- base is the NEWEST month; the earlier two are divided back by the dealer's
+  -- own trend, so every yard moves at its own rate. A single shared factor made
+  -- the screen read "up 6% on Jun" against every name at once, which is the sort
+  -- of coincidence that makes a reader stop trusting the number.
+  round(pr.base * power(pr.trend, m.ord - 3)),
   'LF',
-  round(pr.base * m.factor * pr.price, 2)
+  round(pr.base * power(pr.trend, m.ord - 3) * pr.price, 2)
 from (values
   -- Boise Riverside serves Orange County and the Inland Empire.
-  ('BC-RIV', 'Ganahl Anaheim',      'GANAHL LUMBER - ANAHEIM #4471',      'Thermo-Ayous',        9800, 3.15),
-  ('BC-RIV', 'Ganahl Buena Park',   'GANAHL LUMBER - BUENA PARK #4472',   'Thermo-Ayous',        4200, 3.15),
-  ('BC-RIV', 'Ganahl Corona',       'GANAHL LUMBER - CORONA #4478',       'Thermo-Ash Decking',  6100, 3.40),
-  ('BC-RIV', 'Ganahl Costa Mesa',   'GANAHL LUMBER - COSTA MESA #4473',   'Thermo-Ayous',        7400, 3.15),
-  ('BC-RIV', 'Ganahl Los Alamitos', 'GANAHL LUMBER - LOS ALAMITOS #4479', 'Thermo-Ash Decking',  3300, 3.40),
-  ('BC-RIV', 'BFS Santa Clarita',   'BUILDERS FIRSTSOURCE SANTA CLARITA', 'Thermo-Ayous',        5200, 3.15),
+  ('BC-RIV', 'Ganahl Anaheim',      'GANAHL LUMBER - ANAHEIM #4471',      'Thermo-Ayous',        9800, 3.15, 1.09),
+  ('BC-RIV', 'Ganahl Buena Park',   'GANAHL LUMBER - BUENA PARK #4472',   'Thermo-Ayous',        4200, 3.15, 0.91),
+  ('BC-RIV', 'Ganahl Corona',       'GANAHL LUMBER - CORONA #4478',       'Thermo-Ash Decking',  6100, 3.40, 1.24),
+  ('BC-RIV', 'Ganahl Costa Mesa',   'GANAHL LUMBER - COSTA MESA #4473',   'Thermo-Ayous',        7400, 3.15, 1.00),
+  ('BC-RIV', 'Ganahl Los Alamitos', 'GANAHL LUMBER - LOS ALAMITOS #4479', 'Thermo-Ash Decking',  3300, 3.40, 0.78),
+  ('BC-RIV', 'BFS Santa Clarita',   'BUILDERS FIRSTSOURCE SANTA CLARITA', 'Thermo-Ayous',        5200, 3.15, 1.16),
   -- Hardwoods Perris covers south Orange County.
-  ('HW-PER', 'Ganahl Laguna Beach', 'HARDWOODS/GANAHL LAGUNA BEACH',      'Thermo-Ayous',        2600, 3.28),
-  ('HW-PER', 'Ganahl Lake Forest',  'HARDWOODS/GANAHL LAKE FOREST',       'Thermo-Ash Decking',  3100, 3.55),
-  ('HW-PER', 'Ganahl Corona',       'HARDWOODS/GANAHL CORONA',            'Thermo-Ayous',        1800, 3.28),
+  ('HW-PER', 'Ganahl Laguna Beach', 'HARDWOODS/GANAHL LAGUNA BEACH',      'Thermo-Ayous',        2600, 3.28, 0.86),
+  ('HW-PER', 'Ganahl Lake Forest',  'HARDWOODS/GANAHL LAKE FOREST',       'Thermo-Ash Decking',  3100, 3.55, 1.05),
+  ('HW-PER', 'Ganahl Corona',       'HARDWOODS/GANAHL CORONA',            'Thermo-Ayous',        1800, 3.28, 0.72),
   -- Hardwoods Los Angeles covers the LA basin.
-  ('HW-LAX', 'Ganahl Pasadena',     'HARDWOODS/GANAHL PASADENA',          'Thermo-Ayous',        4100, 3.28),
-  ('HW-LAX', 'BFS Los Angeles',     'HARDWOODS/BFS LOS ANGELES',          'Thermo-Ash Decking', 12400, 3.55),
+  ('HW-LAX', 'Ganahl Pasadena',     'HARDWOODS/GANAHL PASADENA',          'Thermo-Ayous',        4100, 3.28, 1.02),
+  ('HW-LAX', 'BFS Los Angeles',     'HARDWOODS/BFS LOS ANGELES',          'Thermo-Ash Decking', 12400, 3.55, 1.31),
   -- Hardwoods San Diego reaches the county line.
-  ('HW-SAN', 'Ganahl Escondido',    'HARDWOODS/GANAHL ESCONDIDO',         'Thermo-Ayous',        1500, 3.28),
-  ('HW-SAN', 'BFS National City',   'HARDWOODS/BFS NATIONAL CITY',        'Thermo-Ash Decking',  2900, 3.55)
-) as pr(code, dealer_name, label, product, base, price)
+  ('HW-SAN', 'Ganahl Escondido',    'HARDWOODS/GANAHL ESCONDIDO',         'Thermo-Ayous',        1500, 3.28, 0.94),
+  ('HW-SAN', 'BFS National City',   'HARDWOODS/BFS NATIONAL CITY',        'Thermo-Ash Decking',  2900, 3.55, 1.12)
+) as pr(code, dealer_name, label, product, base, price, trend)
 join distributor_branches b
   on b.external_code = pr.code
 join accounts a
   on a.name = pr.dealer_name
  and a.org_id = '11111111-1111-1111-1111-111111111111'
-cross join (values (1, 0.82), (2, 0.94), (3, 1.0)) as m(ord, factor)
+cross join (values (1), (2), (3)) as m(ord)
 join sell_through_uploads u
   on u.distributor_id = b.distributor_id
  and u.period = (date_trunc('month', current_date) - ((4 - m.ord) || ' months')::interval)::date;

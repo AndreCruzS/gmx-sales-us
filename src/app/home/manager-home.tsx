@@ -15,7 +15,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
-import { TeamSales, type CustomerSalesRow, type Focus } from "@/components/team-sales";
+import { TeamSales, type Focus } from "@/components/team-sales";
+import {
+  latestPeriods,
+  movementLabel,
+  periodLabel,
+  type BranchRef,
+  type PathStep,
+  type SellThroughRow,
+} from "@/lib/domain/sell-through";
 import { useTween } from "@/lib/ui/use-tween";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
@@ -68,9 +76,13 @@ export function ManagerHome({ name }: { name: string }) {
   const [rollout, setRollout] = useState<RolloutCounts | null>(null);
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
-  const [dealerSales, setDealerSales] = useState<CustomerSalesRow[]>([]);
+  const [sellRows, setSellRows] = useState<SellThroughRow[]>([]);
+  const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
+  // The walk down the chain lives here, not in the section: "Show all" has to
+  // undo where you are as well as what the page is answering for.
+  const [path, setPath] = useState<PathStep[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [hour, setHour] = useState<number | null>(null);
 
@@ -82,7 +94,7 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ch, sc, ex, ro, wm, pl, ds, br] = await Promise.all([
+    const [ch, sc, ex, ro, wm, pl, st, sb, br] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -112,11 +124,21 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("dashboard_pipeline")
         .select("stage, opportunity_count, total_value"),
+      // The distributors' own report. Newest months first and capped, because
+      // only the latest month and the one before it are ever drawn — a year of
+      // history would be a year of rows shipped to a phone to show two.
       supabase
-        .from("dashboard_customer_sales")
+        .from("sell_through_rows")
         .select(
-          "owner_id, customer_id, customer_name, customer_type, unit, won_qty, out_qty, open_qty, won_value",
+          "period, rep_id, rep_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value",
         )
+        .order("period", { ascending: false })
+        .limit(2000),
+      // Including the branches that bought nothing — the gaps are the point of
+      // a coverage map, and sell_through_rows only carries branches with sales.
+      supabase
+        .from("distributor_branches")
+        .select("id, distributor_id, name, city, state")
         .limit(500),
       supabase
         .from("account_rollout_status")
@@ -131,7 +153,8 @@ export function ManagerHome({ name }: { name: string }) {
     setRollout(ro.error ? null : ((ro.data as RolloutCounts | null) ?? null));
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
-    setDealerSales(ds.error ? [] : ((ds.data as CustomerSalesRow[]) ?? []));
+    setSellRows(st.error ? [] : ((st.data as SellThroughRow[]) ?? []));
+    setSellBranches(sb.error ? [] : ((sb.data as BranchRef[]) ?? []));
     setBranches(br.error ? [] : ((br.data as BranchRow[]) ?? []));
     setLoadedAt(Date.now());
   }, []);
@@ -173,22 +196,34 @@ export function ManagerHome({ name }: { name: string }) {
 
   const narrative = useMemo(() => teamNarrative(team), [team]);
 
-  // The money, in the two numbers a director asks for first: what is open, and
-  // what is priced and waiting on somebody. When a customer is chosen these
-  // become that customer's, from the sales view rather than the org pipeline —
-  // the same figures, asked of one door.
+  // The two months the sell-through is good for. Never "this month and last" —
+  // a distributor that skips a month must not make the comparison read against
+  // nothing.
+  const { latest, previous } = useMemo(() => latestPeriods(sellRows), [sellRows]);
+
+  // The two figures at the top. With nothing chosen they are the money a
+  // director asks for first: what is open, and what is waiting on somebody.
+  //
+  // Once a CUSTOMER is chosen they switch to linear feet, and that is deliberate
+  // rather than cosmetic. GMX does not sell to a dealer — the distributor does —
+  // so a dealer's row in our own pipeline is legitimately empty, and a tile
+  // reading $0 would say "no business here" about a yard buying nine thousand
+  // feet a month. The honest pair for one door is what it bought, and what it
+  // bought the month before.
   const totals = useMemo(() => {
     if (focus) {
-      const mine = dealerSales.filter((r) => r.customer_id === focus.id);
+      // Straight off the focus: the section that drew the bar has already
+      // scoped these to the same walk, so the tile and the bar cannot disagree.
+      const now = focus.qty;
+      const before = focus.prevQty;
       return {
-        open: mine.reduce((n, r) => n + Number(r.won_value), 0),
-        openCount: mine.length,
-        quotes: mine.reduce((n, r) => n + Number(r.out_qty), 0),
-        openLabel: "Won with them",
-        openHint: "in this book",
-        quotesLabel: "Out for quote",
-        quotesHint: "LF waiting on an answer",
-        quotesIsMoney: false,
+        open: now,
+        openIsMoney: false,
+        openLabel: `Bought · ${periodLabel(latest)}`,
+        openHint: movementLabel(now, before, previous) ?? "no month to compare",
+        quotes: before,
+        quotesLabel: previous ? `Bought · ${periodLabel(previous)}` : "Month before",
+        quotesHint: previous ? "the month before" : "no earlier file loaded",
       };
     }
     let open = 0;
@@ -204,26 +239,25 @@ export function ManagerHome({ name }: { name: string }) {
     }
     return {
       open,
-      openCount,
-      quotes,
+      openIsMoney: true,
       openLabel: "Open pipeline",
       openHint: `${openCount} open ${openCount === 1 ? "deal" : "deals"}`,
+      quotes,
       quotesLabel: "Out for quote",
       quotesHint: "waiting on an answer",
-      quotesIsMoney: false,
     };
-  }, [pipeline, focus, dealerSales]);
+  }, [pipeline, focus, latest, previous]);
 
   // Month by month narrows to the chosen customer; the rollout narrows to
   // their own branch, and simply does not apply to a distributor.
   const monthRows = useMemo(
-    () => (focus ? wonMonths.filter((r) => r.customer_id === focus.id) : wonMonths),
+    () => (focus ? wonMonths.filter((r) => r.customer_id === focus.accountId) : wonMonths),
     [wonMonths, focus],
   );
 
   const focusedGates = useMemo(() => {
     if (!focus) return null;
-    const b = branches.find((x) => x.account_id === focus.id);
+    const b = branches.find((x) => x.account_id === focus.accountId);
     if (!b) return null;
     const on = (v: string) => (v === "OK" ? 1 : 0);
     const pending = (v: string) => (v === "PENDING" ? 1 : 0);
@@ -251,7 +285,7 @@ export function ManagerHome({ name }: { name: string }) {
     const map = new Map<string, number>();
     for (const e of slipping) {
       if (!e.exception_type) continue;
-      if (focus && e.subject_id !== focus.id) continue;
+      if (focus && e.subject_id !== focus.accountId) continue;
       map.set(e.exception_type, (map.get(e.exception_type) ?? 0) + 1);
     }
     return [...map.entries()]
@@ -285,15 +319,31 @@ export function ManagerHome({ name }: { name: string }) {
           <span className="focus-swatch" style={{ background: focus.colour }} aria-hidden="true" />
           <span className="min-w-0">
             <span className="focus-name block truncate">{focus.name}</span>
+            {/* When the thing being read is one of our accounts, the sections
+                below really are its own. When it is NOT — a branch in someone
+                else's network, or a name off a file we could not match — they
+                are keyed to the nearest account instead, and this line has to
+                say so. Claiming "everything below is theirs" over a branch's
+                name is a small lie that makes every figure under it suspect. */}
             <span className="focus-kind">
-              {focus.kind === "DISTRIBUTOR"
-                ? "distributor · everything below is theirs"
-                : focus.kind === "DEALER"
-                  ? "dealer · everything below is theirs"
-                  : "everything below is theirs"}
+              {focus.id === focus.accountId
+                ? focus.kind === "DISTRIBUTOR"
+                  ? "distributor · everything below is theirs"
+                  : "dealer · everything below is theirs"
+                : `${focus.dim === "branch" ? "branch" : "unmatched name"} · the rest of the page follows ${focus.accountName}`}
             </span>
           </span>
-          <button type="button" className="focus-clear" onClick={() => setFocus(null)}>
+          {/* Undoes the WALK as well as the focus: leaving the page narrowed
+              three links deep while the bar above says "all" would be two
+              screens disagreeing about what is being read. */}
+          <button
+            type="button"
+            className="focus-clear"
+            onClick={() => {
+              setFocus(null);
+              setPath([]);
+            }}
+          >
             Show all
           </button>
         </div>
@@ -303,25 +353,33 @@ export function ManagerHome({ name }: { name: string }) {
         <div className="card card-pad">
           <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
           <div className="mt-1 text-2xl font-bold tracking-tight">
-            {formatMoney(Math.round(openTween))}
+            {totals.openIsMoney
+              ? formatMoney(Math.round(openTween))
+              : `${QTY.format(Math.round(openTween))} LF`}
           </div>
           <div className="t-meta mt-0.5">{totals.openHint}</div>
         </div>
         <div className="card card-pad">
           <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
           <div className="mt-1 text-2xl font-bold tracking-tight">
-            {QTY.format(Math.round(quotesTween))}
+            {totals.openIsMoney
+              ? QTY.format(Math.round(quotesTween))
+              : `${QTY.format(Math.round(quotesTween))} LF`}
           </div>
           <div className="t-meta mt-0.5">{totals.quotesHint}</div>
         </div>
       </section>
 
-      {/* Sales first: the bar they asked for, banded by customer, opening in
-          place rather than sending anyone to another screen. */}
+      {/* Sales first: the distributors' sell-through, banded by whoever is not
+          the row, walking rep → distributor → branch → dealer in place rather
+          than sending anyone to another screen. */}
       <TeamSales
-        rows={dealerSales}
-        repMeta={repMeta}
-        focus={focus}
+        rows={sellRows}
+        branches={sellBranches}
+        latest={latest}
+        previous={previous}
+        path={path}
+        onPath={setPath}
         onFocus={setFocus}
       />
 

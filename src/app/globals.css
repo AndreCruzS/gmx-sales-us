@@ -621,11 +621,75 @@ body {
     transform: translateY(-12px);
   }
 }
+/* The walk down the chain: rep → distributor → branch → dealer, three links
+   deep with no page change. The crumbs are not decoration — a bar that opens
+   into another bar needs somewhere to say where you are and a way back up, or
+   the animation has taken the reader somewhere they cannot leave. */
+.sales-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 2px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+.sales-crumbs button {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font: inherit;
+  color: inherit;
+}
+.sales-crumbs button + button::before {
+  /* The separator belongs to the crumb that follows it, so it never lands
+     alone at the end of a wrapped line. */
+  content: "›";
+  margin-inline-end: 6px;
+  opacity: 0.55;
+}
+.sales-crumbs button[aria-current="step"] {
+  background: var(--surface-sunken);
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+
+/* Each level of the walk enters rather than swapping in place, on the same
+   curve and keyframes as the page sections. No delay, unlike .adapt: the band
+   has just finished filling, and this IS its continuation. */
+.sales-step {
+  animation: adapt-in 0.44s cubic-bezier(0.25, 0.6, 0.35, 1) both;
+}
+.sales-month {
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Who is NOT buying. A coverage map that only shows volume flatters the patch;
+   the quiet branches are the ones worth a phone call. */
+.sales-quiet {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+.sales-quiet-list {
+  /* Named a little stronger than the label around them, but NOT in clay: a
+     branch outside the patch that bought nothing is a gap worth a call, not a
+     thing that is slipping. Colour here would claim a state we cannot support. */
+  color: var(--ink-primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sales-seg {
     transition: none;
   }
-  .sales-detail {
+  .sales-detail,
+  .sales-step {
     animation: none;
   }
 }
