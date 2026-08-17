@@ -653,6 +653,23 @@ insert into distributor_branches (org_id, distributor_id, name, city, state, ext
   -- TJ's house in the northeast.
   ('11111111-1111-1111-1111-111111111111', 'd0000000-0000-0000-0000-000000000007', 'Russin - Montgomery', 'Montgomery', 'NY', 'RU-MON');
 
+-- Which region each branch sits in — the edge Bianca's hierarchy needs.
+--
+-- Only where it is genuinely known. Riverside, Perris, Los Angeles and San Diego
+-- are southern California and belong to Deon's patch; Stockton and Windsor are
+-- NORTHERN California and deliberately stay unknown, because "any CA branch is
+-- SoCal" is the kind of rule that puts a rep's name on volume five hundred miles
+-- away. Russin's Montgomery yard goes to Buffalo, the New York region we hold.
+--
+-- Boise's seven out-of-state branches stay null on purpose: they are the queue
+-- Bianca fills, and an empty region there is a question rather than a defect.
+
+update distributor_branches set territory_id = 'b0000000-0000-0000-0000-000000000002'
+ where name in ('Riverside Branch', 'Hardwoods - Perris', 'Hardwoods - Los Angeles',
+                'Hardwoods - San Diego');
+update distributor_branches set territory_id = 'b0000000-0000-0000-0000-000000000001'
+ where name = 'Russin - Montgomery';
+
 -- One upload per distributor per month. The newest is LAST month, because that
 -- is when the file arrives — the lag is the truth, not a gap in the fixture.
 
