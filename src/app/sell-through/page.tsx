@@ -95,6 +95,14 @@ export default function SellThroughPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Removing a month is destructive and irreversible, so it is deliberately two
+  // taps: this holds which upload has been armed. A browser confirm() would be
+  // faster to write and is the wrong control — it is dismissable by reflex and
+  // says nothing about what is going.
+  const [armed, setArmed] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
+  // Yards that no longer have a single row against them, once a month has gone.
+  const [orphans, setOrphans] = useState<{ id: string; name: string }[]>([]);
 
   // The clock is an external system: stamped once, never read during a render.
   // The month list is built from the same stamp, so the default and the options
@@ -302,6 +310,76 @@ export default function SellThroughPage() {
       setError(e instanceof Error ? e.message : "Could not load the file.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Remove one month, and only that month.
+   *
+   * The cascade does the work: rows point at their upload, so deleting the upload
+   * takes its rows and nothing else's — proven in 16_sell_through and measured
+   * again here (108 rows to 81, other houses untouched).
+   *
+   * What the cascade CANNOT reach is the branch list. Yards are reference data
+   * created alongside an upload rather than owned by it, so a month loaded with a
+   * misspelled branch leaves that branch behind, sitting on the coverage map and
+   * inflating its denominator for good. They are collected afterwards and offered
+   * — never removed automatically, because a yard with no sales is exactly what a
+   * coverage map exists to show, and telling those two cases apart is a judgement
+   * only the person who typed it can make.
+   */
+  async function removeUpload(uploadId: string) {
+    setRemoving(true);
+    setError(null);
+    setOrphans([]);
+    const supabase = getSupabaseBrowserClient();
+    try {
+      const { error: delErr } = await supabase
+        .from("sell_through_uploads")
+        .delete()
+        .eq("id", uploadId);
+      if (delErr) throw new Error(delErr.message);
+
+      // Which of this house's yards are now empty across EVERY month.
+      const { data: left } = await supabase
+        .from("sell_through")
+        .select("branch_id")
+        .limit(5000);
+      const stillUsed = new Set(
+        ((left as { branch_id: string }[]) ?? []).map((r) => r.branch_id),
+      );
+      setOrphans(
+        mineBranches
+          .filter((b) => !stillUsed.has(b.id))
+          .map((b) => ({ id: b.id, name: b.name })),
+      );
+
+      setArmed(null);
+      setDone(null);
+      void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove that month.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  async function removeOrphanBranches() {
+    setRemoving(true);
+    setError(null);
+    const supabase = getSupabaseBrowserClient();
+    try {
+      const { error: delErr } = await supabase
+        .from("distributor_branches")
+        .delete()
+        .in("id", orphans.map((o) => o.id));
+      if (delErr) throw new Error(delErr.message);
+      setOrphans([]);
+      void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove those yards.");
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -656,20 +734,110 @@ export default function SellThroughPage() {
           <ul className="list">
             {mine.map((u) => (
               <li key={u.id}>
-                <span className="row">
-                  <span className="row-body">
-                    <span className="t-title">{periodLabel(u.period)}</span>
-                    <span className="t-sub block">
-                      {QTY.format(u.row_count)} rows
-                      {u.unmatched_count > 0
-                        ? ` · ${QTY.format(u.unmatched_count)} unnamed`
-                        : ""}
+                {armed === u.id ? (
+                  /* Armed. It names the month and the count, because "are you
+                     sure?" is not information — what a person needs before
+                     pressing this is what disappears. */
+                  <span className="row" style={{ borderColor: "var(--danger)" }}>
+                    <span className="row-body">
+                      <span className="t-title">
+                        {`Remove ${periodLabel(u.period)}?`}
+                      </span>
+                      <span className="t-sub block">
+                        {`Its ${QTY.format(u.row_count)} rows go with it. No other month is touched, and it cannot be undone — but the file can be loaded again.`}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col gap-1.5">
+                      <button
+                        type="button"
+                        className="btn-quiet"
+                        style={{ color: "var(--danger)", fontWeight: 700 }}
+                        disabled={removing}
+                        onClick={() => void removeUpload(u.id)}
+                      >
+                        {removing ? "Removing…" : "Remove"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-quiet"
+                        disabled={removing}
+                        onClick={() => setArmed(null)}
+                      >
+                        Keep
+                      </button>
                     </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="row">
+                    <span className="row-body">
+                      <span className="t-title">{periodLabel(u.period)}</span>
+                      <span className="t-sub block">
+                        {QTY.format(u.row_count)} rows
+                        {u.unmatched_count > 0
+                          ? ` · ${QTY.format(u.unmatched_count)} unnamed`
+                          : ""}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-quiet shrink-0"
+                      onClick={() => setArmed(u.id)}
+                    >
+                      Remove
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
+          <p className="t-sub mt-2 px-1">
+            Loading a month that is already here replaces it, so a corrected file
+            needs no removal first. Remove is for a month that should never have
+            been loaded at all — the wrong house, or the wrong month on the right
+            sheet.
+          </p>
+        </section>
+      )}
+
+      {/* The one thing the cascade cannot reach. Yards are reference data, not
+          owned by the upload that introduced them, so a misspelling survives the
+          month it arrived with and keeps inflating the coverage denominator. */}
+      {orphans.length > 0 && (
+        <section className="card card-pad">
+          <p className="t-title">
+            {`${orphans.length} ${orphans.length === 1 ? "yard has" : "yards have"} no sales left against them`}
+          </p>
+          <p className="t-sub mt-1">
+            Removing a month does not remove the yards it introduced, because a
+            yard is a place rather than a figure. Keep them if they are real and
+            simply quiet — a branch buying nothing is exactly what the coverage map
+            is for. Remove them if they arrived from a misspelling.
+          </p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {orphans.map((o) => (
+              <li key={o.id} className="t-sub">
+                {o.name}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2.5 flex gap-2">
+            <button
+              type="button"
+              className="btn-quiet"
+              style={{ color: "var(--danger)", fontWeight: 700 }}
+              disabled={removing}
+              onClick={() => void removeOrphanBranches()}
+            >
+              {removing ? "Removing…" : "Remove these yards"}
+            </button>
+            <button
+              type="button"
+              className="btn-quiet"
+              onClick={() => setOrphans([])}
+            >
+              Keep them
+            </button>
+          </div>
         </section>
       )}
 
