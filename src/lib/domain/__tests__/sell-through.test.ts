@@ -7,6 +7,7 @@ import {
   latestPeriods,
   movement,
   movementLabel,
+  moveDir,
   periodLabel,
   rowMatchesPath,
   scopeVolume,
@@ -56,7 +57,14 @@ const BRANCHES: BranchRef[] = [
 // double if the chain were read wrongly.
 const JULY: SellThroughRow[] = [
   row({ quantity: 9800 }),
-  row({ dealer_id: "corona", dealer_name: "Ganahl Corona", quantity: 6100 }),
+  // Corona takes decking off Boise and cladding off Hardwoods, so a band can be
+  // asked which product actually moved.
+  row({
+    dealer_id: "corona",
+    dealer_name: "Ganahl Corona",
+    product: "Thermo-Ash Decking",
+    quantity: 6100,
+  }),
   row({
     branch_id: "modesto",
     branch_name: "Boise Cascade - Modesto",
@@ -289,6 +297,55 @@ describe("buildStep · the dealer lens", () => {
   });
 });
 
+describe("what a band row needs to be readable", () => {
+  it("names the products, so a band is a business and not just a number", () => {
+    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const boise = step.groups[0].bands[0];
+    // Deon's Boise volume is decking AND cladding; the leaf rows below carry one
+    // each, which is where naming the product actually decides a conversation.
+    expect(boise.products).toEqual(["Thermo-Ash Decking", "Thermo-Ayous"]);
+
+    const leaf = buildStep(
+      JULY,
+      JUNE,
+      "rep",
+      [
+        { dim: "rep", key: "deon", name: "Deon Rep" },
+        { dim: "distributor", key: "boise", name: "Boise Cascade" },
+        { dim: "branch", key: "riverside", name: "Riverside" },
+      ],
+      BRANCHES,
+    ).groups[0];
+    expect(leaf.bands.find((b) => b.name === "Ganahl Corona")!.products).toEqual([
+      "Thermo-Ash Decking",
+    ]);
+  });
+
+  it("keeps value null rather than zero when the file carried no price", () => {
+    // Some houses share price and some do not. Zero would read as "given away".
+    const unpriced = buildStep([row({ value: null })], [], "dealer", [], BRANCHES);
+    expect(unpriced.groups[0].value).toBeNull();
+    expect(unpriced.groups[0].bands[0].value).toBeNull();
+
+    const priced = buildStep([row({ value: 3000 })], [], "dealer", [], BRANCHES);
+    expect(priced.groups[0].value).toBe(3000);
+  });
+
+  it("adds up the priced part when only some rows carry a price", () => {
+    const mixed = buildStep(
+      [row({ value: 3000 }), row({ dealer_id: "corona", dealer_name: "Ganahl Corona", value: null })],
+      [],
+      "distribution",
+      [
+        { dim: "distributor", key: "boise", name: "Boise Cascade" },
+        { dim: "branch", key: "riverside", name: "Riverside" },
+      ],
+      BRANCHES,
+    );
+    expect(mixed.groups[0].value).toBe(3000);
+  });
+});
+
 describe("buildStep · the tail", () => {
   const many = Array.from({ length: 9 }, (_, i) =>
     row({ dealer_id: `d${i}`, dealer_name: `Dealer ${i}`, quantity: 900 - i * 100 }),
@@ -459,6 +516,16 @@ describe("movement", () => {
 
   it("reads coming from nothing as new, not as a percentage", () => {
     expect(movementLabel(500, 0, JUN)).toBe("new this month");
+  });
+
+  it("gives a direction only where there is one to give", () => {
+    expect(moveDir(110, 100, JUN)).toBe("up");
+    expect(moveDir(90, 100, JUN)).toBe("down");
+    expect(moveDir(100, 100, JUN)).toBe("level");
+    // Coming from nothing has no direction, so nothing gets coloured. A dealer
+    // that appeared this month is not "up", it is new.
+    expect(moveDir(500, 0, JUN)).toBe("none");
+    expect(moveDir(500, 400, null)).toBe("none");
   });
 
   it("names the month it is comparing against", () => {

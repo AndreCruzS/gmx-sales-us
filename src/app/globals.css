@@ -577,31 +577,158 @@ body {
 .sales-seg[data-dimmed="true"] {
   opacity: 0;
 }
-.sales-legend {
+/* The row above the bar, and the rows below it, share one right-hand column of
+   figures: quantity over movement, mono and tabular, so the whole card reads
+   down as a column of numbers rather than as a paragraph with numbers in it. */
+.sales-head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: 8px;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sales-head-body {
+  flex: 1 0 0;
+  min-width: 0;
+}
+.sales-head-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink-primary);
+}
+.sales-head-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-secondary);
+}
+.sales-head-fig {
+  flex-shrink: 0;
+  text-align: right;
+}
+.sales-head-qty {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+
+/* THE BANDS AS ROWS. The bar says the shape of the month; this says what is in
+   it. It replaced a wrapped line of ten-point mono — colour swatch, name,
+   number, next name — which held every fact the reader needed and gave them no
+   way to read any of it. A band is a business: who, what they bought, how much,
+   and which way it went. That is four things, so it gets a row. */
+.sales-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+.sales-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 0;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+.sales-list > li:first-child .sales-item {
+  border-top: none;
+}
+/* The rail, not a dot: it is the same colour as the band it belongs to and the
+   same shape, so the eye can carry a stripe from the bar down to its row. */
+.sales-item-rail {
+  flex-shrink: 0;
+  align-self: stretch;
+  width: 4px;
+  min-height: 26px;
+  border-radius: 2px;
+}
+.sales-item-body {
+  flex: 1 0 0;
+  min-width: 0;
+}
+.sales-item-name {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+  overflow-wrap: anywhere;
+}
+.sales-item-sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--ink-muted);
+}
+.sales-item-fig {
+  flex-shrink: 0;
+  text-align: right;
+}
+.sales-item-qty {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+.sales-item-go {
+  flex-shrink: 0;
+  width: 9px;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+.sales-item[aria-pressed="true"] {
+  /* The chosen row, marked the way the chosen band is: it holds the ground. */
+  background: var(--surface-sunken);
+  /* Bled out to the card's own edges (card-pad is 16px), so the chosen row
+     reads as a band of ground rather than a floating grey rectangle. */
+  box-shadow:
+    -16px 0 0 var(--surface-sunken),
+    16px 0 0 var(--surface-sunken);
+}
+
+/* Movement. Teal is "good" in this language and clay is "slipping", so a figure
+   that fell says so in clay — and a figure that is simply new says nothing in
+   colour at all, because coming from nothing has no direction. */
+.sales-move {
+  display: block;
+  margin-top: 1px;
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--ink-muted);
 }
-.sales-legend button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: inherit;
-  color: inherit;
+.sales-move[data-dir="up"] {
+  color: var(--success-ink);
 }
-.sales-legend i {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+.sales-move[data-dir="down"] {
+  color: var(--danger);
 }
-.sales-legend button[aria-pressed="true"] {
-  color: var(--ink-primary);
-  font-weight: 700;
+
+/* A branch that bought nothing gets a row too, with a dash where the figure
+   would be. Folded away behind a count, because the gaps can outnumber the
+   sales and the sales are still what the card is for. */
+.sales-list-quiet {
+  margin-top: 4px;
+  border-top: 1px solid var(--rule);
+}
+.sales-list-quiet > li:first-child .sales-item {
+  border-top: none;
+}
+.sales-item-still .sales-item-name {
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.sales-item-still .sales-item-qty {
+  color: var(--ink-muted);
 }
 .sales-detail {
   margin-top: 10px;
@@ -672,18 +799,13 @@ body {
 /* Who is NOT buying. A coverage map that only shows volume flatters the patch;
    the quiet branches are the ones worth a phone call. */
 .sales-quiet {
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+  font-size: 11.5px;
+  line-height: 15px;
   color: var(--ink-muted);
 }
-.sales-quiet-list {
-  /* Named a little stronger than the label around them, but NOT in clay: a
-     branch outside the patch that bought nothing is a gap worth a call, not a
-     thing that is slipping. Colour here would claim a state we cannot support. */
-  color: var(--ink-primary);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .sales-seg {
     transition: none;

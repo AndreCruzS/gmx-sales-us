@@ -349,6 +349,13 @@ export interface SellBand {
   entity: SellEntity;
   /** Whether tapping it walks another link, or ends at its own detail. */
   drillable: boolean;
+  /** What they actually bought. A band is a name and a number until it says
+   *  which product moved; two dealers on the same volume of decking and cladding
+   *  are not the same conversation. */
+  products: readonly string[];
+  /** Null, not zero, when the file carried no price — some houses share it and
+   *  some do not, and 0 would read as "given away". */
+  value: number | null;
 }
 
 /** What the track draws: the leaders, plus one grey band for the gathered tail.
@@ -380,6 +387,8 @@ export interface SellGroup {
   unit: string;
   total: number;
   prevTotal: number;
+  /** Null when the file carried no price for any of it. */
+  value: number | null;
   entity: SellEntity;
   bands: readonly SellBand[];
   segments: readonly SellSegment[];
@@ -435,7 +444,7 @@ export function buildStep(
     const rowKey = entityAt(r, rowDim).key;
     prevByRow.set(rowKey, (prevByRow.get(rowKey) ?? 0) + num(r.quantity));
     if (bandDim) {
-      const k = `${rowKey} ${entityAt(r, bandDim).key}`;
+      const k = `${rowKey}::${entityAt(r, bandDim).key}`;
       prevByRowBand.set(k, (prevByRowBand.get(k) ?? 0) + num(r.quantity));
     }
   }
@@ -454,6 +463,8 @@ export function buildStep(
     const total = bandDim
       ? bands.reduce((n, b) => n + b.qty, 0)
       : list.reduce((n, r) => n + num(r.quantity), 0);
+    const priced = list.filter((r) => r.value !== null && r.value !== undefined);
+    const value = priced.length === 0 ? null : priced.reduce((n, r) => n + num(r.value), 0);
 
     return {
       key: rowKey,
@@ -462,6 +473,7 @@ export function buildStep(
       unit,
       total,
       prevTotal: prevByRow.get(rowKey) ?? 0,
+      value,
       entity,
       bands,
       segments: buildSegments(bands, total),
@@ -492,12 +504,28 @@ function buildBands(
   chain: readonly SellDim[],
   depth: number,
 ): SellBand[] {
-  const acc = new Map<string, { entity: SellEntity; qty: number }>();
+  const acc = new Map<
+    string,
+    { entity: SellEntity; qty: number; products: Set<string>; value: number | null }
+  >();
   for (const r of list) {
     const e = entityAt(r, bandDim);
     const seen = acc.get(e.key);
-    if (seen) seen.qty += num(r.quantity);
-    else acc.set(e.key, { entity: e, qty: num(r.quantity) });
+    const target =
+      seen ??
+      (() => {
+        const fresh = { entity: e, qty: 0, products: new Set<string>(), value: null as number | null };
+        acc.set(e.key, fresh);
+        return fresh;
+      })();
+    target.qty += num(r.quantity);
+    if (r.product) target.products.add(r.product);
+    // Null stays null until a priced row turns up: a band of unpriced rows has
+    // no value, where a band of one priced and one unpriced row has a partial
+    // one, and the second is worth showing.
+    if (r.value !== null && r.value !== undefined) {
+      target.value = (target.value ?? 0) + num(r.value);
+    }
   }
 
   // A band walks another link only if the chain has one left AND the entity is
@@ -515,11 +543,13 @@ function buildBands(
     key: x.entity.key,
     name: x.entity.name,
     qty: x.qty,
-    prevQty: prevByRowBand.get(`${rowKey} ${x.entity.key}`) ?? 0,
+    prevQty: prevByRowBand.get(`${rowKey}::${x.entity.key}`) ?? 0,
     share: barTotal === 0 ? 0 : (100 * x.qty) / barTotal,
     colour: i < MAX_BANDS ? BAND_COLOURS[i] : REST_COLOUR,
     entity: x.entity,
     drillable: canWalk && !isUnmatched(x.entity),
+    products: [...x.products].sort((a, b) => a.localeCompare(b)),
+    value: x.value,
   }));
 }
 
@@ -629,6 +659,22 @@ export function periodShort(period: string | null): string {
 export function movement(now: number, before: number): number | null {
   if (before <= 0) return null;
   return (100 * (now - before)) / before;
+}
+
+/** Which way to colour a movement. "new this month" is neither up nor down —
+ *  coming from nothing has no direction, and colouring it would claim one. */
+export type MoveDir = "up" | "down" | "level" | "none";
+
+export function moveDir(
+  now: number,
+  before: number,
+  previous: string | null,
+): MoveDir {
+  if (!previous || before <= 0) return "none";
+  const pct = movement(now, before);
+  if (pct === null) return "none";
+  const rounded = Math.round(pct);
+  return rounded === 0 ? "level" : rounded > 0 ? "up" : "down";
 }
 
 /** "up 9% on Jun" · "down 4% on Jun" · "level with Jun" · "new this month". */

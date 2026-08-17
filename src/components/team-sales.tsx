@@ -29,11 +29,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { formatMoney } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   buildStep,
   focusAccount,
   movementLabel,
+  moveDir,
   scopeVolume,
   periodLabel,
   SELL_LENSES,
@@ -136,6 +138,9 @@ export function TeamSales({
   // "slide" = travelling to the start, "fill" = stretching to own the bar.
   const [phase, setPhase] = useState<"idle" | "slide" | "fill">("idle");
   const [visits, setVisits] = useState<VisitRow[] | null>(null);
+  // Which coverage gaps have been opened out into rows. Keyed by walk AND row,
+  // so opening Boise's quiet branches does not open Hardwoods'.
+  const [quietOpen, setQuietOpen] = useState<ReadonlySet<string>>(new Set());
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const clearTimers = useCallback(() => {
@@ -227,6 +232,15 @@ export function TeamSales({
     },
     [clearTimers, onPath, onFocus, toFocus],
   );
+
+  const toggleQuiet = useCallback((key: string) => {
+    setQuietOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   // Driven by the tap, not by an effect watching state: the walk is caused by
   // the person, and a render is not the place to start one.
@@ -355,15 +369,30 @@ export function TeamSales({
               : null;
             return (
               <div key={g.key} className="sales-row">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="pva-name">{g.title}</span>
-                  <span className="pva-fig">
-                    {QTY.format(g.total)} {g.unit}
+                <div className="sales-head">
+                  <span className="sales-head-body">
+                    <span className="sales-head-name">{g.title}</span>
+                    {/* No dim noun here: under the Rep lens the rows are
+                        obviously reps, and "rep" under a rep's name is a word
+                        that costs a line and says nothing. */}
+                    <span className="sales-head-sub">
+                      {[
+                        g.sub,
+                        g.value !== null ? formatMoney(Math.round(g.value)) : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                  <span className="sales-head-fig">
+                    <span className="sales-head-qty">
+                      {QTY.format(g.total)} {g.unit}
+                    </span>
+                    <span className="sales-move" data-dir={moveDir(g.total, g.prevTotal, previous)}>
+                      {moved ?? "no earlier file"}
+                    </span>
                   </span>
                 </div>
-                <span className="pva-sub">
-                  {[g.sub, moved].filter(Boolean).join(" · ") || DIM_NOUN[g.entity.dim]}
-                </span>
 
                 <div className="sales-track" data-phase={open ? phase : "idle"}>
                   {g.segments.map((s) => {
@@ -409,58 +438,153 @@ export function TeamSales({
                   })}
                 </div>
 
-                {/* The legend is what carries identity — a colour can separate
-                    bands, it cannot name them. It lists EVERY band, including
-                    the ones gathered into the grey tail on the track, so a small
-                    dealer is never unreachable. It is also a second way in for a
-                    thumb that would rather hit a word than a stripe. */}
-                <p className="sales-legend">
-                  {g.bands.map((b) => (
-                    <button
-                      key={b.key}
-                      type="button"
-                      aria-pressed={open?.key === b.key}
-                      onClick={() => tap(g, b)}
-                    >
-                      <i style={{ background: b.colour }} aria-hidden="true" />
-                      {b.name} {QTY.format(b.qty)}
-                    </button>
-                  ))}
-                </p>
+                {/* The bar says the SHAPE; this says the detail. A colour can
+                    separate bands, it cannot name them, and a name crammed into
+                    ten-point mono next to a bare number is not something anybody
+                    reads — it is something they skip. So every band gets a real
+                    row: who, what they bought, how much, and which way it moved.
+
+                    Every band, including the ones gathered into the grey tail on
+                    the track, so a small dealer is never unreachable. It is also
+                    the honest tap target — a thumb would rather hit a row than a
+                    26-pixel stripe. */}
+                <ul className="sales-list">
+                  {g.bands.map((b) => {
+                    const bandMoved = movementLabel(b.qty, b.prevQty, previous);
+                    return (
+                      <li key={b.key}>
+                        <button
+                          type="button"
+                          className="sales-item"
+                          aria-pressed={open?.key === b.key}
+                          onClick={() => tap(g, b)}
+                        >
+                          <span
+                            className="sales-item-rail"
+                            style={{ background: b.colour }}
+                            aria-hidden="true"
+                          />
+                          <span className="sales-item-body">
+                            <span className="sales-item-name">{b.name}</span>
+                            {/* Only what this row does not already say. Every
+                                band at one level is the same kind of thing, so
+                                "distributor" on each of them is three words of
+                                repetition — but a branch's state and an
+                                unmatched name's warning are worth the line. And
+                                one product is worth naming where five are just
+                                a count. */}
+                            <span className="sales-item-sub">
+                              {[
+                                b.entity.sub === DIM_NOUN[b.entity.dim]
+                                  ? null
+                                  : b.entity.sub,
+                                b.products.length === 1
+                                  ? b.products[0]
+                                  : b.products.length > 1
+                                    ? `${b.products.length} products`
+                                    : null,
+                                g.bands.length > 1 ? `${Math.round(b.share)}%` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </span>
+                          <span className="sales-item-fig">
+                            <span className="sales-item-qty">
+                              {QTY.format(b.qty)} {g.unit}
+                            </span>
+                            <span
+                              className="sales-move"
+                              data-dir={moveDir(b.qty, b.prevQty, previous)}
+                            >
+                              {bandMoved ?? "—"}
+                            </span>
+                          </span>
+                          <span className="sales-item-go" aria-hidden="true">
+                            {b.drillable ? "›" : ""}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
 
                 {/* Coverage: the branches of this house that bought NOTHING this
                     month. A map of who is buying is only useful if it also says
-                    who is not.
+                    who is not — so under Distribution the gaps get rows of their
+                    own, with a dash where the figure would be. Seven names in a
+                    grey sentence is a footnote; seven rows is a list of calls.
 
                     The DENOMINATOR only belongs under Distribution. Boise has
                     branches in Denver and Spokane; counting them against Deon's
                     patch would read as a rep failing to sell in states that are
                     not his, which is worse than saying nothing. */}
-                {g.coverage && (
-                  <p className="sales-quiet">
-                    {lens === "distribution" ? (
-                      <>
-                        {g.coverage.buying} of {g.coverage.total} branches buying
-                        {g.coverage.quiet.length > 0 && (
-                          <>
-                            {" · quiet: "}
-                            <span className="sales-quiet-list">
-                              {g.coverage.quiet.join(", ")}
+                {g.coverage &&
+                  (lens === "distribution" ? (
+                    g.coverage.quiet.length > 0 && (
+                      <ul className="sales-list sales-list-quiet">
+                        <li>
+                          <button
+                            type="button"
+                            className="sales-item"
+                            aria-expanded={quietOpen.has(`${pathKey}|${g.key}`)}
+                            onClick={() => toggleQuiet(`${pathKey}|${g.key}`)}
+                          >
+                            <span
+                              className="sales-item-rail"
+                              style={{ background: "var(--cat-rest)", opacity: 0.4 }}
+                              aria-hidden="true"
+                            />
+                            <span className="sales-item-body">
+                              <span className="sales-item-name">
+                                {g.coverage.quiet.length} not buying
+                              </span>
+                              <span className="sales-item-sub">
+                                {g.coverage.buying} of {g.coverage.total} branches
+                                bought in {month}
+                              </span>
                             </span>
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {g.coverage.buying}{" "}
-                        {g.coverage.buying === 1 ? "branch" : "branches"}{" "}
-                        {lens === "dealer" ? "supplying them" : "selling in this patch"}
-                        {" · "}
-                        {g.title} has {g.coverage.total} in all
-                      </>
-                    )}
-                  </p>
-                )}
+                            <span className="sales-item-fig">
+                              <span className="sales-item-qty">0 {g.unit}</span>
+                            </span>
+                            <span className="sales-item-go" aria-hidden="true">
+                              {quietOpen.has(`${pathKey}|${g.key}`) ? "–" : "+"}
+                            </span>
+                          </button>
+                        </li>
+                        {quietOpen.has(`${pathKey}|${g.key}`) &&
+                          g.coverage.quiet.map((name) => (
+                            <li key={name}>
+                              <span className="sales-item sales-item-still">
+                                <span
+                                  className="sales-item-rail"
+                                  style={{ background: "var(--cat-rest)", opacity: 0.28 }}
+                                  aria-hidden="true"
+                                />
+                                <span className="sales-item-body">
+                                  <span className="sales-item-name">{name}</span>
+                                  <span className="sales-item-sub">
+                                    nothing in {month}
+                                  </span>
+                                </span>
+                                <span className="sales-item-fig">
+                                  <span className="sales-item-qty">&mdash;</span>
+                                </span>
+                                <span className="sales-item-go" aria-hidden="true" />
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                    )
+                  ) : (
+                    <p className="sales-quiet">
+                      {g.coverage.buying}{" "}
+                      {g.coverage.buying === 1 ? "branch" : "branches"}{" "}
+                      {lens === "dealer" ? "supplying them" : "selling in this patch"}
+                      {" · "}
+                      {g.title} has {g.coverage.total} in all
+                    </p>
+                  ))}
 
                 {/* The detail waits for the bar to arrive; opening it mid-slide
                     would give the eye two things to follow at once. */}
