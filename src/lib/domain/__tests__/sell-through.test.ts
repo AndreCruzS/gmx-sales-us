@@ -5,6 +5,7 @@ import {
   compositionRail,
   entityAt,
   focusAccount,
+  housesMissing,
   isUnmatched,
   latestPeriods,
   movement,
@@ -598,6 +599,33 @@ describe("focusAccount", () => {
   it("has nothing to answer for when the walk holds no account of ours", () => {
     expect(focusAccount([deon], null)).toBeNull();
     expect(focusAccount([], null)).toBeNull();
+  });
+});
+
+describe("housesMissing", () => {
+  // The day Boise's August lands, the screen moves to August — and Hardwoods,
+  // whose newest file is July, drops out of every total on the page.
+  const AUG = "2026-08-01";
+  const mixed = [
+    ...JULY,
+    row({ period: AUG, quantity: 11200 }),
+  ];
+
+  it("names the house whose file has not arrived", () => {
+    expect(housesMissing(mixed, AUG)).toEqual(["Hardwoods Specialty"]);
+  });
+
+  it("says nothing when everybody reported the month being shown", () => {
+    expect(housesMissing(JULY, JUL)).toEqual([]);
+  });
+
+  it("does not accuse a house that has never reported at all", () => {
+    // Silence from a distributor we have no history with is not a late file.
+    expect(housesMissing([row({ period: AUG })], AUG)).toEqual([]);
+  });
+
+  it("has nothing to say with no month to say it about", () => {
+    expect(housesMissing(mixed, null)).toEqual([]);
   });
 });
 

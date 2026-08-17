@@ -895,6 +895,17 @@ body {
 }
 
 
+/* A house we are waiting on. Amber, because it is act-now rather than wrong:
+   the figures on screen are correct for the month they name, and somebody has a
+   spreadsheet to chase. */
+.sales-waiting {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 15px;
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+
 /* Who is NOT buying. A coverage map that only shows volume flatters the patch;
    the quiet branches are the ones worth a phone call. */
 .sales-quiet {
@@ -1766,6 +1777,11 @@ body {
 .add-item:nth-child(4) {
   animation-delay: 0.14s;
 }
+/* Five when the desk is reading it: the sales report is an admin's entry and
+   sits furthest from the thumb, so it arrives last. */
+.add-item:nth-child(5) {
+  animation-delay: 0.18s;
+}
 
 /* Folding away is the same move run backwards, and the order reverses with it:
    the entry unfolds outward from the button, so the exit collapses back toward
@@ -1787,15 +1803,18 @@ body {
   animation: add-fall 0.18s cubic-bezier(0.4, 0, 0.8, 0.4) forwards;
 }
 .add-menu.is-closing .add-item:nth-child(1) {
-  animation-delay: 0.09s;
+  animation-delay: 0.12s;
 }
 .add-menu.is-closing .add-item:nth-child(2) {
-  animation-delay: 0.06s;
+  animation-delay: 0.09s;
 }
 .add-menu.is-closing .add-item:nth-child(3) {
-  animation-delay: 0.03s;
+  animation-delay: 0.06s;
 }
 .add-menu.is-closing .add-item:nth-child(4) {
+  animation-delay: 0.03s;
+}
+.add-menu.is-closing .add-item:nth-child(5) {
   animation-delay: 0s;
 }
 .add-item:active {

@@ -36,6 +36,7 @@ import {
   backFrom,
   buildStep,
   compositionRail,
+  housesMissing,
   ALL_ROWS,
   SELL_ROOT_LABEL,
   focusAccount,
@@ -335,6 +336,7 @@ export function TeamSales({
     compositionRail(step.summary !== null ? [step.summary] : step.groups);
 
   const month = periodLabel(latest);
+  const waiting = housesMissing(rows, latest);
 
   // The movement beside the counter follows whatever the counter is showing. A
   // figure that has travelled to one band's total with the whole step's movement
@@ -891,6 +893,20 @@ export function TeamSales({
         behind, so this is what the dealers bought, not what we have quoted.
         {previous ? ` Movement is against ${periodLabel(previous)}.` : ""}
       </p>
+
+      {/* The files do not arrive together. When one house's month lands before
+          another's, the screen moves to the newer month and the slower house
+          drops out of every total on it — nothing is wrong with the maths, and
+          the page simply halves. Saying whose file is missing is the difference
+          between a dashboard that understates the channel and one that explains
+          itself. */}
+      {waiting.length > 0 && (
+        <p className="sales-waiting px-1">
+          {`${waiting.join(" and ")} ${
+            waiting.length === 1 ? "has" : "have"
+          } not sent ${month} yet, so none of their volume is in these figures.`}
+        </p>
+      )}
     </section>
   );
 }

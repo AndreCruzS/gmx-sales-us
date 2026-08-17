@@ -207,6 +207,32 @@ export function MicrophoneIcon(props: IconProps) {
   );
 }
 
+/** A sheet with an arrow going into it — loading somebody else's figures. */
+export function UploadIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path
+        d="M3 13V16C3 17.1046 3.89543 18 5 18H15C16.1046 18 17 17.1046 17 16V13M10 2V12M10 2L6 6M10 2L14 6"
+        stroke="currentColor"
+        strokeWidth={props.strokeWidth ?? 2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <svg

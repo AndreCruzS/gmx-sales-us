@@ -763,6 +763,37 @@ export function latestPeriods(
   return { latest: seen[0] ?? null, previous: seen[1] ?? null };
 }
 
+/**
+ * Houses that have reported before but not for the month being shown.
+ *
+ * The screens draw ONE month, because a figure that mixes months is not a figure.
+ * But the files do not arrive together: the day Boise's August lands, the latest
+ * month becomes August, and Hardwoods — whose newest file is July — drops out of
+ * every total on the page. Nothing is wrong with the data and nothing is wrong
+ * with the maths; the screen simply halves, and a manager has no way to know why.
+ *
+ * So the gap is named. This is the difference between a dashboard that quietly
+ * understates the channel and one that says which house it is waiting on.
+ */
+export function housesMissing(
+  rows: readonly SellThroughRow[],
+  latest: string | null,
+): readonly string[] {
+  if (!latest) return [];
+  const reported = new Set<string>();
+  const names = new Map<string, string>();
+  const everReported = new Map<string, string>();
+  for (const r of rows) {
+    names.set(r.distributor_id, r.distributor_name);
+    if (r.period === latest) reported.add(r.distributor_id);
+    else everReported.set(r.distributor_id, r.distributor_name);
+  }
+  return [...everReported.keys()]
+    .filter((id) => !reported.has(id))
+    .map((id) => names.get(id) ?? id)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 const MONTH_YEAR = new Intl.DateTimeFormat("en-US", {
   month: "long",
   year: "numeric",

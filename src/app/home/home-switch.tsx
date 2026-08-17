@@ -9,10 +9,9 @@
 // Reps and support keep the day. Managers and admins get the team.
 
 import { useOffline } from "@/components/offline-provider";
+import { manages } from "@/lib/domain/roles";
 import HomeClient from "./home-client";
 import { ManagerHome } from "./manager-home";
-
-const MANAGES = new Set(["manager", "admin"]);
 
 /** "bianca@gmxgroup.com" → "Bianca". The cache never holds a display name. */
 function nameFromEmail(email: string): string {
@@ -26,7 +25,7 @@ export function HomeSwitch() {
   // Until the profile resolves, the rep day is the safe default: it is the one
   // that works with no signal at all (D56), and capture must never wait on a
   // role lookup.
-  if (profile?.role && MANAGES.has(profile.role)) {
+  if (profile && manages(profile.role)) {
     return <ManagerHome name={nameFromEmail(profile.email)} />;
   }
   return <HomeClient />;

@@ -20,6 +20,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useOffline } from "@/components/offline-provider";
+import { manages } from "@/lib/domain/roles";
 import {
   BuildingIcon,
   CalendarIcon,
@@ -27,6 +29,7 @@ import {
   HomeIcon,
   MicrophoneIcon,
   PlusIcon,
+  UploadIcon,
   type IconProps,
 } from "./icons";
 
@@ -41,12 +44,14 @@ const TABS = [
 // up closest to the button that opened it. The order is how often a rep
 // actually reaches for each — notes daily, visits weekly, quotes when the
 // conversation turns to price, a new company rarely.
-const ADD_ITEMS: readonly {
+interface AddItem {
   href: string;
   label: string;
   hint: string;
   Icon: (p: IconProps) => React.ReactElement;
-}[] = [
+}
+
+const ADD_ITEMS: readonly AddItem[] = [
   {
     href: "/record",
     label: "Voice note",
@@ -73,14 +78,30 @@ const ADD_ITEMS: readonly {
   },
 ];
 
+// The desk's own entry, and the only one that is not a rep's. The sales figures
+// do not come from anybody using this app: a distributor sends a spreadsheet and
+// an admin loads it. That is the single most consequential thing anyone puts INTO
+// the system — every sales screen is downstream of it — and it had no home at
+// all, which meant the person whose job it is had to be told where to go.
+//
+// Furthest from the thumb because it is monthly, not daily.
+const ADMIN_ADD_ITEM: AddItem = {
+  href: "/sell-through",
+  label: "Sales report",
+  hint: "Load a distributor's month",
+  Icon: UploadIcon,
+};
+
 // How long the fold-away takes: the last item's delay plus its own duration
+// (0.12s + 0.18s, now that the desk's menu is five items deep)
 // (see .add-menu.is-closing in globals.css). The menu stays mounted for
 // exactly this long so the exit can be seen — unmounting on the click would
 // make it vanish, which is the thing that felt wrong.
-const CLOSE_MS = 280;
+const CLOSE_MS = 300;
 
 export function TabBar() {
   const pathname = usePathname();
+  const { profile } = useOffline();
   // Three states, not two: a menu that is on its way out is still on screen.
   const [addState, setAddState] = useState<"closed" | "open" | "closing">(
     "closed",
@@ -145,6 +166,13 @@ export function TabBar() {
   // still has no tab of its own — it is a chore list a rep opens from Home and
   // clears — so the Home tab stays lit while on it, the same way
   // "/accounts/[id]" keeps Accounts lit via startsWith.
+  // Reps get the four things a rep adds; the desk gets a fifth. Until the
+  // profile resolves this is the rep's list, which is the same default the home
+  // switch takes: capture must never wait on a role lookup.
+  const addItems = manages(profile?.role)
+    ? [...ADD_ITEMS, ADMIN_ADD_ITEM]
+    : ADD_ITEMS;
+
   const isActive = (href: string) =>
     href === "/"
       ? pathname === "/" || pathname.startsWith("/routine")
@@ -169,7 +197,7 @@ export function TabBar() {
             role="menu"
             aria-label="Add to the system"
           >
-            {ADD_ITEMS.map(({ href, label, hint, Icon }) => (
+            {addItems.map(({ href, label, hint, Icon }) => (
               <Link
                 key={href}
                 href={href}
