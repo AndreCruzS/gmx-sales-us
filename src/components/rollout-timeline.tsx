@@ -115,11 +115,23 @@ export function RolloutTimeline({
       </p>
 
       <p className="t-sub px-1">
-        <b style={{ color: "var(--ink-primary)" }}>{counts.fully_through ?? 0}</b>{" "}
+        {/* Counts inside a sentence still take the figure treatment, so a number
+            reads as a number wherever it appears rather than only in a column. */}
+        <span className="fig-sm" style={{ color: "var(--ink-primary)" }}>
+          {counts.fully_through ?? 0}
+        </span>{" "}
         through all four
-        {(counts.not_started ?? 0) > 0
-          ? `, ${counts.not_started} not started`
-          : ""}
+        {(counts.not_started ?? 0) > 0 ? (
+          <>
+            {", "}
+            <span className="fig-sm" style={{ color: "var(--ink-primary)" }}>
+              {counts.not_started}
+            </span>{" "}
+            not started
+          </>
+        ) : (
+          ""
+        )}
         . A branch can clear a later gate with an earlier one still open — that
         gap is the queue.
       </p>

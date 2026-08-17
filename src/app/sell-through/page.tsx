@@ -659,7 +659,7 @@ export default function SellThroughPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="card card-pad">
               <div className="t-meta uppercase tracking-wide">Volume</div>
-              <div className="mt-1 text-2xl font-bold tracking-tight">
+              <div className="fig fig-xl mt-1">
                 {QTY.format(plan.quantity)} LF
               </div>
               <div className="t-meta mt-0.5">
@@ -669,7 +669,7 @@ export default function SellThroughPage() {
             </div>
             <div className="card card-pad">
               <div className="t-meta uppercase tracking-wide">Matched</div>
-              <div className="mt-1 text-2xl font-bold tracking-tight">
+              <div className="fig fig-xl mt-1">
                 {QTY.format(plan.matchedRows)}
                 <span className="t-meta"> / {QTY.format(plan.rows.length)}</span>
               </div>

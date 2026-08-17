@@ -156,7 +156,7 @@ export default function QuotesPage() {
         <div className="card card-pad flex items-baseline justify-between gap-3">
           <span>
             <span
-              className="block text-[26px] font-extrabold leading-none"
+              className="fig fig-xl block"
               style={{ color: "var(--accent-ink)" }}
             >
               {rows === null ? "–" : rows.length}
@@ -179,7 +179,7 @@ export default function QuotesPage() {
           </span>
           <span className="text-right">
             <span
-              className="block text-[19px] font-bold"
+              className="fig fig-lg block"
               style={{ fontFamily: "var(--font-mono)" }}
             >
               {formatMoney(totalValue(rows ?? []))}

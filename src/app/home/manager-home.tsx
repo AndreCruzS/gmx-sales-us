@@ -352,7 +352,7 @@ export function ManagerHome({ name }: { name: string }) {
       <section className="adapt grid grid-cols-2 gap-3" key={`tiles-${focus?.id ?? "all"}`}>
         <div className="card card-pad">
           <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
-          <div className="mt-1 text-2xl font-bold tracking-tight">
+          <div className="fig fig-xl mt-1">
             {totals.openIsMoney
               ? formatMoney(Math.round(openTween))
               : `${QTY.format(Math.round(openTween))} LF`}
@@ -361,7 +361,7 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
         <div className="card card-pad">
           <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
-          <div className="mt-1 text-2xl font-bold tracking-tight">
+          <div className="fig fig-xl mt-1">
             {totals.openIsMoney
               ? QTY.format(Math.round(quotesTween))
               : `${QTY.format(Math.round(quotesTween))} LF`}
@@ -417,7 +417,7 @@ export function ManagerHome({ name }: { name: string }) {
                     <span className="t-title">{exceptionLabel(g.type)}</span>
                   </span>
                   <span
-                    className="shrink-0 text-[19px] font-bold tabular-nums"
+                    className="fig fig-lg shrink-0"
                     style={{ color: g.danger ? "var(--danger)" : "var(--ink-primary)" }}
                   >
                     {g.count}

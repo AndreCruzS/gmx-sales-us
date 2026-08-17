@@ -276,7 +276,7 @@ export default function RepPage() {
       <section className="grid grid-cols-2 gap-3">
         <div className="card card-pad">
           <div
-            className="text-2xl font-bold tracking-tight"
+            className="fig fig-xl"
             style={{ color: week?.missed ? "var(--danger)" : "var(--accent-ink)" }}
           >
             {week ? `${week.done}/${week.total}` : "–"}
@@ -285,7 +285,7 @@ export default function RepPage() {
         </div>
         <div className="card card-pad">
           <div
-            className="text-2xl font-bold tracking-tight"
+            className="fig fig-xl"
             style={{ color: week?.missed ? "var(--danger)" : undefined }}
           >
             {week?.missed ?? 0}
@@ -294,7 +294,7 @@ export default function RepPage() {
         </div>
         <div className="card card-pad">
           <div
-            className="text-2xl font-bold tracking-tight"
+            className="fig fig-xl"
             style={{ color: bookedNextWeek === 0 ? "var(--danger)" : undefined }}
           >
             {bookedNextWeek}
@@ -303,7 +303,7 @@ export default function RepPage() {
         </div>
         <div className="card card-pad">
           <div
-            className="text-2xl font-bold tracking-tight"
+            className="fig fig-xl"
             style={{
               color: rep.overdue_next_actions > 0 ? "var(--danger)" : undefined,
             }}

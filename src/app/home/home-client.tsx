@@ -676,7 +676,7 @@ export default function HomeClient() {
           <section>
             <div className="grid grid-cols-2 gap-3">
               <Link href="/routine" className="card card-pad flex flex-col gap-0.5">
-                <span className="text-[26px] font-extrabold leading-none" style={{ color: "var(--accent-ink)" }}>
+                <span className="fig fig-xl" style={{ color: "var(--accent-ink)" }}>
                   {routineItems.length}
                 </span>
                 <span className="text-[11px] font-semibold" style={{ color: "var(--ink-secondary)" }}>
@@ -695,7 +695,7 @@ export default function HomeClient() {
               </Link>
 
               <Link href="/dashboard" className="card card-pad flex flex-col gap-0.5">
-                <span className="text-[26px] font-extrabold leading-none" style={{ color: "var(--accent-ink)" }}>
+                <span className="fig fig-xl" style={{ color: "var(--accent-ink)" }}>
                   {weekStats.completed}
                   <span className="text-sm font-semibold" style={{ color: "var(--ink-muted)" }}>
                     /{weekStats.planned}

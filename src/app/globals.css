@@ -174,6 +174,58 @@ body {
   color: var(--accent-ink);
 }
 
+/* ── Figures ─────────────────────────────────────────────────────────────────
+   EVERY number this app displays is mono and tabular. There were four different
+   treatments for the same thing — the home tiles at 24px proportional sans, the
+   slipping counts at 19px sans, the sales rows at 15px mono, the bands at 13.5px
+   mono — so two figures side by side on one screen did not look like the same
+   kind of object.
+
+   Mono is not decoration here. It is the whole reason a column of figures reads:
+   proportional digits are different widths, so "1" and "7" do not line up and the
+   eye cannot compare down a list without measuring each one.
+
+   And tabular-nums is load-bearing on the tiles specifically, because those tiles
+   ANIMATE. A tweened figure in proportional digits changes width sixty times a
+   second — the number physically jitters while it counts. That is the wobble that
+   made two identical tiles look like two different fonts.
+
+   Three sizes, and no more: a headline, a row's own total, a band inside it. */
+.fig {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-primary);
+}
+.fig-xl {
+  /* Two of these sit side by side, so on a 375px handset each headline gets about
+     118px. Mono is wider than the proportional sans it replaced, and at a fixed
+     21px "$244,000" filled 116 of those 118 — fine until the day the pipeline
+     reaches seven figures, at which point it silently overflows the card.
+     Clamped instead: full size wherever there is room, and it steps down on a
+     narrow screen rather than breaking. */
+  font-size: clamp(16px, 4.6vw, 21px);
+  line-height: 1.15;
+}
+.fig-lg {
+  font-size: 15px;
+  line-height: 1.2;
+}
+.fig-md {
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+/* A figure sitting inside a line of prose — "distributor · $98,120". It keeps the
+   mono so it reads as the same kind of object as the figures above it, but drops
+   to the weight of the sentence it is in rather than shouting inside it. */
+.fig-sm {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
 /* ── Surfaces ───────────────────────────────────────────────────────────── */
 
 /* On a white page a card is a grey block. On the concrete ground it is the
@@ -879,6 +931,8 @@ body {
      the instant the fill begins, and the number is what travels. */
 }
 .sales-count-qty {
+  /* Same values as .fig + .fig-lg; kept explicit only because this element also
+     carries the counter's own spacing. If the scale moves, move it here too. */
   font-family: var(--font-mono);
   font-size: 15px;
   font-weight: 700;

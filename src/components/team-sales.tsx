@@ -584,13 +584,16 @@ export function TeamSales({
                         {/* No dim noun here: under the Rep lens the rows are
                             obviously reps, and "rep" under a rep's name is a
                             word that costs a line and says nothing. */}
+                        {/* The money keeps the mono, so a figure inside a
+                            sentence still reads as a figure and not as a word. */}
                         <span className="sales-head-sub">
-                          {[
-                            g.sub,
-                            g.value !== null ? formatMoney(Math.round(g.value)) : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
+                          {g.sub}
+                          {g.sub && g.value !== null ? " · " : ""}
+                          {g.value !== null && (
+                            <span className="fig-sm">
+                              {formatMoney(Math.round(g.value))}
+                            </span>
+                          )}
                         </span>
                       </span>
                       <span className="sales-head-fig">
