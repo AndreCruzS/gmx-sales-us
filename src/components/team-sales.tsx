@@ -36,6 +36,8 @@ import {
   backFrom,
   buildStep,
   compositionRail,
+  ALL_ROWS,
+  SELL_ROOT_LABEL,
   focusAccount,
   movementLabel,
   moveDir,
@@ -89,13 +91,6 @@ const FILL_MS = 460;
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-
-/** What the first crumb offers to go back to, per lens. */
-const ROOT_CRUMB: Record<SellLens, string> = {
-  rep: "All reps",
-  distribution: "All houses",
-  dealer: "All dealers",
-};
 
 const DIM_NOUN: Record<string, string> = {
   rep: "rep",
@@ -194,7 +189,13 @@ export function TeamSales({
   // can never end up scoped differently.
   const scopeOf = useCallback(
     (p: readonly PathStep[], group: SellGroup | null, band: SellBand | null): PathStep[] => {
-      const withRow = p.length === 0 && group ? [...p, stepFor(group.entity)] : [...p];
+      // The summary row is not a link in the walk — it stands for ALL the rows,
+      // so recording it would narrow the scope to an entity that matches nothing
+      // and every figure keyed on it would come back zero.
+      const withRow =
+        p.length === 0 && group !== null && group.key !== ALL_ROWS
+          ? [...p, stepFor(group.entity)]
+          : [...p];
       return band ? [...withRow, stepFor(band.entity, band.colour)] : withRow;
     },
     [],
@@ -288,10 +289,15 @@ export function TeamSales({
   // has to answer for it as well as the row it sits in. Two array lookups over a
   // handful of items, so plain — memoising it buys nothing and the compiler
   // cannot preserve a memo whose value is assembled from two chained finds.
+  // The summary is a row like any other for selection purposes, but it does not
+  // live in step.groups — so it has to be looked for by name, or a tap on the
+  // total bar sets the page focus and then nothing else happens.
   const chosenGroup =
-    selected !== null && selected.pathKey === pathKey
-      ? (step.groups.find((g) => g.key === selected.group) ?? null)
-      : null;
+    selected === null || selected.pathKey !== pathKey
+      ? null
+      : selected.group === ALL_ROWS
+        ? step.summary
+        : (step.groups.find((g) => g.key === selected.group) ?? null);
   const chosenBand =
     chosenGroup === null || selected === null
       ? null
@@ -328,12 +334,31 @@ export function TeamSales({
 
   const month = periodLabel(latest);
 
+  // The movement beside the counter follows whatever the counter is showing. A
+  // figure that has travelled to one band's total with the whole step's movement
+  // still printed next to it is two different months in one line.
+  const stepPrevTotal = step.groups.reduce((n, g) => n + g.prevTotal, 0);
+  const counterPrev =
+    chosenBand !== null && phase !== "slide" ? chosenBand.prevQty : stepPrevTotal;
+  const stepMoved = movementLabel(counterTarget, counterPrev, previous);
+
+  const summaryOpen =
+    step.summary !== null && chosenGroup?.key === ALL_ROWS ? chosenBand : null;
+
+  // The counter earns its figure only when the figure says something the card
+  // does not already say. With a total bar it is the total, and no row below is
+  // the total. Without one — deeper in the walk, where there is a single row —
+  // the row's own header IS the total, so printing it again two lines above
+  // would be the same number twice. There it appears only once a band has been
+  // chosen, which is the case where it differs: "9,800 of this branch's 36,000".
+  const showCounterFigure = step.summary !== null || chosenBand !== null;
+
   const backPath = backFrom(path);
   const backLabel =
     backPath === null
       ? null
       : backPath.length === 0
-        ? ROOT_CRUMB[lens]
+        ? SELL_ROOT_LABEL[lens]
         : backPath[backPath.length - 1].name;
 
   if (rows.length === 0) {
@@ -403,7 +428,7 @@ export function TeamSales({
             onClick={() => goTo([])}
             aria-current={path.length === 0 ? "step" : undefined}
           >
-            {ROOT_CRUMB[lens]}
+            {SELL_ROOT_LABEL[lens]}
           </button>
           {path.map((s, i) => (
             <button
@@ -421,25 +446,121 @@ export function TeamSales({
       {/* Keyed on the walk, so each level enters rather than swapping in place —
           the same remount trick the page sections use. */}
       <div className="sales-step" key={`${lens}-${pathKey}`}>
-        <p className="sales-count">
-          <span
-            className="sales-count-rail"
-            style={{ background: counterRail }}
-            aria-hidden="true"
-          />
-          {/* aria-hidden on the travelling figure and the true one announced
-              once: a screen reader being read sixty intermediate numbers is not
-              being told anything. */}
-          <span className="sales-count-qty" aria-hidden="true">
-            {QTY.format(Math.round(counterQty))} {step.unit}
-          </span>
-          <span className="sr-only">
-            {QTY.format(counterTarget)} {step.unit}
-          </span>
-          <span className="sales-count-when">· {month}</span>
-        </p>
-
         <div className="card card-pad">
+          {/* THE FIRST BAR IS THE TOTAL.
+              A grand total with no bar, sitting above a column of bars, reads as
+              the one number that was left out of the picture. The mix of the
+              month is worth seeing before whose mix it is.
+
+              It is deliberately UNTITLED. Calling it "All reps" would make it lie
+              the moment the counter travels to a chosen band — "All reps ·
+              28,400 LF" is a false sentence. The rail and the number are its
+              identity: this is the figure you are currently reading, and this is
+              what it is made of.
+
+              The bar is skipped when there is only one row, because that row's
+              own bar is already the same picture. */}
+          <div className="sales-row">
+            <p className="sales-count">
+              {showCounterFigure && (
+                <>
+                  <span
+                    className="sales-count-rail"
+                    style={{ background: counterRail }}
+                    aria-hidden="true"
+                  />
+                  {/* aria-hidden on the travelling figure and the true one
+                      announced once: a screen reader being read sixty
+                      intermediate numbers is not being told anything. */}
+                  <span className="sales-count-qty" aria-hidden="true">
+                    {QTY.format(Math.round(counterQty))} {step.unit}
+                  </span>
+                  <span className="sr-only">
+                    {QTY.format(counterTarget)} {step.unit}
+                  </span>
+                </>
+              )}
+              <span className="sales-count-when">
+                {showCounterFigure ? `· ${month}` : month}
+              </span>
+              {showCounterFigure && stepMoved && (
+                <span
+                  className="sales-move sales-count-move"
+                  data-dir={moveDir(counterTarget, counterPrev, previous)}
+                >
+                  {stepMoved}
+                </span>
+              )}
+            </p>
+
+            {step.summary && (
+              <>
+                <div
+                  className="sales-track"
+                  data-phase={summaryOpen ? phase : "idle"}
+                >
+                  {step.summary.segments.map((seg) => {
+                    const chosenHere = summaryOpen !== null;
+                    const isOpen = summaryOpen?.key === seg.key;
+                    const band = seg.band;
+                    return (
+                      <button
+                        key={seg.key}
+                        type="button"
+                        className="sales-seg"
+                        style={{
+                          flexGrow: 0,
+                          flexBasis: !chosenHere
+                            ? `${seg.share}%`
+                            : isOpen
+                              ? phase === "slide"
+                                ? `${seg.share}%`
+                                : "100%"
+                              : "0%",
+                          background: seg.colour,
+                        }}
+                        data-dimmed={chosenHere && !isOpen}
+                        aria-pressed={isOpen}
+                        aria-label={`${seg.name}: ${QTY.format(seg.qty)} ${step.unit} across the whole month`}
+                        disabled={band === null}
+                        onClick={() => band && tap(step.summary!, band)}
+                      />
+                    );
+                  })}
+                </div>
+
+                {summaryOpen && phase !== "slide" && (
+                  <div className="sales-detail">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="t-title">{summaryOpen.name}</span>
+                      <span className="t-meta tabular-nums">
+                        {QTY.format(summaryOpen.qty)} {step.unit}
+                      </span>
+                    </div>
+                    <p className="t-sub mt-1">
+                      {/* The whole month, not one row's share of it — which is
+                          the only reason this band exists separately from the
+                          identical name on the rows below. */}
+                      Everything through {summaryOpen.name} in {month}
+                      {(() => {
+                        const m = movementLabel(
+                          summaryOpen.qty,
+                          summaryOpen.prevQty,
+                          previous,
+                        );
+                        return m ? ` · ${m}` : "";
+                      })()}
+                      {summaryOpen.value !== null
+                        ? ` · ${formatMoney(Math.round(summaryOpen.value))}`
+                        : ""}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+
           {step.groups.map((g) => {
             const open = chosenGroup?.key === g.key ? chosenBand : null;
             const moved = movementLabel(g.total, g.prevTotal, previous);

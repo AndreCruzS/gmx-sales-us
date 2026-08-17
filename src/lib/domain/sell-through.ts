@@ -67,6 +67,22 @@ export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
   ["dealer", "Dealer"],
 ];
 
+/** What "all of it" is called, per lens. Shared by the crumb trail and by the
+ *  summary row, so the two can never disagree about what the top of the walk is. */
+export const SELL_ROOT_LABEL: Record<SellLens, string> = {
+  rep: "All reps",
+  distribution: "All houses",
+  dealer: "All dealers",
+};
+
+/** The plural of a row, for the summary's second line. */
+const DIM_PLURAL: Record<SellDim, string> = {
+  rep: "reps",
+  distributor: "distributors",
+  branch: "branches",
+  dealer: "dealers",
+};
+
 export const SELL_CHAIN: Record<SellLens, readonly SellDim[]> = {
   rep: ["rep", "distributor", "branch", "dealer"],
   distribution: ["distributor", "branch", "dealer"],
@@ -338,6 +354,9 @@ export function rowMatchesPath(
 /** Six is the practical limit for bands a person can tell apart on a phone. */
 export const MAX_BANDS = 6;
 
+/** The summary row's key. Not a real entity, so it cannot collide with one. */
+export const ALL_ROWS = "__all__";
+
 const BAND_COLOURS = [
   "var(--cat-1)",
   "var(--cat-2)",
@@ -451,7 +470,19 @@ export interface SellStep {
   rowDim: SellDim;
   bandDim: SellDim | null;
   groups: readonly SellGroup[];
-  /** Total across every row on this step, for the line above the card. */
+  /**
+   * The whole step as one row: the same header, the same bar, the same bands —
+   * only aggregated across every row instead of belonging to one of them.
+   *
+   * It is the FIRST bar on the card, and it is there because a total with no bar
+   * beside a column of bars reads as a number that was left out of the picture.
+   * The mix of the month is the first thing worth seeing, before whose mix it is.
+   *
+   * Null when there is only one row, because then that row already IS the total
+   * and a summary above it would be the same bar drawn twice.
+   */
+  summary: SellGroup | null;
+  /** Total across every row on this step. */
   total: number;
   unit: string;
 }
@@ -491,12 +522,17 @@ export function buildStep(
   // Previous month, keyed the same way, so a band can find its own history.
   const prevByRowBand = new Map<string, number>();
   const prevByRow = new Map<string, number>();
+  // The same again with the row ignored, for the summary's own bands.
+  const prevByBand = new Map<string, number>();
   for (const r of scopedPrev) {
     const rowKey = entityAt(r, rowDim).key;
     prevByRow.set(rowKey, (prevByRow.get(rowKey) ?? 0) + num(r.quantity));
     if (bandDim) {
-      const k = `${rowKey}::${entityAt(r, bandDim).key}`;
+      const bandKey = entityAt(r, bandDim).key;
+      const k = `${rowKey}::${bandKey}`;
       prevByRowBand.set(k, (prevByRowBand.get(k) ?? 0) + num(r.quantity));
+      const all = `${ALL_ROWS}::${bandKey}`;
+      prevByBand.set(all, (prevByBand.get(all) ?? 0) + num(r.quantity));
     }
   }
 
@@ -537,12 +573,51 @@ export function buildStep(
 
   groups.sort((a, b) => b.total - a.total || a.title.localeCompare(b.title));
 
+  const total = groups.reduce((n, g) => n + g.total, 0);
+
+  // The summary row. Its bands are aggregated across every row of the step, so
+  // they are NOT doors: at depth 0 the walk's next link is the row dimension,
+  // and "Boise across all reps" has no step in the chain to land on. They select
+  // and open their own detail, which is the same thing every terminal band on
+  // this screen does — so the missing chevron already says it.
+  let summary: SellGroup | null = null;
+  if (groups.length > 1 && bandDim) {
+    const bands = buildBands(scoped, bandDim, ALL_ROWS, prevByBand, chain, depth).map(
+      (b) => ({ ...b, drillable: false }),
+    );
+    const summaryTotal = bands.reduce((n, b) => n + b.qty, 0);
+    const priced = scoped.filter((r) => r.value !== null && r.value !== undefined);
+    summary = {
+      key: ALL_ROWS,
+      title: SELL_ROOT_LABEL[lens],
+      sub: `${groups.length} ${DIM_PLURAL[rowDim]}`,
+      unit,
+      total: summaryTotal,
+      prevTotal: scopedPrev.reduce((n, r) => n + num(r.quantity), 0),
+      value: priced.length === 0 ? null : priced.reduce((n, r) => n + num(r.value), 0),
+      entity: {
+        key: ALL_ROWS,
+        name: SELL_ROOT_LABEL[lens],
+        dim: rowDim,
+        accountId: null,
+        kind: null,
+        sub: null,
+      },
+      bands,
+      segments: buildSegments(bands, summaryTotal),
+      // A denominator across two networks is not a coverage figure, it is two
+      // coverage figures added together. The per-house rows carry it instead.
+      coverage: null,
+    };
+  }
+
   return {
     depth,
     rowDim,
     bandDim,
     groups,
-    total: groups.reduce((n, g) => n + g.total, 0),
+    summary,
+    total,
     unit,
   };
 }

@@ -441,6 +441,56 @@ describe("scopeVolume", () => {
   });
 });
 
+describe("the summary row", () => {
+  it("is the whole step as one row, aggregated across all of them", () => {
+    const step = buildStep(JULY, JUNE, "rep", [], BRANCHES);
+    const summary = step.summary!;
+    expect(summary.title).toBe("All reps");
+    expect(summary.sub).toBe("2 reps");
+    expect(summary.total).toBe(step.total);
+    expect(summary.total).toBe(20300);
+    // Boise across BOTH reps — 16,300 of Deon's plus TJ's 2,200 — which is the
+    // whole reason it exists next to the identical name on the rows below.
+    expect(summary.bands.map((b) => [b.name, b.qty])).toEqual([
+      ["Boise Cascade", 18500],
+      ["Hardwoods Specialty", 1800],
+    ]);
+  });
+
+  it("carries the month before, aggregated the same way", () => {
+    const summary = buildStep(JULY, JUNE, "rep", [], BRANCHES).summary!;
+    expect(summary.prevTotal).toBe(14100);
+    expect(summary.bands[0].prevQty).toBe(14100);
+  });
+
+  it("has no doors: its bands stand for every row, so there is nowhere to walk", () => {
+    // At depth 0 the walk's next link is the ROW dimension, and "Boise across all
+    // reps" is not a step in any chain. They select and open their own detail.
+    const summary = buildStep(JULY, JUNE, "rep", [], BRANCHES).summary!;
+    expect(summary.bands.every((b) => b.drillable)).toBe(false);
+  });
+
+  it("is absent when there is only one row, because that row is already the total", () => {
+    const deep = buildStep(
+      JULY,
+      JUNE,
+      "rep",
+      [
+        { dim: "rep", key: "deon", name: "Deon Rep" },
+        { dim: "distributor", key: "boise", name: "Boise Cascade" },
+      ],
+      BRANCHES,
+    );
+    expect(deep.groups).toHaveLength(1);
+    expect(deep.summary).toBeNull();
+  });
+
+  it("does not add two networks' coverage together and call it one figure", () => {
+    const summary = buildStep(JULY, JUNE, "distribution", [], BRANCHES).summary!;
+    expect(summary.coverage).toBeNull();
+  });
+});
+
 describe("compositionRail", () => {
   it("stacks the whole step, aggregated across every row", () => {
     // Boise appears on both Deon's row and TJ's; the counter answers for both,

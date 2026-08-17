@@ -858,8 +858,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 7px;
   padding-inline-start: 1px;
+}
+.sales-count-move {
+  /* Pushed to the figure column the rows use, so the whole card still reads down
+     as one column of numbers. */
+  margin-inline-start: auto;
+  margin-top: 0;
+  text-align: right;
 }
 .sales-count-rail {
   flex-shrink: 0;
