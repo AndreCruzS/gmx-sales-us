@@ -220,7 +220,7 @@ export function TabBar() {
           onClick={toggleAdd}
         >
           <span className="tab-fab">
-            <PlusIcon size={20} />
+            <PlusIcon size={22} strokeWidth={3} />
           </span>
           Add
         </button>

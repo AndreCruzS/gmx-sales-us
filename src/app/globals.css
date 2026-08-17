@@ -320,8 +320,9 @@ body {
   background: var(--surface-page);
   border-color: var(--rule);
 }
-/* Now is the only ring, and it is amber — the same colour as capture, because
-   both mean "you, here, right now". */
+/* Now is the only ring, and it is amber, which is this language's act-now.
+   (It used to say "the same colour as capture" — capture went teal on 17 Aug
+   2026 at the client's direction, and this ring stayed.) */
 .spine-now {
   flex: 0 0 auto;
   width: 20px;
@@ -1680,10 +1681,15 @@ body {
 .tab-capture {
   position: relative;
 }
-/* Capture is amber, not teal, and bigger than the other tabs. Teal in this
-   language means "done"; the one thing a rep must be able to hit from any
-   screen should not wear the colour of a finished task. Dark ink on amber,
-   because white on it is 2.45:1. */
+/* Capture is TEAL, at the client's direction (17 Aug 2026), and bigger than the
+   other tabs.
+   It used to be amber on the reasoning that teal in this language means "done"
+   and the one control a rep must be able to hit from any screen should not wear
+   the colour of a finished task. Overruled, and the reasoning is worth keeping
+   only so nobody re-derives it and quietly changes it back.
+   Colour comes from --accent-strong/--on-accent rather than a literal white: on
+   the light ramp that IS white on teal at 5.92:1, and after dark the teal lifts
+   and the ink flips, where forced white would land at about 2:1. */
 .tab-capture .tab-fab {
   display: grid;
   place-items: center;
@@ -1691,8 +1697,8 @@ body {
   height: 56px;
   margin-top: -22px;
   border-radius: 999px;
-  background: var(--warn);
-  color: var(--on-warn);
+  background: var(--accent-strong);
+  color: var(--on-accent);
   box-shadow: var(--shadow-2);
 }
 .tab-capture:active .tab-fab {
@@ -1970,16 +1976,15 @@ body {
     color: var(--accent-ink);
   }
 
-  /* Capture leads the rail, the way a compose action does — and it is amber
-     here for the same reason the phone's centre button is: capture is the
-     act-now control, and the rail must not tell a different story from the
-     tab bar. */
+  /* Capture leads the rail, the way a compose action does — and it is teal here
+     for the same reason the phone's centre button is: the rail must not tell a
+     different story from the tab bar. */
   .tab-capture {
     order: -1;
     margin-bottom: 10px;
     height: 44px;
-    background: var(--warn);
-    color: var(--on-warn);
+    background: var(--accent-strong);
+    color: var(--on-accent);
   }
   .tab-capture:hover {
     filter: brightness(1.05);
@@ -1989,7 +1994,7 @@ body {
     height: 22px;
     margin-top: 0;
     background: transparent;
-    color: var(--on-warn);
+    color: var(--on-accent);
     box-shadow: none;
   }
 

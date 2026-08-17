@@ -11,6 +11,10 @@ export interface IconProps {
   style?: CSSProperties;
   /** Supply only when the icon carries meaning on its own. */
   title?: string;
+  /** Override the stroke. A weight tuned for an 18px icon beside a line of text
+   *  goes thin and wiry on a 56px button; only pass it where the icon is being
+   *  rendered big enough to need it. */
+  strokeWidth?: number;
 }
 
 export function AlertIcon(props: IconProps) {
@@ -217,7 +221,12 @@ export function PlusIcon(props: IconProps) {
       style={{ flexShrink: 0, ...props.style }}
     >
       {props.title ? <title>{props.title}</title> : null}
-      <path d="M1 8H8M8 8H15M8 8V1M8 8V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path
+        d="M1 8H8M8 8H15M8 8V1M8 8V15"
+        stroke="currentColor"
+        strokeWidth={props.strokeWidth ?? 2}
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
