@@ -11,6 +11,7 @@ import {
   parseNumber,
   parseSheet,
   periodOf,
+  rowsToSheet,
   toLinearFeet,
   type KnownBranch,
   type KnownDealer,
@@ -67,6 +68,70 @@ describe("parseSheet", () => {
 
   it("has nothing to say about nothing", () => {
     expect(parseSheet("   ")).toEqual({ headers: [], rows: [] });
+  });
+});
+
+describe("rowsToSheet · the .xlsx door", () => {
+  // A parsed workbook hands back real types where a paste hands back strings.
+  // Both doors have to arrive at the same corridor: proven against the client's
+  // real Boise file, which came out identical to the paste — 397 lines, 186 sales
+  // rows, 142 subtotals, 10,700 of theirs, 83,153 LF.
+  it("turns a workbook's own cell types into strings", () => {
+    const sheet = rowsToSheet([
+      ["Branch", "Item", "Qty", "UOM"],
+      ["Riverside Branch", '1X6-94" AYOUS', 14, "PC"],
+      ["Dallas Branch", "1X8-RL AYOUS", 600.5, "LF"],
+    ]);
+    expect(sheet.headers).toEqual(["Branch", "Item", "Qty", "UOM"]);
+    expect(sheet.rows[0]).toEqual(["Riverside Branch", '1X6-94" AYOUS', "14", "PC"]);
+    // Everything downstream reads strings and decides for itself what a figure
+    // is, so a float must survive as written rather than being rounded here.
+    expect(sheet.rows[1][2]).toBe("600.5");
+  });
+
+  it("reads null as an empty cell, not the word null", () => {
+    // A pivot's branch-subtotal line has a null customer, and "null" as a name
+    // would sail past every emptiness check downstream.
+    const sheet = rowsToSheet([
+      ["Branch", "Customer"],
+      ["Atlanta Branch", null],
+    ]);
+    expect(sheet.rows[0]).toEqual(["Atlanta Branch", ""]);
+  });
+
+  it("skips blank rows above the header instead of using one as the header", () => {
+    // An export very often has a row of nothing on top; taking it as the headers
+    // makes every dropdown on the mapping step useless.
+    const sheet = rowsToSheet([
+      [null, null],
+      ["", ""],
+      ["Branch", "Qty"],
+      ["Riverside Branch", 14],
+    ]);
+    expect(sheet.headers).toEqual(["Branch", "Qty"]);
+    expect(sheet.rows).toEqual([["Riverside Branch", "14"]]);
+  });
+
+  it("pads a short row and drops a blank one", () => {
+    const sheet = rowsToSheet([
+      ["A", "B", "C"],
+      ["1"],
+      [null, null, null],
+    ]);
+    expect(sheet.rows).toEqual([["1", "", ""]]);
+  });
+
+  it("writes a date as a date, not as a locale sentence", () => {
+    const sheet = rowsToSheet([
+      ["Period", "Qty"],
+      [new Date("2026-07-01T00:00:00Z"), 5],
+    ]);
+    expect(sheet.rows[0][0]).toBe("2026-07-01");
+  });
+
+  it("has nothing to say about an empty workbook", () => {
+    expect(rowsToSheet([])).toEqual({ headers: [], rows: [] });
+    expect(rowsToSheet([[null, null]])).toEqual({ headers: [], rows: [] });
   });
 });
 

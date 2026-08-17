@@ -92,6 +92,40 @@ export function parseSheet(text: string): Sheet {
   return { headers, rows };
 }
 
+/**
+ * A spreadsheet's own cells, as the Sheet the rest of this module expects.
+ *
+ * A parsed .xlsx hands back real types — numbers, dates, booleans, nulls — where
+ * a paste hands back strings. Everything downstream reads strings and decides for
+ * itself what a figure is (parseNumber already copes with "$1,234.50" and
+ * "(500)"), so this is the one place the two doors become the same corridor.
+ *
+ * Leading blank rows are skipped rather than treated as the header: an exported
+ * sheet very often has a row or two of nothing above the column names, and taking
+ * one of those as the headers makes every dropdown on the mapping step useless.
+ */
+export function rowsToSheet(rows: readonly (readonly unknown[])[]): Sheet {
+  const text = (v: unknown): string => {
+    if (v === null || v === undefined) return "";
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    return String(v).trim();
+  };
+  const filled = rows
+    .map((r) => r.map(text))
+    .filter((r) => r.some((c) => c.length > 0));
+  if (filled.length === 0) return { headers: [], rows: [] };
+
+  const [headers, ...body] = filled;
+  const width = headers.length;
+  return {
+    headers,
+    // Ragged is normal in an export; a short row means blank cells, not a broken
+    // file. Same rule parseSheet follows for a paste.
+    rows: body.map((r) => Array.from({ length: width }, (_, i) => r[i] ?? "")),
+  };
+}
+
 function cell(raw: string): string {
   return raw.trim().replace(/^"(.*)"$/s, "$1").trim();
 }

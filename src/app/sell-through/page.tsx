@@ -6,15 +6,15 @@
 // app produces the figures: Boise and Hardwoods send a spreadsheet, an admin
 // puts it in, and it is always a month behind. Until now it had no home at all.
 //
-// It takes a PASTE rather than a file, which is a decision and not a shortcut.
-// The two houses' files agree about nothing — not the column names, not the
-// order, not how a dealer is spelled — so a parser written against one of them
-// breaks on the other and on next year's export of either. Selecting a range in
-// Excel and pasting it is what the job already looks like, it needs no library to
-// go wrong on the eighteenth variant of xlsx, and the admin says which column is
-// which once instead of us guessing forever.
+// It takes the FILE they were emailed — .xlsx, .csv or .tsv — and a paste as a
+// second door. The first version was paste-only, on the reasoning that two unknown
+// vendor formats cannot be parsed blind; that reasoning expired the moment a real
+// file arrived. What survives from it is the important half: this knows no vendor's
+// layout. The admin says which column is which once, and both doors land in the
+// same tested code, which is why reading the real Boise .xlsx produced figures
+// identical to pasting it — 397 lines, 186 sales rows, 142 subtotals, 83,153 LF.
 //
-// The screen is a straight line: which house, which month, paste it, check what
+// The screen is a straight line: which house, which month, the file, check what
 // it found, load it. Nothing is written until the last step, and everything the
 // last step will do is on screen before it is pressed — how much volume, how much
 // of it landed on a dealer we know, which yards we have never heard of.
@@ -24,7 +24,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOffline } from "@/components/offline-provider";
 import { formatMoney } from "@/lib/format";
-import { manages } from "@/lib/domain/roles";
+import { isAdmin } from "@/lib/domain/roles";
 import { periodLabel } from "@/lib/domain/sell-through";
 import {
   buildImport,
@@ -38,6 +38,11 @@ import {
   type KnownDealer,
   type Mapping,
 } from "@/lib/domain/sell-through-import";
+import {
+  readSpreadsheet,
+  SpreadsheetError,
+  type ReadSheet,
+} from "@/lib/sheet/read-spreadsheet";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -88,6 +93,12 @@ export default function SellThroughPage() {
   const [distributorId, setDistributorId] = useState("");
   const [when, setWhen] = useState<{ year: number; month: number } | null>(null);
   const [months, setMonths] = useState<{ value: string; label: string }[]>([]);
+  // The file is the main door now; the paste stays as a second one because it is
+  // genuinely quicker for a three-line correction.
+  const [file, setFile] = useState<File | null>(null);
+  const [tabs, setTabs] = useState<ReadSheet[]>([]);
+  const [tabName, setTabName] = useState("");
+  const [reading, setReading] = useState(false);
   const [pasted, setPasted] = useState("");
   const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING);
   const [touchedMapping, setTouchedMapping] = useState(false);
@@ -175,7 +186,15 @@ export default function SellThroughPage() {
     return () => clearTimeout(t);
   }, [profile, load]);
 
-  const sheet = useMemo(() => parseSheet(pasted), [pasted]);
+  // One of two doors, never both: a file wins, because if somebody has chosen one
+  // the paste box is stale by definition.
+  const sheet = useMemo(() => {
+    if (tabs.length > 0) {
+      const chosen = tabs.find((t) => t.name === tabName) ?? tabs[0];
+      return chosen.sheet;
+    }
+    return parseSheet(pasted);
+  }, [tabs, tabName, pasted]);
 
   // Guessed on the first paste and then left alone: re-guessing after every
   // keystroke would undo a correction the moment it was made.
@@ -263,6 +282,19 @@ export default function SellThroughPage() {
         })
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
+      // The original goes to storage BEFORE the rows land, so a month can never
+      // exist in the database with its own source already lost. A failed upload
+      // fails the whole load rather than quietly storing figures nobody can trace.
+      let storagePath: string | null = null;
+      if (file) {
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
+        storagePath = `${profile.orgId}/${distributorId}/${period}-${safe}`;
+        const { error: putErr } = await supabase.storage
+          .from("sell-through")
+          .upload(storagePath, file, { upsert: true });
+        if (putErr) throw new Error(`Could not store the file: ${putErr.message}`);
+      }
+
       const { data: up, error: upErr } = await supabase
         .from("sell_through_uploads")
         .insert({
@@ -270,6 +302,8 @@ export default function SellThroughPage() {
           distributor_id: distributorId,
           period,
           uploaded_by: profile.membershipId,
+          filename: file?.name ?? null,
+          storage_path: storagePath,
           row_count: rows.length,
           unmatched_count: rows.filter((r) => r.dealerId === null).length,
         })
@@ -304,12 +338,49 @@ export default function SellThroughPage() {
         `${QTY.format(rows.length)} ${rows.length === 1 ? "row" : "rows"} loaded for ${periodLabel(period)}.`,
       );
       setPasted("");
+      setFile(null);
+      setTabs([]);
+      setTabName("");
       setTouchedMapping(false);
       void load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load the file.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Take the file the distributor emailed.
+   *
+   * The parse happens here, in the browser, before anything is written or
+   * uploaded — so a wrong file is caught by the person holding it rather than
+   * discovered later in a table. Choosing a file also clears the paste box: two
+   * sources of truth on one screen is how somebody loads last month twice.
+   */
+  async function takeFile(next: File | null) {
+    setError(null);
+    setDone(null);
+    setTabs([]);
+    setTabName("");
+    setTouchedMapping(false);
+    setFile(next);
+    if (!next) return;
+    setReading(true);
+    try {
+      const read = await readSpreadsheet(next);
+      setTabs(read);
+      setTabName(read[0]?.name ?? "");
+      setPasted("");
+    } catch (e) {
+      setFile(null);
+      setError(
+        e instanceof SpreadsheetError
+          ? e.message
+          : "That file could not be read as a spreadsheet.",
+      );
+    } finally {
+      setReading(false);
     }
   }
 
@@ -383,12 +454,13 @@ export default function SellThroughPage() {
     }
   }
 
-  if (profile && !manages(profile.role)) {
+  if (profile && !isAdmin(profile.role)) {
     return (
       <div className="stack pt-2">
         <div className="card card-pad">
           <p className="t-sub">
-            The distributors&rsquo; reports are loaded by an admin. Nothing to do
+            The distributors&rsquo; reports are loaded by an admin — the write
+            rules on these tables say so, not just this screen. Nothing to do
             here.
           </p>
         </div>
@@ -405,7 +477,7 @@ export default function SellThroughPage() {
           Load a sales report
         </h1>
         <p className="t-sub mt-1" style={{ maxWidth: "52ch" }}>
-          The month a distributor sends you. Paste the sheet — any columns, any
+          The month a distributor sends you. Drop the file in — any columns, any
           order — say which is which, and check what it found before it lands.
         </p>
       </section>
@@ -463,18 +535,80 @@ export default function SellThroughPage() {
 
       {distributorId && (
         <section className="flex flex-col gap-3">
+          {/* The file the distributor emailed. First, because that is what they
+              actually have — the paste below is the fallback, not the method. */}
           <label className="flex flex-col gap-1">
-            <span className="t-meta">
-              Paste the sheet, header row included
-            </span>
-            <textarea
-              value={pasted}
-              onChange={(e) => setPasted(e.target.value)}
-              className="field paste-box"
-              rows={6}
-              placeholder={"Branch\tCustomer\tProduct\tQty\tValue\n…"}
+            <span className="t-meta">The file they sent — .xlsx, .csv or .tsv</span>
+            <input
+              type="file"
+              accept=".xlsx,.xlsm,.csv,.tsv,.txt"
+              className="field"
+              onChange={(e) => void takeFile(e.target.files?.[0] ?? null)}
             />
           </label>
+
+          {reading && <p className="t-sub">Reading the file…</p>}
+
+          {file && tabs.length > 0 && (
+            <div className="card card-pad">
+              <p className="t-title">{file.name}</p>
+              <p className="t-sub mt-1">
+                {`${QTY.format(sheet.rows.length)} lines, ${sheet.headers.length} columns`}
+                {tabs.length > 1 ? ` · ${tabs.length} sheets in this workbook` : ""}
+              </p>
+
+              {/* Only asked when there is something to ask: most workbooks have
+                  one tab, and a question with one answer is noise. */}
+              {tabs.length > 1 && (
+                <label className="mt-2.5 flex flex-col gap-1">
+                  <span className="t-meta">Which sheet holds the report</span>
+                  <select
+                    value={tabName}
+                    onChange={(e) => {
+                      setTabName(e.target.value);
+                      setTouchedMapping(false);
+                    }}
+                    className="field"
+                  >
+                    {tabs.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {`${t.name} — ${QTY.format(t.sheet.rows.length)} lines`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <button
+                type="button"
+                className="btn-quiet mt-2.5"
+                onClick={() => void takeFile(null)}
+              >
+                Choose a different file
+              </button>
+            </div>
+          )}
+
+          {/* Kept, and demoted. Quicker than saving an attachment for a
+              three-line correction, and the only way in when the sheet arrives in
+              the body of an email rather than attached to it. */}
+          {!file && (
+            <details>
+              <summary className="t-action cursor-pointer">
+                Or paste the rows instead
+              </summary>
+              <label className="mt-2 flex flex-col gap-1">
+                <span className="t-meta">Header row included</span>
+                <textarea
+                  value={pasted}
+                  onChange={(e) => setPasted(e.target.value)}
+                  className="field paste-box"
+                  rows={6}
+                  placeholder={"Branch\tCustomer\tProduct\tQty\tValue\n…"}
+                />
+              </label>
+            </details>
+          )}
 
           {sheet.headers.length > 0 && (
             <div className="card card-pad flex flex-col gap-3">

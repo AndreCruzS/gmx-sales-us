@@ -21,7 +21,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { manages } from "@/lib/domain/roles";
+import { isAdmin } from "@/lib/domain/roles";
 import {
   BuildingIcon,
   CalendarIcon,
@@ -166,10 +166,12 @@ export function TabBar() {
   // still has no tab of its own — it is a chore list a rep opens from Home and
   // clears — so the Home tab stays lit while on it, the same way
   // "/accounts/[id]" keeps Accounts lit via startsWith.
-  // Reps get the four things a rep adds; the desk gets a fifth. Until the
-  // profile resolves this is the rep's list, which is the same default the home
-  // switch takes: capture must never wait on a role lookup.
-  const addItems = manages(profile?.role)
+  // Reps get the four things a rep adds; the desk gets a fifth. ADMIN, not
+  // manager: every write policy on the sell-through tables is is_admin(), so
+  // offering this to a manager would be offering a form that fails on save.
+  // Until the profile resolves this is the rep's list, which is the same default
+  // the home switch takes — capture must never wait on a role lookup.
+  const addItems = isAdmin(profile?.role)
     ? [...ADD_ITEMS, ADMIN_ADD_ITEM]
     : ADD_ITEMS;
 

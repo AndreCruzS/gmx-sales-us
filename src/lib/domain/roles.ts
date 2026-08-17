@@ -14,3 +14,19 @@ const MANAGES = new Set(["manager", "admin"]);
 export function manages(role: string | null | undefined): boolean {
   return role !== null && role !== undefined && MANAGES.has(role);
 }
+
+/**
+ * Strictly an admin, which is a NARROWER thing than `manages`.
+ *
+ * The two exist separately because the database draws the line in two places. A
+ * manager may READ the org — that is what `manages` gates, and it decides which
+ * home a person lands on. But every write policy on the sell-through tables is
+ * `private.is_admin()`, so offering a manager the screen that loads a report
+ * means offering them a form that fails on save.
+ *
+ * Gate on this wherever the database will gate on it too, or the UI promises
+ * something RLS refuses.
+ */
+export function isAdmin(role: string | null | undefined): boolean {
+  return role === "admin";
+}

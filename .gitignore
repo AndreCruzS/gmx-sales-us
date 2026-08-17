@@ -25,3 +25,4 @@ supabase/.temp/
 
 # Local-only notes (demo credentials etc.)
 *.local.md
+.tmp-upload/
