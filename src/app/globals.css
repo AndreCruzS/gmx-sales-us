@@ -1423,6 +1423,23 @@ select {
   font-size: 16px;
 }
 
+/* Safari sizes a native date control to its own formatted value and will not
+   shrink below it, so on a handset "17/08/2026" plus the spinner can push past
+   the edge of its container even at width:100%. Chrome honours the width, which
+   is why it only ever shows up on a phone.
+
+   Dropping the native appearance restores ordinary sizing; the picker still opens
+   on tap. The month picker on /sell-through went further and became a <select> —
+   a month is a pick from eighteen options and never needed a date widget — but a
+   due date does, so these keep theirs. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+
 /* A field needs a stroke of its own. Filling it with the card colour made it
    invisible the moment it sat ON a card — the debrief box was a placeholder
    floating in white with nothing to say "type here". The border does that work

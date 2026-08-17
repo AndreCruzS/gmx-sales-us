@@ -87,6 +87,7 @@ export default function SellThroughPage() {
 
   const [distributorId, setDistributorId] = useState("");
   const [when, setWhen] = useState<{ year: number; month: number } | null>(null);
+  const [months, setMonths] = useState<{ value: string; label: string }[]>([]);
   const [pasted, setPasted] = useState("");
   const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING);
   const [touchedMapping, setTouchedMapping] = useState(false);
@@ -96,8 +97,31 @@ export default function SellThroughPage() {
   const [done, setDone] = useState<string | null>(null);
 
   // The clock is an external system: stamped once, never read during a render.
+  // The month list is built from the same stamp, so the default and the options
+  // cannot disagree about what "last month" is.
   useEffect(() => {
-    const t = setTimeout(() => setWhen(lastMonth(new Date())), 0);
+    const t = setTimeout(() => {
+      const last = lastMonth(new Date());
+      setWhen(last);
+      // Eighteen back is enough for a late file and a catch-up. The FUTURE is not
+      // offered at all: the report is a month behind by definition, so a month
+      // that has not finished cannot have one.
+      const opts: { value: string; label: string }[] = [];
+      let year = last.year;
+      let month = last.month;
+      for (let i = 0; i < 18; i += 1) {
+        opts.push({
+          value: `${year}-${String(month).padStart(2, "0")}`,
+          label: periodLabel(periodOf(year, month)),
+        });
+        month -= 1;
+        if (month === 0) {
+          month = 12;
+          year -= 1;
+        }
+      }
+      setMonths(opts);
+    }, 0);
     return () => clearTimeout(t);
   }, []);
 
@@ -325,19 +349,30 @@ export default function SellThroughPage() {
           </select>
         </label>
 
+        {/* A LIST, not <input type="month">. Safari sizes a native month control
+            to its own formatted value and will not shrink below it, so "July
+            2026" plus the spinner ran off the edge of a handset even at
+            width:100% — and Chrome honours the width, which is why it only
+            showed up on a phone. A month is a pick from eighteen options; that
+            never needed a date widget, and a select cannot overflow. */}
         <label className="flex flex-col gap-1">
           <span className="t-meta">
             Which month it covers — the report is always a month behind
           </span>
-          <input
-            type="month"
+          <select
             value={when ? `${when.year}-${String(when.month).padStart(2, "0")}` : ""}
             onChange={(e) => {
               const [y, m] = e.target.value.split("-").map(Number);
               if (y && m) setWhen({ year: y, month: m });
             }}
             className="field"
-          />
+          >
+            {months.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         {existing && (
