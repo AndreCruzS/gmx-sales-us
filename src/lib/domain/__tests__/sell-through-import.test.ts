@@ -3,12 +3,15 @@ import {
   buildImport,
   EMPTY_MAPPING,
   guessMapping,
+  inchesPerPiece,
+  isSubtotal,
   mappingProblem,
   matchDealer,
   normaliseName,
   parseNumber,
   parseSheet,
   periodOf,
+  toLinearFeet,
   type KnownBranch,
   type KnownDealer,
   type Mapping,
@@ -161,10 +164,12 @@ describe("buildImport", () => {
   });
 
   it("throws away the lines that were never data", () => {
-    // The TOTAL row: a quantity with no customer against it. The blank spacer
-    // never even reaches here — parseSheet drops empty lines — which is why this
-    // is 1 and not 2.
-    expect(plan.skipped).toBe(1);
+    // The TOTAL row is caught as a SUBTOTAL, not merely skipped — its branch cell
+    // says so, and it carries a real quantity that would otherwise be loaded as a
+    // sale. The blank spacer never reaches here at all: parseSheet drops empty
+    // lines.
+    expect(plan.subtotals).toBe(1);
+    expect(plan.skipped).toBe(0);
     expect(plan.rows).toHaveLength(4);
   });
 
@@ -221,6 +226,122 @@ describe("matchDealer", () => {
   it("cannot see through an abbreviation, and does not pretend to", () => {
     const bfs = [{ id: "sc", norm: "bfs santa clarita", tokens: ["bfs", "santa", "clarita"] }];
     expect(matchDealer("BUILDERS FIRSTSOURCE SANTA CLARITA", bfs)).toBeNull();
+  });
+});
+
+describe("isSubtotal · the four-times bug", () => {
+  // The first real report is a pivot with its subtotals left in. Each one carries
+  // a real quantity in a real column, so loading the file as-is stored the month
+  // FOUR TIMES OVER — 42,800 against a true 10,700.
+  it("catches the shapes a pivot leaves behind", () => {
+    expect(isSubtotal(["Total", "1X6-94\" AYOUS", "Riverside Branch"])).toBe(true);
+    expect(isSubtotal(["", "Total", "Atlanta Branch"])).toBe(true);
+    expect(isSubtotal(["", "", "Total"])).toBe(true);
+    expect(isSubtotal([" grand total ", "", ""])).toBe(true);
+  });
+
+  it("matches the whole cell, never a substring", () => {
+    // A rule that caught this would lose a real dealer's volume for good.
+    expect(isSubtotal(["TOTAL BUILDING SUPPLY", "", "Dallas Branch"])).toBe(false);
+    expect(isSubtotal(["Sumner Lumber", "", ""])).toBe(false);
+  });
+});
+
+describe("inchesPerPiece", () => {
+  it("reads the length out of a board's name", () => {
+    expect(inchesPerPiece('083002608 1X6-94" THERMOWOOD S4S E4E AYOUS 7/BDL')).toBe(94);
+    expect(inchesPerPiece('083002675 1X12-177" THERMOWOOD S4S E4E AYOUS')).toBe(177);
+  });
+
+  it("takes the LAST measurement, not the first", () => {
+    // One real item reads 1X71"-71": the section carries a quote mark too, and
+    // reading the first would take the width for the length.
+    expect(inchesPerPiece('083000006 1X71"-71" THERMOWOOD DECK ASH 6/BDL')).toBe(71);
+  });
+
+  it("has no length for a random-length item", () => {
+    // "RL" boards are sold by the foot precisely because there is no length to
+    // multiply by.
+    expect(inchesPerPiece('083002620 1X8-RL THERMOWOOD S4S E4E AYOUS')).toBeNull();
+  });
+});
+
+describe("toLinearFeet", () => {
+  const item = '083002608 1X6-94" THERMOWOOD S4S E4E AYOUS 7/BDL';
+
+  it("converts a piece count through the board's length", () => {
+    // 14 boards of 94 inches is 109.67 feet, not 14 of anything useful.
+    expect(toLinearFeet(14, "PC", item)).toBeCloseTo(109.666, 2);
+  });
+
+  it("leaves feet alone, whatever the file calls them", () => {
+    expect(toLinearFeet(600, "LF", "1X8-RL AYOUS")).toBe(600);
+    expect(toLinearFeet(600, "", "1X8-RL AYOUS")).toBe(600);
+  });
+
+  it("says it cannot rather than guessing at nothing", () => {
+    // A piece count with no length is an unanswered question, not zero feet.
+    expect(toLinearFeet(100, "PC", "1X8-RL AYOUS")).toBeNull();
+    expect(toLinearFeet(100, "M", item)).toBeNull();
+  });
+});
+
+describe("buildImport · a real report's shape", () => {
+  // Branch / Item / Customer Name / Qty / LY Qty / UOM, with subtotals in place —
+  // the first file a distributor actually sent.
+  const sheet = parseSheet(
+    [
+      "Branch	Item	Customer Name	Qty	LY Qty	UOM",
+      'Riverside Branch	083002608 1X6-94" THERMOWOOD S4S E4E AYOUS	GANLUGG - GANAHL LUMBER	14	0	PC',
+      'Riverside Branch	083002608 1X6-94" THERMOWOOD S4S E4E AYOUS	Total	14	0	PC',
+      'Riverside Branch	083003200 1X6-RL THERMOWOOD CLAD AYOUS	GANLUGG - GANAHL LUMBER	600	0	LF',
+      'Riverside Branch	083003200 1X6-RL THERMOWOOD CLAD AYOUS	Total	600	0	LF',
+      'Riverside Branch	083000004 1X6-47" THERMOWOOD DECK ASH	HOMDEAT - HOME DEPOT	0	42	PC',
+      'Riverside Branch	Total		614	42	PC',
+      "Total			614	42	-",
+    ].join("\n"),
+  );
+  const map = guessMapping(sheet.headers);
+  const plan = buildImport(sheet, map, {
+    branches: [{ id: "riv", name: "Riverside Branch", external_code: null }],
+    dealers: [{ id: "ganahl", name: "Ganahl Lumber" }],
+  });
+
+  it("guesses this file's own headers", () => {
+    expect(map.branch).toBe(0);
+    expect(map.product).toBe(1);
+    expect(map.dealer).toBe(2);
+    expect(map.quantity).toBe(3);
+    // "LY Qty" must not be taken by quantity on the strength of the word "qty".
+    expect(map.last_year).toBe(4);
+    expect(map.unit).toBe(5);
+  });
+
+  it("throws away every subtotal, which is the whole ball game", () => {
+    expect(plan.subtotals).toBe(4);
+    expect(plan.rows).toHaveLength(2);
+  });
+
+  it("counts business lost rather than dropping it in silence", () => {
+    // Home Depot took 42 pieces last year and nothing now. It cannot be stored —
+    // a zero is not a sale — but it is the most actionable line in the file.
+    expect(plan.lostBusiness).toBe(1);
+  });
+
+  it("normalises the mixture to linear feet and keeps what it was told", () => {
+    // 14 pieces at 94 inches = 109.67 LF, plus 600 LF that needed no conversion.
+    expect(Math.round(plan.quantity)) .toBe(710);
+    expect(plan.sourceQuantity).toBe(614);
+    expect(plan.rows[0].sourceQuantity).toBe(14);
+    expect(plan.rows[0].sourceUnit).toBe("PC");
+    // Already feet: nothing was converted, so there is nothing to keep.
+    expect(plan.rows[1].sourceQuantity).toBeNull();
+  });
+
+  it("matches the banner the file names, in feet", () => {
+    expect(plan.rows.every((r) => r.dealerId === "ganahl")).toBe(true);
+    expect(plan.matchedRows).toBe(2);
+    expect(plan.unmatched).toEqual([]);
   });
 });
 

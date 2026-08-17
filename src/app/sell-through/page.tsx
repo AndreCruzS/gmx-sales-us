@@ -58,9 +58,13 @@ interface UploadRow {
 const FIELDS: readonly { key: ImportField; label: string; need: boolean }[] = [
   { key: "branch", label: "Branch", need: false },
   { key: "branch_code", label: "Branch code", need: false },
-  { key: "dealer", label: "Dealer", need: true },
-  { key: "product", label: "Product", need: false },
-  { key: "quantity", label: "Quantity (LF)", need: true },
+  { key: "dealer", label: "Customer", need: true },
+  // The item, and it earns more than a name: the length in its description is
+  // what turns a piece count into linear feet.
+  { key: "product", label: "Item", need: false },
+  { key: "quantity", label: "Quantity", need: true },
+  { key: "unit", label: "Unit (UOM)", need: false },
+  { key: "last_year", label: "Last year's quantity", need: false },
   { key: "value", label: "Value", need: false },
 ];
 
@@ -256,6 +260,8 @@ export default function SellThroughPage() {
             product: r.product,
             quantity: r.quantity,
             unit: "LF",
+            source_quantity: r.sourceQuantity,
+            source_unit: r.sourceUnit,
             value: r.value,
           })),
         );
@@ -428,6 +434,95 @@ export default function SellThroughPage() {
               </div>
             </div>
           </div>
+
+          {/* The arithmetic laid out, because it is the one thing on this screen
+              nobody can check by eye. An admin can put the middle line against
+              the bottom of their own spreadsheet; if it disagrees, the mapping is
+              wrong and nothing has been written yet. */}
+          <div className="card card-pad">
+            <p className="t-meta uppercase tracking-wide">How that was reached</p>
+            <ul className="mt-1.5 flex flex-col gap-1">
+              <li className="t-sub flex justify-between gap-3">
+                <span>Lines in the sheet</span>
+                <span className="t-meta tabular-nums">
+                  {QTY.format(sheet.rows.length)}
+                </span>
+              </li>
+              {plan.subtotals > 0 && (
+                <li className="t-sub flex justify-between gap-3">
+                  <span style={{ color: "var(--warn-ink)", fontWeight: 600 }}>
+                    Subtotal lines thrown away
+                  </span>
+                  <span className="t-meta tabular-nums">
+                    −{QTY.format(plan.subtotals)}
+                  </span>
+                </li>
+              )}
+              {plan.lostBusiness > 0 && (
+                <li className="t-sub flex justify-between gap-3">
+                  <span>Bought last year, nothing now</span>
+                  <span className="t-meta tabular-nums">
+                    −{QTY.format(plan.lostBusiness)}
+                  </span>
+                </li>
+              )}
+              {plan.skipped > 0 && (
+                <li className="t-sub flex justify-between gap-3">
+                  <span>Blank or not a sales line</span>
+                  <span className="t-meta tabular-nums">
+                    −{QTY.format(plan.skipped)}
+                  </span>
+                </li>
+              )}
+              <li className="t-sub flex justify-between gap-3">
+                <span style={{ fontWeight: 700 }}>Sales lines to load</span>
+                <span className="t-meta tabular-nums" style={{ fontWeight: 700 }}>
+                  {QTY.format(plan.rows.length)}
+                </span>
+              </li>
+              {plan.sourceQuantity !== Math.round(plan.quantity) && (
+                <li className="t-sub flex justify-between gap-3">
+                  <span>
+                    Their quantity, converted to linear feet by the length in the
+                    item name
+                  </span>
+                  <span className="t-meta shrink-0 tabular-nums">
+                    {QTY.format(plan.sourceQuantity)} → {QTY.format(plan.quantity)}{" "}
+                    LF
+                  </span>
+                </li>
+              )}
+            </ul>
+          </div>
+
+          {plan.unconvertible.length > 0 && (
+            <div className="card card-pad">
+              <p className="t-title">
+                {`${plan.unconvertible.length} ${
+                  plan.unconvertible.length === 1 ? "line" : "lines"
+                } in a unit we can’t turn into feet`}
+              </p>
+              <p className="t-sub mt-1">
+                A piece count needs a length to multiply by, and these items
+                don&rsquo;t carry one. Their volume is unknown rather than zero, so
+                they are left out instead of loaded as nothing — map the Item
+                column if you haven&rsquo;t, or send me one of these lines.
+              </p>
+              <ul className="mt-2 flex flex-col gap-1">
+                {plan.unconvertible.slice(0, 5).map((u, i) => (
+                  <li
+                    key={`${u.label}-${i}`}
+                    className="t-sub flex justify-between gap-3"
+                  >
+                    <span className="min-w-0 truncate">{u.label}</span>
+                    <span className="t-meta shrink-0 tabular-nums">
+                      {QTY.format(u.quantity)} {u.unit}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {plan.newBranches.length > 0 && (
             <div className="card card-pad">

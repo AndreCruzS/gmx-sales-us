@@ -38,7 +38,9 @@ export type ImportField =
   | "dealer"
   | "product"
   | "quantity"
-  | "value";
+  | "unit"
+  | "value"
+  | "last_year";
 
 /** Which column of the pasted sheet holds which field. -1 means "not present". */
 export type Mapping = Record<ImportField, number>;
@@ -49,7 +51,9 @@ export const EMPTY_MAPPING: Mapping = {
   dealer: -1,
   product: -1,
   quantity: -1,
+  unit: -1,
   value: -1,
+  last_year: -1,
 };
 
 export interface Sheet {
@@ -128,7 +132,13 @@ const HINTS: Record<ImportField, readonly string[]> = {
   dealer: ["customer", "dealer", "sold to", "account", "ship to", "buyer"],
   product: ["product", "item", "sku", "description", "material"],
   quantity: ["qty", "quantity", "lf", "linear", "volume", "feet", "units"],
+  unit: ["uom", "unit of measure", "u/m", "measure"],
   value: ["value", "sales", "amount", "revenue", "extended", "$", "net"],
+  // Real reports compare against the same period LAST YEAR rather than against
+  // last month. It is not stored — there is nowhere for it to go — but a line
+  // that bought something last year and nothing now is the most actionable row
+  // in the file, and it would otherwise be dropped in silence.
+  last_year: ["ly ", " ly", "last year", "ly qty", "prior year", "py "],
 };
 
 export function guessMapping(headers: readonly string[]): Mapping {
@@ -138,8 +148,12 @@ export function guessMapping(headers: readonly string[]): Mapping {
 
   // Most specific first: "branch code" must not be eaten by "branch", and
   // "customer" must not be eaten by a column merely containing "code".
+  // Most specific first. "LY Qty" must be claimed by last_year before
+  // "quantity" takes it on the strength of the word "qty".
   const order: ImportField[] = [
     "branch_code",
+    "last_year",
+    "unit",
     "quantity",
     "value",
     "dealer",
@@ -235,6 +249,76 @@ export function matchDealer(
   return tied ? null : best.id;
 }
 
+/**
+ * A row that is not a sale.
+ *
+ * The first real report is a pivot with the subtotals left in: every item gets a
+ * line whose customer is literally "Total", every branch gets one whose item is,
+ * and the sheet ends with a grand total. Each of them carries a real quantity in
+ * a real column, so loading the file as-is stored the month FOUR TIMES OVER —
+ * 42,800 against a true 10,700.
+ *
+ * Matched on the whole cell, never on a substring: "Total Building Supply" is a
+ * dealer, and a rule that caught it would lose their volume for good.
+ */
+const TOTAL_WORDS = new Set([
+  "total",
+  "totals",
+  "grand total",
+  "subtotal",
+  "sub total",
+  "sum",
+  "all",
+]);
+
+export function isSubtotal(cells: readonly (string | undefined)[]): boolean {
+  return cells.some(
+    (c) => c !== undefined && TOTAL_WORDS.has(c.trim().toLowerCase()),
+  );
+}
+
+/**
+ * Inches per piece, read out of the item description.
+ *
+ * The trade names a board by its section and its length — 1X6-94" is a six-inch
+ * board ninety-four inches long — so a piece count converts to feet exactly.
+ * "RL" means random length, and those rows arrive in LF already because there is
+ * no fixed length to multiply by.
+ *
+ * The LAST measurement wins. One item in the first real file reads
+ * `1X71"-71"`, where the section carries a quote mark too; taking the first
+ * would be reading the width as the length.
+ */
+export function inchesPerPiece(item: string): number | null {
+  const all = [...item.matchAll(/(\d+)\s*"/g)];
+  if (all.length === 0) return null;
+  const n = Number(all[all.length - 1][1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * A quantity in whatever unit the file used, as linear feet.
+ *
+ * Null when it cannot be known rather than a guess: a piece count with no length
+ * to multiply by is not zero feet, it is an unanswered question, and the row has
+ * to be surfaced instead of quietly rounded to nothing.
+ */
+export function toLinearFeet(
+  quantity: number,
+  unit: string,
+  item: string,
+): number | null {
+  const u = unit.trim().toUpperCase();
+  if (u === "" || u === "LF" || u === "FT" || u === "LNFT") return quantity;
+  if (u === "PC" || u === "PCS" || u === "PIECE" || u === "PIECES" || u === "EA") {
+    const inches = inchesPerPiece(item);
+    return inches === null ? null : (quantity * inches) / 12;
+  }
+  // An inch or metre column would need its own arithmetic; saying so beats
+  // pretending the number was already feet.
+  return null;
+}
+
 export interface PlannedRow {
   /** Which branch of ours this row belongs to, once one exists. */
   branchId: string | null;
@@ -245,15 +329,34 @@ export interface PlannedRow {
   dealerId: string | null;
   dealerLabel: string;
   product: string | null;
+  /** Linear feet, always — converted if the file used something else. */
   quantity: number;
+  /** What the file said, kept so the conversion can be checked later. Null when
+   *  the file was already in LF and nothing was converted. */
+  sourceQuantity: number | null;
+  sourceUnit: string | null;
   value: number | null;
 }
 
 export interface ImportPlan {
   rows: readonly PlannedRow[];
-  /** Rows the file had that carry no usable quantity, and are therefore noise:
-   *  subtotal lines, blank spacers, a repeated header halfway down. */
+  /** Lines with no usable quantity: blank spacers, a repeated header halfway
+   *  down, a line that was never data. */
   skipped: number;
+  /** Subtotal lines thrown away, counted separately because they are the
+   *  difference between a right answer and one four times too big — and a person
+   *  checking a load needs to see that they were found. */
+  subtotals: number;
+  /** Lines that bought something in the comparison period and nothing now. They
+   *  cannot be stored (a zero is not a sale) but they are the most actionable
+   *  thing in the file, so they are counted rather than dropped in silence. */
+  lostBusiness: number;
+  /** Rows whose unit could not be turned into linear feet. Their volume is
+   *  unknown, not zero, so they are named rather than loaded as nothing. */
+  unconvertible: readonly { label: string; quantity: number; unit: string }[];
+  /** What the file's own quantity column added up to, in its own mixed units —
+   *  the figure an admin can check against the bottom of their spreadsheet. */
+  sourceQuantity: number;
   /** Branch names in the file that we hold no branch for, once each. */
   newBranches: readonly { name: string; code: string | null }[];
   /** Dealer names we could not match, once each, with what they add up to. */
@@ -294,18 +397,37 @@ export function buildImport(
   const rows: PlannedRow[] = [];
   const newBranches = new Map<string, { name: string; code: string | null }>();
   const unmatched = new Map<string, { label: string; quantity: number }>();
+  const unconvertible: { label: string; quantity: number; unit: string }[] = [];
   let skipped = 0;
+  let subtotals = 0;
+  let lostBusiness = 0;
   let quantity = 0;
+  let sourceQuantity = 0;
   let value: number | null = null;
   let matchedRows = 0;
 
   for (const row of sheet.rows) {
-    const qty = parseNumber(at(row, "quantity"));
     const dealerLabel = at(row, "dealer");
-    // No quantity, or no name to hang it on, and it is not a sales line. A
-    // spreadsheet is full of these and none of them belong in the book.
-    if (qty === null || qty === 0 || dealerLabel.length === 0) {
+    const itemText = at(row, "product");
+
+    // Subtotals FIRST, before anything is counted. They carry a real quantity in
+    // a real column, so every test that follows would happily let them through.
+    if (isSubtotal([dealerLabel, itemText, at(row, "branch")])) {
+      subtotals += 1;
+      continue;
+    }
+
+    const qty = parseNumber(at(row, "quantity"));
+    if (qty === null || dealerLabel.length === 0) {
       skipped += 1;
+      continue;
+    }
+    // Nothing this period. If the file also says what they took last time, this
+    // is business lost rather than a line that was never data.
+    if (qty === 0) {
+      const before = parseNumber(at(row, "last_year"));
+      if (before !== null && before > 0) lostBusiness += 1;
+      else skipped += 1;
       continue;
     }
 
@@ -330,27 +452,39 @@ export function buildImport(
     }
 
     const dealerId = matchDealer(dealerLabel, dealerIndex);
-    if (dealerId !== null) matchedRows += 1;
-    else {
-      const key = normaliseName(dealerLabel);
-      const seen = unmatched.get(key);
-      if (seen) seen.quantity += qty;
-      else unmatched.set(key, { label: dealerLabel, quantity: qty });
+
+    // Into linear feet, which is the only unit anything downstream understands.
+    const unit = at(row, "unit");
+    const feet = toLinearFeet(qty, unit, itemText);
+    if (feet === null) {
+      unconvertible.push({ label: dealerLabel, quantity: qty, unit: unit || "?" });
+      continue;
     }
 
     const rowValue = parseNumber(at(row, "value"));
     if (rowValue !== null) value = (value ?? 0) + rowValue;
-    quantity += qty;
+    quantity += feet;
+    sourceQuantity += qty;
 
-    const product = at(row, "product");
+    if (dealerId !== null) matchedRows += 1;
+    else {
+      const key = normaliseName(dealerLabel);
+      const seen = unmatched.get(key);
+      if (seen) seen.quantity += feet;
+      else unmatched.set(key, { label: dealerLabel, quantity: feet });
+    }
+
+    const converted = feet !== qty;
     rows.push({
       branchId,
       newBranchName: branchId === null ? branchName || code : null,
       branchCode: code || null,
       dealerId,
       dealerLabel,
-      product: product.length > 0 ? product : null,
-      quantity: qty,
+      product: itemText.length > 0 ? itemText : null,
+      quantity: feet,
+      sourceQuantity: converted ? qty : null,
+      sourceUnit: converted ? unit || null : null,
       value: rowValue,
     });
   }
@@ -358,6 +492,10 @@ export function buildImport(
   return {
     rows,
     skipped,
+    subtotals,
+    lostBusiness,
+    unconvertible,
+    sourceQuantity,
     newBranches: [...newBranches.values()],
     unmatched: [...unmatched.values()].sort((a, b) => b.quantity - a.quantity),
     quantity,
