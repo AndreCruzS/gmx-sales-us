@@ -2223,3 +2223,63 @@ input[type="datetime-local"] {
     max-width: 340px;
   }
 }
+
+/* ── Loading, without claiming a number ──────────────────────────────────────
+   A block where a figure is about to be. The manager home used to mount with
+   every total at zero, so opening the app showed "$0 · 0 open deals" and a sales
+   bar of 0 LF for as long as nine queries took — a wrong answer rather than a
+   slow one, and worse than a slow one, because a zero is a number and nothing
+   told the reader it was a placeholder.
+
+   ONE BREATH, NOT A SHIMMER. The sweeping-gradient skeleton is the convention and
+   it is wrong for this app: everything here moves on one curve, and a highlight
+   travelling sideways would be the only thing on the screen going that way. A
+   slow change in opacity says "working" using the vocabulary the sync dot already
+   established. */
+.skel {
+  display: block;
+  border-radius: 5px;
+  background: var(--surface-sunken);
+  animation: skel-breathe 1.8s ease-in-out infinite;
+}
+@keyframes skel-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+/* Staggered by role rather than by index: the eye reads a page that arrives in
+   layers, where a single synchronised pulse reads as one flashing object. */
+.skel-bar {
+  border-radius: 4px;
+  animation-delay: 0.15s;
+}
+.skel-pill {
+  border-radius: 999px;
+  animation-delay: 0.3s;
+}
+.skel-rail {
+  border-radius: 2px;
+  align-self: stretch;
+}
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 0;
+  border-top: 1px solid var(--rule);
+}
+.skel-row:first-of-type {
+  margin-top: 10px;
+}
+/* A pulse is decoration; a reader who has asked for less motion still needs to
+   know the page is coming, so the block stays and only the breathing stops. */
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+    opacity: 0.8;
+  }
+}

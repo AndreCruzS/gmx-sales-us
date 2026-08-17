@@ -36,11 +36,27 @@ export interface Profile {
 interface OfflineContextValue {
   profile: Profile | null;
   status: SyncStatus;
+  /**
+   * True until the first attempt to resolve the profile has finished, however it
+   * finished.
+   *
+   * `profile === null` was doing two jobs and could not do either well: "we are
+   * still looking" and "there is nobody" are the same value, so a screen that
+   * needs the role had to guess. Home guessed the rep's day, which meant every
+   * manager watched somebody else's diary for a beat before their own team
+   * replaced it.
+   *
+   * It goes false even when resolution FAILED — no session, no membership, no
+   * signal and no cache. A flag that only clears on success is a spinner that
+   * never stops.
+   */
+  resolving: boolean;
 }
 
 const OfflineContext = createContext<OfflineContextValue>({
   profile: null,
   status: { pending: 0, rejected: 0, syncing: false, lastPulledAt: null },
+  resolving: true,
 });
 
 export function useOffline(): OfflineContextValue {
@@ -58,6 +74,7 @@ function orgIdFromAccessToken(token: string): string | null {
 
 export function OfflineProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [resolving, setResolving] = useState(true);
   const [status, setStatus] = useState<SyncStatus>({
     pending: 0,
     rejected: 0,
@@ -124,15 +141,29 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
       layer.sync.start();
     }
 
+    // Every path out of boot() has to report that it finished, including the
+    // ones that failed: no session, no membership, no signal and no cache. A
+    // resolving flag that only clears on success is a spinner with no way out.
+    const settle = () => {
+      if (!stopped) setResolving(false);
+    };
+
     // Boot when a session exists now, AND when one appears later — the
     // provider mounts on the login page before sign-in, and client-side
     // navigation never remounts it.
-    void boot();
+    void boot().finally(settle);
     const supabase = getSupabaseBrowserClient();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") void boot();
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        // Back into the loading state only when boot has not already run. On the
+        // login page the first attempt settled with no session, so signing in has
+        // to reopen it; a TOKEN_REFRESHED for somebody already working must not,
+        // or their screen would blink back to a skeleton for no reason.
+        if (!booted && !stopped) setResolving(true);
+        void boot().finally(settle);
+      }
       if (event === "SIGNED_OUT") {
         booted = false;
         setProfile(null);
@@ -147,7 +178,7 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <OfflineContext.Provider value={{ profile, status }}>
+    <OfflineContext.Provider value={{ profile, status, resolving }}>
       {children}
     </OfflineContext.Provider>
   );

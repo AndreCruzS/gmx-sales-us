@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
+import { ManagerHomeSkeleton } from "./home-skeleton";
 import { TeamSales, type Focus } from "@/components/team-sales";
 import {
   latestPeriods,
@@ -84,6 +85,11 @@ export function ManagerHome({ name }: { name: string }) {
   // undo where you are as well as what the page is answering for.
   const [path, setPath] = useState<PathStep[]>([]);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  // Set when the load did not come back at all. Distinct from "every query
+  // errored", which load() already absorbs into empty lists — this is the case
+  // where there was no answer to absorb, and it is the difference between a page
+  // that can honestly show nothing and a page that must say why.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [hour, setHour] = useState<number | null>(null);
 
   // The clock is an external system; stamped once, never read during a render.
@@ -159,11 +165,24 @@ export function ManagerHome({ name }: { name: string }) {
     setLoadedAt(Date.now());
   }, []);
 
+  // Every attempt must CONCLUDE, or the skeleton is a spinner with no way out —
+  // the exact failure this whole change was meant to avoid, moved one screen
+  // along. This home is network-only, unlike the rep's day, so "no signal" is a
+  // real state it has to be able to say out loud rather than draw as zeros.
+  const attempt = useCallback(async () => {
+    setLoadFailed(false);
+    try {
+      await load();
+    } catch {
+      setLoadFailed(true);
+    }
+  }, [load]);
+
   useEffect(() => {
     if (!profile) return;
-    const timer = setTimeout(() => void load(), 0);
+    const timer = setTimeout(() => void attempt(), 0);
     return () => clearTimeout(timer);
-  }, [profile, load, status.lastPulledAt]);
+  }, [profile, attempt, status.lastPulledAt]);
 
   const repMeta = useMemo(() => {
     const m = new Map<string, { name: string; patch: string }>();
@@ -302,6 +321,49 @@ export function ManagerHome({ name }: { name: string }) {
   // that changed because someone asked a different question looks like it.
   const openTween = useTween(totals.open);
   const quotesTween = useTween(totals.quotes);
+
+  // NOTHING IS ASSERTED BEFORE THE FIRST LOAD LANDS.
+  //
+  // Every piece of state here starts empty, which used to mean this screen mounted
+  // as a finished page with nothing in it: "Open pipeline $0 · 0 open deals" over
+  // a sales bar reading 0 LF, held for as long as nine network queries took, and
+  // then silently replaced by $180,000. A zero is a number. Nothing on screen told
+  // the reader it was a placeholder, so it was not a slow answer — it was a wrong
+  // one, and the reader had no way to know.
+  //
+  // loadedAt is the honest gate: it is stamped when the load returns, so it says
+  // "these figures came from somewhere" and not merely "time has passed".
+  if (loadedAt === null && !loadFailed) {
+    return <ManagerHomeSkeleton name={name} />;
+  }
+
+  // No answer at all. Drawn as a state rather than as zeros, because this home is
+  // network-only and a manager with no signal has genuinely not been told anything
+  // — where "$0 open pipeline" tells them something false. The greeting stays: it
+  // came off the cached profile and is still true.
+  if (loadedAt === null) {
+    return (
+      <div className="stack pt-2">
+        <section>
+          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
+            {greeting(hour)}, {name}
+          </h1>
+          <p className="t-sub mt-1" style={{ maxWidth: "52ch" }}>
+            The team&apos;s numbers live on the server and this device can&apos;t
+            reach it right now. Nothing is lost &mdash; anything you record still
+            saves and syncs when you&apos;re back.
+          </p>
+        </section>
+        <button
+          type="button"
+          onClick={() => void attempt()}
+          className="btn-secondary w-full"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="stack pt-2">

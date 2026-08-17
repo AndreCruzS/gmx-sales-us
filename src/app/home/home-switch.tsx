@@ -11,6 +11,7 @@
 import { useOffline } from "@/components/offline-provider";
 import { manages } from "@/lib/domain/roles";
 import HomeClient from "./home-client";
+import { HomeBootSkeleton } from "./home-skeleton";
 import { ManagerHome } from "./manager-home";
 
 /** "bianca@gmxgroup.com" → "Bianca". The cache never holds a display name. */
@@ -20,11 +21,22 @@ function nameFromEmail(email: string): string {
 }
 
 export function HomeSwitch() {
-  const { profile } = useOffline();
+  const { profile, resolving } = useOffline();
 
-  // Until the profile resolves, the rep day is the safe default: it is the one
-  // that works with no signal at all (D56), and capture must never wait on a
-  // role lookup.
+  // WAIT RATHER THAN GUESS. This used to default to the rep's day while the
+  // profile resolved, on the reasoning that the rep day works with no signal at
+  // all (D56) and capture must never wait on a role lookup. The reasoning was
+  // sound and the conclusion was wrong: a manager watched somebody else's diary —
+  // a route they do not walk, visits counted across other people's weeks — for a
+  // beat before their own team replaced it.
+  //
+  // Capture is not what waits here. The + button lives in the nav bar, outside
+  // this tree, so it is on screen and working throughout. What waits is the
+  // ANSWER, and the answer is worth the fraction of a second it takes to know
+  // whose it is. `resolving` clears even when resolution failed, so this can
+  // never be the last thing anybody sees.
+  if (resolving && !profile) return <HomeBootSkeleton />;
+
   if (profile && manages(profile.role)) {
     return <ManagerHome name={nameFromEmail(profile.email)} />;
   }
