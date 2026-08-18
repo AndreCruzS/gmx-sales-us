@@ -35,6 +35,7 @@ export interface KnownDealer {
 export type ImportField =
   | "branch"
   | "branch_code"
+  | "state"
   | "dealer"
   | "product"
   | "quantity"
@@ -48,6 +49,7 @@ export type Mapping = Record<ImportField, number>;
 export const EMPTY_MAPPING: Mapping = {
   branch: -1,
   branch_code: -1,
+  state: -1,
   dealer: -1,
   product: -1,
   quantity: -1,
@@ -163,6 +165,9 @@ function splitCsv(line: string): string[] {
 const HINTS: Record<ImportField, readonly string[]> = {
   branch: ["branch", "location", "warehouse", "ship from", "shipping branch", "yard", "dc"],
   branch_code: ["branch code", "branch #", "branch no", "loc code", "location code", "whse"],
+  // Where the yard IS, which is what decides whose region it belongs to. Kept
+  // narrow on purpose: a bare "st" would be claimed by "customer".
+  state: ["state", "branch state", "loc state", "province"],
   dealer: ["customer", "dealer", "sold to", "account", "ship to", "buyer"],
   product: ["product", "item", "sku", "description", "material"],
   quantity: ["qty", "quantity", "lf", "linear", "volume", "feet", "units"],
@@ -186,6 +191,9 @@ export function guessMapping(headers: readonly string[]): Mapping {
   // "quantity" takes it on the strength of the word "qty".
   const order: ImportField[] = [
     "branch_code",
+    // Before "branch", or a column headed "Branch State" is taken for the branch
+    // itself and the state is never read at all.
+    "state",
     "last_year",
     "unit",
     "quantity",
@@ -204,6 +212,41 @@ export function guessMapping(headers: readonly string[]): Mapping {
     }
   }
   return guess;
+}
+
+// ── Where a yard is ─────────────────────────────────────────────────────────
+//
+// A branch that arrives without a state never reaches the territory map, and a
+// branch off the map hands its volume to whoever owns the dealer's banner —
+// which is the misattribution the whole region model was built to end. So a new
+// yard has to arrive with a state or with somebody being asked for one.
+
+/** The codes the client's Master Territory Map is written in. */
+const US_STATES = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI",
+  "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN",
+  "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH",
+  "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
+  "WV", "WI", "WY",
+]);
+
+/**
+ * The state a yard sits in: the file's own column when it has one, the branch
+ * label when it does not.
+ *
+ * THE LABEL RULE IS DELIBERATELY NARROW — only "City, ST", with the comma. Read
+ * loosely, "ABC Lumber Co" ends in Colorado and "Yard 3 NE" in Nebraska, and a
+ * branch filed under the WRONG region is far worse than one filed under none: the
+ * volume lands on a rep who never sold it and no screen ever says so. A missing
+ * state is a question an admin answers in one field before saving. A wrong one is
+ * invisible for a quarter.
+ */
+export function branchState(column: string, label: string): string | null {
+  const direct = column.trim().toUpperCase();
+  if (US_STATES.has(direct)) return direct;
+  const tail = /,\s*([A-Za-z]{2})\s*\.?$/.exec(label.trim());
+  const guess = tail ? tail[1].toUpperCase() : null;
+  return guess !== null && US_STATES.has(guess) ? guess : null;
 }
 
 // ── Matching ────────────────────────────────────────────────────────────────
@@ -402,8 +445,14 @@ export interface ImportPlan {
   /** What the file's own quantity column added up to, in its own mixed units —
    *  the figure an admin can check against the bottom of their spreadsheet. */
   sourceQuantity: number;
-  /** Branch names in the file that we hold no branch for, once each. */
-  newBranches: readonly { name: string; code: string | null }[];
+  /** Branch names in the file that we hold no branch for, once each. The state
+   *  is what lets the new yard find its region; null means nobody said, which is
+   *  a question for the admin rather than a reason to guess. */
+  newBranches: readonly {
+    name: string;
+    code: string | null;
+    state: string | null;
+  }[];
   /** Dealer names we could not match, once each, with what they add up to. */
   unmatched: readonly { label: string; quantity: number }[];
   quantity: number;
@@ -440,7 +489,10 @@ export function buildImport(
     mapping[field] >= 0 ? (row[mapping[field]] ?? "") : "";
 
   const rows: PlannedRow[] = [];
-  const newBranches = new Map<string, { name: string; code: string | null }>();
+  const newBranches = new Map<
+    string,
+    { name: string; code: string | null; state: string | null }
+  >();
   const unmatched = new Map<string, { label: string; quantity: number }>();
   const unconvertible: { label: string; quantity: number; unit: string }[] = [];
   let skipped = 0;
@@ -491,8 +543,14 @@ export function buildImport(
         continue;
       }
       const key = normaliseName(label);
-      if (!newBranches.has(key)) {
-        newBranches.set(key, { name: label, code: code || null });
+      const found = newBranches.get(key);
+      const state = branchState(at(row, "state"), label);
+      if (!found) {
+        newBranches.set(key, { name: label, code: code || null, state });
+      } else if (found.state === null && state !== null) {
+        // The same yard can appear a hundred times and be spelled with its state
+        // only once. Taking the first mention would throw that away.
+        found.state = state;
       }
     }
 

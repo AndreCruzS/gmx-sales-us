@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  branchState,
   buildImport,
   EMPTY_MAPPING,
   guessMapping,
@@ -158,6 +159,40 @@ describe("guessMapping", () => {
     const g = guessMapping(["Col1", "Col2"]);
     expect(g).toEqual(EMPTY_MAPPING);
   });
+
+  it("reads a state column instead of taking it for the branch", () => {
+    // "Branch State" contains "branch", so without state being claimed first the
+    // yard's location is silently read as the yard's name — and a branch with no
+    // state never reaches the territory map.
+    const g = guessMapping(["Branch", "Branch State", "Customer", "Qty"]);
+    expect(g.branch).toBe(0);
+    expect(g.state).toBe(1);
+  });
+});
+
+describe("branchState · what puts a yard in a region", () => {
+  it("takes the file's own column, however it was typed", () => {
+    expect(branchState(" tx ", "Dallas Branch")).toBe("TX");
+  });
+
+  it("reads City, ST off the label when there is no column", () => {
+    expect(branchState("", "Salt Lake City, UT")).toBe("UT");
+    expect(branchState("", "Boise Cascade - Memphis, tn.")).toBe("TN");
+  });
+
+  it("refuses a trailing word that merely looks like a state", () => {
+    // This is the whole reason the comma is required. Read loosely, a company
+    // suffix becomes Colorado and a compass point becomes Nebraska — and a yard
+    // filed in the WRONG region is worse than one filed in none, because the
+    // volume lands on a rep who never sold it and nothing on screen says so.
+    expect(branchState("", "ABC Lumber Co")).toBeNull();
+    expect(branchState("", "Yard 3 NE")).toBeNull();
+  });
+
+  it("says nothing rather than guessing when nobody said", () => {
+    expect(branchState("", "Fresno")).toBeNull();
+    expect(branchState("XX", "Fresno")).toBeNull();
+  });
 });
 
 describe("normaliseName", () => {
@@ -239,9 +274,35 @@ describe("buildImport", () => {
     // sell_through.branch_id is not null, so this row has nowhere to go until
     // somebody says the yard exists. Guessing would put a branch on the coverage
     // map that does not.
-    expect(plan.newBranches).toEqual([{ name: "Fresno", code: "BC-FRE" }]);
+    expect(plan.newBranches).toEqual([
+      { name: "Fresno", code: "BC-FRE", state: null },
+    ]);
     expect(plan.rows[3].branchId).toBeNull();
     expect(plan.rows[3].newBranchName).toBe("Fresno");
+  });
+
+  it("carries a new yard's state, from whichever row happened to say it", () => {
+    // A monthly file names the same yard hundreds of times and often fills the
+    // state on only some of them. Taking the first mention would throw the
+    // answer away and leave the branch off the territory map — where its volume
+    // is credited to whoever owns the dealer's banner rather than to the region
+    // it shipped from.
+    const s = parseSheet(
+      [
+        "Branch\tSt\tCustomer\tQty",
+        "Fresno\t\tGANAHL LUMBER - CORONA\t1,000",
+        "Fresno\tCA\tGANAHL LUMBER - CORONA\t2,000",
+        "Reno, NV\t\tORCO BLOCK\t500",
+      ].join("\n"),
+    );
+    const p = buildImport(s, mapping({ branch: 0, state: 1, dealer: 2, quantity: 3 }), {
+      branches: BRANCHES,
+      dealers: DEALERS,
+    });
+    expect(p.newBranches).toEqual([
+      { name: "Fresno", code: null, state: "CA" },
+      { name: "Reno, NV", code: null, state: "NV" },
+    ]);
   });
 
   it("throws away the lines that were never data", () => {

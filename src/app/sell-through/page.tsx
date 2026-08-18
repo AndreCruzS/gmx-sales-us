@@ -63,6 +63,10 @@ interface UploadRow {
 const FIELDS: readonly { key: ImportField; label: string; need: boolean }[] = [
   { key: "branch", label: "Branch", need: false },
   { key: "branch_code", label: "Branch code", need: false },
+  // Not required, and it decides more than any other optional column: a yard
+  // with no state never reaches the territory map, and volume off the map is
+  // credited to whoever owns the dealer's banner instead of to the region.
+  { key: "state", label: "Branch state", need: false },
   { key: "dealer", label: "Customer", need: true },
   // The item, and it earns more than a name: the length in its description is
   // what turns a piece count into linear feet.
@@ -103,6 +107,14 @@ export default function SellThroughPage() {
   const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING);
   const [touchedMapping, setTouchedMapping] = useState(false);
   const [addBranches, setAddBranches] = useState(true);
+  // The client's map, so a new yard can be shown landing in a region BEFORE it is
+  // saved. Without it the screen could only say "added", and whether the volume
+  // reached the right rep would not be visible until somebody noticed a number.
+  const [regionOfState, setRegionOfState] = useState<Record<string, string>>({});
+  // What an admin typed for a yard whose state the file did not carry. An
+  // override map rather than a seeded copy of the plan: nothing to keep in step,
+  // and no state written from an effect.
+  const [statePicked, setStatePicked] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -146,7 +158,7 @@ export default function SellThroughPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ds, us, br] = await Promise.all([
+    const [ds, us, br, ts, tr] = await Promise.all([
       supabase
         .from("accounts")
         .select("id, name, account_type")
@@ -161,6 +173,10 @@ export default function SellThroughPage() {
         .from("distributor_branches")
         .select("id, distributor_id, name, external_code")
         .limit(1000),
+      // Read as two queries rather than one embed: fifty rows and ten, both
+      // cheap, and neither depends on PostgREST guessing the relationship.
+      supabase.from("territory_states").select("state, territory_id").limit(200),
+      supabase.from("territories").select("id, name").limit(200),
     ]);
     const accounts = ds.error
       ? []
@@ -178,6 +194,21 @@ export default function SellThroughPage() {
             (b) => ({ ...b }),
           ) as (KnownBranch & { distributor_id: string })[]),
     );
+
+    const named = new Map<string, string>();
+    for (const t of ((tr.error ? [] : tr.data) as
+      | { id: string; name: string }[]
+      | null) ?? []) {
+      named.set(t.id, t.name);
+    }
+    const map: Record<string, string> = {};
+    for (const s of ((ts.error ? [] : ts.data) as
+      | { state: string; territory_id: string }[]
+      | null) ?? []) {
+      const region = named.get(s.territory_id);
+      if (region) map[s.state] = region;
+    }
+    setRegionOfState(map);
   }, []);
 
   useEffect(() => {
@@ -220,6 +251,11 @@ export default function SellThroughPage() {
     [sheet, mapping, mineBranches, dealers],
   );
 
+  /** What the file said this yard's state was, or what an admin typed instead. */
+  function stateFor(b: { name: string; state: string | null }): string {
+    return (statePicked[b.name] ?? b.state ?? "").trim().toUpperCase();
+  }
+
   const period = when ? periodOf(when.year, when.month) : null;
   const existing = uploads.find(
     (u) => u.distributor_id === distributorId && u.period === period,
@@ -261,6 +297,10 @@ export default function SellThroughPage() {
               distributor_id: distributorId,
               name: b.name,
               external_code: b.code,
+              // The region is NOT set here. A trigger derives it from the state,
+              // so the same rule holds for a yard added by hand later and there
+              // is one place where a state becomes a region.
+              state: stateFor(b) || null,
             })),
           )
           .select("id, name, external_code");
@@ -780,9 +820,48 @@ export default function SellThroughPage() {
                   plan.newBranches.length === 1 ? "yard" : "yards"
                 } we don’t hold yet`}
               </p>
-              <p className="t-sub mt-1">
-                {plan.newBranches.map((b) => b.name).join(", ")}
-              </p>
+              {/* One line each with its state, because the state is what puts the
+                  yard in a region and the region is whose volume this becomes. A
+                  comma-separated list read fine and hid the only decision on this
+                  card. */}
+              <ul className="stack-sm mt-2">
+                {plan.newBranches.map((b) => {
+                  const st = stateFor(b);
+                  const region = st ? regionOfState[st] : undefined;
+                  return (
+                    <li key={b.name} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className="t-sub block truncate font-semibold"
+                          style={{ color: "var(--ink-primary)" }}
+                        >
+                          {b.name}
+                        </span>
+                        <span className="t-sub">
+                          {region
+                            ? region
+                            : st
+                              ? `${st} is not on the territory map`
+                              : "no state — this yard lands in no region"}
+                        </span>
+                      </span>
+                      <input
+                        className="field field-state"
+                        maxLength={2}
+                        placeholder="ST"
+                        aria-label={`State for ${b.name}`}
+                        value={st}
+                        onChange={(e) =>
+                          setStatePicked((p) => ({
+                            ...p,
+                            [b.name]: e.target.value.toUpperCase(),
+                          }))
+                        }
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
               <label className="mt-2.5 flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -795,6 +874,18 @@ export default function SellThroughPage() {
                   loaded without one.
                 </span>
               </label>
+              {/* Said once, here, rather than as a warning per row: a yard with no
+                  region is not broken, it is unfiled, and its volume is credited
+                  to whoever owns the dealer's banner until somebody says where it
+                  is. That is the misattribution the territory map exists to end,
+                  so it is worth a sentence at the point it can still be fixed. */}
+              {plan.newBranches.some((b) => !regionOfState[stateFor(b)]) && (
+                <p className="t-sub mt-2">
+                  A yard with no region has its volume credited to whoever owns
+                  the dealer, not to the region it shipped from. Two letters here
+                  fixes that now; an admin can also set it later.
+                </p>
+              )}
             </div>
           )}
 

@@ -25,7 +25,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(22);
 
 -- ── 1. The map resolves a state to a region ────────────────────────────────
 
@@ -184,6 +184,76 @@ select is(
       and branch_name = 'Russin - Montgomery'),
   'Anthony Peca',
   'Northeast volume is the new owner''s, not the old one''s'
+);
+
+-- ── 8. A yard placed by the loader, not by hand ────────────────────────────
+--
+-- 20260818000100. Until it, /sell-through inserted a branch with a name and the
+-- distributor's own code and nothing else, so every yard of every new house
+-- arrived OFF the map — and off the map is not neutral, it is credited to
+-- whoever owns the dealer's banner. These are the rules that close that door and
+-- keep it closed for a branch added by hand, by the next importer, or by
+-- whatever replaces that screen.
+
+insert into distributor_branches (org_id, distributor_id, name, state)
+values ('11111111-1111-1111-1111-111111111111',
+        'd0000000-0000-0000-0000-000000000005', 'Trigger - Austin', 'TX');
+
+select is(
+  (select t.name from distributor_branches b
+     join territories t on t.id = b.territory_id
+    where b.name = 'Trigger - Austin'),
+  'Texas',
+  'a new yard places itself from its state, with nobody asked to remember'
+);
+
+-- The one case the client told us a code cannot decide. It has to stay a
+-- question rather than become a guess.
+insert into distributor_branches (org_id, distributor_id, name, state)
+values ('11111111-1111-1111-1111-111111111111',
+        'd0000000-0000-0000-0000-000000000005', 'Trigger - Stockton', 'CA');
+
+select ok(
+  (select territory_id is null from distributor_branches
+    where name = 'Trigger - Stockton'),
+  'a Californian yard is left for a person, because the map refuses CA'
+);
+
+-- Which is only safe if a person's answer then outranks the state.
+update distributor_branches
+   set territory_id = 'b0000000-0000-0000-0000-000000000011'
+ where name = 'Trigger - Stockton';
+
+update distributor_branches set state = 'CA' where name = 'Trigger - Stockton';
+
+select is(
+  (select t.name from distributor_branches b
+     join territories t on t.id = b.territory_id
+    where b.name = 'Trigger - Stockton'),
+  'Northern California',
+  'and a hand-placed yard is never re-derived from its state'
+);
+
+-- A state arriving later is the common case: the first file has no state column
+-- and the next one does.
+insert into distributor_branches (org_id, distributor_id, name)
+values ('11111111-1111-1111-1111-111111111111',
+        'd0000000-0000-0000-0000-000000000005', 'Trigger - Late');
+
+select ok(
+  (select territory_id is null from distributor_branches
+    where name = 'Trigger - Late'),
+  'a yard whose state nobody gave stays honestly unplaced'
+);
+
+update distributor_branches set state = 'GA' where name = 'Trigger - Late';
+
+select is(
+  (select t.name from distributor_branches b
+     join territories t on t.id = b.territory_id
+    where b.name = 'Trigger - Late'),
+  'Southeast',
+  'and places itself the moment somebody says where it is'
 );
 
 select * from finish();

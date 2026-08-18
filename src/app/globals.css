@@ -1555,6 +1555,19 @@ input[type="datetime-local"] {
   color: var(--ink-muted);
 }
 
+/* A state, beside the yard it belongs to. Two letters, so it is sized for two:
+   a full-width box would read as somewhere to type an address, and this is a
+   code. The 16px font floor above still applies — a box a rep has to zoom into
+   is a box they get wrong. */
+.field-state {
+  width: 4.25rem;
+  flex: none;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 /* The paste target for a distributor's sheet. Mono, because it is columns, and
    dense enough to see the shape of what was pasted — but only where density is
    free. A mouse cannot trigger the zoom, so the desktop box is small and the
