@@ -166,6 +166,12 @@ export function TeamSales({
   // to unfold. It is a BEAT, not a second opinion about what is selected —
   // nothing reads it to decide what is open, only to decide what is arriving.
   const [releasing, setReleasing] = useState<string | null>(null);
+  // The same beat one level down: the terminal band whose panel was just
+  // closed, held while its siblings come back to full weight. Its own state
+  // rather than a scope flag on `releasing`, because the two never fire
+  // together — rows shrink only at depth 0, where every band walks, and panels
+  // only open at the end of the chain, where there is a single row.
+  const [bandReleasing, setBandReleasing] = useState<string | null>(null);
   // Which coverage gaps have been opened out into rows. Keyed by walk AND row,
   // so opening Boise's quiet branches does not open Hardwoods'.
   const [quietOpen, setQuietOpen] = useState<ReadonlySet<string>>(new Set());
@@ -264,6 +270,7 @@ export function TeamSales({
       // A level change replaces the card outright — sales-step is keyed on the
       // walk — so there is nothing left for a release to return to.
       setReleasing(null);
+      setBandReleasing(null);
       onPath(next);
       onFocus(toFocus(next, null, null));
     },
@@ -297,6 +304,7 @@ export function TeamSales({
     // clearTimers has just killed whatever was going to end the last release, so
     // this has to be said out loud: a new tap supersedes the one before it.
     setReleasing(null);
+    setBandReleasing(null);
 
     // A BAND THAT WALKS DOES IT NOW. There used to be a transition — the band
     // filling the bar while the counter counted toward its figure — and Andre
@@ -326,12 +334,19 @@ export function TeamSales({
       // bar, over the same half second. Held by a beat rather than by the
       // selection, because by this point nothing IS selected.
       const wasNarrowing = group.key === ALL_ROWS && phase !== "slide";
+      // And the same for a terminal band's panel: its siblings were set back
+      // while it was open, so they come forward on the bar's own beat.
+      const wasHolding = group.key !== ALL_ROWS && phase !== "slide";
       setSelected(null);
       setPhase("idle");
       onFocus(toFocus(path, null, null));
       if (wasNarrowing) {
         setReleasing(band.key);
         timers.current.push(setTimeout(() => setReleasing(null), RELEASE_MS));
+      }
+      if (wasHolding) {
+        setBandReleasing(band.key);
+        timers.current.push(setTimeout(() => setBandReleasing(null), RELEASE_MS));
       }
       return;
     }
@@ -346,11 +361,12 @@ export function TeamSales({
     // Straight to the fill instead: the new stripe takes the bar as the old one
     // gives it up, which wipes from one colour to the next, and the rows below
     // simply change which of them is the open one.
+    // And for the same reason it holds one level down: stepping from one open
+    // dealer to the next while the bar is already a single colour.
     const sideways =
-      narrow &&
       selected !== null &&
       selected.pathKey === pathKey &&
-      selected.group === ALL_ROWS;
+      selected.group === group.key;
 
     setSelected({ pathKey, group: group.key, band: band.key });
     setPhase(sideways ? "fill" : "slide");
@@ -919,14 +935,63 @@ export function TeamSales({
                     the track, so a small dealer is never unreachable. It is also
                     the honest tap target — a thumb would rather hit a row than a
                     26-pixel stripe. */}
+                {(() => {
+                  // THE SAME ISOLATION, AT THE END OF THE CHAIN. A terminal
+                  // band's panel answers for one dealer, and fourteen sibling
+                  // rows at full weight underneath it made the answer hard to
+                  // find on the screen that was showing it — Andre's words:
+                  // the chart marks who it is but hides nobody. So while a
+                  // panel is open its siblings set back to a colour, a name
+                  // and a figure, exactly what the shrunk rows keep at depth
+                  // 0. On the fill, like every narrowing on this card.
+                  const held =
+                    open !== null && !open.drillable && phase !== "slide"
+                      ? open
+                      : null;
+                  return (
                 <ul className="sales-list">
                   {g.bands.map((b) => {
+                    if (held !== null && b.key !== held.key) {
+                      return (
+                        <li key={b.key}>
+                          <button
+                            type="button"
+                            className="sales-item sales-item-set-back"
+                            onClick={() => tap(g, b)}
+                          >
+                            <span
+                              className="sales-item-rail"
+                              style={{ background: b.colour }}
+                              aria-hidden="true"
+                            />
+                            <span className="sales-item-body">
+                              <span className="sales-item-name">{b.name}</span>
+                            </span>
+                            <span className="sales-item-fig">
+                              <span className="sales-item-qty">
+                                {QTY.format(b.qty)} {g.unit}
+                              </span>
+                            </span>
+                            <span className="sales-item-go" aria-hidden="true" />
+                          </button>
+                        </li>
+                      );
+                    }
+
                     const bandMoved = movementLabel(b.qty, b.prevQty, previous);
+                    const bandReturning =
+                      held === null &&
+                      bandReleasing !== null &&
+                      b.key !== bandReleasing;
                     return (
                       <li key={b.key}>
                         <button
                           type="button"
-                          className="sales-item"
+                          className={
+                            bandReturning
+                              ? "sales-item sales-item-return"
+                              : "sales-item"
+                          }
                           aria-pressed={open?.key === b.key}
                           onClick={() => tap(g, b)}
                         >
@@ -979,6 +1044,8 @@ export function TeamSales({
                     );
                   })}
                 </ul>
+                  );
+                })()}
 
                 {/* Coverage: the branches of this house that bought NOTHING this
                     month. A map of who is buying is only useful if it also says

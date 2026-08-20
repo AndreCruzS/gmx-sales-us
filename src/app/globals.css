@@ -902,6 +902,37 @@ body {
   line-height: 1;
   color: var(--ink-muted);
 }
+/* A sibling row while a terminal band's panel is open — the same isolation the
+   shrunk rows perform at depth 0, at the same weight, so "narrowed" reads as one
+   idea wherever it happens on the card. Colour, name and figure survive;
+   everything that answers a question the reader has just read past does not.
+   Still pressable: it is how you step from one open dealer to the next. */
+.sales-item-set-back {
+  opacity: 0.5;
+  transition: opacity 0.24s ease;
+  /* Arriving on the fill, the way the depth-0 rows shrink: one fade for all of
+     them together, so the list steps back as a group rather than in pieces. */
+  animation: sales-shrink 0.36s cubic-bezier(0.25, 0.6, 0.35, 1) both;
+}
+.sales-item-set-back:hover,
+.sales-item-set-back:focus-visible,
+.sales-item-set-back:active {
+  opacity: 1;
+}
+.sales-item-set-back .sales-item-name {
+  font-weight: 600;
+}
+/* Coming forward again when the panel closes, in step with the bar giving its
+   track back — same half second, and from 0.5 rather than from 0 because that
+   is where the row was standing a frame earlier. */
+.sales-item-return {
+  animation: sales-item-back 0.5s cubic-bezier(0.25, 0.6, 0.35, 1) both;
+}
+@keyframes sales-item-back {
+  from {
+    opacity: 0.5;
+  }
+}
 .sales-item[aria-pressed="true"] {
   /* The chosen row, marked the way the chosen band is: it holds the ground. */
   background: var(--surface-sunken);
@@ -1125,6 +1156,8 @@ body {
   .sales-detail,
   .sales-row-shrunk,
   .sales-row-return,
+  .sales-item-set-back,
+  .sales-item-return,
   .sales-step {
     animation: none;
   }
