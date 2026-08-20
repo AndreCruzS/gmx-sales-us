@@ -561,28 +561,45 @@ body {
    for. Here each band is a CUSTOMER, so it needs a categorical ramp instead,
    and the legend has to say so or the teal band will read as "done".
 
-   The ramp is drawn from the kit's own family rather than a rainbow: the trade
-   greens and woods, spaced far enough apart to be told apart at a glance on a
-   phone in daylight. Six is the practical limit; past that the tail is
-   gathered into one "others" band rather than inventing colours nobody can
-   distinguish. */
+   The order is FIXED and never cycles. A ninth band does not go back to the
+   first — it joins the gathered tail — because a colour that appears twice in
+   one bar stops being a name and becomes a coincidence.
+
+   ── ON TRIAL: Bianca's ramp, 20 Aug 2026 ──────────────────────────────────
+   Eight colours she picked, in her order, and deliberately UNCHANGED between
+   light and dark. This is a test of her colours and not of an interpretation
+   of them: she is looking at a screenshot and saying yes or no, so what she
+   sees has to be what she sent. Two things to look at when she does —
+
+   #e34948 sits on top of --danger and #1baf7a / #008300 sit near
+   --success-ink. In this card a colour means WHICH CUSTOMER, but the movement
+   printed beside every band still means up or down, so a region painted
+   danger-red with a green "up 9%" next to it is one row arguing with itself.
+
+   #008300 and #4a3aa7 are dark. Against the dark scheme's own ground they will
+   close up, which is why the ramp used to carry a second, lifted set. If she
+   keeps the eight, dark needs its own values derived from them. */
 :root {
-  --cat-1: #2c6e6b;
-  --cat-2: #b8792c;
-  --cat-3: #4a6b8a;
-  --cat-4: #7a9a5c;
-  --cat-5: #9a5b4a;
-  --cat-6: #6b5b8a;
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #008300;
+  --cat-7: #4a3aa7;
+  --cat-8: #e34948;
   --cat-rest: #8a9299;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --cat-1: #5fb3ae;
-    --cat-2: #d99b4e;
-    --cat-3: #7ea2c4;
-    --cat-4: #a3c17e;
-    --cat-5: #cc8a76;
-    --cat-6: #a08fc4;
+    --cat-1: #2a78d6;
+    --cat-2: #eb6834;
+    --cat-3: #1baf7a;
+    --cat-4: #eda100;
+    --cat-5: #e87ba4;
+    --cat-6: #008300;
+    --cat-7: #4a3aa7;
+    --cat-8: #e34948;
     --cat-rest: #8a9299;
   }
 }

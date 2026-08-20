@@ -8,6 +8,7 @@ import {
   housesMissing,
   isUnmatched,
   latestPeriods,
+  MAX_BANDS,
   movement,
   movementLabel,
   moveDir,
@@ -395,6 +396,38 @@ describe("buildStep · the tail", () => {
     );
     expect(step.groups[0].segments).toHaveLength(7);
     expect(step.groups[0].segments.every((s) => s.band !== null)).toBe(true);
+  });
+
+  // Bianca's rule about the ramp, and the one part of a palette that is a rule
+  // rather than a taste: FIXED ORDER, NEVER CYCLED. Past the end of the ramp a
+  // row joins the gathered tail instead of going back to the first colour,
+  // because a colour that appears twice in one bar stops naming anybody.
+  //
+  // This is the ROW ramp, which is a different axis from the tail above: that
+  // one gathers the bands inside a single row, and it runs on six shades of
+  // that row's own hue. Changing the length of one has never changed the other.
+  it("never spends a ramp colour twice, however many rows there are", () => {
+    const houses = Array.from({ length: 12 }, (_, i) =>
+      row({
+        distributor_id: `h${i}`,
+        distributor_name: `House ${i}`,
+        quantity: 1200 - i * 50,
+      }),
+    );
+    const step = buildStep(houses, [], "distribution", [], BRANCHES);
+    expect(step.groups).toHaveLength(12);
+
+    // Read off MAX_BANDS rather than off the number eight: the ramp is on trial
+    // and may yet go back to six, and a test that has to be edited to let a
+    // palette change is a test that will be edited without being read.
+    const ramp = step.groups.slice(0, MAX_BANDS).map((g) => g.colour);
+    expect(ramp).toEqual(
+      Array.from({ length: MAX_BANDS }, (_, i) => `var(--cat-${i + 1})`),
+    );
+    // And past the end of it, grey — not a second House 0 wearing --cat-1.
+    expect(step.groups.slice(MAX_BANDS).map((g) => g.colour)).toEqual(
+      Array.from({ length: 12 - MAX_BANDS }, () => "var(--cat-rest)"),
+    );
   });
 });
 

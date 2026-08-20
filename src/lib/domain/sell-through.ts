@@ -403,12 +403,19 @@ export function rowMatchesPath(
 
 // ── Bands and rows ──────────────────────────────────────────────────────────
 
-/** Six is the practical limit for bands a person can tell apart on a phone. */
-export const MAX_BANDS = 6;
+/** How many rows get a colour of their own before the rest are gathered.
+ *
+ *  It is the LENGTH OF THE RAMP and nothing else — whatever the ramp holds, the
+ *  next row along joins the tail rather than reusing a colour already spent. On
+ *  Bianca's eight that leaves seven gathered under the region lens instead of
+ *  nine; it does not mean eight is the number a person can tell apart on a
+ *  phone, which is the question her screenshot is being asked. */
+export const MAX_BANDS = 8;
 
 /** The summary row's key. Not a real entity, so it cannot collide with one. */
 export const ALL_ROWS = "__all__";
 
+/** Fixed order, never cycled — see the ramp's note in globals.css. */
 const BAND_COLOURS = [
   "var(--cat-1)",
   "var(--cat-2)",
@@ -416,6 +423,8 @@ const BAND_COLOURS = [
   "var(--cat-4)",
   "var(--cat-5)",
   "var(--cat-6)",
+  "var(--cat-7)",
+  "var(--cat-8)",
 ];
 export const REST_COLOUR = "var(--cat-rest)";
 
