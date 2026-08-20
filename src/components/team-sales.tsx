@@ -273,10 +273,30 @@ export function TeamSales({
       return;
     }
 
+    // STEPPING SIDEWAYS: another stripe of the TOTAL bar while one already owns
+    // it. There is nothing to slide out of — the bar is a single colour and the
+    // rows below have already shrunk around the old choice — so taking the slide
+    // would swing the whole card open for four hundred milliseconds and shut it
+    // again on the next region. Two readings one tap apart, with the entire
+    // month flashing in between.
+    //
+    // Straight to the fill instead: the new stripe takes the bar as the old one
+    // gives it up, which wipes from one colour to the next, and the rows below
+    // simply change which of them is the open one. Only the total bar does this.
+    // Deeper in, a band still slides — there the bar is a real composition and
+    // the movement is what says which piece of it was chosen.
+    const sideways =
+      group.key === ALL_ROWS &&
+      selected !== null &&
+      selected.pathKey === pathKey &&
+      selected.group === ALL_ROWS;
+
     setSelected({ pathKey, group: group.key, band: band.key });
-    setPhase("slide");
+    setPhase(sideways ? "fill" : "slide");
     onFocus(toFocus(path, group, band));
-    timers.current.push(setTimeout(() => setPhase("fill"), SLIDE_MS));
+    if (!sideways) {
+      timers.current.push(setTimeout(() => setPhase("fill"), SLIDE_MS));
+    }
 
     if (band.drillable) {
       // The fill IS the transition. Once the band owns the bar, that bar becomes
@@ -356,6 +376,26 @@ export function TeamSales({
 
   const summaryOpen =
     step.summary !== null && chosenGroup?.key === ALL_ROWS ? chosenBand : null;
+
+  // ISOLATION. Picking a stripe of the total bar narrows the rows underneath to
+  // the one it stands for — the others shrink to a colour, a name and a number.
+  //
+  // They SHRINK rather than leave, and that is load-bearing. The total bar
+  // gathers every band past the sixth colour into a single grey stripe that is
+  // deliberately not tappable (see buildSegments: `band: null`), so under the
+  // region lens nine of fifteen regions have no way in from the bar at all.
+  // Their shrunk row is the only door, which also makes the list a way to step
+  // sideways from one region to the next without going back through the whole.
+  //
+  // It happens on the FILL, not on the tap — the same beat the counter travels
+  // on. During the slide the bar is still carrying the band at its own share and
+  // every row below it is still true; the moment the band stretches to own the
+  // track is the moment the rest of the card stops being the answer.
+  //
+  // A summary band's key IS the row's key: both are the row dimension's entity,
+  // built from the same map, which is what lets the stripe and the row agree.
+  const isolatedKey =
+    summaryOpen !== null && phase !== "slide" ? summaryOpen.key : null;
 
   // The counter earns its figure only when the figure says something the card
   // does not already say. With a total bar it is the total, and no row below is
@@ -544,37 +584,21 @@ export function TeamSales({
                   })}
                 </div>
 
-                {summaryOpen && phase !== "slide" && (
-                  <div className="sales-detail">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="t-title">{summaryOpen.name}</span>
-                      <span className="t-meta tabular-nums">
-                        {QTY.format(summaryOpen.qty)} {step.unit}
-                      </span>
-                    </div>
-                    <p className="t-sub mt-1">
-                      {/* Their share of the month, which is what the total bar is
-                          for: not what they bought, but how much of it was
-                          theirs. */}
-                      {Math.round(summaryOpen.share)}% of {month}
-                      {(() => {
-                        const m = movementLabel(
-                          summaryOpen.qty,
-                          summaryOpen.prevQty,
-                          previous,
-                        );
-                        return m ? ` · ${m}` : "";
-                      })()}
-                      {summaryOpen.value !== null
-                        ? ` · ${formatMoney(Math.round(summaryOpen.value))}`
-                        : ""}
-                    </p>
-                  </div>
-                )}
+                {/* NOTHING UNFOLDS HERE, and that is the point.
+
+                    A panel used to open under this bar naming the chosen stripe,
+                    its quantity and its share. Two of those three were already on
+                    the screen — the counter above had travelled to that quantity
+                    and put on that colour, and the bar itself had gone all one
+                    colour — while the rows below carried on as if nothing had
+                    been picked. So the reader chose a region and got a worse copy
+                    of the row that was already sitting underneath, and the rest
+                    of the card ignored them.
+
+                    What the tap does instead is ISOLATE: see the rows below. */}
               </>
             )}
           </div>
-
 
           {step.groups.map((g) => {
             const open = chosenGroup?.key === g.key ? chosenBand : null;
@@ -582,6 +606,45 @@ export function TeamSales({
             const openMoved = open
               ? movementLabel(open.qty, open.prevQty, previous)
               : null;
+            const isolated = isolatedKey !== null && g.key === isolatedKey;
+            const shrunk = isolatedKey !== null && !isolated;
+
+            // Shrunk, this row is a way back into the bar rather than a reading
+            // of the month: the colour so it can be matched to the stripe it
+            // owns, the name, and the figure. No Market Owner, no bar of its
+            // own, no bands, no coverage — every one of those is an answer to a
+            // question the reader has just said they are not asking.
+            if (shrunk) {
+              const band = step.summary?.bands.find((b) => b.key === g.key) ?? null;
+              return (
+                <div key={g.key} className="sales-row sales-row-shrunk">
+                  <button
+                    type="button"
+                    className="sales-head sales-head-shrunk"
+                    disabled={band === null}
+                    aria-label={`${g.title}: ${QTY.format(g.total)} ${g.unit}. Show only this ${DIM_NOUN[step.rowDim] ?? "row"}.`}
+                    onClick={() => band && step.summary && tap(step.summary, band)}
+                  >
+                    {g.colour && (
+                      <span
+                        className="sales-item-rail"
+                        style={{ background: g.colour }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="sales-head-body">
+                      <span className="sales-head-name">{g.title}</span>
+                    </span>
+                    <span className="sales-head-fig">
+                      <span className="sales-head-qty">
+                        {QTY.format(g.total)} {g.unit}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              );
+            }
+
             return (
               <div key={g.key} className="sales-row">
                 {(() => {
@@ -610,7 +673,26 @@ export function TeamSales({
                             sentence still reads as a figure and not as a word. */}
                         <span className="sales-head-sub">
                           {g.sub}
-                          {g.sub && g.value !== null ? " · " : ""}
+                          {/* The share, and ONLY while this row is the one the
+                              total bar was narrowed to. It is the single fact
+                              the panel that used to open above was telling the
+                              reader that the row itself does not: not what this
+                              region bought, but how much of the month was
+                              theirs. It rides in the sub-line because the right
+                              of the row already belongs to the quantity and the
+                              movement, and pushing a third figure in there
+                              would unalign all fifteen rows to say one thing
+                              about one of them. */}
+                          {isolated && summaryOpen !== null && (
+                            <>
+                              {g.sub ? " · " : ""}
+                              <span className="fig-sm">
+                                {Math.round(summaryOpen.share)}%
+                              </span>
+                              {` of ${month}`}
+                            </>
+                          )}
+                          {(g.sub || isolated) && g.value !== null ? " · " : ""}
                           {g.value !== null && (
                             <span className="fig-sm">
                               {formatMoney(Math.round(g.value))}
@@ -637,21 +719,42 @@ export function TeamSales({
                   // gesture mirrors itself: a row with a chevron on the RIGHT
                   // goes in, the row you are standing in wears one on the LEFT
                   // and comes back out. Nobody has to be taught that.
-                  return backPath !== null ? (
-                    <button
-                      type="button"
-                      className="sales-head sales-head-back"
-                      onClick={() => goTo(backPath)}
-                      aria-label={`Back to ${backLabel}`}
-                    >
-                      <span className="sales-head-up" aria-hidden="true">
-                        &#8249;
-                      </span>
-                      {body}
-                    </button>
-                  ) : (
-                    <div className="sales-head">{body}</div>
-                  );
+                  if (backPath !== null) {
+                    return (
+                      <button
+                        type="button"
+                        className="sales-head sales-head-back"
+                        onClick={() => goTo(backPath)}
+                        aria-label={`Back to ${backLabel}`}
+                      >
+                        <span className="sales-head-up" aria-hidden="true">
+                          &#8249;
+                        </span>
+                        {body}
+                      </button>
+                    );
+                  }
+
+                  // The isolated row is a toggle, not a door: pressing it lets
+                  // go and the whole month comes back. NO chevron — in this card
+                  // a chevron means a level, and isolating is not one. It wears
+                  // the pressed ground instead, the same mark the chosen band
+                  // row wears, so the one row that is open says so.
+                  if (isolated && summaryOpen !== null && step.summary !== null) {
+                    return (
+                      <button
+                        type="button"
+                        className="sales-head sales-head-open"
+                        aria-pressed={true}
+                        aria-label={`${g.title}. Show every ${DIM_NOUN[step.rowDim] ?? "row"} again.`}
+                        onClick={() => tap(step.summary!, summaryOpen)}
+                      >
+                        {body}
+                      </button>
+                    );
+                  }
+
+                  return <div className="sales-head">{body}</div>;
                 })()}
 
                 <div className="sales-track" data-phase={open ? phase : "idle"}>

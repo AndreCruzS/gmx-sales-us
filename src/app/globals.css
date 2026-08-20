@@ -722,6 +722,73 @@ body {
   color: var(--ink-primary);
 }
 
+/* ── Isolation ──────────────────────────────────────────────────────────────
+   Pick a stripe of the total bar and the rows below narrow to the one it stands
+   for. The rest do not leave: they shrink to a colour, a name and a number.
+
+   Leaving would have been tidier and wrong. The bar gathers everything past the
+   sixth colour into one grey stripe that cannot be pressed, so most rows have no
+   door of their own up there — the shrunk row IS the door, and it doubles as the
+   way across from one region to the next without going back through the whole.
+
+   Everything else on the row goes: the Market Owner, its own bar, its bands, its
+   coverage line. Each of those answers a question the reader has just said they
+   are not asking, and fifteen of them at once is the wall the isolation exists
+   to take down. */
+.sales-row-shrunk {
+  /* The padding moves to the button, so the whole strip is the target. */
+  padding: 0;
+  /* One fade for all of them together. Given a movement of their own — fourteen
+     rows each travelling — it would read as the card coming apart rather than
+     as the rest of the month stepping back. They arrive on the FILL, so this is
+     the bar finishing its stretch and the card agreeing with it. */
+  animation: sales-shrink 0.36s cubic-bezier(0.25, 0.6, 0.35, 1) both;
+}
+@keyframes sales-shrink {
+  from {
+    opacity: 0;
+  }
+}
+.sales-head-shrunk {
+  width: 100%;
+  align-items: center;
+  padding: 11px 0;
+  text-align: left;
+  /* Set back, not greyed out. The names and the figures keep their own ink, so
+     a shrunk row is still readable as a number — it has simply stopped being
+     the thing in front. */
+  opacity: 0.55;
+  transition: opacity 0.24s ease;
+}
+.sales-head-shrunk:hover,
+.sales-head-shrunk:focus-visible,
+.sales-head-shrunk:active {
+  opacity: 1;
+}
+.sales-head-shrunk .sales-item-rail {
+  min-height: 20px;
+}
+.sales-head-shrunk .sales-head-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.sales-head-shrunk .sales-head-qty {
+  font-size: 13.5px;
+}
+/* The isolated row's own header is pressable — pressing it lets go and the whole
+   month comes back — but it deliberately looks no different from the row it was
+   a second ago. It does not need marking: fourteen rows standing back around it
+   is the loudest mark on the card, and a highlight here would only add furniture
+   to the one row the reader is trying to read. */
+.sales-head-open {
+  width: 100%;
+  text-align: left;
+  transition: opacity 0.18s ease;
+}
+.sales-head-open:active {
+  opacity: 0.7;
+}
+
 /* THE BANDS AS ROWS. The bar says the shape of the month; this says what is in
    it. It replaced a wrapped line of ten-point mono — colour swatch, name,
    number, next name — which held every fact the reader needed and gave them no
@@ -1012,6 +1079,7 @@ body {
     transition: none;
   }
   .sales-detail,
+  .sales-row-shrunk,
   .sales-step {
     animation: none;
   }
