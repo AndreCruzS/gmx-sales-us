@@ -641,10 +641,10 @@ body {
    track; only then does it stretch to fill. Doing both at once reads as a bar
    being yanked; in sequence it reads as the chosen customer stepping forward.
 
-   A band that WALKS A LEVEL takes the fill alone. The slide says "this one is
-   out of the line" and the fill says "this one is the bar" — only the second
-   opens the door, and the first in front of it was most of a second spent
-   introducing somebody already on their way in. See the note on SLIDE_MS.
+   A band that WALKS A LEVEL takes neither: the level changes on the tap, and
+   the new level's own entrance is all the movement the walk gets. Anything
+   played between the choice and the level is time spent performing what the
+   level says by arriving. See the note on SLIDE_MS.
 
    Both movements ease OUT, and gently. Easing the slide IN made the band sit
    still for a third of the move and then bolt, which the eye reads as lag. A
@@ -819,11 +819,11 @@ body {
 .sales-head-shrunk .sales-head-qty {
   font-size: 13.5px;
 }
-/* The isolated row's own header is pressable — pressing it lets go and the whole
-   month comes back — but it deliberately looks no different from the row it was
-   a second ago. It does not need marking: fourteen rows standing back around it
-   is the loudest mark on the card, and a highlight here would only add furniture
-   to the one row the reader is trying to read. */
+/* The isolated row's header is pressable — pressing it lets go, the same as
+   pressing its stripe again — but it deliberately looks no different from the row
+   it was a second ago. It does not need marking: fourteen rows standing back
+   around it is the loudest mark on the card, and a highlight here would only add
+   furniture to the one row the reader is trying to read. */
 .sales-head-open {
   width: 100%;
   text-align: left;

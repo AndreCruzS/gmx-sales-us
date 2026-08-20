@@ -24,15 +24,20 @@
 // collapse into one "Nobody yet" that nobody can act on.
 //
 // Tapping a band does not leave the page, and this is the part leadership liked:
-// the band stretches to own the whole bar — and THAT FILLED BAR IS THE NEXT
-// LEVEL. It splits into what is inside it. So "which Boise branches have sales"
-// and "who that branch sold to" are not two screens, they are one bar one link
-// apart. At the end of the chain there is nothing left to split into, so the
-// detail unfolds underneath instead.
+// the level underneath simply BECOMES what was tapped, on the tap. So "which
+// Boise branches have sales" and "who that branch sold to" are not two screens,
+// they are one bar one link apart, and no transition is performed in between —
+// the new level entering is all the movement the walk needs. At the end of the
+// chain there is nothing left to walk into, so the detail unfolds underneath
+// instead.
 //
-// Meanwhile the WHOLE SCREEN re-answers for whatever was picked: the figures
-// above travel to their new values, the rollout narrows to that branch, the year
-// narrows to their months. Nobody loses their place to read one number.
+// Meanwhile the WHOLE SCREEN re-answers for whatever was WALKED INTO: the
+// figures above travel to their new values, the rollout narrows to that branch,
+// the year narrows to their months. Nobody loses their place to read one number.
+//
+// Walked into, and not merely looked at. Narrowing the total bar to one stripe
+// leaves the page alone, because that is a way of reading the card rather than a
+// choice about what the page is for. The page follows the walk.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -86,26 +91,22 @@ interface VisitRow {
   what_happened: string | null;
 }
 
-// TWO MOVEMENTS, AND ONLY ONE OF THEM OPENS A DOOR.
+// TWO MOVEMENTS, FOR THE TAPS THAT ARE ANSWERS IN THEMSELVES.
 //
 // The slide folds the bands in front of the chosen one away, carrying it to the
 // start of the track; the fill stretches it to own the bar. In order they read
 // as a customer stepping forward, where at once they read as a bar being yanked.
 //
-// But the two say different things. The slide says "this one is out of the
-// line"; the fill says "this one IS the bar" — and it is the second alone that
-// makes the bar the next level. So a band that walks a level takes the fill and
-// nothing else. Andre put it exactly right: he could not find a moment that
-// needed the first half, and there is not one. It cost most of a second before
-// every drill to say something the drill was about to say properly.
-//
-// A band with nowhere left to go keeps both. There the movement is not a
-// transition to anywhere — it is the whole answer, with the panel underneath —
-// so it is worth watching rather than worth getting through.
+// Only the taps that END on the bar get them: isolating a row of the total bar,
+// and opening a band with nowhere left to walk. There the movement is the whole
+// answer, so it is worth watching. A band that WALKS gets neither — the level
+// changes on the tap itself, because anything between the choice and the level
+// is time spent performing what the level says by arriving. That is the third
+// cut Andre made to this transition, and the lesson of all three: motion earns
+// its keep by being the reading, never by being the journey.
 //
 // Both beats ease out; see the note on .sales-seg.
 const SLIDE_MS = 420;
-const FILL_MS = 460;
 // Letting go is one beat, not two — the bands returning to their own shares IS
 // the slide run backwards, so there is nothing to sequence. It matches the idle
 // flex-basis transition on .sales-seg, because the rows coming back and the bar
@@ -129,14 +130,6 @@ interface Selection {
   pathKey: string;
   group: string;
   band: string;
-  /** The row the total bar had been narrowed to when this selection was made,
-   *  when it was made from inside one.
-   *
-   *  It rides ON the selection rather than beside it, and that is the whole
-   *  reason it is safe: an isolation cannot outlive the thing it describes.
-   *  Everything that ends a selection — letting go, walking a level, changing
-   *  lens — ends this with it, without having to remember to. */
-  isolated?: string;
 }
 
 const keyOf = (path: readonly PathStep[]) => path.map((s) => s.key).join(">");
@@ -288,12 +281,35 @@ export function TeamSales({
 
   // Driven by the tap, not by an effect watching state: the walk is caused by
   // the person, and a render is not the place to start one.
+  // THE TOTAL BAR NARROWS. EVERY BAR BELOW IT WALKS.
+  //
+  // One rule, split by height, and it is Andre's: the primary bar is where you
+  // look around — a stripe isolates its row and a second tap on it lets go, all
+  // inside the card. Every other bar is already INSIDE something, so its stripes
+  // mean the same as the rows listed under them: the next link of the chain.
+  // Tapping Boise's colour and tapping Boise's row both go to Boise, because two
+  // controls a centimetre apart that both name Boise had better agree on what
+  // Boise means.
   function tap(group: SellGroup, band: SellBand) {
+    const narrow = group.key === ALL_ROWS;
     clearTimers();
     setVisits(null);
     // clearTimers has just killed whatever was going to end the last release, so
     // this has to be said out loud: a new tap supersedes the one before it.
     setReleasing(null);
+
+    // A BAND THAT WALKS DOES IT NOW. There used to be a transition — the band
+    // filling the bar while the counter counted toward its figure — and Andre
+    // cut it for the plainest reason there is: it spent half a second before
+    // every walk performing what the next level says by arriving. The level's
+    // own entrance is the movement. The choice is loaded, not narrated.
+    if (!narrow && band.drillable) {
+      setSelected(null);
+      setPhase("idle");
+      onFocus(toFocus(path, group, band));
+      onPath(scopeOf(path, group, band));
+      return;
+    }
 
     if (
       selected?.pathKey === pathKey &&
@@ -309,27 +325,11 @@ export function TeamSales({
       // animation rather than as the month returning. They now come back ON the
       // bar, over the same half second. Held by a beat rather than by the
       // selection, because by this point nothing IS selected.
-      // Letting go of something chosen INSIDE an isolated row goes back to that
-      // row, not out to the whole month. The row is where the reader was — the
-      // band was a question asked from there — and throwing the isolation away
-      // as well would answer a tap on one distributor by returning fifteen
-      // regions nobody asked to see again.
-      const inside = selected.isolated ?? null;
-      if (inside !== null && step.summary !== null) {
-        const home = step.summary.bands.find((b) => b.key === inside) ?? null;
-        if (home !== null) {
-          setSelected({ pathKey, group: ALL_ROWS, band: inside });
-          setPhase("fill");
-          onFocus(toFocus(path, step.summary, home));
-          return;
-        }
-      }
-
-      const wasIsolating = group.key === ALL_ROWS && phase !== "slide";
+      const wasNarrowing = group.key === ALL_ROWS && phase !== "slide";
       setSelected(null);
       setPhase("idle");
       onFocus(toFocus(path, null, null));
-      if (wasIsolating) {
+      if (wasNarrowing) {
         setReleasing(band.key);
         timers.current.push(setTimeout(() => setReleasing(null), RELEASE_MS));
       }
@@ -347,50 +347,39 @@ export function TeamSales({
     // gives it up, which wipes from one colour to the next, and the rows below
     // simply change which of them is the open one.
     const sideways =
-      group.key === ALL_ROWS &&
+      narrow &&
       selected !== null &&
       selected.pathKey === pathKey &&
       selected.group === ALL_ROWS;
 
-    // The other case that skips it, and the bigger one: a band about to walk a
-    // level. See the note on SLIDE_MS — the fill is the half that opens the
-    // door, and the slide in front of it was four hundred milliseconds spent
-    // saying "this one is out of the line" to somebody already on their way in.
-    const noSlide = sideways || band.drillable;
-
-    setSelected({
-      pathKey,
-      group: group.key,
-      band: band.key,
-      // A tap on the total bar IS the isolation and does not need to remember
-      // one; a tap on anything else inherits whichever row is currently isolated
-      // so the card does not fly open underneath it.
-      isolated: group.key === ALL_ROWS ? undefined : (isolatedKey ?? undefined),
-    });
-    setPhase(noSlide ? "fill" : "slide");
-    onFocus(toFocus(path, group, band));
-    if (!noSlide) {
+    setSelected({ pathKey, group: group.key, band: band.key });
+    setPhase(sideways ? "fill" : "slide");
+    // A STRIPE OF THE TOTAL BAR DOES NOT MOVE THE PAGE.
+    //
+    // It used to, and the movement was enormous: the focus bar arriving and four
+    // sections below — the tiles, the gates, the months, the slipping list —
+    // unmounting and entering again with their figures travelling to new values.
+    // All of it starting on the tap, while the card itself did not move until the
+    // slide finished four hundred milliseconds later. The page answered before
+    // the thing that had been touched did.
+    //
+    // That movement was written when A TAP WAS A CHOICE. It is not one any more:
+    // the first tap narrows the bar and the second walks the level, so the first
+    // is a way of LOOKING. Spending the largest movement on the page on a glance
+    // is what made this feel like it did too much for what was asked of it.
+    //
+    // The card still answers in full — the bar, the rows, the counter above it
+    // all follow the stripe — and every one of those is inside the card, which is
+    // the scope the stripe actually belongs to.
+    if (!narrow) onFocus(toFocus(path, group, band));
+    if (!sideways) {
       timers.current.push(setTimeout(() => setPhase("fill"), SLIDE_MS));
-    }
-
-    if (band.drillable) {
-      // The fill IS the transition. Once the band owns the bar, that bar becomes
-      // the next level and splits into what is inside it — and now that is the
-      // only thing between the tap and the level, so the whole walk is one beat.
-      timers.current.push(
-        setTimeout(() => {
-          setSelected(null);
-          setPhase("idle");
-          onPath(scopeOf(path, group, band));
-        }, FILL_MS),
-      );
-      return;
     }
 
     // Only a row's own band has a panel to fill. A stripe of the TOTAL bar
     // narrows the card and opens nothing, so asking for its visits is a question
     // whose answer has nowhere to be printed.
-    if (group.key !== ALL_ROWS && band.entity.accountId) {
+    if (!narrow && band.entity.accountId) {
       void loadVisits(band.entity.accountId);
     }
   }
@@ -413,6 +402,33 @@ export function TeamSales({
       ? null
       : (chosenGroup.bands.find((b) => b.key === selected.band) ?? null);
 
+  const summaryOpen =
+    step.summary !== null && chosenGroup?.key === ALL_ROWS ? chosenBand : null;
+
+  // ISOLATION. Picking a stripe of the total bar narrows the rows underneath to
+  // the one it stands for — the others shrink to a colour, a name and a number.
+  //
+  // They SHRINK rather than leave, and that is load-bearing. The total bar
+  // gathers every band past the sixth colour into a single grey stripe that is
+  // deliberately not tappable (see buildSegments: `band: null`), so under the
+  // region lens nine of fifteen regions have no way in from the bar at all.
+  // Their shrunk row is the only door, which also makes the list a way to step
+  // sideways from one region to the next without going back through the whole.
+  //
+  // It happens on the FILL, not on the tap — the same beat the counter travels
+  // on. During the slide the bar is still carrying the band at its own share and
+  // every row below it is still true; the moment the band stretches to own the
+  // track is the moment the rest of the card stops being the answer.
+  //
+  // A summary band's key IS the row's key: both are the row dimension's entity,
+  // built from the same map, which is what lets the stripe and the row agree.
+  //
+  // Nothing else can hold an isolation open: a tap anywhere below the total bar
+  // either walks the level on the spot or opens a terminal band's panel at a
+  // depth where there is no summary to isolate. One writer, one reader.
+  const isolatedKey =
+    summaryOpen !== null && phase !== "slide" ? summaryOpen.key : null;
+
   // THE COUNTER, which is the whole point of the fill.
   //
   // The animation says "this fraction is now the entire bar". The figure above
@@ -424,6 +440,10 @@ export function TeamSales({
   // holding its own share and the total above it is still true; the moment the
   // band starts stretching to own the bar is the moment its number becomes the
   // answer. Counting earlier would anticipate a claim the bar has not made yet.
+  //
+  // And it never counts on a WALK: a walking tap changes the level immediately,
+  // so this figure only ever travels between readings of the bar it sits on —
+  // to an isolated row, to a terminal band, and back.
   const counterTarget =
     chosenBand !== null && phase !== "slide" ? chosenBand.qty : step.total;
   const counterQty = useTween(counterTarget);
@@ -455,39 +475,7 @@ export function TeamSales({
     chosenBand !== null && phase !== "slide" ? chosenBand.prevQty : stepPrevTotal;
   const stepMoved = movementLabel(counterTarget, counterPrev, previous);
 
-  const summaryOpen =
-    step.summary !== null && chosenGroup?.key === ALL_ROWS ? chosenBand : null;
 
-  // ISOLATION. Picking a stripe of the total bar narrows the rows underneath to
-  // the one it stands for — the others shrink to a colour, a name and a number.
-  //
-  // They SHRINK rather than leave, and that is load-bearing. The total bar
-  // gathers every band past the sixth colour into a single grey stripe that is
-  // deliberately not tappable (see buildSegments: `band: null`), so under the
-  // region lens nine of fifteen regions have no way in from the bar at all.
-  // Their shrunk row is the only door, which also makes the list a way to step
-  // sideways from one region to the next without going back through the whole.
-  //
-  // It happens on the FILL, not on the tap — the same beat the counter travels
-  // on. During the slide the bar is still carrying the band at its own share and
-  // every row below it is still true; the moment the band stretches to own the
-  // track is the moment the rest of the card stops being the answer.
-  //
-  // A summary band's key IS the row's key: both are the row dimension's entity,
-  // built from the same map, which is what lets the stripe and the row agree.
-  //
-  // AND IT SURVIVES A TAP TAKEN INSIDE IT. Choosing a distributor within an
-  // isolated region moves the selection off the total bar, which used to end the
-  // isolation on the spot: all fourteen rows sprang open for the nine hundred
-  // milliseconds of the drill and were thrown away when the next level arrived.
-  // The whole month turning up on its way out. The selection carries the row it
-  // was made inside, so the card stays narrowed until the level actually changes.
-  const isolatedKey =
-    summaryOpen !== null && phase !== "slide"
-      ? summaryOpen.key
-      : selected !== null && selected.pathKey === pathKey
-        ? (selected.isolated ?? null)
-        : null;
 
   // The counter earns its figure only when the figure says something the card
   // does not already say. With a total bar it is the total, and no row below is
@@ -668,7 +656,15 @@ export function TeamSales({
                         }}
                         data-dimmed={chosenHere && !isOpen}
                         aria-pressed={isOpen}
-                        aria-label={`${seg.name}: ${QTY.format(seg.qty)} ${step.unit} of the total`}
+                        aria-label={
+                          // The two taps do different things, so the label has
+                          // to change between them or the second one is a door
+                          // nobody was told about.
+                          `${seg.name}: ${QTY.format(seg.qty)} ${step.unit} of the total` +
+                          (isOpen
+                            ? ", press again to show them all"
+                            : ", shows only this one")
+                        }
                         disabled={band === null}
                         onClick={() => band && tap(step.summary!, band)}
                       />
@@ -699,6 +695,14 @@ export function TeamSales({
               ? movementLabel(open.qty, open.prevQty, previous)
               : null;
             const isolated = isolatedKey !== null && g.key === isolatedKey;
+            // The isolated row's stripe on the total bar, looked up by key
+            // rather than read off the selection — the selection may be three
+            // taps away on a distributor by now, and this row's share of the
+            // month and its way out must not vanish because of that.
+            const rowSummaryBand =
+              isolated && step.summary !== null
+                ? (step.summary.bands.find((b) => b.key === g.key) ?? null)
+                : null;
             const shrunk = isolatedKey !== null && !isolated;
             // Coming back from a release: whole again, but brightening up as the
             // bar unfolds instead of landing in front of it. The row that was
@@ -714,7 +718,10 @@ export function TeamSales({
             if (shrunk) {
               const band = step.summary?.bands.find((b) => b.key === g.key) ?? null;
               return (
-                <div key={g.key} className="sales-row sales-row-shrunk">
+                <div
+                  key={g.key}
+                  className="sales-row sales-row-shrunk"
+                >
                   <button
                     type="button"
                     className="sales-head sales-head-shrunk"
@@ -783,11 +790,11 @@ export function TeamSales({
                               movement, and pushing a third figure in there
                               would unalign all fifteen rows to say one thing
                               about one of them. */}
-                          {isolated && summaryOpen !== null && (
+                          {rowSummaryBand !== null && (
                             <>
                               {g.sub ? " · " : ""}
                               <span className="fig-sm">
-                                {Math.round(summaryOpen.share)}%
+                                {Math.round(rowSummaryBand.share)}%
                               </span>
                               {` of ${month}`}
                             </>
@@ -836,18 +843,19 @@ export function TeamSales({
                   }
 
                   // The isolated row is a toggle, not a door: pressing it lets
-                  // go and the whole month comes back. NO chevron — in this card
-                  // a chevron means a level, and isolating is not one. It wears
-                  // the pressed ground instead, the same mark the chosen band
-                  // row wears, so the one row that is open says so.
-                  if (isolated && summaryOpen !== null && step.summary !== null) {
+                  // go, exactly as pressing its stripe again does. NO chevron —
+                  // in this card a chevron means a LEVEL, and isolating is not
+                  // one. It does not need marking either: fourteen rows standing
+                  // back around it is the loudest mark on the card, and a
+                  // highlight would add furniture to the one row being read.
+                  if (isolated && rowSummaryBand !== null && step.summary !== null) {
                     return (
                       <button
                         type="button"
                         className="sales-head sales-head-open"
                         aria-pressed={true}
                         aria-label={`${g.title}. Show every ${DIM_NOUN[step.rowDim] ?? "row"} again.`}
-                        onClick={() => tap(step.summary!, summaryOpen)}
+                        onClick={() => tap(step.summary!, rowSummaryBand)}
                       >
                         {body}
                       </button>
