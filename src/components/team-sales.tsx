@@ -24,11 +24,11 @@
 // collapse into one "Nobody yet" that nobody can act on.
 //
 // Tapping a band does not leave the page, and this is the part leadership liked:
-// the band slides to the start of the track, stretches to own the whole bar —
-// and THAT FILLED BAR IS THE NEXT LEVEL. It splits into what is inside it. So
-// "which Boise branches have sales" and "who that branch sold to" are not two
-// screens, they are one bar one link apart. At the end of the chain there is
-// nothing left to split into, so the detail unfolds underneath instead.
+// the band stretches to own the whole bar — and THAT FILLED BAR IS THE NEXT
+// LEVEL. It splits into what is inside it. So "which Boise branches have sales"
+// and "who that branch sold to" are not two screens, they are one bar one link
+// apart. At the end of the chain there is nothing left to split into, so the
+// detail unfolds underneath instead.
 //
 // Meanwhile the WHOLE SCREEN re-answers for whatever was picked: the figures
 // above travel to their new values, the rollout narrows to that branch, the year
@@ -86,16 +86,32 @@ interface VisitRow {
   what_happened: string | null;
 }
 
-// The pick is two movements, not one. First the bands in front of the chosen one
-// fold away, which SLIDES it to the start of the track. Only then does it stretch
-// to fill. Doing both at once reads as a bar being yanked; doing them in order
-// reads as the chosen customer stepping forward.
+// TWO MOVEMENTS, AND ONLY ONE OF THEM OPENS A DOOR.
 //
-// Both beats ease out — see the note on .sales-seg. FILL_MS matches the fill
-// transition, so the walk to the next level begins at the moment the band has
-// actually taken the bar, not while it is still travelling.
+// The slide folds the bands in front of the chosen one away, carrying it to the
+// start of the track; the fill stretches it to own the bar. In order they read
+// as a customer stepping forward, where at once they read as a bar being yanked.
+//
+// But the two say different things. The slide says "this one is out of the
+// line"; the fill says "this one IS the bar" — and it is the second alone that
+// makes the bar the next level. So a band that walks a level takes the fill and
+// nothing else. Andre put it exactly right: he could not find a moment that
+// needed the first half, and there is not one. It cost most of a second before
+// every drill to say something the drill was about to say properly.
+//
+// A band with nowhere left to go keeps both. There the movement is not a
+// transition to anywhere — it is the whole answer, with the panel underneath —
+// so it is worth watching rather than worth getting through.
+//
+// Both beats ease out; see the note on .sales-seg.
 const SLIDE_MS = 420;
 const FILL_MS = 460;
+// Letting go is one beat, not two — the bands returning to their own shares IS
+// the slide run backwards, so there is nothing to sequence. It matches the idle
+// flex-basis transition on .sales-seg, because the rows coming back and the bar
+// giving the track back have to be one movement or the rows arrive first and
+// stand there waiting for it.
+const RELEASE_MS = 500;
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
@@ -113,6 +129,14 @@ interface Selection {
   pathKey: string;
   group: string;
   band: string;
+  /** The row the total bar had been narrowed to when this selection was made,
+   *  when it was made from inside one.
+   *
+   *  It rides ON the selection rather than beside it, and that is the whole
+   *  reason it is safe: an isolation cannot outlive the thing it describes.
+   *  Everything that ends a selection — letting go, walking a level, changing
+   *  lens — ends this with it, without having to remember to. */
+  isolated?: string;
 }
 
 const keyOf = (path: readonly PathStep[]) => path.map((s) => s.key).join(">");
@@ -145,6 +169,10 @@ export function TeamSales({
   // "slide" = travelling to the start, "fill" = stretching to own the bar.
   const [phase, setPhase] = useState<"idle" | "slide" | "fill">("idle");
   const [visits, setVisits] = useState<VisitRow[] | null>(null);
+  // The row that was just let go of, held for exactly as long as the bar takes
+  // to unfold. It is a BEAT, not a second opinion about what is selected —
+  // nothing reads it to decide what is open, only to decide what is arriving.
+  const [releasing, setReleasing] = useState<string | null>(null);
   // Which coverage gaps have been opened out into rows. Keyed by walk AND row,
   // so opening Boise's quiet branches does not open Hardwoods'.
   const [quietOpen, setQuietOpen] = useState<ReadonlySet<string>>(new Set());
@@ -240,6 +268,9 @@ export function TeamSales({
       setSelected(null);
       setPhase("idle");
       setVisits(null);
+      // A level change replaces the card outright — sales-step is keyed on the
+      // walk — so there is nothing left for a release to return to.
+      setReleasing(null);
       onPath(next);
       onFocus(toFocus(next, null, null));
     },
@@ -260,6 +291,9 @@ export function TeamSales({
   function tap(group: SellGroup, band: SellBand) {
     clearTimers();
     setVisits(null);
+    // clearTimers has just killed whatever was going to end the last release, so
+    // this has to be said out loud: a new tap supersedes the one before it.
+    setReleasing(null);
 
     if (
       selected?.pathKey === pathKey &&
@@ -267,9 +301,38 @@ export function TeamSales({
       selected.band === band.key
     ) {
       // Letting go: everything returns to its share of the bar together.
+      //
+      // "Together" was a lie for the rows. The bar takes half a second to give
+      // the track back to all its stripes; the rows underneath came back on the
+      // very next frame, so fourteen of them appeared fully formed in front of a
+      // bar that was still folded — which reads as debris left over from the
+      // animation rather than as the month returning. They now come back ON the
+      // bar, over the same half second. Held by a beat rather than by the
+      // selection, because by this point nothing IS selected.
+      // Letting go of something chosen INSIDE an isolated row goes back to that
+      // row, not out to the whole month. The row is where the reader was — the
+      // band was a question asked from there — and throwing the isolation away
+      // as well would answer a tap on one distributor by returning fifteen
+      // regions nobody asked to see again.
+      const inside = selected.isolated ?? null;
+      if (inside !== null && step.summary !== null) {
+        const home = step.summary.bands.find((b) => b.key === inside) ?? null;
+        if (home !== null) {
+          setSelected({ pathKey, group: ALL_ROWS, band: inside });
+          setPhase("fill");
+          onFocus(toFocus(path, step.summary, home));
+          return;
+        }
+      }
+
+      const wasIsolating = group.key === ALL_ROWS && phase !== "slide";
       setSelected(null);
       setPhase("idle");
       onFocus(toFocus(path, null, null));
+      if (wasIsolating) {
+        setReleasing(band.key);
+        timers.current.push(setTimeout(() => setReleasing(null), RELEASE_MS));
+      }
       return;
     }
 
@@ -282,36 +345,54 @@ export function TeamSales({
     //
     // Straight to the fill instead: the new stripe takes the bar as the old one
     // gives it up, which wipes from one colour to the next, and the rows below
-    // simply change which of them is the open one. Only the total bar does this.
-    // Deeper in, a band still slides — there the bar is a real composition and
-    // the movement is what says which piece of it was chosen.
+    // simply change which of them is the open one.
     const sideways =
       group.key === ALL_ROWS &&
       selected !== null &&
       selected.pathKey === pathKey &&
       selected.group === ALL_ROWS;
 
-    setSelected({ pathKey, group: group.key, band: band.key });
-    setPhase(sideways ? "fill" : "slide");
+    // The other case that skips it, and the bigger one: a band about to walk a
+    // level. See the note on SLIDE_MS — the fill is the half that opens the
+    // door, and the slide in front of it was four hundred milliseconds spent
+    // saying "this one is out of the line" to somebody already on their way in.
+    const noSlide = sideways || band.drillable;
+
+    setSelected({
+      pathKey,
+      group: group.key,
+      band: band.key,
+      // A tap on the total bar IS the isolation and does not need to remember
+      // one; a tap on anything else inherits whichever row is currently isolated
+      // so the card does not fly open underneath it.
+      isolated: group.key === ALL_ROWS ? undefined : (isolatedKey ?? undefined),
+    });
+    setPhase(noSlide ? "fill" : "slide");
     onFocus(toFocus(path, group, band));
-    if (!sideways) {
+    if (!noSlide) {
       timers.current.push(setTimeout(() => setPhase("fill"), SLIDE_MS));
     }
 
     if (band.drillable) {
       // The fill IS the transition. Once the band owns the bar, that bar becomes
-      // the next level and splits into what is inside it.
+      // the next level and splits into what is inside it — and now that is the
+      // only thing between the tap and the level, so the whole walk is one beat.
       timers.current.push(
         setTimeout(() => {
           setSelected(null);
           setPhase("idle");
           onPath(scopeOf(path, group, band));
-        }, SLIDE_MS + FILL_MS),
+        }, FILL_MS),
       );
       return;
     }
 
-    if (band.entity.accountId) void loadVisits(band.entity.accountId);
+    // Only a row's own band has a panel to fill. A stripe of the TOTAL bar
+    // narrows the card and opens nothing, so asking for its visits is a question
+    // whose answer has nowhere to be printed.
+    if (group.key !== ALL_ROWS && band.entity.accountId) {
+      void loadVisits(band.entity.accountId);
+    }
   }
 
   // The chosen band, lifted out of the render loop: the counter above the card
@@ -394,8 +475,19 @@ export function TeamSales({
   //
   // A summary band's key IS the row's key: both are the row dimension's entity,
   // built from the same map, which is what lets the stripe and the row agree.
+  //
+  // AND IT SURVIVES A TAP TAKEN INSIDE IT. Choosing a distributor within an
+  // isolated region moves the selection off the total bar, which used to end the
+  // isolation on the spot: all fourteen rows sprang open for the nine hundred
+  // milliseconds of the drill and were thrown away when the next level arrived.
+  // The whole month turning up on its way out. The selection carries the row it
+  // was made inside, so the card stays narrowed until the level actually changes.
   const isolatedKey =
-    summaryOpen !== null && phase !== "slide" ? summaryOpen.key : null;
+    summaryOpen !== null && phase !== "slide"
+      ? summaryOpen.key
+      : selected !== null && selected.pathKey === pathKey
+        ? (selected.isolated ?? null)
+        : null;
 
   // The counter earns its figure only when the figure says something the card
   // does not already say. With a total bar it is the total, and no row below is
@@ -608,6 +700,11 @@ export function TeamSales({
               : null;
             const isolated = isolatedKey !== null && g.key === isolatedKey;
             const shrunk = isolatedKey !== null && !isolated;
+            // Coming back from a release: whole again, but brightening up as the
+            // bar unfolds instead of landing in front of it. The row that was
+            // let go of is not one of these — it never went anywhere.
+            const returning =
+              isolatedKey === null && releasing !== null && g.key !== releasing;
 
             // Shrunk, this row is a way back into the bar rather than a reading
             // of the month: the colour so it can be matched to the stripe it
@@ -646,7 +743,10 @@ export function TeamSales({
             }
 
             return (
-              <div key={g.key} className="sales-row">
+              <div
+                key={g.key}
+                className={returning ? "sales-row sales-row-return" : "sales-row"}
+              >
                 {(() => {
                   const body = (
                     <>
@@ -950,8 +1050,17 @@ export function TeamSales({
                   ))}
 
                 {/* The detail waits for the bar to arrive; opening it mid-slide
-                    would give the eye two things to follow at once. */}
-                {open && phase !== "slide" && (
+                    would give the eye two things to follow at once.
+
+                    AND NEVER FOR A BAND THAT IS ON ITS WAY DOWN A LEVEL. For a
+                    drillable band the fill IS the transition — four hundred and
+                    sixty milliseconds later the card is replaced by the next
+                    level. Opening the panel in that window built "Last seen ·
+                    Loading…" on every single drill, held it just long enough to
+                    be read as a mistake, and threw it away unanswered. The panel
+                    belongs to the bands with nowhere left to go, which is what
+                    it was written for. */}
+                {open && phase !== "slide" && !open.drillable && (
                   <div className="sales-detail">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="t-title">

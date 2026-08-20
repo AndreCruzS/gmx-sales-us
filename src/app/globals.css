@@ -632,10 +632,15 @@ body {
 .sales-track[data-phase="fill"] {
   gap: 0;
 }
-/* Two movements, in order. The bands in front of the chosen one fold away
-   first, which carries it to the START of the track; only then does it stretch
-   to fill. Doing both at once reads as a bar being yanked — in sequence it
-   reads as the chosen customer stepping forward.
+/* Two movements, in order — for a band with nowhere left to go. The bands in
+   front of the chosen one fold away first, which carries it to the START of the
+   track; only then does it stretch to fill. Doing both at once reads as a bar
+   being yanked; in sequence it reads as the chosen customer stepping forward.
+
+   A band that WALKS A LEVEL takes the fill alone. The slide says "this one is
+   out of the line" and the fill says "this one is the bar" — only the second
+   opens the door, and the first in front of it was most of a second spent
+   introducing somebody already on their way in. See the note on SLIDE_MS.
 
    Both movements ease OUT, and gently. Easing the slide IN made the band sit
    still for a third of the move and then bolt, which the eye reads as lag. A
@@ -764,6 +769,24 @@ body {
 @keyframes sales-shrink {
   from {
     opacity: 0;
+  }
+}
+/* LETTING GO. The bar takes half a second to give the track back to all of its
+   stripes; without this the rows came back on the next frame and stood there
+   fully formed in front of a bar still folded shut — which does not read as the
+   month returning, it reads as debris left over from the animation that just
+   ran. They brighten up over the same half second instead, so the card opens as
+   one movement.
+
+   From 0.55 and not from 0: that is exactly where the shrunk row was standing a
+   frame earlier, so the row carries on from itself rather than blinking out and
+   fading back in. */
+.sales-row-return {
+  animation: sales-return 0.5s cubic-bezier(0.25, 0.6, 0.35, 1) both;
+}
+@keyframes sales-return {
+  from {
+    opacity: 0.55;
   }
 }
 .sales-head-shrunk {
@@ -1097,6 +1120,7 @@ body {
   }
   .sales-detail,
   .sales-row-shrunk,
+  .sales-row-return,
   .sales-step {
     animation: none;
   }
