@@ -1,10 +1,12 @@
-// The four gates from the California rollout tracker, named once.
+// The rollout gates from the California tracker, named once.
 //
-// The order is the order the business walks a branch through, which is why the
-// tracker's columns are in it — the class teaches the counter staff, the
-// merchandiser owns the bay, the wall goes up, the material arrives. Reading
-// order is not the same as dependency: a branch can clear a later gate with an
-// earlier one still open, and the whole point of the book is that many do.
+// Three on screen since 2026-08-28 (the review with Bianca and João): the PK
+// class leads and is a COUNT — the same counter gets taught more than once and
+// the book remembers how many times — then material, then the display. The
+// merchandiser gate still exists in the data but left the screen: assigning
+// one is somebody's task, not a thing a dealer needs before selling. Reading
+// order is not dependency: a branch can clear a later gate with an earlier one
+// still open, and the whole point of the book is that many do.
 
 export interface RolloutCounts {
   branches: number | null;
@@ -15,11 +17,20 @@ export interface RolloutCounts {
   fully_through: number | null;
   not_started?: number | null;
   // Her sheet records ok / pending / no. Counting only the "ok"s made a branch
-  // with a merchandiser being hired look like one where nobody had started.
+  // with a wall going up look like one where nobody had started.
   pk_pending?: number | null;
   merchandiser_pending?: number | null;
   display_wall_pending?: number | null;
   material_pending?: number | null;
+  /** Classes actually taught — can exceed pk_done: a counter taught twice. */
+  pk_total?: number | null;
+}
+
+/** One branch's PK standing, for the gate's unfold and its checkbox. */
+export interface PkAccount {
+  account_id: string;
+  name: string;
+  pk_count: number;
 }
 
 export type GateKey =
@@ -39,29 +50,29 @@ export const PIPELINE_GATES: readonly {
   pendingKey: GatePendingKey;
   label: string;
   hint: string;
+  /** yes-or-no gates show no amber: there is no half-stocked worth reporting. */
+  binary?: boolean;
 }[] = [
   {
     key: "pk_done",
     pendingKey: "pk_pending",
-    label: "PK class done",
+    label: "PK class",
     hint: "The counter staff know what they are selling",
-  },
-  {
-    key: "merchandiser_done",
-    pendingKey: "merchandiser_pending",
-    label: "Merchandiser assigned",
-    hint: "Somebody owns the bay",
-  },
-  {
-    key: "display_wall_done",
-    pendingKey: "display_wall_pending",
-    label: "Display wall up",
-    hint: "There is something to point at",
   },
   {
     key: "material_done",
     pendingKey: "material_pending",
     label: "Material in stock",
     hint: "They can sell it the day it is asked for",
+    binary: true,
+  },
+  {
+    key: "display_wall_done",
+    pendingKey: "display_wall_pending",
+    label: "Display wall / rolling display",
+    hint: "There is something to point at",
   },
 ];
+
+/** How many of the VISIBLE gates the timeline reads against. */
+export const GATE_COUNT = PIPELINE_GATES.length;

@@ -20,15 +20,17 @@ import { TeamSales, type Focus } from "@/components/team-sales";
 import {
   latestPeriods,
   movementLabel,
+  moveDir,
   periodLabel,
   type BranchRef,
   type PathStep,
+  type SellLens,
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
 import { useTween } from "@/lib/ui/use-tween";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
-import type { RolloutCounts } from "@/lib/domain/rollout";
+import type { PkAccount, RolloutCounts } from "@/lib/domain/rollout";
 import { formatMoney } from "@/lib/format";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -52,13 +54,18 @@ interface PipelineRow {
   total_value: number;
 }
 // One branch's own gates, for when the screen is answering for one customer
-// rather than for the book.
+// rather than for the book — and, since the PK unfold, for the book itself:
+// the general counts are summed from these rows so the three-gate reading and
+// the class counts come from one query instead of two answers that can drift.
 interface BranchRow {
   account_id: string;
+  org_id: string;
+  name: string;
   pk_state: string;
   merchandiser_state: string;
   display_wall_state: string;
   material_state: string;
+  pk_count: number;
 }
 
 function greeting(hour: number | null): string {
@@ -74,7 +81,6 @@ export function ManagerHome({ name }: { name: string }) {
   const [channel, setChannel] = useState<ChannelRow[]>([]);
   const [scorecard, setScorecard] = useState<ScorecardRow[]>([]);
   const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
-  const [rollout, setRollout] = useState<RolloutCounts | null>(null);
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [sellRows, setSellRows] = useState<SellThroughRow[]>([]);
@@ -84,6 +90,13 @@ export function ManagerHome({ name }: { name: string }) {
   // The walk down the chain lives here, not in the section: "Show all" has to
   // undo where you are as well as what the page is answering for.
   const [path, setPath] = useState<PathStep[]>([]);
+  // Which lens the sales card is being read through. Lifted for one reason:
+  // the rollout book answers for REPS — under Region or Distribution it is a
+  // list about people nobody on the screen is asking about (João, 2026-08-28).
+  const [salesLens, setSalesLens] = useState<SellLens>("region");
+  // And which window: the footnote and the quiet ranking answer for the same
+  // reading the card is giving, month or year-so-far.
+  const [salesMode, setSalesMode] = useState<"month" | "ytd">("month");
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   // Set when the load did not come back at all. Distinct from "every query
   // errored", which load() already absorbs into empty lists — this is the case
@@ -100,7 +113,7 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ch, sc, ex, ro, wm, pl, st, sb, br] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sb, br] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -117,12 +130,6 @@ export function ManagerHome({ name }: { name: string }) {
         .select("exception_type, owner_membership_id, subject_id")
         .limit(1000),
       supabase
-        .from("dashboard_rollout")
-        .select(
-          "branches, pk_done, merchandiser_done, display_wall_done, material_done, fully_through, not_started, pk_pending, merchandiser_pending, display_wall_pending, material_pending",
-        )
-        .maybeSingle(),
-      supabase
         .from("dashboard_won_monthly")
         .select("customer_id, month, unit, won_qty, won_value")
         .order("month", { ascending: false })
@@ -136,7 +143,7 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("sell_through_rows")
         .select(
-          "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value",
+          "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind",
         )
         .order("period", { ascending: false })
         .limit(2000),
@@ -149,14 +156,13 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("account_rollout_status")
         .select(
-          "account_id, pk_state, merchandiser_state, display_wall_state, material_state",
+          "account_id, org_id, name, pk_state, merchandiser_state, display_wall_state, material_state, pk_count",
         )
         .limit(500),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
-    setRollout(ro.error ? null : ((ro.data as RolloutCounts | null) ?? null));
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
     setSellRows(st.error ? [] : ((st.data as SellThroughRow[]) ?? []));
@@ -218,7 +224,20 @@ export function ManagerHome({ name }: { name: string }) {
   // The two months the sell-through is good for. Never "this month and last" —
   // a distributor that skips a month must not make the comparison read against
   // nothing.
-  const { latest, previous } = useMemo(() => latestPeriods(sellRows), [sellRows]);
+  // The two windows never mix: a YTD aggregate inside the monthly pair would
+  // double the book, and a month inside the YTD reading would understate it.
+  const monthlyRows = useMemo(
+    () => sellRows.filter((r) => r.period_kind !== "YTD"),
+    [sellRows],
+  );
+  const ytdSellRows = useMemo(
+    () => sellRows.filter((r) => r.period_kind === "YTD"),
+    [sellRows],
+  );
+  const { latest, previous } = useMemo(
+    () => latestPeriods(monthlyRows),
+    [monthlyRows],
+  );
 
   // The two figures at the top. With nothing chosen they are the money a
   // director asks for first: what is open, and what is waiting on somebody.
@@ -274,6 +293,75 @@ export function ManagerHome({ name }: { name: string }) {
     [wonMonths, focus],
   );
 
+  // Three visible gates since the 2026-08-28 review — the merchandiser stays
+  // in the row but out of every reading, and "through" means through the three
+  // that are on the screen.
+  const gatesOn = (b: BranchRow) => {
+    const on = (v: string) => (v === "OK" ? 1 : 0);
+    return on(b.pk_state) + on(b.material_state) + on(b.display_wall_state);
+  };
+
+  // Summed from the same rows the unfold lists, so the book's counts and the
+  // names behind them cannot disagree. dashboard_rollout still exists for the
+  // desktop stopgap; this screen stopped asking two sources one question.
+  const rollout = useMemo<RolloutCounts | null>(() => {
+    if (branches.length === 0) return null;
+    const on = (v: string) => (v === "OK" ? 1 : 0);
+    const pend = (v: string) => (v === "PENDING" ? 1 : 0);
+    const sum = (f: (b: BranchRow) => number) => branches.reduce((n, b) => n + f(b), 0);
+    return {
+      branches: branches.length,
+      pk_done: sum((b) => on(b.pk_state)),
+      merchandiser_done: sum((b) => on(b.merchandiser_state)),
+      display_wall_done: sum((b) => on(b.display_wall_state)),
+      material_done: sum((b) => on(b.material_state)),
+      fully_through: branches.filter((b) => gatesOn(b) === 3).length,
+      not_started: branches.filter((b) => gatesOn(b) === 0).length,
+      pk_pending: sum((b) => pend(b.pk_state)),
+      merchandiser_pending: 0,
+      display_wall_pending: sum((b) => pend(b.display_wall_state)),
+      material_pending: sum((b) => pend(b.material_state)),
+      pk_total: sum((b) => b.pk_count),
+    };
+  }, [branches]);
+
+  const pkAccounts = useMemo<PkAccount[]>(
+    () =>
+      branches
+        .map((b) => ({ account_id: b.account_id, name: b.name, pk_count: b.pk_count }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [branches],
+  );
+
+  // The checkbox and its "again": one writer, the count — the trigger keeps
+  // pk_state agreeing on the server. Optimistic, then the truth reloaded only
+  // on failure, because the row being ticked is already on the screen.
+  const setPkCount = useCallback(
+    async (accountId: string, next: number) => {
+      const row = branches.find((b) => b.account_id === accountId);
+      if (!row || next < 0) return;
+      setBranches((prev) =>
+        prev.map((b) =>
+          b.account_id === accountId
+            ? {
+                ...b,
+                pk_count: next,
+                pk_state: next > 0 ? "OK" : b.pk_state === "OK" ? "NO" : b.pk_state,
+              }
+            : b,
+        ),
+      );
+      const { error } = await getSupabaseBrowserClient()
+        .from("account_rollout")
+        .upsert(
+          { account_id: accountId, org_id: row.org_id, pk_count: next },
+          { onConflict: "account_id" },
+        );
+      if (error) void attempt();
+    },
+    [branches, attempt],
+  );
+
   const focusedGates = useMemo(() => {
     if (!focus) return null;
     const b = branches.find((x) => x.account_id === focus.accountId);
@@ -287,16 +375,108 @@ export function ManagerHome({ name }: { name: string }) {
       display_wall_done: on(b.display_wall_state),
       material_done: on(b.material_state),
       pk_pending: pending(b.pk_state),
-      merchandiser_pending: pending(b.merchandiser_state),
+      merchandiser_pending: 0,
       display_wall_pending: pending(b.display_wall_state),
       material_pending: pending(b.material_state),
-      fully_through:
-        on(b.pk_state) + on(b.merchandiser_state) + on(b.display_wall_state) + on(b.material_state) === 4
-          ? 1
-          : 0,
+      fully_through: gatesOn(b) === 3 ? 1 : 0,
       not_started: 0,
+      pk_total: b.pk_count,
     };
   }, [focus, branches]);
+
+  // The one branch's own unfold row, so the class can be recorded from the
+  // focused reading with the same control the book uses.
+  const focusedPk = useMemo<PkAccount[] | undefined>(() => {
+    if (!focus) return undefined;
+    const b = branches.find((x) => x.account_id === focus.accountId);
+    return b ? [{ account_id: b.account_id, name: b.name, pk_count: b.pk_count }] : undefined;
+  }, [focus, branches]);
+
+  // GONE QUIET AS A RANKING, under the region reading (Andre, 2026-08-28).
+  // A count ("4") says there is trouble; it does not say WHERE TO GO FIRST.
+  // The buying itself does: every dealer in the book, ordered from the one
+  // that stopped buying to the one still growing — attention runs down the
+  // list. With no earlier file to move against, the smallest buyers lead,
+  // because a thin month is the quietest signal there is.
+  // It follows the card's window: under "Year so far" the comparison is the
+  // file's own LY column — which is where the dealers who bought all of last
+  // year and nothing this year finally get named instead of skipped.
+  const quietYtd = salesMode === "ytd" && ytdSellRows.length > 0;
+  const quietRanking = useMemo(() => {
+    const base = quietYtd ? ytdSellRows : monthlyRows;
+    const pLatest = quietYtd
+      ? ([...new Set(ytdSellRows.map((r) => r.period))].sort().reverse()[0] ?? null)
+      : latest;
+    const empty = {
+      rows: [] as {
+        key: string;
+        accountId: string | null;
+        name: string;
+        qty: number;
+        prevQty: number;
+        score: number;
+        unit: string;
+      }[],
+      hasPrev: false,
+    };
+    if (!pLatest) return empty;
+    const cur = new Map<string, number>();
+    const prev = new Map<string, number>();
+    const names = new Map<string, string>();
+    const ids = new Map<string, string | null>();
+    let unit = "LF";
+    for (const r of base) {
+      const key = r.dealer_id ?? r.dealer_label;
+      names.set(key, r.dealer_name ?? r.dealer_label);
+      ids.set(key, r.dealer_id);
+      unit = r.unit || unit;
+      if (r.period === pLatest) {
+        cur.set(key, (cur.get(key) ?? 0) + Number(r.quantity));
+        if (quietYtd)
+          prev.set(key, (prev.get(key) ?? 0) + Number(r.ly_quantity ?? 0));
+      } else if (!quietYtd && previous && r.period === previous) {
+        prev.set(key, (prev.get(key) ?? 0) + Number(r.quantity));
+      }
+    }
+    const hasPrev = quietYtd
+      ? [...prev.values()].some((v) => v > 0)
+      : previous !== null;
+    const keys = new Set([...cur.keys(), ...prev.keys()]);
+    const rows = [...keys]
+      .map((k) => {
+        const c = cur.get(k) ?? 0;
+        const p = prev.get(k) ?? 0;
+        // Attention, as a number: stopped < falling < level < rising < new.
+        const score = !hasPrev
+          ? c
+          : p === 0
+            ? Number.POSITIVE_INFINITY
+            : c === 0
+              ? Number.NEGATIVE_INFINITY
+              : (c - p) / p;
+        return {
+          key: k,
+          accountId: ids.get(k) ?? null,
+          name: names.get(k) ?? k,
+          qty: c,
+          prevQty: p,
+          score,
+          unit,
+        };
+      })
+      .filter((r) => r.qty > 0 || r.prevQty > 0);
+    rows.sort((a, b) => a.score - b.score || a.qty - b.qty);
+    return { rows, hasPrev };
+  }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
+
+  // The ranking answers for the whole book under the region lens; a chosen
+  // customer narrows the section to themselves like everything else does.
+  const quietAsRanking =
+    salesLens === "region" && !focus && quietRanking.rows.length > 0;
+  const quietPrevKey = quietYtd ? "last-year" : previous;
+  const quietLabels = quietYtd
+    ? { on: "last year", fresh: "new this year" }
+    : undefined;
 
   // Grouped by what is wrong, most of it first — the same union a rep meets one
   // row at a time, read as a list of problems with names against them.
@@ -436,34 +616,52 @@ export function ManagerHome({ name }: { name: string }) {
           the row, walking rep → distributor → branch → dealer in place rather
           than sending anyone to another screen. */}
       <TeamSales
-        rows={sellRows}
+        rows={monthlyRows}
+        ytdRows={ytdSellRows}
         branches={sellBranches}
         latest={latest}
         previous={previous}
         path={path}
         onPath={setPath}
         onFocus={setFocus}
+        onLens={setSalesLens}
+        onMode={setSalesMode}
       />
 
       {/* Bianca's tracker, as the journey a branch walks rather than four
-          numbers in a box. */}
+          numbers in a box — and ONLY under the Rep lens: the gates are the
+          reps' work, and next to a region or a distributor reading they were
+          an answer to a question nobody had asked. */}
       {/* The rollout answers for one branch when one is chosen, and steps
           aside for a distributor — a house does not have a display wall. */}
-      <div className="adapt" key={`gates-${focus?.id ?? "all"}`}>
-        {focus ? (
-          focusedGates ? (
-            <RolloutTimeline counts={focusedGates} heading="Their rollout" />
-          ) : null
-        ) : (
-          rollout && <RolloutTimeline counts={rollout} />
-        )}
-      </div>
+      {salesLens === "rep" && (
+        <div className="adapt" key={`gates-${focus?.id ?? "all"}`}>
+          {focus ? (
+            focusedGates ? (
+              <RolloutTimeline
+                counts={focusedGates}
+                heading="Their rollout"
+                pkAccounts={focusedPk}
+                onPkCount={setPkCount}
+              />
+            ) : null
+          ) : (
+            rollout && (
+              <RolloutTimeline
+                counts={rollout}
+                pkAccounts={pkAccounts}
+                onPkCount={setPkCount}
+              />
+            )
+          )}
+        </div>
+      )}
 
       <div className="adapt" key={`months-${focus?.id ?? "all"}`}>
         <MonthByMonth rows={monthRows} nowMs={loadedAt} />
       </div>
 
-      {slippingGroups.length > 0 && (
+      {(slippingGroups.length > 0 || quietAsRanking) && (
         <section className="adapt" key={`slip-${focus?.id ?? "all"}`}>
           <div className="section-head">
             <h2 className="t-section">What&rsquo;s slipping</h2>
@@ -471,22 +669,96 @@ export function ManagerHome({ name }: { name: string }) {
               All of it
             </Link>
           </div>
+
+          {/* The quiet accounts, RANKED by their buying — the one that stopped
+              is first and the one still growing is last, so "who do I call
+              first" is answered by reading top to bottom. Replaces the bare
+              count under the region lens; the other exception groups keep
+              their chips below. */}
+          {quietAsRanking && (
+            <div className="card mb-3">
+              <div className="quiet-head">
+                <span className="t-title">Account gone quiet</span>
+                <span className="t-hint">
+                  {quietRanking.hasPrev
+                    ? quietYtd
+                      ? "ranked against last year — most in need first"
+                      : "ranked by buying — most in need first"
+                    : "ranked by volume — no earlier file to move against"}
+                </span>
+              </div>
+              <ul className="list">
+                {quietRanking.rows.slice(0, 10).map((r) => {
+                  const stopped = r.prevQty > 0 && r.qty === 0;
+                  const body = (
+                    <>
+                      <span className="row-body">
+                        <span className="quiet-name">{r.name}</span>
+                      </span>
+                      <span className="quiet-fig">
+                        <span className="fig fig-md">
+                          {QTY.format(r.qty)} {r.unit}
+                        </span>
+                        {quietRanking.hasPrev &&
+                          (stopped ? (
+                            <span className="sales-move" data-dir="down">
+                              stopped buying
+                            </span>
+                          ) : (
+                            <span
+                              className="sales-move"
+                              data-dir={moveDir(r.qty, r.prevQty, quietPrevKey)}
+                            >
+                              {r.prevQty === 0
+                                ? (quietLabels?.fresh ?? "new this month")
+                                : (movementLabel(r.qty, r.prevQty, quietPrevKey, quietLabels) ?? "—")}
+                            </span>
+                          ))}
+                      </span>
+                    </>
+                  );
+                  return (
+                    <li key={r.key}>
+                      {r.accountId ? (
+                        <Link href={`/accounts/${r.accountId}`} className="row quiet-row">
+                          {body}
+                        </Link>
+                      ) : (
+                        <div className="row quiet-row">{body}</div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {quietRanking.rows.length > 10 && (
+                <p className="t-hint quiet-more">
+                  and {quietRanking.rows.length - 10} calmer below —{" "}
+                  <Link href="/accounts" className="underline underline-offset-2">
+                    all accounts
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+
           <ul className="list">
-            {slippingGroups.map((g) => (
-              <li key={g.type}>
-                <Link href="/accounts" className="row">
-                  <span className="row-body">
-                    <span className="t-title">{exceptionLabel(g.type)}</span>
-                  </span>
-                  <span
-                    className="fig fig-lg shrink-0"
-                    style={{ color: g.danger ? "var(--danger)" : "var(--ink-primary)" }}
-                  >
-                    {g.count}
-                  </span>
-                </Link>
-              </li>
-            ))}
+            {slippingGroups
+              .filter((g) => !(quietAsRanking && g.type === "STRATEGIC_ACCOUNT_QUIET"))
+              .map((g) => (
+                <li key={g.type}>
+                  <Link href="/accounts" className="row">
+                    <span className="row-body">
+                      <span className="t-title">{exceptionLabel(g.type)}</span>
+                    </span>
+                    <span
+                      className="fig fig-lg shrink-0"
+                      style={{ color: g.danger ? "var(--danger)" : "var(--ink-primary)" }}
+                    >
+                      {g.count}
+                    </span>
+                  </Link>
+                </li>
+              ))}
           </ul>
         </section>
       )}

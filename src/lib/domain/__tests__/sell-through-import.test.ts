@@ -471,13 +471,23 @@ describe("buildImport · a real report's shape", () => {
 
   it("throws away every subtotal, which is the whole ball game", () => {
     expect(plan.subtotals).toBe(4);
-    expect(plan.rows).toHaveLength(2);
+    // Two sales rows, plus Home Depot's zero — kept as a row since the YTD
+    // work, because "who stopped buying" needs a name and a figure to rank.
+    expect(plan.rows).toHaveLength(3);
   });
 
-  it("counts business lost rather than dropping it in silence", () => {
-    // Home Depot took 42 pieces last year and nothing now. It cannot be stored —
-    // a zero is not a sale — but it is the most actionable line in the file.
+  it("loads business lost as a zero row, and still counts it", () => {
     expect(plan.lostBusiness).toBe(1);
+    const lost = plan.rows.find((r) => r.quantity === 0);
+    expect(lost).toBeDefined();
+    expect(lost!.dealerLabel).toContain("HOME DEPOT");
+    // 42 pieces at 47 inches, in feet — the LY rides the same conversion.
+    expect(Math.round(lost!.lastYear ?? 0)).toBe(165);
+  });
+
+  it("keeps last year beside this year on the rows that have both", () => {
+    // The sales rows in this file say LY 0 — stored as null, not as a figure.
+    expect(plan.rows[0].lastYear).toBeNull();
   });
 
   it("normalises the mixture to linear feet and keeps what it was told", () => {
@@ -491,9 +501,14 @@ describe("buildImport · a real report's shape", () => {
   });
 
   it("matches the banner the file names, in feet", () => {
-    expect(plan.rows.every((r) => r.dealerId === "ganahl")).toBe(true);
+    const sales = plan.rows.filter((r) => r.quantity > 0);
+    expect(sales.every((r) => r.dealerId === "ganahl")).toBe(true);
     expect(plan.matchedRows).toBe(2);
-    expect(plan.unmatched).toEqual([]);
+    // Home Depot is not one of ours: its zero row loads unmatched, at zero
+    // volume, exactly like any other name an admin maps later.
+    expect(plan.unmatched).toHaveLength(1);
+    expect(plan.unmatched[0].label).toContain("HOME DEPOT");
+    expect(plan.unmatched[0].quantity).toBe(0);
   });
 });
 

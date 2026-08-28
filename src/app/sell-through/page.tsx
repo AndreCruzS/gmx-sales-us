@@ -55,6 +55,7 @@ interface UploadRow {
   id: string;
   distributor_id: string;
   period: string;
+  period_kind: "MONTH" | "YTD";
   row_count: number;
   unmatched_count: number;
   uploaded_at: string;
@@ -96,6 +97,10 @@ export default function SellThroughPage() {
 
   const [distributorId, setDistributorId] = useState("");
   const [when, setWhen] = useState<{ year: number; month: number } | null>(null);
+  // What window the file covers. A YTD file is January through its cut date,
+  // one aggregate — it never joins the month-over-month reading, it compares
+  // against its own LY column instead (Bianca, 2026-08-28).
+  const [kind, setKind] = useState<"MONTH" | "YTD">("MONTH");
   const [months, setMonths] = useState<{ value: string; label: string }[]>([]);
   // The file is the main door now; the paste stays as a second one because it is
   // genuinely quicker for a three-line correction.
@@ -166,7 +171,7 @@ export default function SellThroughPage() {
         .limit(500),
       supabase
         .from("sell_through_uploads")
-        .select("id, distributor_id, period, row_count, unmatched_count, uploaded_at")
+        .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at")
         .order("period", { ascending: false })
         .limit(200),
       supabase
@@ -258,7 +263,10 @@ export default function SellThroughPage() {
 
   const period = when ? periodOf(when.year, when.month) : null;
   const existing = uploads.find(
-    (u) => u.distributor_id === distributorId && u.period === period,
+    (u) =>
+      u.distributor_id === distributorId &&
+      u.period === period &&
+      u.period_kind === kind,
   );
   const problem = mappingProblem(mapping);
   const loadable = plan
@@ -341,6 +349,7 @@ export default function SellThroughPage() {
           org_id: profile.orgId,
           distributor_id: distributorId,
           period,
+          period_kind: kind,
           uploaded_by: profile.membershipId,
           filename: file?.name ?? null,
           storage_path: storagePath,
@@ -365,6 +374,7 @@ export default function SellThroughPage() {
             period,
             product: r.product,
             quantity: r.quantity,
+            ly_quantity: r.lastYear,
             unit: "LF",
             source_quantity: r.sourceQuantity,
             source_unit: r.sourceUnit,
@@ -375,7 +385,7 @@ export default function SellThroughPage() {
       }
 
       setDone(
-        `${QTY.format(rows.length)} ${rows.length === 1 ? "row" : "rows"} loaded for ${periodLabel(period)}.`,
+        `${QTY.format(rows.length)} ${rows.length === 1 ? "row" : "rows"} loaded for ${kind === "YTD" ? `the year through ${periodLabel(period)}` : periodLabel(period)}.`,
       );
       setPasted("");
       setFile(null);
@@ -545,9 +555,36 @@ export default function SellThroughPage() {
             width:100% — and Chrome honours the width, which is why it only
             showed up on a phone. A month is a pick from eighteen options; that
             never needed a date widget, and a select cannot overflow. */}
+        {/* What WINDOW the file is, before which month: a year-to-date export
+            is a different object, not a bigger month — it stays out of the
+            month-over-month reading and compares against its own LY column. */}
+        <div className="flex flex-col gap-1">
+          <span className="t-hint">What the file covers</span>
+          <div className="chip-row" role="group" aria-label="What the file covers">
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={kind === "MONTH"}
+              onClick={() => setKind("MONTH")}
+            >
+              One month
+            </button>
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={kind === "YTD"}
+              onClick={() => setKind("YTD")}
+            >
+              Year to date
+            </button>
+          </div>
+        </div>
+
         <label className="flex flex-col gap-1">
           <span className="t-hint">
-            Which month it covers — the report is always a month behind
+            {kind === "YTD"
+              ? "The month the export was cut — it covers January through then"
+              : "Which month it covers — the report is always a month behind"}
           </span>
           <select
             value={when ? `${when.year}-${String(when.month).padStart(2, "0")}` : ""}
@@ -567,7 +604,7 @@ export default function SellThroughPage() {
 
         {existing && (
           <p className="t-sub" style={{ color: "var(--warn-ink)" }}>
-            {periodLabel(period)} is already loaded for this house
+            {kind === "YTD" ? `Year-to-date through ${periodLabel(period)}` : periodLabel(period)} is already loaded for this house
             {` — ${QTY.format(existing.row_count)} rows. Loading again REPLACES it, so the book cannot double.`}
           </p>
         )}
@@ -744,11 +781,15 @@ export default function SellThroughPage() {
                   </span>
                 </li>
               )}
+              {/* Not a subtraction: these LOAD, at zero, so the dealers who
+                  stopped buying keep their names. The line stays because an
+                  admin checking the file against the plan needs to see them
+                  accounted for. */}
               {plan.lostBusiness > 0 && (
                 <li className="t-sub flex justify-between gap-3">
-                  <span>Bought last year, nothing now</span>
+                  <span>Bought last year, nothing now — kept, at zero</span>
                   <span className="t-meta tabular-nums">
-                    −{QTY.format(plan.lostBusiness)}
+                    {QTY.format(plan.lostBusiness)}
                   </span>
                 </li>
               )}
@@ -933,7 +974,7 @@ export default function SellThroughPage() {
           >
             {saving
               ? "Loading…"
-              : `${existing ? "Replace" : "Load"} ${periodLabel(period)} · ${QTY.format(loadable)} rows`}
+              : `${existing ? "Replace" : "Load"} ${kind === "YTD" ? `YTD through ${periodLabel(period)}` : periodLabel(period)} · ${QTY.format(loadable)} rows`}
           </button>
         </section>
       )}
@@ -966,7 +1007,7 @@ export default function SellThroughPage() {
                   <span className="row" style={{ borderColor: "var(--danger)" }}>
                     <span className="row-body">
                       <span className="t-title">
-                        {`Remove ${periodLabel(u.period)}?`}
+                        {`Remove ${u.period_kind === "YTD" ? `YTD through ${periodLabel(u.period)}` : periodLabel(u.period)}?`}
                       </span>
                       <span className="t-sub block">
                         {`Its ${QTY.format(u.row_count)} rows go with it. No other month is touched, and it cannot be undone — but the file can be loaded again.`}
@@ -995,7 +1036,10 @@ export default function SellThroughPage() {
                 ) : (
                   <span className="row">
                     <span className="row-body">
-                      <span className="t-title">{periodLabel(u.period)}</span>
+                      <span className="t-title">
+                        {periodLabel(u.period)}
+                        {u.period_kind === "YTD" ? " · YTD" : ""}
+                      </span>
                       <span className="t-sub block">
                         {QTY.format(u.row_count)} rows
                         {u.unmatched_count > 0

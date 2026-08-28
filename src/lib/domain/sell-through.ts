@@ -51,6 +51,12 @@ export interface SellThroughRow {
   quantity: number | string;
   unit: string | null;
   value: number | string | null;
+  /** The same window one year earlier, when the file carried an LY column.
+   *  Optional: monthly files rarely have one, and fixtures never do. */
+  ly_quantity?: number | string | null;
+  /** MONTH unless the upload said otherwise. YTD rows are January-through-the-
+   *  period aggregates and must never join the month-over-month pair. */
+  period_kind?: "MONTH" | "YTD" | null;
 }
 
 /** A branch of a distributor, including the ones that bought nothing — which is
@@ -1063,10 +1069,11 @@ export function movementLabel(
   now: number,
   before: number,
   previous: string | null,
+  labels?: { on?: string; fresh?: string },
 ): string | null {
   if (!previous) return null;
-  const on = periodShort(previous);
-  if (before <= 0) return now > 0 ? "new this month" : null;
+  const on = labels?.on ?? periodShort(previous);
+  if (before <= 0) return now > 0 ? (labels?.fresh ?? "new this month") : null;
   const pct = movement(now, before);
   if (pct === null) return null;
   const rounded = Math.round(pct);

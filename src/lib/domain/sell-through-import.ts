@@ -419,6 +419,10 @@ export interface PlannedRow {
   product: string | null;
   /** Linear feet, always — converted if the file used something else. */
   quantity: number;
+  /** The same window one year earlier, in linear feet, when the file carried an
+   *  LY column. A row may hold quantity 0 with lastYear > 0: business that
+   *  existed a year ago and stopped — kept as a row, not a footnote. */
+  lastYear: number | null;
   /** What the file said, kept so the conversion can be checked later. Null when
    *  the file was already in LF and nothing was converted. */
   sourceQuantity: number | null;
@@ -435,9 +439,9 @@ export interface ImportPlan {
    *  difference between a right answer and one four times too big — and a person
    *  checking a load needs to see that they were found. */
   subtotals: number;
-  /** Lines that bought something in the comparison period and nothing now. They
-   *  cannot be stored (a zero is not a sale) but they are the most actionable
-   *  thing in the file, so they are counted rather than dropped in silence. */
+  /** Lines that bought something in the comparison period and nothing now.
+   *  Since the YTD work these LOAD as rows (quantity zero, lastYear kept) —
+   *  the count stays so the admin sees how much of the file is lost business. */
   lostBusiness: number;
   /** Rows whose unit could not be turned into linear feet. Their volume is
    *  unknown, not zero, so they are named rather than loaded as nothing. */
@@ -519,13 +523,17 @@ export function buildImport(
       skipped += 1;
       continue;
     }
-    // Nothing this period. If the file also says what they took last time, this
-    // is business lost rather than a line that was never data.
+    // Nothing this period. If the file also says what they took last time, the
+    // line is business LOST — since the YTD work it is kept as a row (quantity
+    // zero, lastYear set), because "who stopped buying" is the most actionable
+    // list in the file and a counter cannot be ranked or named.
+    const lyRaw = parseNumber(at(row, "last_year"));
     if (qty === 0) {
-      const before = parseNumber(at(row, "last_year"));
-      if (before !== null && before > 0) lostBusiness += 1;
-      else skipped += 1;
-      continue;
+      if (lyRaw !== null && lyRaw > 0) lostBusiness += 1;
+      else {
+        skipped += 1;
+        continue;
+      }
     }
 
     const code = at(row, "branch_code");
@@ -557,10 +565,21 @@ export function buildImport(
     const dealerId = matchDealer(dealerLabel, dealerIndex);
 
     // Into linear feet, which is the only unit anything downstream understands.
+    // A zero needs no conversion — asking would let a zero row die on a product
+    // whose length cannot be parsed, and its LY figure with it.
     const unit = at(row, "unit");
-    const feet = toLinearFeet(qty, unit, itemText);
+    const feet = qty === 0 ? 0 : toLinearFeet(qty, unit, itemText);
     if (feet === null) {
       unconvertible.push({ label: dealerLabel, quantity: qty, unit: unit || "?" });
+      continue;
+    }
+    // Last year rides the same conversion. When only the LY fails to convert,
+    // the row still loads — a this-year figure must not be lost to last year's.
+    const lastYear =
+      lyRaw !== null && lyRaw > 0 ? toLinearFeet(lyRaw, unit, itemText) : null;
+    if (qty === 0 && lastYear === null) {
+      // The whole point of a zero row was its LY; without it there is no row.
+      skipped += 1;
       continue;
     }
 
@@ -586,6 +605,7 @@ export function buildImport(
       dealerLabel,
       product: itemText.length > 0 ? itemText : null,
       quantity: feet,
+      lastYear,
       sourceQuantity: converted ? qty : null,
       sourceUnit: converted ? unit || null : null,
       value: rowValue,

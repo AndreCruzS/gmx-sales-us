@@ -136,15 +136,23 @@ const keyOf = (path: readonly PathStep[]) => path.map((s) => s.key).join(">");
 
 export function TeamSales({
   rows,
+  ytdRows,
   branches,
-  latest,
-  previous,
+  latest: latestMonth,
+  previous: previousMonth,
   path,
   onPath,
   onFocus,
+  onLens,
+  onMode,
 }: {
-  /** Sell-through, at least for the two most recent months. */
+  /** Sell-through, at least for the two most recent months. MONTH rows only —
+   *  a year-to-date aggregate in here would double the book. */
   rows: readonly SellThroughRow[];
+  /** Year-to-date uploads, when any exist. Their presence is what makes the
+   *  "This month / Year so far" toggle appear; their LY column is the only
+   *  comparison the YTD reading makes. */
+  ytdRows?: readonly SellThroughRow[];
   /** Every known branch, including the ones that bought nothing. */
   branches: readonly BranchRef[];
   /** The month the book is good to, and the one before it. */
@@ -156,8 +164,19 @@ export function TeamSales({
   path: readonly PathStep[];
   onPath: (next: PathStep[]) => void;
   onFocus: (next: Focus | null) => void;
+  /** The page listens because sections below answer per-lens — the rollout
+   *  book only makes sense while the card is being read by rep. */
+  onLens?: (lens: SellLens) => void;
+  /** And per-window: the footnote and the quiet ranking follow the same
+   *  month-or-year reading the card is giving. */
+  onMode?: (mode: "month" | "ytd") => void;
 }) {
   const [lens, setLens] = useState<SellLens>("region");
+  // Which WINDOW the card is read through. "month" is the book as it has
+  // always been; "ytd" is the year-so-far aggregate compared against its own
+  // last-year column. The pair of periods below follows this, so everything
+  // downstream — the walk, the movement, the counter — works unchanged.
+  const [mode, setMode] = useState<"month" | "ytd">("month");
   const [selected, setSelected] = useState<Selection | null>(null);
   // "slide" = travelling to the start, "fill" = stretching to own the bar.
   const [phase, setPhase] = useState<"idle" | "slide" | "fill">("idle");
@@ -188,15 +207,46 @@ export function TeamSales({
 
   const pathKey = keyOf(path);
 
-  const { current, prior } = useMemo(() => {
+  // The YTD window, shaped to look exactly like a pair of months: the file's
+  // LY column becomes the "previous period", so buildStep, the movement labels
+  // and the counter all work untouched. A pseudo period key, never a date —
+  // nothing formats it, the labels are overridden wherever it would show.
+  const LY_PERIOD = "last-year";
+  const ytd = useMemo(() => {
+    if (!ytdRows || ytdRows.length === 0) return null;
+    const seen = [...new Set(ytdRows.map((r) => r.period))].sort().reverse();
+    const yLatest = seen[0] ?? null;
+    if (!yLatest) return null;
+    const cur = ytdRows.filter((r) => r.period === yLatest);
+    const prior = cur
+      .filter((r) => Number(r.ly_quantity ?? 0) > 0)
+      .map((r) => ({ ...r, period: LY_PERIOD, quantity: Number(r.ly_quantity) }));
+    return {
+      current: cur,
+      prior,
+      latest: yLatest,
+      previous: prior.length > 0 ? LY_PERIOD : null,
+    };
+  }, [ytdRows]);
+  const ytdOn = mode === "ytd" && ytd !== null;
+
+  const latest = ytdOn ? ytd!.latest : latestMonth;
+  const previous = ytdOn ? ytd!.previous : previousMonth;
+  // "on last year", not "on Jun" — the YTD comparison is the same window a
+  // year back, and a month name there would be a lie with a date on it.
+  const mv = ytdOn ? { on: "last year", fresh: "new this year" } : undefined;
+
+  const monthPair = useMemo(() => {
     const c: SellThroughRow[] = [];
     const p: SellThroughRow[] = [];
     for (const r of rows) {
-      if (latest && r.period === latest) c.push(r);
-      else if (previous && r.period === previous) p.push(r);
+      if (latestMonth && r.period === latestMonth) c.push(r);
+      else if (previousMonth && r.period === previousMonth) p.push(r);
     }
     return { current: c, prior: p };
-  }, [rows, latest, previous]);
+  }, [rows, latestMonth, previousMonth]);
+  const current = ytdOn && ytd ? ytd.current : monthPair.current;
+  const prior = ytdOn && ytd ? ytd.prior : monthPair.prior;
 
   const step = useMemo(
     () => buildStep(current, prior, lens, path, branches),
@@ -480,8 +530,8 @@ export function TeamSales({
     counterColour ??
     compositionRail(step.summary !== null ? [step.summary] : step.groups);
 
-  const month = periodLabel(latest);
-  const waiting = housesMissing(rows, latest);
+  const month = ytdOn ? `${latest?.slice(0, 4)} so far` : periodLabel(latest);
+  const waiting = housesMissing(ytdOn ? (ytdRows ?? []) : rows, latest);
 
   // The movement beside the counter follows whatever the counter is showing. A
   // figure that has travelled to one band's total with the whole step's movement
@@ -489,7 +539,7 @@ export function TeamSales({
   const stepPrevTotal = step.groups.reduce((n, g) => n + g.prevTotal, 0);
   const counterPrev =
     chosenBand !== null && phase !== "slide" ? chosenBand.prevQty : stepPrevTotal;
-  const stepMoved = movementLabel(counterTarget, counterPrev, previous);
+  const stepMoved = movementLabel(counterTarget, counterPrev, previous, mv);
 
 
 
@@ -557,7 +607,10 @@ export function TeamSales({
               // start of it. Three links deep, the chip is the thing a thumb
               // reaches for first — it should not be the one control on the
               // screen that does nothing.
-              if (lens !== key) setLens(key);
+              if (lens !== key) {
+                setLens(key);
+                onLens?.(key);
+              }
               // And a walk taken under one lens is not a walk under the next.
               goTo([]);
             }}
@@ -566,6 +619,37 @@ export function TeamSales({
           </button>
         ))}
       </div>
+
+      {/* The window, only once there is more than one to read: a YTD upload is
+          what makes "Year so far" a real question. Flipping it abandons the
+          walk for the same reason a lens change does — a walk taken through
+          one window is not a walk through the next. */}
+      {ytd !== null && (
+        <div className="chip-row mb-3" role="group" aria-label="Read the book over">
+          {(
+            [
+              ["month", "This month"],
+              ["ytd", "Year so far"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className="chip"
+              aria-pressed={mode === key}
+              onClick={() => {
+                if (mode !== key) {
+                  setMode(key);
+                  onMode?.(key);
+                }
+                goTo([]);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Where the walk has got to, and TWO ways back out of it.
 
@@ -611,7 +695,7 @@ export function TeamSales({
 
       {/* Keyed on the walk, so each level enters rather than swapping in place —
           the same remount trick the page sections use. */}
-      <div className="sales-step" key={`${lens}-${pathKey}`}>
+      <div className="sales-step" key={`${lens}-${mode}-${pathKey}`}>
         <div className="card card-pad">
           {/* THE FIRST BAR IS THE TOTAL.
               A grand total with no bar, sitting above a column of bars, reads as
@@ -748,9 +832,9 @@ export function TeamSales({
 
           {step.groups.map((g) => {
             const open = chosenGroup?.key === g.key ? chosenBand : null;
-            const moved = movementLabel(g.total, g.prevTotal, previous);
+            const moved = movementLabel(g.total, g.prevTotal, previous, mv);
             const openMoved = open
-              ? movementLabel(open.qty, open.prevQty, previous)
+              ? movementLabel(open.qty, open.prevQty, previous, mv)
               : null;
             const isolated = isolatedKey !== null && g.key === isolatedKey;
             // The isolated row's stripe on the total bar, looked up by key
@@ -1083,7 +1167,7 @@ export function TeamSales({
                       );
                     }
 
-                    const bandMoved = movementLabel(b.qty, b.prevQty, previous);
+                    const bandMoved = movementLabel(b.qty, b.prevQty, previous, mv);
                     const bandReturning =
                       held === null &&
                       bandReleasing !== null &&
@@ -1336,9 +1420,19 @@ export function TeamSales({
       </div>
 
       <p className="t-sub px-1">
-        The distributors&rsquo; own report for {month} — it arrives a month
-        behind, so this is what the dealers bought, not what we have quoted.
-        {previous ? ` Movement is against ${periodLabel(previous)}.` : ""}
+        {ytdOn ? (
+          <>
+            The distributors&rsquo; own year-to-date report, January through{" "}
+            {periodLabel(latest)} — one aggregate, so the months inside it
+            cannot be told apart. Movement is against the same window last year.
+          </>
+        ) : (
+          <>
+            The distributors&rsquo; own report for {month} — it arrives a month
+            behind, so this is what the dealers bought, not what we have quoted.
+            {previous ? ` Movement is against ${periodLabel(previous)}.` : ""}
+          </>
+        )}
       </p>
 
       {/* The files do not arrive together. When one house's month lands before

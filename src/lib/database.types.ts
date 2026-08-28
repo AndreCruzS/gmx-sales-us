@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -270,6 +250,7 @@ export type Database = {
           merchandiser_state: Database["public"]["Enums"]["rollout_gate_state"]
           notes: string | null
           org_id: string
+          pk_count: number
           pk_state: Database["public"]["Enums"]["rollout_gate_state"]
           product: string | null
           updated_at: string
@@ -282,6 +263,7 @@ export type Database = {
           merchandiser_state?: Database["public"]["Enums"]["rollout_gate_state"]
           notes?: string | null
           org_id: string
+          pk_count?: number
           pk_state?: Database["public"]["Enums"]["rollout_gate_state"]
           product?: string | null
           updated_at?: string
@@ -294,6 +276,7 @@ export type Database = {
           merchandiser_state?: Database["public"]["Enums"]["rollout_gate_state"]
           notes?: string | null
           org_id?: string
+          pk_count?: number
           pk_state?: Database["public"]["Enums"]["rollout_gate_state"]
           product?: string | null
           updated_at?: string
@@ -3842,6 +3825,7 @@ export type Database = {
           dealer_id: string | null
           dealer_label: string
           id: string
+          ly_quantity: number | null
           org_id: string
           period: string
           product: string | null
@@ -3859,6 +3843,7 @@ export type Database = {
           dealer_id?: string | null
           dealer_label: string
           id?: string
+          ly_quantity?: number | null
           org_id: string
           period: string
           product?: string | null
@@ -3876,6 +3861,7 @@ export type Database = {
           dealer_id?: string | null
           dealer_label?: string
           id?: string
+          ly_quantity?: number | null
           org_id?: string
           period?: string
           product?: string | null
@@ -3996,6 +3982,7 @@ export type Database = {
           notes: string | null
           org_id: string
           period: string
+          period_kind: Database["public"]["Enums"]["sell_period_kind"]
           row_count: number
           storage_path: string | null
           unmatched_count: number
@@ -4010,6 +3997,7 @@ export type Database = {
           notes?: string | null
           org_id: string
           period: string
+          period_kind?: Database["public"]["Enums"]["sell_period_kind"]
           row_count?: number
           storage_path?: string | null
           unmatched_count?: number
@@ -4024,6 +4012,7 @@ export type Database = {
           notes?: string | null
           org_id?: string
           period?: string
+          period_kind?: Database["public"]["Enums"]["sell_period_kind"]
           row_count?: number
           storage_path?: string | null
           unmatched_count?: number
@@ -4710,6 +4699,7 @@ export type Database = {
           org_id: string | null
           owner_id: string | null
           parent_account_id: string | null
+          pk_count: number | null
           pk_state: Database["public"]["Enums"]["rollout_gate_state"] | null
           product: string | null
           territory_id: string | null
@@ -5339,6 +5329,7 @@ export type Database = {
           org_id: string | null
           pk_done: number | null
           pk_pending: number | null
+          pk_total: number | null
         }
         Relationships: [
           {
@@ -6221,10 +6212,12 @@ export type Database = {
           dealer_name: string | null
           distributor_id: string | null
           distributor_name: string | null
+          ly_quantity: number | null
           market_owner_id: string | null
           market_owner_name: string | null
           org_id: string | null
           period: string | null
+          period_kind: Database["public"]["Enums"]["sell_period_kind"] | null
           product: string | null
           quantity: number | null
           region_id: string | null
@@ -6500,6 +6493,7 @@ export type Database = {
         | "ARCHITECT_FOR"
         | "DEVELOPER_FOR"
       rollout_gate_state: "OK" | "PENDING" | "NO"
+      sell_period_kind: "MONTH" | "YTD"
       strategic_importance: "STRATEGIC" | "HIGH" | "MEDIUM" | "LOW"
       visit_objective:
         | "COLLECT_QUOTE"
@@ -6644,9 +6638,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       account_type: [
@@ -6762,6 +6753,7 @@ export const Constants = {
         "DEVELOPER_FOR",
       ],
       rollout_gate_state: ["OK", "PENDING", "NO"],
+      sell_period_kind: ["MONTH", "YTD"],
       strategic_importance: ["STRATEGIC", "HIGH", "MEDIUM", "LOW"],
       visit_objective: [
         "COLLECT_QUOTE",
@@ -6786,4 +6778,3 @@ export const Constants = {
     },
   },
 } as const
-
