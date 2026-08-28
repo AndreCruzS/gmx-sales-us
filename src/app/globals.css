@@ -1007,6 +1007,27 @@ body {
   flex: 1 0 0;
   min-width: 0;
 }
+/* The band row grows a second storey: the line above, the share-meter below,
+   both starting where the rail ends so every row's track shares one x. */
+.sales-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sales-item-line {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.sales-item-track {
+  /* flex:1 on the base class is horizontal in the meter row; in this column
+     it would be vertical growth, so it is switched off. */
+  flex: none;
+  margin-top: 7px;
+  height: 6px;
+  border-radius: 3px;
+}
 .sales-item-name {
   display: block;
   font-size: var(--text-base);

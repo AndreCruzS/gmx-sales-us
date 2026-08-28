@@ -1100,49 +1100,79 @@ export function TeamSales({
                           aria-pressed={open?.key === b.key}
                           onClick={() => tap(g, b)}
                         >
-                          <span
-                            className="sales-item-rail"
-                            style={{ background: b.colour }}
-                            aria-hidden="true"
-                          />
-                          <span className="sales-item-body">
-                            <span className="sales-item-name">{b.name}</span>
-                            {/* Only what this row does not already say. Every
-                                band at one level is the same kind of thing, so
-                                "distributor" on each of them is three words of
-                                repetition — but a branch's state and an
-                                unmatched name's warning are worth the line. And
-                                one product is worth naming where five are just
-                                a count. */}
-                            <span className="sales-item-sub">
-                              {[
-                                b.entity.sub === DIM_NOUN[b.entity.dim]
-                                  ? null
-                                  : b.entity.sub,
-                                b.products.length === 1
-                                  ? b.products[0]
-                                  : b.products.length > 1
-                                    ? `${b.products.length} products`
-                                    : null,
-                                g.bands.length > 1 ? `${Math.round(b.share)}%` : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
-                          </span>
-                          <span className="sales-item-fig">
-                            <span className="sales-item-qty">
-                              {QTY.format(b.qty)} {g.unit}
-                            </span>
+                          {/* The rail only where the meter is not there to
+                              carry the colour — same rule as depth 0: a clean
+                              row wears its colour as the bar, a set-back row
+                              keeps the rail as its one remaining colour. */}
+                          {g.bands.length <= 1 && (
                             <span
-                              className="sales-move"
-                              data-dir={moveDir(b.qty, b.prevQty, previous)}
-                            >
-                              {bandMoved ?? "—"}
+                              className="sales-item-rail"
+                              style={{ background: b.colour }}
+                              aria-hidden="true"
+                            />
+                          )}
+                          {/* The line, then the same reading the markets get:
+                              the band's share of THIS level as a width, on the
+                              same track (Andre, 2026-08-28 — the ruler at the
+                              top runs the whole way down the chain). A column
+                              wrapper so the meter spans name and figure alike
+                              and every row's track starts at the same x. */}
+                          <span className="sales-item-main">
+                            <span className="sales-item-line">
+                              <span className="sales-item-body">
+                                <span className="sales-item-name">{b.name}</span>
+                                {/* Only what this row does not already say. Every
+                                    band at one level is the same kind of thing, so
+                                    "distributor" on each of them is three words of
+                                    repetition — but a branch's state and an
+                                    unmatched name's warning are worth the line. And
+                                    one product is worth naming where five are just
+                                    a count. */}
+                                <span className="sales-item-sub">
+                                  {[
+                                    b.entity.sub === DIM_NOUN[b.entity.dim]
+                                      ? null
+                                      : b.entity.sub,
+                                    b.products.length === 1
+                                      ? b.products[0]
+                                      : b.products.length > 1
+                                        ? `${b.products.length} products`
+                                        : null,
+                                    g.bands.length > 1 ? `${Math.round(b.share)}%` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                              </span>
+                              <span className="sales-item-fig">
+                                <span className="sales-item-qty">
+                                  {QTY.format(b.qty)} {g.unit}
+                                </span>
+                                <span
+                                  className="sales-move"
+                                  data-dir={moveDir(b.qty, b.prevQty, previous)}
+                                >
+                                  {bandMoved ?? "—"}
+                                </span>
+                              </span>
+                              <span className="sales-item-go" aria-hidden="true">
+                                {b.drillable ? "›" : ""}
+                              </span>
                             </span>
-                          </span>
-                          <span className="sales-item-go" aria-hidden="true">
-                            {b.drillable ? "›" : ""}
+                            {g.bands.length > 1 && (
+                              <span
+                                className="sales-market-track sales-item-track"
+                                aria-hidden="true"
+                              >
+                                <span
+                                  className="sales-market-fill"
+                                  style={{
+                                    width: `${b.share}%`,
+                                    background: b.colour,
+                                  }}
+                                />
+                              </span>
+                            )}
                           </span>
                         </button>
                       </li>
