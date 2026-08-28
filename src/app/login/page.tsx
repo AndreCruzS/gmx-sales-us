@@ -48,7 +48,7 @@ export default function LoginPage() {
       <div className="m-auto flex w-full max-w-sm flex-col gap-6 py-8">
       <div className="text-center">
         <h1 className="t-title text-2xl">Commercial OS</h1>
-        <p className="t-meta mt-1">Record once — update everything.</p>
+        <p className="t-hint mt-1">Record once — update everything.</p>
       </div>
 
       <button onClick={signInWithGoogle} className="btn-secondary w-full">

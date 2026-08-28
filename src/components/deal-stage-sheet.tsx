@@ -172,7 +172,7 @@ export function DealStageSheet({
 
         <div className="mt-4 flex flex-col gap-3">
           <label className="flex flex-col gap-1">
-            <span className="t-meta">Stage</span>
+            <span className="t-hint">Stage</span>
             <select
               value={stage}
               onChange={(e) => setStage(e.target.value as OpportunityStage)}
@@ -187,7 +187,7 @@ export function DealStageSheet({
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="t-meta">Where does this stand?</span>
+            <span className="t-hint">Where does this stand?</span>
             <input
               value={status}
               onChange={(e) => setStatus(e.target.value)}
@@ -201,13 +201,13 @@ export function DealStageSheet({
               className="flex flex-col gap-3"
               style={{ borderTop: "1px solid var(--rule)", paddingTop: 12 }}
             >
-              <p className="t-meta">
+              <p className="t-hint">
                 No open next action on this deal — one&apos;s needed to move
                 it to this stage.
               </p>
 
               <label className="flex flex-col gap-1">
-                <span className="t-meta">What are you doing next?</span>
+                <span className="t-hint">What are you doing next?</span>
                 <input
                   value={actionText}
                   onChange={(e) => setActionText(e.target.value)}
@@ -217,7 +217,7 @@ export function DealStageSheet({
               </label>
 
               <label className="flex flex-col gap-1">
-                <span className="t-meta">By when?</span>
+                <span className="t-hint">By when?</span>
                 <input
                   type="date"
                   value={actionDue}
@@ -227,7 +227,7 @@ export function DealStageSheet({
               </label>
 
               <label className="flex flex-col gap-1">
-                <span className="t-meta">What kind of follow-up is this?</span>
+                <span className="t-hint">What kind of follow-up is this?</span>
                 <select
                   value={actionKind}
                   onChange={(e) =>

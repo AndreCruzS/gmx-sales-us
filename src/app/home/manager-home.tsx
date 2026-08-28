@@ -419,7 +419,7 @@ export function ManagerHome({ name }: { name: string }) {
               ? formatMoney(Math.round(openTween))
               : `${QTY.format(Math.round(openTween))} LF`}
           </div>
-          <div className="t-meta mt-0.5">{totals.openHint}</div>
+          <div className="t-hint mt-0.5">{totals.openHint}</div>
         </div>
         <div className="card card-pad">
           <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
@@ -428,7 +428,7 @@ export function ManagerHome({ name }: { name: string }) {
               ? QTY.format(Math.round(quotesTween))
               : `${QTY.format(Math.round(quotesTween))} LF`}
           </div>
-          <div className="t-meta mt-0.5">{totals.quotesHint}</div>
+          <div className="t-hint mt-0.5">{totals.quotesHint}</div>
         </div>
       </section>
 

@@ -524,7 +524,7 @@ export default function SellThroughPage() {
 
       <section className="flex flex-col gap-3">
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Which house sent it</span>
+          <span className="t-hint">Which house sent it</span>
           <select
             value={distributorId}
             onChange={(e) => setDistributorId(e.target.value)}
@@ -546,7 +546,7 @@ export default function SellThroughPage() {
             showed up on a phone. A month is a pick from eighteen options; that
             never needed a date widget, and a select cannot overflow. */}
         <label className="flex flex-col gap-1">
-          <span className="t-meta">
+          <span className="t-hint">
             Which month it covers — the report is always a month behind
           </span>
           <select
@@ -578,7 +578,7 @@ export default function SellThroughPage() {
           {/* The file the distributor emailed. First, because that is what they
               actually have — the paste below is the fallback, not the method. */}
           <label className="flex flex-col gap-1">
-            <span className="t-meta">The file they sent — .xlsx, .csv or .tsv</span>
+            <span className="t-hint">The file they sent — .xlsx, .csv or .tsv</span>
             <input
               type="file"
               accept=".xlsx,.xlsm,.csv,.tsv,.txt"
@@ -601,7 +601,7 @@ export default function SellThroughPage() {
                   one tab, and a question with one answer is noise. */}
               {tabs.length > 1 && (
                 <label className="mt-2.5 flex flex-col gap-1">
-                  <span className="t-meta">Which sheet holds the report</span>
+                  <span className="t-hint">Which sheet holds the report</span>
                   <select
                     value={tabName}
                     onChange={(e) => {
@@ -638,7 +638,7 @@ export default function SellThroughPage() {
                 Or paste the rows instead
               </summary>
               <label className="mt-2 flex flex-col gap-1">
-                <span className="t-meta">Header row included</span>
+                <span className="t-hint">Header row included</span>
                 <textarea
                   value={pasted}
                   onChange={(e) => setPasted(e.target.value)}
@@ -912,7 +912,7 @@ export default function SellThroughPage() {
                 ))}
               </ul>
               {plan.unmatched.length > 8 && (
-                <p className="t-meta mt-1">
+                <p className="t-hint mt-1">
                   and {plan.unmatched.length - 8} more
                 </p>
               )}

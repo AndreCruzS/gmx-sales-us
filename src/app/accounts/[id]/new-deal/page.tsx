@@ -243,7 +243,7 @@ function NewDealForm() {
         <p className="t-sub">{account.name}</p>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Deal name</span>
+          <span className="t-hint">Deal name</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -254,7 +254,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Stage</span>
+          <span className="t-hint">Stage</span>
           <select
             value={stage}
             onChange={(e) => setStage(e.target.value as OpportunityStage)}
@@ -269,7 +269,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Where does this stand?</span>
+          <span className="t-hint">Where does this stand?</span>
           <input
             value={currentStatus}
             onChange={(e) => setCurrentStatus(e.target.value)}
@@ -279,7 +279,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Estimated value (optional)</span>
+          <span className="t-hint">Estimated value (optional)</span>
           <input
             type="number"
             inputMode="decimal"
@@ -291,7 +291,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Expected close (optional)</span>
+          <span className="t-hint">Expected close (optional)</span>
           <input
             type="date"
             value={closeDate}
@@ -301,7 +301,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">How did this deal come about?</span>
+          <span className="t-hint">How did this deal come about?</span>
           <select
             value={leadSource}
             onChange={(e) => {
@@ -333,7 +333,7 @@ function NewDealForm() {
         {/* Referral picker — same type-to-filter idiom as accounts/new. */}
         {isReferral && (
           <div className="flex flex-col gap-1">
-            <span className="t-meta">Who sent them your way?</span>
+            <span className="t-hint">Who sent them your way?</span>
             {referringAccount ? (
               <div className="row">
                 <span className="row-body">
@@ -380,7 +380,7 @@ function NewDealForm() {
                         style={{ borderTop: "1px solid var(--rule)" }}
                       >
                         <span className="t-title">{a.name}</span>
-                        <span className="t-meta">
+                        <span className="t-hint">
                           {humanize(a.account_type)}
                           {a.city ? ` · ${a.city}` : ""}
                         </span>
@@ -409,7 +409,7 @@ function NewDealForm() {
         <p className="t-section mt-2">First next step</p>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">What are you doing next?</span>
+          <span className="t-hint">What are you doing next?</span>
           <input
             value={actionText}
             onChange={(e) => setActionText(e.target.value)}
@@ -419,7 +419,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">By when?</span>
+          <span className="t-hint">By when?</span>
           <input
             type="date"
             value={actionDue}
@@ -429,7 +429,7 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">What kind of follow-up is this?</span>
+          <span className="t-hint">What kind of follow-up is this?</span>
           <select
             value={actionKind}
             onChange={(e) => setActionKind(e.target.value as ActionKind)}

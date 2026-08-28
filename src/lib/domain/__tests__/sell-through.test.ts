@@ -487,7 +487,7 @@ describe("the summary row", () => {
   it("is the whole step as one row, aggregated across all of them", () => {
     const step = buildStep(JULY, JUNE, "region", [], BRANCHES);
     const summary = step.summary!;
-    expect(summary.title).toBe("All regions");
+    expect(summary.title).toBe("USA Nationwide");
     expect(summary.sub).toBe("2 regions");
     expect(summary.total).toBe(step.total);
     expect(summary.total).toBe(20300);

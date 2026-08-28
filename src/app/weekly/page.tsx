@@ -134,7 +134,7 @@ export default function WeeklyReviewPage() {
               : "Write my week up"}
         </button>
         {!narrative && !busy && (
-          <p className="t-meta mt-2 px-1">
+          <p className="t-hint mt-2 px-1">
             You don&apos;t write a report — the week is already recorded. The
             system drafts it; you check it against the detail below.
           </p>
@@ -152,7 +152,7 @@ export default function WeeklyReviewPage() {
         <section className="card card-pad">
           {renderNarrative(narrative)}
           <p
-            className="t-meta mt-4 pt-2"
+            className="t-hint mt-4 pt-2"
             style={{ borderTop: "1px solid var(--rule)" }}
           >
             Drafted from your recorded activity — check it against the detail

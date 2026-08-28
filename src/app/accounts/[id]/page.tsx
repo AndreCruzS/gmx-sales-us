@@ -374,7 +374,7 @@ export default function AccountPage() {
         </div>
 
         {offline && (
-          <p className="t-meta mt-3">
+          <p className="t-hint mt-3">
             Offline — showing what&apos;s cached on this device.
           </p>
         )}
@@ -533,7 +533,7 @@ export default function AccountPage() {
               {/* The heading only earns its place when there is more than one
                   side to tell apart. */}
               {networkByPosition.length > 1 && (
-                <p className="t-meta px-1 pt-1">{group.heading}</p>
+                <p className="t-hint px-1 pt-1">{group.heading}</p>
               )}
               <ul className="list">
                 {group.entries.map((n) => (
@@ -597,7 +597,7 @@ export default function AccountPage() {
                     <span className="t-sub block">{a.what_happened}</span>
                   )}
                   {a.key_information && (
-                    <span className="t-meta mt-1 flex items-start gap-1.5">
+                    <span className="t-hint mt-1 flex items-start gap-1.5">
                       <CheckIcon size={12} style={{ marginTop: 2 }} />
                       {a.key_information}
                     </span>

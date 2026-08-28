@@ -102,7 +102,7 @@ function StatTile({
     <div className="card card-pad">
       <div className="t-meta uppercase tracking-wide">{label}</div>
       <div className="fig fig-xl mt-1">{value}</div>
-      {hint && <div className="t-meta mt-0.5">{hint}</div>}
+      {hint && <div className="t-hint mt-0.5">{hint}</div>}
     </div>
   );
 }

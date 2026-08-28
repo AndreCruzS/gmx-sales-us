@@ -269,7 +269,7 @@ export default function RoutinePage() {
 
       {routineGroups.length > 0 && (
         <section>
-          <p className="t-meta px-1">
+          <p className="t-hint px-1">
             Recording the call or checking the wall clears these — nothing to
             tick.
           </p>

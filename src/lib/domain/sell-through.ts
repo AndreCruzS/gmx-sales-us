@@ -78,7 +78,10 @@ export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
 /** What "all of it" is called, per lens. Shared by the crumb trail and by the
  *  summary row, so the two can never disagree about what the top of the walk is. */
 export const SELL_ROOT_LABEL: Record<SellLens, string> = {
-  region: "All regions",
+  // Bianca's word, 2026-08-28: the top of the region walk is the COUNTRY, and
+  // the regions under it are MARKETS. "All regions" described the list; this
+  // names the thing the total bar is a reading of.
+  region: "USA Nationwide",
   rep: "All reps",
   distribution: "All houses",
   dealer: "All dealers",

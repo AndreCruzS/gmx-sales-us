@@ -274,7 +274,7 @@ export default function RepPage() {
           >
             {week ? `${week.done}/${week.total}` : "–"}
           </div>
-          <div className="t-meta mt-0.5">Visits done this week</div>
+          <div className="t-hint mt-0.5">Visits done this week</div>
         </div>
         <div className="card card-pad">
           <div
@@ -283,7 +283,7 @@ export default function RepPage() {
           >
             {week?.missed ?? 0}
           </div>
-          <div className="t-meta mt-0.5">Planned, never happened</div>
+          <div className="t-hint mt-0.5">Planned, never happened</div>
         </div>
         <div className="card card-pad">
           <div
@@ -292,7 +292,7 @@ export default function RepPage() {
           >
             {bookedNextWeek}
           </div>
-          <div className="t-meta mt-0.5">Booked for next week</div>
+          <div className="t-hint mt-0.5">Booked for next week</div>
         </div>
         <div className="card card-pad">
           <div
@@ -303,7 +303,7 @@ export default function RepPage() {
           >
             {rep.overdue_next_actions}
           </div>
-          <div className="t-meta mt-0.5">Follow-ups overdue</div>
+          <div className="t-hint mt-0.5">Follow-ups overdue</div>
         </div>
       </section>
 

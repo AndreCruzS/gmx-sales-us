@@ -311,14 +311,14 @@ function AccountsView() {
     <div className="stack pt-2">
       {(owner || accountType) && (
         <div className="flex items-center justify-between gap-2">
-          <p className="t-meta">
+          <p className="t-hint">
             {accountType
               ? `${humanize(accountType)}s`
               : ownerName?.id === owner
                 ? `${ownerName.name}’s accounts`
                 : "One rep’s accounts"}
           </p>
-          <Link href="/accounts" className="t-meta underline underline-offset-2">
+          <Link href="/accounts" className="t-hint underline underline-offset-2">
             Show all
           </Link>
         </div>

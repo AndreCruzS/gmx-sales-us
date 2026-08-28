@@ -161,7 +161,7 @@ export default function QuotesPage() {
             >
               {rows === null ? "–" : rows.length}
             </span>
-            <span className="t-meta mt-1 block">
+            <span className="t-hint mt-1 block">
               {rows === null
                 ? "Loading"
                 : rows.length === 1
@@ -184,7 +184,7 @@ export default function QuotesPage() {
             >
               {formatMoney(totalValue(rows ?? []))}
             </span>
-            <span className="t-meta">on the table</span>
+            <span className="t-hint">on the table</span>
           </span>
         </div>
       </section>
@@ -233,7 +233,7 @@ export default function QuotesPage() {
                         {r.account ? displayAccountName(r.account.name) : "Account"}
                         {r.current_status ? ` · ${r.current_status}` : ""}
                       </span>
-                      <span className="t-meta mt-0.5 block">
+                      <span className="t-hint mt-0.5 block">
                         {quoteStageLabel(r.stage)}
                         {r.expected_close_date ? (
                           <>
@@ -274,7 +274,7 @@ export default function QuotesPage() {
 
       {/* Pricing is the half of this the app cannot do yet, and saying so is
           better than a number nobody can trust. */}
-      <p className="t-meta px-1">
+      <p className="t-hint px-1">
         Prices are typed in for now — the distributor price list isn&rsquo;t
         wired up yet.
       </p>

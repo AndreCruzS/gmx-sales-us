@@ -209,7 +209,7 @@ export default function NewAccountPage() {
     <form onSubmit={submit} className="stack pt-2">
       <section className="flex flex-col gap-3">
         <label className="flex flex-col gap-1">
-          <span className="t-meta">
+          <span className="t-hint">
             Name — brand + city, e.g. &quot;Ganahl Anaheim&quot;
           </span>
           <input
@@ -222,7 +222,7 @@ export default function NewAccountPage() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">Type</span>
+          <span className="t-hint">Type</span>
           <select
             value={accountType}
             onChange={(e) => setAccountType(e.target.value as AccountType)}
@@ -237,7 +237,7 @@ export default function NewAccountPage() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">City (optional)</span>
+          <span className="t-hint">City (optional)</span>
           <input
             value={city}
             onChange={(e) => setCity(e.target.value)}
@@ -247,7 +247,7 @@ export default function NewAccountPage() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">How did you get to them?</span>
+          <span className="t-hint">How did you get to them?</span>
           <select
             value={leadSource}
             onChange={(e) => {
@@ -282,7 +282,7 @@ export default function NewAccountPage() {
             org's account-list size. */}
         {isReferral && (
           <div className="flex flex-col gap-1">
-            <span className="t-meta">Who sent them your way?</span>
+            <span className="t-hint">Who sent them your way?</span>
             {referringAccount ? (
               <div className="row">
                 <span className="row-body">
@@ -329,7 +329,7 @@ export default function NewAccountPage() {
                         style={{ borderTop: "1px solid var(--rule)" }}
                       >
                         <span className="t-title">{a.name}</span>
-                        <span className="t-meta">
+                        <span className="t-hint">
                           {humanize(a.account_type)}
                           {a.city ? ` · ${a.city}` : ""}
                         </span>
@@ -356,7 +356,7 @@ export default function NewAccountPage() {
         )}
 
         <label className="flex flex-col gap-1">
-          <span className="t-meta">
+          <span className="t-hint">
             Champion — who&apos;s your fan there?
           </span>
           <input
@@ -365,7 +365,7 @@ export default function NewAccountPage() {
             className="field"
             placeholder="Their name (optional)"
           />
-          <span className="t-meta">
+          <span className="t-hint">
             Optional — the name you type becomes this account&apos;s
             champion contact.
           </span>

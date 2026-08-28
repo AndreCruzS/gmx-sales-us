@@ -561,7 +561,7 @@ export default function HomeClient() {
         >
           {dayNarrative}
         </p>
-        <p className="t-meta mt-1.5">
+        <p className="t-hint mt-1.5">
           {todayIso ? formatFullDate(todayIso) : " "} · {syncLine}
         </p>
       </section>
@@ -682,7 +682,7 @@ export default function HomeClient() {
                 <span className="text-[11px] font-semibold" style={{ color: "var(--ink-secondary)" }}>
                   Routine
                 </span>
-                <span className="t-meta block">
+                <span className="t-hint block">
                   {routineGroups.length === 0
                     ? "Nothing due"
                     : routineGroups
@@ -704,7 +704,7 @@ export default function HomeClient() {
                 <span className="text-[11px] font-semibold" style={{ color: "var(--ink-secondary)" }}>
                   Visits this week
                 </span>
-                <span className="t-meta block">
+                <span className="t-hint block">
                   {weekStats.planned === 0
                     ? "Nothing planned this week"
                     : weekStats.completed >= weekStats.planned
@@ -848,7 +848,7 @@ export default function HomeClient() {
                   ))}
                 </ul>
                 {waiting.length > 3 && (
-                  <p className="t-meta mt-1">and {waiting.length - 3} more</p>
+                  <p className="t-hint mt-1">and {waiting.length - 3} more</p>
                 )}
               </div>
             </section>

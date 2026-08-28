@@ -400,7 +400,7 @@ function RecordPageInner() {
             .
           </p>
         ) : (
-          <p className="t-meta">
+          <p className="t-hint">
             Talk like you&apos;d brief a colleague. Works with no signal — it
             uploads when you&apos;re back in coverage.
           </p>
@@ -495,7 +495,7 @@ function RecordPageInner() {
                     style={{ borderTop: "1px solid var(--rule)" }}
                   >
                     <span className="t-title">{a.name}</span>
-                    <span className="t-meta">{humanize(a.account_type)}</span>
+                    <span className="t-hint">{humanize(a.account_type)}</span>
                   </button>
                 </li>
               ))}
@@ -556,7 +556,7 @@ function RecordPageInner() {
         {selected && showMore && (
           <div className="card card-pad flex flex-col gap-3">
             <label className="flex flex-col gap-1">
-              <span className="t-meta">What kind of contact</span>
+              <span className="t-hint">What kind of contact</span>
               <select
                 value={activityType}
                 onChange={(e) =>
@@ -574,7 +574,7 @@ function RecordPageInner() {
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="t-meta">What you went there to do</span>
+              <span className="t-hint">What you went there to do</span>
               <select
                 value={objective}
                 onChange={(e) =>
@@ -602,7 +602,7 @@ function RecordPageInner() {
             )}
 
             <fieldset className="flex flex-col gap-1.5">
-              <span className="t-meta">What came out of it</span>
+              <span className="t-hint">What came out of it</span>
               <div className="flex flex-wrap gap-1.5">
                 {ACTIVITY_OUTCOMES.map((o) => {
                   const on = outcomes.includes(o);
@@ -646,7 +646,7 @@ function RecordPageInner() {
             <button type="submit" disabled={busy} className="btn-primary">
               {selected ? `Save to ${selected.name}` : "Save note"}
             </button>
-            <p className="t-meta">
+            <p className="t-hint">
               {selected
                 ? "Saves straight to the account — offline too."
                 : "No account attached — it gets written up and waits for your OK in Review."}

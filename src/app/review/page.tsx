@@ -1048,7 +1048,7 @@ function ReviewSheet({
 
           {dispositions.length > 0 && (
             <div className="flex flex-col gap-2">
-              <span className="t-meta">On your list</span>
+              <span className="t-hint">On your list</span>
               {dispositions.map((d, i) => (
                 <label key={`${d.item_id}-${i}`} className="flex items-center gap-2">
                   <input
@@ -1070,7 +1070,7 @@ function ReviewSheet({
           )}
 
           <div className="flex flex-col gap-2">
-            <span className="t-meta">What happens next</span>
+            <span className="t-hint">What happens next</span>
             {actions.map((na, i) => (
               <div key={i} className="flex gap-2">
                 <input
@@ -1347,7 +1347,7 @@ function CardSheet({
     label: string,
     f: { value: string | null; confidence: number },
   ) => (
-    <span className="t-meta flex items-center gap-1.5">
+    <span className="t-hint flex items-center gap-1.5">
       {label}
       {check(f) && <span className="tag tag-danger">check this</span>}
     </span>
@@ -1505,7 +1505,7 @@ function CardSheet({
                 />
               </div>
               <label className="flex flex-col gap-1">
-                <span className="t-meta">How did you get to them?</span>
+                <span className="t-hint">How did you get to them?</span>
                 <select
                   value={leadSource}
                   onChange={(e) =>

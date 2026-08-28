@@ -501,6 +501,16 @@ export function TeamSales({
   // chosen, which is the case where it differs: "9,800 of this branch's 36,000".
   const showCounterFigure = step.summary !== null || chosenBand !== null;
 
+  // BIANCA'S FIRST VIEW (2026-08-28). The top of the region walk is a COUNTRY
+  // read over its MARKETS: the total bar wears the name "USA Nationwide" and the
+  // regions under it show only their name and their share of it — no owner, no
+  // figures, no distributor stripes. The figures are one gesture away in either
+  // direction: isolating a stripe of the total bar still opens the full row, and
+  // tapping a market walks into it. Only the FIRST view is clean — every level
+  // below it still needs its numbers, because down there the reader has already
+  // said which market they are asking about.
+  const cleanTop = lens === "region" && path.length === 0;
+
   const backPath = backFrom(path);
   const backLabel =
     backPath === null
@@ -564,6 +574,10 @@ export function TeamSales({
           shape of that is a screen you can enter and not leave. So the way out
           is a control — ink, pill, thumb-sized, and it names where it goes —
           with the trail beside it for jumping more than one link at a time. */}
+      {/* Only once there is somewhere to come back FROM. At the top of the walk
+          the trail is one inert button naming the level the card already names —
+          "USA Nationwide" printed twice a centimetre apart (Andre, 2026-08-28). */}
+      {path.length > 0 && (
       <nav className="sales-crumbs" aria-label="Where you are">
         {backPath !== null && (
           <button type="button" className="sales-back" onClick={() => goTo(backPath)}>
@@ -593,6 +607,7 @@ export function TeamSales({
           ))}
         </span>
       </nav>
+      )}
 
       {/* Keyed on the walk, so each level enters rather than swapping in place —
           the same remount trick the page sections use. */}
@@ -612,18 +627,35 @@ export function TeamSales({
               The bar is skipped when there is only one row, because that row's
               own bar is already the same picture. */}
           <div className="sales-row">
+            {/* The name disappears the moment the counter travels to a chosen
+                stripe — "USA Nationwide · 46,436 LF" narrowed to one market is
+                exactly the false sentence the untitled bar was avoiding. */}
+            {cleanTop && summaryOpen === null && (
+              <p className="sales-title">USA Nationwide</p>
+            )}
             <p className="sales-count">
               {showCounterFigure && (
                 <>
-                  <span
-                    className="sales-count-rail"
-                    style={{ background: counterRail }}
-                    aria-hidden="true"
-                  />
+                  {/* At the clean top the rail is furniture: the title above
+                      says whose figure this is and the bar below says its
+                      composition. It returns the moment a market is isolated —
+                      then the colour IS the answer to "whose number is this". */}
+                  {!(cleanTop && summaryOpen === null) && (
+                    <span
+                      className="sales-count-rail"
+                      style={{ background: counterRail }}
+                      aria-hidden="true"
+                    />
+                  )}
                   {/* aria-hidden on the travelling figure and the true one
                       announced once: a screen reader being read sixty
                       intermediate numbers is not being told anything. */}
-                  <span className="sales-count-qty" aria-hidden="true">
+                  <span
+                    className={
+                      cleanTop ? "sales-count-qty sales-count-hero" : "sales-count-qty"
+                    }
+                    aria-hidden="true"
+                  >
                     {QTY.format(Math.round(counterQty))} {step.unit}
                   </span>
                   <span className="sr-only">
@@ -631,6 +663,9 @@ export function TeamSales({
                   </span>
                 </>
               )}
+              {/* No "total" next to it — the figure travels when a stripe is
+                  isolated, and a word that has to come and go with the reading
+                  is better left off (Andre tried it, 2026-08-28). */}
               <span className="sales-count-when">
                 {showCounterFigure ? `· ${month}` : month}
               </span>
@@ -646,8 +681,13 @@ export function TeamSales({
 
             {step.summary && (
               <>
+                {/* Taller than every bar below it. The stripes up here isolate
+                    and the stripes down there walk, and nothing on the screen
+                    said so — two bars a centimetre apart, painted the same,
+                    answering a tap differently. The height is the tell: the
+                    month itself stands above the shares of it. */}
                 <div
-                  className="sales-track"
+                  className="sales-track sales-track-total"
                   data-phase={summaryOpen ? phase : "idle"}
                 >
                   {step.summary.segments.map((seg) => {
@@ -704,6 +744,8 @@ export function TeamSales({
             )}
           </div>
 
+          {cleanTop && <p className="sales-eyebrow">Markets</p>}
+
           {step.groups.map((g) => {
             const open = chosenGroup?.key === g.key ? chosenBand : null;
             const moved = movementLabel(g.total, g.prevTotal, previous);
@@ -758,6 +800,59 @@ export function TeamSales({
                     <span className="sales-head-fig">
                       <span className="sales-head-qty">
                         {QTY.format(g.total)} {g.unit}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              );
+            }
+
+            // THE CLEAN MARKET ROW. A name and its share of the country, and
+            // nothing else — the width IS the figure, read against the total
+            // bar above the same way its stripe is. Tapping it does NOT leave:
+            // it isolates, the same reading its stripe on the total bar gives —
+            // the full row opens IN PLACE and the others shrink around it. The
+            // level below is a second, deliberate step, behind the chevron the
+            // isolated row wears (Andre, 2026-08-28: first a little detail here,
+            // THEN the screen with much more). No chevron here — in this card a
+            // chevron means a LEVEL, and a peek is not one.
+            if (cleanTop && !isolated) {
+              const share = step.summary
+                ? (step.summary.bands.find((b) => b.key === g.key)?.share ?? 0)
+                : 100;
+              const band = step.summary?.bands.find((b) => b.key === g.key) ?? null;
+              return (
+                <div
+                  key={g.key}
+                  className={returning ? "sales-row sales-row-return" : "sales-row"}
+                >
+                  <button
+                    type="button"
+                    className="sales-market"
+                    aria-label={`${g.title}: ${QTY.format(g.total)} ${g.unit} in ${month}. Shows its details here.`}
+                    onClick={() => {
+                      if (band && step.summary) tap(step.summary, band);
+                      else goTo([stepFor(g.entity, g.colour ?? undefined)]);
+                    }}
+                  >
+                    <span className="sales-market-head">
+                      <span className="sales-head-name">{g.title}</span>
+                    </span>
+                    {/* The figure rides in front of the bar in a fixed mono
+                        column, so every track still starts at the same x and
+                        the widths stay comparable down the list. */}
+                    <span className="sales-market-meter">
+                      <span className="fig-sm sales-market-qty">
+                        {QTY.format(g.total)} {g.unit}
+                      </span>
+                      <span className="sales-market-track">
+                        <span
+                          className="sales-market-fill"
+                          style={{
+                            width: `${share}%`,
+                            background: g.colour ?? "var(--surface-sunken)",
+                          }}
+                        />
                       </span>
                     </span>
                   </button>
@@ -858,23 +953,33 @@ export function TeamSales({
                     );
                   }
 
-                  // The isolated row is a toggle, not a door: pressing it lets
-                  // go, exactly as pressing its stripe again does. NO chevron —
-                  // in this card a chevron means a LEVEL, and isolating is not
-                  // one. It does not need marking either: fourteen rows standing
-                  // back around it is the loudest mark on the card, and a
-                  // highlight would add furniture to the one row being read.
+                  // The isolated row is a toggle AND a doorway. Pressing the row
+                  // lets go, exactly as pressing its stripe again does. The
+                  // chevron beside it is the second, deliberate step Andre asked
+                  // for: first the details in place, and only through this does
+                  // the walk actually leave for the market's own level. Chevron
+                  // = level still holds — this one IS a level.
                   if (isolated && rowSummaryBand !== null && step.summary !== null) {
                     return (
-                      <button
-                        type="button"
-                        className="sales-head sales-head-open"
-                        aria-pressed={true}
-                        aria-label={`${g.title}. Show every ${DIM_NOUN[step.rowDim] ?? "row"} again.`}
-                        onClick={() => tap(step.summary!, rowSummaryBand)}
-                      >
-                        {body}
-                      </button>
+                      <div className="sales-head-gorow">
+                        <button
+                          type="button"
+                          className="sales-head sales-head-open"
+                          aria-pressed={true}
+                          aria-label={`${g.title}. Show every ${DIM_NOUN[step.rowDim] ?? "row"} again.`}
+                          onClick={() => tap(step.summary!, rowSummaryBand)}
+                        >
+                          {body}
+                        </button>
+                        <button
+                          type="button"
+                          className="sales-head-go"
+                          aria-label={`Open ${g.title}`}
+                          onClick={() => goTo([stepFor(g.entity, g.colour ?? undefined)])}
+                        >
+                          <span aria-hidden="true">&#8250;</span>
+                        </button>
+                      </div>
                     );
                   }
 
@@ -1143,7 +1248,7 @@ export function TeamSales({
                         {open.entity.sub ? (
                           <>
                             {" "}
-                            <span className="t-meta">{open.entity.sub}</span>
+                            <span className="t-hint">{open.entity.sub}</span>
                           </>
                         ) : null}
                       </span>
