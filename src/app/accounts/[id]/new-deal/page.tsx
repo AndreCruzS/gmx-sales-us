@@ -16,13 +16,21 @@ import { useOffline } from "@/components/offline-provider";
 import {
   LEAD_SOURCES_ALL,
   OPPORTUNITY_STAGES,
+  QUOTE_STAGES,
   REFERRAL_LEAD_SOURCES,
   humanize,
+  isQuoteStage,
   type LeadSource,
   type OpportunityStage,
 } from "@/lib/domain/enums";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { StatusVoiceButton } from "@/components/status-voice";
+import {
+  QuoteItemsEditor,
+  lineLf,
+  type QuoteLine,
+} from "@/components/quote-items-editor";
 
 // A deal is never born closed — WON/LOST are outcomes a rep records later,
 // not a starting stage.
@@ -64,6 +72,10 @@ function NewDealForm() {
     ? (stageParam as OpportunityStage)
     : "IDENTIFIED";
 
+  // Arrived through Quotes -> "add new": the deal lives in the QUOTE LENS —
+  // four states with the quote's own names — instead of the full pipeline.
+  const quoteFlow = initialStage === "QUOTE";
+
   const [account, setAccount] = useState<AccountLite | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -83,6 +95,12 @@ function NewDealForm() {
   const [actionKind, setActionKind] = useState<ActionKind>("VISIT");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The survey: product lines for a QUOTE-stage deal. Kept even when the
+  // stage flips away, only written when it flips back.
+  const [items, setItems] = useState<QuoteLine[]>([]);
+  // Set once the deal op is queued. A failed item write must be retryable
+  // WITHOUT enqueueing the deal a second time — the id is the fence.
+  const [queuedDealId, setQueuedDealId] = useState<string | null>(null);
 
   // Same shape as the account page's own load(): try the live row, and if the
   // fetch rejects (offline) fall back to what's already cached on this
@@ -183,47 +201,96 @@ function NewDealForm() {
       return;
     }
 
+    // A quote's lines must add up before anything is written: a quantity of
+    // nothing, or pieces of an item the catalog cannot convert, is not a line.
+    const liveItems = isQuoteStage(stage) ? items.filter((l) => l.qtyInput !== "") : [];
+    if (isQuoteStage(stage) && liveItems.some((l) => lineLf(l) <= 0)) {
+      setError(
+        "A product line has no usable quantity — enter it, or switch the line to LF.",
+      );
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
       const layer = getOfflineLayer();
-      const dealId = crypto.randomUUID();
+      // The fence: a retry after a failed item write reuses the queued deal
+      // instead of creating a twin.
+      const dealId = queuedDealId ?? crypto.randomUUID();
       const actionId = crypto.randomUUID();
 
-      await layer.sync.enqueue({
-        clientId: dealId,
-        entityType: "opportunity",
-        op: "create",
-        payload: {
-          id: dealId,
-          org_id: profile.orgId,
-          name: name.trim(),
-          primary_account_id: accountId,
-          territory_id: account.territory_id,
-          owner_id: profile.membershipId,
-          stage,
-          current_status: currentStatus.trim(),
-          estimated_revenue: revenue === "" ? null : Number(revenue),
-          expected_close_date: closeDate || null,
-          lead_source: leadSource,
-          source_detail: sourceDetail.trim() || null,
-          referring_account_id: isReferral ? referringAccountId : null,
-          first_action: {
-            id: actionId,
-            action: actionText.trim(),
-            due_date: actionDue,
-            kind: actionKind,
+      if (!queuedDealId) {
+        await layer.sync.enqueue({
+          clientId: dealId,
+          entityType: "opportunity",
+          op: "create",
+          payload: {
+            id: dealId,
+            org_id: profile.orgId,
+            name: name.trim(),
+            primary_account_id: accountId,
+            territory_id: account.territory_id,
+            owner_id: profile.membershipId,
+            stage,
+            current_status: currentStatus.trim(),
+            estimated_revenue: revenue === "" ? null : Number(revenue),
+            expected_close_date: closeDate || null,
+            lead_source: leadSource,
+            source_detail: sourceDetail.trim() || null,
+            referring_account_id: isReferral ? referringAccountId : null,
+            first_action: {
+              id: actionId,
+              action: actionText.trim(),
+              due_date: actionDue,
+              kind: actionKind,
+            },
           },
-        },
-        baseVersion: null,
-        blobRef: null,
-      });
+          baseVersion: null,
+          blobRef: null,
+        });
+        setQueuedDealId(dealId);
+      }
 
-      void layer.sync.drain();
+      if (liveItems.length > 0) {
+        // The lines reference the deal, so the deal has to LAND first — the
+        // catalog search needed signal to build them, so demanding it here to
+        // save them is not a new ask.
+        await layer.sync.drain();
+        const { error: itemsErr } = await getSupabaseBrowserClient()
+          .from("quote_items")
+          .insert(
+            liveItems.map((l) => ({
+              org_id: profile.orgId,
+              opportunity_id: dealId,
+              account_id: accountId,
+              sku: l.sku,
+              description: l.description,
+              species: l.species,
+              profile: l.profile,
+              nominal_size: l.nominal_size,
+              lf_per_piece: l.lfPerPiece,
+              qty_input: Number(l.qtyInput),
+              input_uom: l.inputUom,
+              lf: lineLf(l),
+              created_by: profile.membershipId,
+            })),
+          );
+        if (itemsErr) throw new Error(itemsErr.message);
+      } else {
+        void layer.sync.drain();
+      }
+
       router.push(`/accounts/${accountId}`);
     } catch (err) {
       setBusy(false);
-      setError(err instanceof Error ? err.message : String(err));
+      setError(
+        queuedDealId || stage === "QUOTE"
+          ? `The deal is queued, but the product lines did not save — likely no signal. Save again to retry the lines; the deal will not be duplicated. (${err instanceof Error ? err.message : String(err)})`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
     }
   }
 
@@ -260,23 +327,41 @@ function NewDealForm() {
             onChange={(e) => setStage(e.target.value as OpportunityStage)}
             className="field"
           >
-            {DEAL_STAGES.map((s) => (
-              <option key={s} value={s}>
-                {humanize(s)}
-              </option>
-            ))}
+            {quoteFlow
+              ? QUOTE_STAGES.filter((q) => isQuoteStage(q.value)).map((q) => (
+                  <option key={q.value} value={q.value}>
+                    {q.label}
+                  </option>
+                ))
+              : DEAL_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {humanize(s)}
+                  </option>
+                ))}
           </select>
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="t-hint">Where does this stand?</span>
+          <span className="field-label-row">
+            <span className="t-hint">Where does this stand?</span>
+            {/* Spoken, then summarised into the field — still editable, the
+                person is the gate on every AI draft in this app. */}
+            <StatusVoiceButton onText={setCurrentStatus} />
+          </span>
           <input
             value={currentStatus}
             onChange={(e) => setCurrentStatus(e.target.value)}
             className="field"
-            placeholder="A quick line on where things are"
+            placeholder="A quick line on where things are — or tap the mic"
           />
         </label>
+
+        {/* THE SURVEY, only where the deal IS a quote. No price anywhere in
+            it by design — the priced quote is produced in Spruce; what is
+            ours is which products and how many linear feet. */}
+        {isQuoteStage(stage) && (
+          <QuoteItemsEditor value={items} onChange={setItems} />
+        )}
 
         <label className="flex flex-col gap-1">
           <span className="t-hint">Estimated value (optional)</span>

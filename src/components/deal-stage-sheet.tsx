@@ -17,8 +17,11 @@
 
 import { useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { StatusVoiceButton } from "@/components/status-voice";
 import {
   OPPORTUNITY_STAGES,
+  QUOTE_STAGES,
+  isQuoteStage,
   humanize,
   type OpportunityStage,
 } from "@/lib/domain/enums";
@@ -178,21 +181,33 @@ export function DealStageSheet({
               onChange={(e) => setStage(e.target.value as OpportunityStage)}
               className="field"
             >
-              {OPPORTUNITY_STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {humanize(s)}
-                </option>
-              ))}
+              {/* A deal living in the quote lens shows the quote's four
+                  states under the quote's names; everything else keeps the
+                  full pipeline. Same enum underneath either way. */}
+              {isQuoteStage(opportunity.stage)
+                ? QUOTE_STAGES.map((q) => (
+                    <option key={q.value} value={q.value}>
+                      {q.label}
+                    </option>
+                  ))
+                : OPPORTUNITY_STAGES.map((s) => (
+                    <option key={s} value={s}>
+                      {humanize(s)}
+                    </option>
+                  ))}
             </select>
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="t-hint">Where does this stand?</span>
+            <span className="field-label-row">
+              <span className="t-hint">Where does this stand?</span>
+              <StatusVoiceButton onText={setStatus} />
+            </span>
             <input
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               className="field"
-              placeholder="A quick line on where things are"
+              placeholder="A quick line on where things are — or tap the mic"
             />
           </label>
 

@@ -130,3 +130,23 @@ export const RELATIONSHIP_TYPES = [
   "DEVELOPER_FOR",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
+
+// The QUOTE'S OWN lifecycle — four states, the client's words (2026-08-31):
+// Quoted, In progress, Won, Lost. A LENS over the pipeline enum, not a
+// reshaping of it: QUOTE and DECISION are the two live states wearing the
+// quote's names, and the terminal pair is shared. The HubSpot bridge, the
+// stage gates and every existing view keep reading the enum they always read.
+export const QUOTE_STAGES: readonly {
+  value: OpportunityStage;
+  label: string;
+}[] = [
+  { value: "QUOTE", label: "Quoted" },
+  { value: "DECISION", label: "In progress" },
+  { value: "WON", label: "Won" },
+  { value: "LOST", label: "Lost" },
+];
+
+/** A deal currently living inside the quote lens (its two live states). */
+export function isQuoteStage(stage: string): boolean {
+  return stage === "QUOTE" || stage === "DECISION";
+}

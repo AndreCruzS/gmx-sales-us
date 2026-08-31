@@ -416,6 +416,13 @@ export function ManagerHome({ name }: { name: string }) {
         prevQty: number;
         score: number;
         unit: string;
+        /** WHEN they stopped, as honestly as the data allows: a month when the
+         *  windows say one, a year with its uncertainty named when they don't
+         *  (Andre, 2026-08-31: if we don't know, we say so). */
+        quietSince: string | null;
+        /** They zeroed the YTD window but appear in a later monthly file —
+         *  not stopped at all. Ranked calm and said out loud. */
+        backIn: string | null;
       }[],
       hasPrev: false,
     };
@@ -424,6 +431,17 @@ export function ManagerHome({ name }: { name: string }) {
     const prev = new Map<string, number>();
     const names = new Map<string, string>();
     const ids = new Map<string, string | null>();
+    // The window AFTER the YTD cut — the monthly files. A dealer at zero for
+    // January–June who bought in July has not stopped; without this map the
+    // ranking would send a rep to rescue an account that already came back.
+    const later = new Map<string, number>();
+    if (quietYtd && latest) {
+      for (const r of monthlyRows) {
+        if (r.period !== latest) continue;
+        const key = r.dealer_id ?? r.dealer_label;
+        later.set(key, (later.get(key) ?? 0) + Number(r.quantity));
+      }
+    }
     let unit = "LF";
     for (const r of base) {
       const key = r.dealer_id ?? r.dealer_label;
@@ -441,19 +459,24 @@ export function ManagerHome({ name }: { name: string }) {
     const hasPrev = quietYtd
       ? [...prev.values()].some((v) => v > 0)
       : previous !== null;
+    const lyYear = Number(pLatest.slice(0, 4)) - 1;
     const keys = new Set([...cur.keys(), ...prev.keys()]);
     const rows = [...keys]
       .map((k) => {
         const c = cur.get(k) ?? 0;
         const p = prev.get(k) ?? 0;
-        // Attention, as a number: stopped < falling < level < rising < new.
+        const stopped = hasPrev && p > 0 && c === 0;
+        const cameBack = stopped && quietYtd && (later.get(k) ?? 0) > 0;
+        // Attention, as a number: stopped < falling < level < rising < back/new.
         const score = !hasPrev
           ? c
-          : p === 0
-            ? Number.POSITIVE_INFINITY
-            : c === 0
-              ? Number.NEGATIVE_INFINITY
-              : (c - p) / p;
+          : cameBack
+            ? 1e9
+            : p === 0
+              ? Number.POSITIVE_INFINITY
+              : c === 0
+                ? Number.NEGATIVE_INFINITY
+                : (c - p) / p;
         return {
           key: k,
           accountId: ids.get(k) ?? null,
@@ -462,6 +485,15 @@ export function ManagerHome({ name }: { name: string }) {
           prevQty: p,
           score,
           unit,
+          quietSince:
+            stopped && !cameBack
+              ? quietYtd
+                ? // Their last trace is the LY aggregate — a year, not a month,
+                  // and the gap is named rather than smoothed over.
+                  `last bought in ${lyYear} · month unknown`
+                : `last bought ${periodLabel(previous)}`
+              : null,
+          backIn: cameBack && latest ? `back in ${periodLabel(latest)}` : null,
         };
       })
       .filter((r) => r.qty > 0 || r.prevQty > 0);
@@ -689,18 +721,29 @@ export function ManagerHome({ name }: { name: string }) {
               </div>
               <ul className="list">
                 {quietRanking.rows.slice(0, 10).map((r) => {
-                  const stopped = r.prevQty > 0 && r.qty === 0;
+                  const stopped = r.prevQty > 0 && r.qty === 0 && !r.backIn;
                   const body = (
                     <>
                       <span className="row-body">
                         <span className="quiet-name">{r.name}</span>
+                        {/* WHEN it stopped, or that we cannot know: a month if
+                            the windows say one, the year with its gap named
+                            when they don't. Under the NAME, where there is
+                            room — the figure column keeps the verdict. */}
+                        {stopped && r.quietSince && (
+                          <span className="t-hint quiet-since">{r.quietSince}</span>
+                        )}
                       </span>
                       <span className="quiet-fig">
                         <span className="fig fig-md">
                           {QTY.format(r.qty)} {r.unit}
                         </span>
                         {quietRanking.hasPrev &&
-                          (stopped ? (
+                          (r.backIn ? (
+                            <span className="sales-move" data-dir="up">
+                              {r.backIn}
+                            </span>
+                          ) : stopped ? (
                             <span className="sales-move" data-dir="down">
                               stopped buying
                             </span>

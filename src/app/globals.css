@@ -877,6 +877,121 @@ body {
 .quiet-more {
   padding: 2px 16px 12px;
 }
+.quiet-since {
+  display: block;
+  margin-top: 1px;
+}
+
+/* ── The quote survey — product lines, quantities, and their LF ──────────
+   A line reads top to bottom the way the rep builds it: the product, its
+   facts, then the question (how many, in what) with the answer beside it —
+   "36 pieces = 282 LF". No price column exists to leave room for. */
+.qline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+.qline:first-child {
+  border-top: none;
+}
+.qline-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qline-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+.qline-remove {
+  border: none;
+  background: none;
+  padding: 2px 8px;
+  color: var(--ink-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.qline-qty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.qline-input {
+  width: 96px;
+}
+.chip-sm {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: var(--text-sm);
+}
+.qline-lf {
+  margin-left: auto;
+}
+.qtotal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0;
+  padding: 2px 2px 0;
+}
+.qresult-name {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+.qadd {
+  align-self: flex-start;
+}
+
+/* ── The spoken status ────────────────────────────────────────────────────
+   A mic beside the field's own label: same row, right edge, so the field
+   stays a field and the voice is an offer, not a demand. Recording pulses
+   in the capture red the Tap-and-talk screen taught. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.voice-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.voice-status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--surface-card);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+.voice-status-btn.is-recording {
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 122, 95, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(224, 122, 95, 0); }
+}
+.voice-status-dots {
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-status-btn.is-recording { animation: none; }
+}
 /* Two movements, in order — for a band with nowhere left to go. The bands in
    front of the chosen one fold away first, which carries it to the START of the
    track; only then does it stretch to fill. Doing both at once reads as a bar
