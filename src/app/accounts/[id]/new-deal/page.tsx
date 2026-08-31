@@ -23,9 +23,11 @@ import {
   type LeadSource,
   type OpportunityStage,
 } from "@/lib/domain/enums";
+import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { StatusVoiceButton } from "@/components/status-voice";
+import { QuoteVoice, type QuoteDraft } from "@/components/quote-voice";
 import {
   QuoteItemsEditor,
   lineLf,
@@ -81,6 +83,15 @@ function NewDealForm() {
 
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [name, setName] = useState("");
+  // The quote NAMES ITSELF from what the form already knows — the account,
+  // the first product, the day — and stops the moment a person touches the
+  // field: renaming is the field itself, not a second control.
+  const [nameTouched, setNameTouched] = useState(false);
+  const [bornDay] = useState(() =>
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(
+      new Date(),
+    ),
+  );
   const [stage, setStage] = useState<OpportunityStage>(initialStage);
   const [revenue, setRevenue] = useState("");
   const [closeDate, setCloseDate] = useState("");
@@ -151,6 +162,58 @@ function NewDealForm() {
 
   const referringAccount = accounts.find((a) => a.id === referringAccountId) ?? null;
 
+  // The spoken draft, landed across the form: status into the field, lines
+  // appended (never duplicated), the follow-up and close date only where the
+  // rep has not already answered. Every landing is still editable — the
+  // review gate is the person, as everywhere in this app.
+  function landDraft(draft: QuoteDraft) {
+    if (draft.status) setCurrentStatus(draft.status);
+    if (draft.lines.length > 0) {
+      setItems((prev) => {
+        const have = new Set(prev.map((l) => l.sku));
+        const next = [...prev];
+        for (const l of draft.lines) {
+          if (have.has(l.sku)) continue;
+          next.push({
+            sku: l.sku,
+            description: l.description,
+            species: l.species,
+            profile: l.profile,
+            nominal_size: l.nominal_size,
+            lfPerPiece: l.lf_per_piece,
+            qtyInput: String(l.quantity),
+            inputUom: l.uom,
+          });
+        }
+        return next;
+      });
+    }
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    if (draft.nextAction && !actionText.trim()) {
+      setActionText(draft.nextAction.text);
+      setActionKind("QUOTE_FOLLOW_UP");
+      if (draft.nextAction.due && iso.test(draft.nextAction.due)) {
+        setActionDue(draft.nextAction.due);
+      }
+    }
+    if (draft.expectedClose && !closeDate && iso.test(draft.expectedClose)) {
+      setCloseDate(draft.expectedClose);
+    }
+  }
+
+  const autoName = useMemo(() => {
+    if (!quoteFlow || !account) return "";
+    const first = items[0];
+    const prod = first
+      ? [first.species, first.nominal_size].filter(Boolean).join(" ")
+      : "";
+    const more = items.length > 1 ? ` +${items.length - 1}` : "";
+    return `Quote — ${displayAccountName(account.name)}${
+      prod ? ` · ${prod}${more}` : ""
+    } · ${bornDay}`;
+  }, [quoteFlow, account, items, bornDay]);
+  const dealName = quoteFlow && !nameTouched ? autoName : name;
+
   // Same quick-find idiom as accounts/new's referral picker.
   const filteredReferring = useMemo(() => {
     const q = referringQuery.trim().toLowerCase();
@@ -170,7 +233,7 @@ function NewDealForm() {
       setError("This account hasn't reached this device yet.");
       return;
     }
-    if (!name.trim()) {
+    if (!dealName.trim()) {
       setError("The deal needs a name.");
       return;
     }
@@ -228,7 +291,7 @@ function NewDealForm() {
           payload: {
             id: dealId,
             org_id: profile.orgId,
-            name: name.trim(),
+            name: dealName.trim(),
             primary_account_id: accountId,
             territory_id: account.territory_id,
             owner_id: profile.membershipId,
@@ -312,8 +375,11 @@ function NewDealForm() {
         <label className="flex flex-col gap-1">
           <span className="t-hint">Deal name</span>
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={dealName}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameTouched(true);
+            }}
             className="field"
             placeholder="What's this deal called?"
             autoFocus
@@ -342,18 +408,33 @@ function NewDealForm() {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="field-label-row">
-            <span className="t-hint">Where does this stand?</span>
-            {/* Spoken, then summarised into the field — still editable, the
-                person is the gate on every AI draft in this app. */}
-            <StatusVoiceButton onText={setCurrentStatus} />
+          <span className="t-hint">
+            {quoteFlow ? "What is this quote about?" : "Where does this stand?"}
           </span>
-          <input
-            value={currentStatus}
-            onChange={(e) => setCurrentStatus(e.target.value)}
-            className="field"
-            placeholder="A quick line on where things are — or tap the mic"
-          />
+          <span className="field-mic-row">
+            <input
+              value={currentStatus}
+              onChange={(e) => setCurrentStatus(e.target.value)}
+              className="field"
+              placeholder={
+                quoteFlow
+                  ? "Talk it through — the quote drafts itself"
+                  : "A quick line on where things are — or tap the mic"
+              }
+            />
+            {/* On the quote, the voice is the front door: the big mic drafts
+                the WHOLE survey — lines, status, follow-up — searching the
+                real catalog while it listens. Elsewhere it stays the quiet
+                summariser it was. Either way the person is the gate. */}
+            {quoteFlow ? (
+              <QuoteVoice
+                account={account ? displayAccountName(account.name) : ""}
+                onDraft={landDraft}
+              />
+            ) : (
+              <StatusVoiceButton onText={setCurrentStatus} />
+            )}
+          </span>
         </label>
 
         {/* THE SURVEY, only where the deal IS a quote. No price anywhere in

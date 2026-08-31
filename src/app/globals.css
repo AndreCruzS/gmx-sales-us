@@ -989,6 +989,63 @@ body {
 .voice-status-dots {
   font-weight: 700;
 }
+
+/* The quote's big mic — inline with the field, thumb-sized and then some:
+   on this form the voice is the front door, not a garnish. */
+.field-mic-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.field-mic-row .field {
+  flex: 1;
+  min-width: 0;
+}
+.qvoice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.qvoice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+.qvoice-btn:hover {
+  filter: brightness(1.05);
+}
+.qvoice-btn.is-recording {
+  background: var(--danger);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+.qvoice-btn:focus-visible {
+  outline: 2px solid var(--ink-primary);
+  outline-offset: 2px;
+}
+.qvoice-dots {
+  font-weight: 700;
+  font-size: 20px;
+}
+.qvoice p {
+  margin: 0;
+  text-align: right;
+  max-width: 220px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qvoice-btn.is-recording {
+    animation: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .voice-status-btn.is-recording { animation: none; }
 }
@@ -2824,5 +2881,65 @@ input[type="datetime-local"] {
   .skel {
     animation: none;
     opacity: 0.8;
+  }
+}
+
+/* ── THE DESK — the admins' wide-screen reading (>=1280px) ──────────────────
+   Bianca and João moved to the PC and met a phone column stretched to 1040px.
+   This is the second front (Andre, 2026-08-31: "duas frentes, sempre"): the
+   SAME page, the SAME children, placed as a desk instead of a stack. Nothing
+   here reaches below 1280px — the phone experience is mandatory-as-is, and
+   the 1024-1279 window keeps the old single column as the in-between.
+
+   The desk's grammar: the LEFT is the walk (the sales card, wide enough for
+   the ruler to actually rule), the RIGHT is the ledger — who needs you first
+   (gone quiet, slipping), the gates, the year. The greeting shares its row
+   with the money band, so the first glance answers "how are we" before the
+   eye drops into either column. grid-auto-flow dense lets the tiles backfill
+   beside the hero without disturbing the phone's DOM order. */
+@media (min-width: 1280px) {
+  :root {
+    --content-w: 1400px;
+  }
+  main {
+    /* w-full measures the BODY and then the rail's margin pushes the box past
+       the viewport (232 + 1400 = 1632). auto respects the margin. */
+    width: auto !important;
+    padding-inline: 40px !important;
+  }
+  .navbar-inner {
+    padding-inline: 40px;
+  }
+  .mgr-home {
+    display: grid;
+    grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
+    gap: 28px 36px;
+    grid-auto-flow: dense;
+    align-items: start;
+  }
+  .mgr-home > [data-desk="hero"] {
+    grid-column: 1;
+    align-self: center;
+  }
+  .mgr-home > [data-desk="tiles"] {
+    grid-column: 2;
+    align-self: center;
+  }
+  .mgr-home > [data-desk="focus"] {
+    grid-column: 1 / -1;
+  }
+  .mgr-home > [data-desk="sales"] {
+    grid-column: 1;
+    grid-row: span 6;
+  }
+  .mgr-home > [data-desk="gates"],
+  .mgr-home > [data-desk="months"],
+  .mgr-home > [data-desk="slipping"] {
+    grid-column: 2;
+  }
+  /* The .adapt entrance animation staggers by nth-of-type for the phone's
+     top-to-bottom read; on the desk the columns arrive together. */
+  .mgr-home > .adapt {
+    animation-delay: 0.05s;
   }
 }

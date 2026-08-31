@@ -3,11 +3,15 @@
 // "Add new" on the Quotes tile.
 //
 // A quote belongs to an account, and the deal form already knows how to create
-// one properly — stage, value, close date, lead source and the required first
-// next action, all through the one outbox op that create_opportunity_with_action
-// replays in a single transaction. So this screen does the only thing that
-// form cannot: name the account first. Then it hands over, with the stage
-// pre-set to QUOTE, rather than growing a second form that would drift.
+// one properly — so this screen does the only thing that form cannot: name the
+// account first. Then it hands over with the stage pre-set to QUOTE.
+//
+// THE DISTRIBUTORS LEAD, UNFOLDED. Quotes here are for the distribution houses
+// in their absolute majority (Andre, 2026-08-31) — a handful of names that
+// deserve to be one tap away, not alphabetically interleaved with every dealer
+// in the patch. The dealers wait folded underneath, one tap to open; typing in
+// the search flattens everything, because a person typing a name has already
+// chosen it.
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,19 +29,57 @@ export default function NewQuotePage() {
     void getOfflineLayer().local.getAccounts().then(setAccounts);
   }, []);
 
-  // Quick-find over the cached working set, the same idiom as the referral
-  // pickers — this is "which of my doors", not a search of the whole org.
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = q
-      ? accounts.filter((a) =>
-          `${a.name} ${a.city ?? ""}`.toLowerCase().includes(q),
-        )
-      : accounts;
-    return [...base]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, 20);
-  }, [accounts, query]);
+  const byName = (a: CachedAccount, b: CachedAccount) =>
+    a.name.localeCompare(b.name);
+
+  // Quick-find over the cached working set — "which of my doors", not a
+  // search of the whole org. A live query flattens the groups.
+  const q = query.trim().toLowerCase();
+  const searched = useMemo(
+    () =>
+      q
+        ? accounts
+            .filter((a) => `${a.name} ${a.city ?? ""}`.toLowerCase().includes(q))
+            .sort(byName)
+            .slice(0, 20)
+        : [],
+    [accounts, q],
+  );
+
+  const groups = useMemo(() => {
+    const distributors = accounts
+      .filter((a) => a.account_type === "DISTRIBUTOR")
+      .sort(byName);
+    const dealers = accounts
+      .filter((a) => a.account_type === "DEALER")
+      .sort(byName);
+    const rest = accounts
+      .filter(
+        (a) => a.account_type !== "DISTRIBUTOR" && a.account_type !== "DEALER",
+      )
+      .sort(byName);
+    return { distributors, dealers, rest };
+  }, [accounts]);
+
+  const row = (a: CachedAccount) => (
+    <li key={a.id}>
+      <button
+        type="button"
+        className="row"
+        onClick={() => router.push(`/accounts/${a.id}/new-deal?stage=QUOTE`)}
+      >
+        <span className="row-body">
+          <span className="t-title block truncate">
+            {displayAccountName(a.name)}
+          </span>
+          <span className="t-sub block truncate">
+            {humanize(a.account_type)}
+            {a.city ? ` · ${a.city}` : ""}
+          </span>
+        </span>
+      </button>
+    </li>
+  );
 
   return (
     <div className="stack pt-2">
@@ -57,36 +99,41 @@ export default function NewQuotePage() {
           />
         </label>
 
-        {filtered.length === 0 ? (
-          <p className="t-sub px-1">
-            {accounts.length === 0
-              ? "No accounts on this device yet."
-              : "No account matches that."}
-          </p>
+        {accounts.length === 0 ? (
+          <p className="t-sub px-1">No accounts on this device yet.</p>
+        ) : q ? (
+          searched.length === 0 ? (
+            <p className="t-sub px-1">No account matches that.</p>
+          ) : (
+            <ul className="list">{searched.map(row)}</ul>
+          )
         ) : (
-          <ul className="list">
-            {filtered.map((a) => (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  className="row"
-                  onClick={() =>
-                    router.push(`/accounts/${a.id}/new-deal?stage=QUOTE`)
-                  }
-                >
-                  <span className="row-body">
-                    <span className="t-title block truncate">
-                      {displayAccountName(a.name)}
-                    </span>
-                    <span className="t-sub block truncate">
-                      {humanize(a.account_type)}
-                      {a.city ? ` · ${a.city}` : ""}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {groups.distributors.length > 0 && (
+              <div>
+                <p className="sales-eyebrow">Distribution</p>
+                <ul className="list">{groups.distributors.map(row)}</ul>
+              </div>
+            )}
+
+            {groups.dealers.length > 0 && (
+              <details className="pk-unfold">
+                <summary className="t-hint">
+                  Dealers — {groups.dealers.length}
+                </summary>
+                <ul className="list">{groups.dealers.map(row)}</ul>
+              </details>
+            )}
+
+            {groups.rest.length > 0 && (
+              <details className="pk-unfold">
+                <summary className="t-hint">
+                  Everyone else — {groups.rest.length}
+                </summary>
+                <ul className="list">{groups.rest.map(row)}</ul>
+              </details>
+            )}
+          </>
         )}
       </section>
     </div>

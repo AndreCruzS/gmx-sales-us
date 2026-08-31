@@ -578,8 +578,12 @@ export function ManagerHome({ name }: { name: string }) {
   }
 
   return (
-    <div className="stack pt-2">
-      <section>
+    // mgr-home + data-desk: INERT on the phone — the attributes exist so the
+    // desk (>=1280px) can place these same children on a two-column grid
+    // without touching the mobile DOM or its order. Mobile is mandatory-as-is
+    // (Andre, 2026-08-31); the desk is a second reading of the same page.
+    <div className="stack pt-2 mgr-home">
+      <section data-desk="hero">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
           {greeting(hour)}, {name}
         </h1>
@@ -589,7 +593,7 @@ export function ManagerHome({ name }: { name: string }) {
       </section>
 
       {focus && (
-        <div className="focus-bar">
+        <div className="focus-bar" data-desk="focus">
           <span className="focus-swatch" style={{ background: focus.colour }} aria-hidden="true" />
           <span className="min-w-0">
             <span className="focus-name block truncate">{focus.name}</span>
@@ -623,7 +627,11 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
       )}
 
-      <section className="adapt grid grid-cols-2 gap-3" key={`tiles-${focus?.id ?? "all"}`}>
+      <section
+        className="adapt grid grid-cols-2 gap-3"
+        data-desk="tiles"
+        key={`tiles-${focus?.id ?? "all"}`}
+      >
         <div className="card card-pad">
           <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
           <div className="fig fig-xl mt-1">
@@ -647,6 +655,7 @@ export function ManagerHome({ name }: { name: string }) {
       {/* Sales first: the distributors' sell-through, banded by whoever is not
           the row, walking rep → distributor → branch → dealer in place rather
           than sending anyone to another screen. */}
+      <div data-desk="sales">
       <TeamSales
         rows={monthlyRows}
         ytdRows={ytdSellRows}
@@ -659,6 +668,7 @@ export function ManagerHome({ name }: { name: string }) {
         onLens={setSalesLens}
         onMode={setSalesMode}
       />
+      </div>
 
       {/* Bianca's tracker, as the journey a branch walks rather than four
           numbers in a box — and ONLY under the Rep lens: the gates are the
@@ -667,7 +677,7 @@ export function ManagerHome({ name }: { name: string }) {
       {/* The rollout answers for one branch when one is chosen, and steps
           aside for a distributor — a house does not have a display wall. */}
       {salesLens === "rep" && (
-        <div className="adapt" key={`gates-${focus?.id ?? "all"}`}>
+        <div className="adapt" data-desk="gates" key={`gates-${focus?.id ?? "all"}`}>
           {focus ? (
             focusedGates ? (
               <RolloutTimeline
@@ -689,12 +699,12 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
       )}
 
-      <div className="adapt" key={`months-${focus?.id ?? "all"}`}>
+      <div className="adapt" data-desk="months" key={`months-${focus?.id ?? "all"}`}>
         <MonthByMonth rows={monthRows} nowMs={loadedAt} />
       </div>
 
       {(slippingGroups.length > 0 || quietAsRanking) && (
-        <section className="adapt" key={`slip-${focus?.id ?? "all"}`}>
+        <section className="adapt" data-desk="slipping" key={`slip-${focus?.id ?? "all"}`}>
           <div className="section-head">
             <h2 className="t-section">What&rsquo;s slipping</h2>
             <Link href="/dashboard" className="t-action">
