@@ -20,7 +20,6 @@ import { TeamSales, type Focus } from "@/components/team-sales";
 import {
   latestPeriods,
   movementLabel,
-  moveDir,
   periodLabel,
   type BranchRef,
   type PathStep,
@@ -47,6 +46,8 @@ interface ExceptionRow {
   exception_type: string | null;
   owner_membership_id: string | null;
   subject_id: string | null;
+  /** The subject's name — an exception is always ABOUT somebody. */
+  title: string | null;
 }
 interface PipelineRow {
   stage: string;
@@ -127,7 +128,7 @@ export function ManagerHome({ name }: { name: string }) {
         .order("rep_name"),
       supabase
         .from("exceptions")
-        .select("exception_type, owner_membership_id, subject_id")
+        .select("exception_type, owner_membership_id, subject_id, title")
         .limit(1000),
       supabase
         .from("dashboard_won_monthly")
@@ -392,15 +393,16 @@ export function ManagerHome({ name }: { name: string }) {
     return b ? [{ account_id: b.account_id, name: b.name, pk_count: b.pk_count }] : undefined;
   }, [focus, branches]);
 
-  // GONE QUIET AS A RANKING, under the region reading (Andre, 2026-08-28).
-  // A count ("4") says there is trouble; it does not say WHERE TO GO FIRST.
-  // The buying itself does: every dealer in the book, ordered from the one
-  // that stopped buying to the one still growing — attention runs down the
-  // list. With no earlier file to move against, the smallest buyers lead,
-  // because a thin month is the quietest signal there is.
-  // It follows the card's window: under "Year so far" the comparison is the
-  // file's own LY column — which is where the dealers who bought all of last
-  // year and nothing this year finally get named instead of skipped.
+  // GONE QUIET, MEANING QUIET (Andre, 2026-09-01: "se comprou esse mês que
+  // passou não é quiet"). The register holds ONLY the dealers absent from
+  // our latest file — whoever bought in it, however little, is out, and so
+  // is anyone who already came back in a later monthly file. The figure on
+  // each row is the volume that went silent: what they used to buy.
+  // Under "Year so far" two silences qualify: gone against last year's file
+  // (LY volume, zero this year) and gone mid-year (bought in the YTD window,
+  // nothing in the newest monthly file — provable only when that file is
+  // actually newer than the YTD cut). The year-long silence outranks the
+  // fresh one; inside each group, the biggest loss leads.
   const quietYtd = salesMode === "ytd" && ytdSellRows.length > 0;
   const quietRanking = useMemo(() => {
     const base = quietYtd ? ytdSellRows : monthlyRows;
@@ -412,17 +414,14 @@ export function ManagerHome({ name }: { name: string }) {
         key: string;
         accountId: string | null;
         name: string;
-        qty: number;
-        prevQty: number;
-        score: number;
+        /** The volume that went silent — what this dealer used to buy. */
+        stake: number;
         unit: string;
-        /** WHEN they stopped, as honestly as the data allows: a month when the
-         *  windows say one, a year with its uncertainty named when they don't
+        /** The verdict: "stopped buying", or silence since the newest file. */
+        verdict: string;
+        /** WHEN they were last heard, as honestly as the data allows
          *  (Andre, 2026-08-31: if we don't know, we say so). */
-        quietSince: string | null;
-        /** They zeroed the YTD window but appear in a later monthly file —
-         *  not stopped at all. Ranked calm and said out loud. */
-        backIn: string | null;
+        when: string | null;
       }[],
       hasPrev: false,
     };
@@ -460,44 +459,53 @@ export function ManagerHome({ name }: { name: string }) {
       ? [...prev.values()].some((v) => v > 0)
       : previous !== null;
     const lyYear = Number(pLatest.slice(0, 4)) - 1;
+    // The later file is only proof of silence when somebody is IN it.
+    const laterFileExists = later.size > 0;
     const keys = new Set([...cur.keys(), ...prev.keys()]);
-    const rows = [...keys]
-      .map((k) => {
-        const c = cur.get(k) ?? 0;
-        const p = prev.get(k) ?? 0;
-        const stopped = hasPrev && p > 0 && c === 0;
-        const cameBack = stopped && quietYtd && (later.get(k) ?? 0) > 0;
-        // Attention, as a number: stopped < falling < level < rising < back/new.
-        const score = !hasPrev
-          ? c
-          : cameBack
-            ? 1e9
-            : p === 0
-              ? Number.POSITIVE_INFINITY
-              : c === 0
-                ? Number.NEGATIVE_INFINITY
-                : (c - p) / p;
-        return {
-          key: k,
-          accountId: ids.get(k) ?? null,
-          name: names.get(k) ?? k,
-          qty: c,
-          prevQty: p,
-          score,
-          unit,
-          quietSince:
-            stopped && !cameBack
-              ? quietYtd
-                ? // Their last trace is the LY aggregate — a year, not a month,
-                  // and the gap is named rather than smoothed over.
-                  `last bought in ${lyYear} · month unknown`
-                : `last bought ${periodLabel(previous)}`
-              : null,
-          backIn: cameBack && latest ? `back in ${periodLabel(latest)}` : null,
-        };
-      })
-      .filter((r) => r.qty > 0 || r.prevQty > 0);
-    rows.sort((a, b) => a.score - b.score || a.qty - b.qty);
+    const rows: (typeof empty)["rows"] = [];
+    const grouped: { group: number; row: (typeof empty)["rows"][number] }[] = [];
+    for (const k of keys) {
+      const c = cur.get(k) ?? 0;
+      const p = prev.get(k) ?? 0;
+      const common = {
+        key: k,
+        accountId: ids.get(k) ?? null,
+        name: names.get(k) ?? k,
+        unit,
+      };
+      if (hasPrev && p > 0 && c === 0) {
+        // Silent for the whole window — unless a later monthly file already
+        // heard from them, in which case they are simply NOT QUIET.
+        if (quietYtd && (later.get(k) ?? 0) > 0) continue;
+        grouped.push({
+          group: 0,
+          row: {
+            ...common,
+            stake: p,
+            verdict: "stopped buying",
+            when: quietYtd
+              ? // Their last trace is the LY aggregate — a year, not a month,
+                // and the gap is named rather than smoothed over.
+                `last bought in ${lyYear} · month unknown`
+              : `last bought ${periodLabel(previous)}`,
+          },
+        });
+      } else if (quietYtd && c > 0 && laterFileExists && (later.get(k) ?? 0) === 0) {
+        // Bought inside the YTD window, silent in the newest monthly file.
+        grouped.push({
+          group: 1,
+          row: {
+            ...common,
+            stake: c,
+            verdict: latest ? `nothing in ${periodLabel(latest)}` : "gone quiet",
+            when: "bought earlier this year",
+          },
+        });
+      }
+      // Anyone with volume in the latest file is buying — not this card's business.
+    }
+    grouped.sort((a, b) => a.group - b.group || b.row.stake - a.row.stake);
+    for (const g of grouped) rows.push(g.row);
     return { rows, hasPrev };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
 
@@ -505,24 +513,24 @@ export function ManagerHome({ name }: { name: string }) {
   // customer narrows the section to themselves like everything else does.
   const quietAsRanking =
     salesLens === "region" && !focus && quietRanking.rows.length > 0;
-  const quietPrevKey = quietYtd ? "last-year" : previous;
-  const quietLabels = quietYtd
-    ? { on: "last year", fresh: "new this year" }
-    : undefined;
 
   // Grouped by what is wrong, most of it first — the same union a rep meets one
   // row at a time, read as a list of problems with names against them.
   const slippingGroups = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { count: number; names: string[] }>();
     for (const e of slipping) {
       if (!e.exception_type) continue;
       if (focus && e.subject_id !== focus.accountId) continue;
-      map.set(e.exception_type, (map.get(e.exception_type) ?? 0) + 1);
+      const g = map.get(e.exception_type) ?? { count: 0, names: [] };
+      g.count += 1;
+      if (e.title) g.names.push(e.title);
+      map.set(e.exception_type, g);
     }
     return [...map.entries()]
-      .map(([type, count]) => ({
+      .map(([type, g]) => ({
         type,
-        count,
+        count: g.count,
+        names: g.names,
         danger: DANGER_EXCEPTIONS.has(type),
       }))
       .sort((a, b) => Number(b.danger) - Number(a.danger) || b.count - a.count)
@@ -722,51 +730,32 @@ export function ManagerHome({ name }: { name: string }) {
               <div className="quiet-head">
                 <span className="t-title">Account gone quiet</span>
                 <span className="t-hint">
-                  {quietRanking.hasPrev
-                    ? quietYtd
-                      ? "ranked against last year — most in need first"
-                      : "ranked by buying — most in need first"
-                    : "ranked by volume — no earlier file to move against"}
+                  {quietYtd
+                    ? "silent in our newest file — the year-long silences first, biggest loss leading"
+                    : `bought before, nothing in ${periodLabel(latest)} — biggest loss first`}
                 </span>
               </div>
+              <div className="quiet-scroll">
               <ul className="list">
-                {quietRanking.rows.slice(0, 10).map((r) => {
-                  const stopped = r.prevQty > 0 && r.qty === 0 && !r.backIn;
+                {quietRanking.rows.map((r) => {
                   const body = (
                     <>
                       <span className="row-body">
                         <span className="quiet-name">{r.name}</span>
-                        {/* WHEN it stopped, or that we cannot know: a month if
-                            the windows say one, the year with its gap named
-                            when they don't. Under the NAME, where there is
-                            room — the figure column keeps the verdict. */}
-                        {stopped && r.quietSince && (
-                          <span className="t-hint quiet-since">{r.quietSince}</span>
+                        {/* WHEN they were last heard — under the name, where
+                            there is room; the figure column keeps the verdict
+                            and the volume that went silent. */}
+                        {r.when && (
+                          <span className="t-hint quiet-since">{r.when}</span>
                         )}
                       </span>
                       <span className="quiet-fig">
                         <span className="fig fig-md">
-                          {QTY.format(r.qty)} {r.unit}
+                          {QTY.format(r.stake)} {r.unit}
                         </span>
-                        {quietRanking.hasPrev &&
-                          (r.backIn ? (
-                            <span className="sales-move" data-dir="up">
-                              {r.backIn}
-                            </span>
-                          ) : stopped ? (
-                            <span className="sales-move" data-dir="down">
-                              stopped buying
-                            </span>
-                          ) : (
-                            <span
-                              className="sales-move"
-                              data-dir={moveDir(r.qty, r.prevQty, quietPrevKey)}
-                            >
-                              {r.prevQty === 0
-                                ? (quietLabels?.fresh ?? "new this month")
-                                : (movementLabel(r.qty, r.prevQty, quietPrevKey, quietLabels) ?? "—")}
-                            </span>
-                          ))}
+                        <span className="sales-move" data-dir="down">
+                          {r.verdict}
+                        </span>
                       </span>
                     </>
                   );
@@ -783,9 +772,10 @@ export function ManagerHome({ name }: { name: string }) {
                   );
                 })}
               </ul>
+              </div>
               {quietRanking.rows.length > 10 && (
                 <p className="t-hint quiet-more">
-                  and {quietRanking.rows.length - 10} calmer below —{" "}
+                  and {quietRanking.rows.length - 10} more —{" "}
                   <Link href="/accounts" className="underline underline-offset-2">
                     all accounts
                   </Link>
@@ -799,16 +789,32 @@ export function ManagerHome({ name }: { name: string }) {
               .filter((g) => !(quietAsRanking && g.type === "STRATEGIC_ACCOUNT_QUIET"))
               .map((g) => (
                 <li key={g.type}>
-                  <Link href="/accounts" className="row">
-                    <span className="row-body">
-                      <span className="t-title">{exceptionLabel(g.type)}</span>
+                  <Link href="/accounts" className="row slip-group">
+                    <span className="slip-group-head">
+                      <span className="row-body">
+                        <span className="t-title">{exceptionLabel(g.type)}</span>
+                      </span>
+                      <span
+                        className="fig fig-lg shrink-0"
+                        style={{ color: g.danger ? "var(--danger)" : "var(--ink-primary)" }}
+                      >
+                        {g.count}
+                      </span>
                     </span>
-                    <span
-                      className="fig fig-lg shrink-0"
-                      style={{ color: g.danger ? "var(--danger)" : "var(--ink-primary)" }}
-                    >
-                      {g.count}
-                    </span>
+                    {/* WHO, not only how many — the desk has the room, and a
+                        count with no names is a question, not an answer. */}
+                    {g.names.length > 0 && (
+                      <span className="slip-names">
+                        {g.names.slice(0, 6).map((n) => (
+                          <span key={n} className="slip-name">
+                            {n}
+                          </span>
+                        ))}
+                        {g.count > 6 && (
+                          <span className="t-hint">+ {g.count - 6} more</span>
+                        )}
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}

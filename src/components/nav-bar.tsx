@@ -105,7 +105,7 @@ export function NavBar() {
     // the bar spans full width so content scrolls under a continuous blur;
     // the inner column matches the content box so the title and the sync chip
     // line up with what's below them
-    <header className="navbar">
+    <header className="navbar" data-root={isRoot || undefined}>
       <div className="navbar-inner">
         {!isRoot && (
           <button

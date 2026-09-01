@@ -22,13 +22,17 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { isAdmin } from "@/lib/domain/roles";
+import { useReviewCount } from "@/lib/review/count";
+import { SyncBadge } from "./sync-badge";
 import {
   BuildingIcon,
   CalendarIcon,
+  CheckIcon,
   FileIcon,
   HomeIcon,
   MicrophoneIcon,
   PlusIcon,
+  SearchIcon,
   UploadIcon,
   type IconProps,
 } from "./icons";
@@ -102,6 +106,7 @@ const CLOSE_MS = 300;
 export function TabBar() {
   const pathname = usePathname();
   const { profile } = useOffline();
+  const reviewCount = useReviewCount();
   // Three states, not two: a menu that is on its way out is still on screen.
   const [addState, setAddState] = useState<"closed" | "open" | "closing">(
     "closed",
@@ -267,6 +272,34 @@ export function TabBar() {
             {label}
           </Link>
         ))}
+
+        {/* THE DESK'S TOOL SHELF, top right beside Add: the review badge, the
+            account search, the sync chip. The phone never shows this — its
+            nav bar already carries all three. */}
+        <span className="tabbar-tools">
+          {reviewCount > 0 && !pathname.startsWith("/review") && (
+            <Link
+              href="/review"
+              className="navbar-icon navbar-review"
+              aria-label={`${reviewCount} waiting for your OK`}
+            >
+              <CheckIcon size={19} />
+              <span className="tab-badge" aria-hidden="true">
+                {reviewCount > 9 ? "9+" : reviewCount}
+              </span>
+            </Link>
+          )}
+          {!pathname.startsWith("/accounts") && (
+            <Link
+              href="/accounts"
+              className="navbar-icon"
+              aria-label="Find an account"
+            >
+              <SearchIcon size={19} />
+            </Link>
+          )}
+          <SyncBadge />
+        </span>
       </nav>
     </>
   );
