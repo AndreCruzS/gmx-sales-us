@@ -3672,6 +3672,11 @@ input[type="datetime-local"] {
   gap: 9px;
   margin-top: 8px;
 }
+.pmix-scroll {
+  max-height: 330px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
 .pmix-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

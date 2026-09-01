@@ -1839,8 +1839,10 @@ function SalesBook({
                           ? ` — ${panePath[panePath.length - 1].name}`
                           : ""}
                       </p>
-                      <ul className="pmix-list">
-                        {productMix.slice(0, 8).map((prod) => (
+                      {/* every product, in a window that scrolls — a
+                          "+ 41 more" is a door; a scroll is the room */}
+                      <ul className="pmix-list pmix-scroll">
+                        {productMix.map((prod) => (
                           <li key={prod.name} className="pmix-row">
                             <span className="pmix-name">{prod.name}</span>
                             <span className="fig-sm pmix-share">
@@ -1867,11 +1869,6 @@ function SalesBook({
                           </li>
                         ))}
                       </ul>
-                      {productMix.length > 8 && (
-                        <p className="t-hint">
-                          + {productMix.length - 8} more products
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>
