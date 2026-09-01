@@ -1961,7 +1961,7 @@ function SalesBook({
                           style={{
                             flexGrow: 0,
                             flexBasis: `${(100 * b.qty) / Math.max(m.total, 1)}%`,
-                            background: `color-mix(in srgb, ${hue} ${Math.max(92 - i * 18, 28)}%, white)`,
+                            background: `color-mix(in srgb, ${hue} ${Math.max(92 - i * 18, 28)}%, var(--map-ground))`,
                           }}
                         />
                       ))}

@@ -61,11 +61,13 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "detroit|MI": [-83.0458, 42.3314],
 };
 
-// Each state wears its market's colour. These are only the neutrals — and the
-// paper is DARKER than the card on purpose: the country must read as a thing
-// lying on the page, not a watermark dissolving into it.
-const COVERED_ZERO = "#d6dde2";
-const PAPER = "#e2e7ea";
+// Each state wears its market's colour. The neutrals are THEME TOKENS —
+// paper darker than the card by day, lighter by night — and the volume mix
+// leans on the map's own ground, so a state deepens from whatever surface
+// it lies on. Hardcoded hexes here were the whole dark-mode bug.
+const COVERED_ZERO = "var(--map-covered)";
+const PAPER = "var(--map-paper)";
+const GROUND = "var(--map-ground)";
 const REST_HUE = "#8a9299";
 /** The legend's intensity strip, hue-agnostic: the first market's blue is as
  *  good a demonstrator as any. */
@@ -233,7 +235,7 @@ export function SalesMap({
     // 46k in one state does not wash every other market out.
     const t = Math.sqrt(qty / maxState);
     const mix = Math.round(25 + 75 * t);
-    return `color-mix(in srgb, ${hue} ${mix}%, white)`;
+    return `color-mix(in srgb, ${hue} ${mix}%, ${GROUND})`;
   };
 
   const centroidOf = (postal: string | null) =>
@@ -306,7 +308,7 @@ export function SalesMap({
                   key={s.id}
                   d={s.path}
                   fill={fillOf(postal)}
-                  stroke="#fbfcfc"
+                  stroke="var(--map-line)"
                   strokeWidth={1}
                   vectorEffect="non-scaling-stroke"
                   data-dim={dimmed || undefined}
@@ -402,7 +404,7 @@ export function SalesMap({
             <i
               key={m}
               style={{
-                background: `color-mix(in srgb, var(--cat-1) ${m}%, white)`,
+                background: `color-mix(in srgb, var(--cat-1) ${m}%, var(--map-ground))`,
               }}
             />
           ))}
