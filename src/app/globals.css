@@ -102,6 +102,14 @@
   --tabbar-h: 62px;
   --topbar-h: 58px; /* the desktop nav runs along the top, not down the side */
   --content-w: 1040px;
+
+  /* The map's neutrals. The volume mix leans on --map-ground, so a state's
+     colour deepens FROM the surface it lies on — white by day, the card by
+     night — and the seams between states are always the card behind them. */
+  --map-ground: #ffffff;
+  --map-line: #fbfcfc;
+  --map-paper: #e2e7ea;
+  --map-covered: #d6dde2;
 }
 
 /* The mockups are light only. This is the same language after dark: the warm
@@ -116,6 +124,14 @@
     --surface-sunken: #262e37;
     --surface-accent: #17322f;
     --rule: #2e3843;
+
+    /* the map on a dark desk: ground and seams from the dark surfaces,
+       uncovered states a step lighter than the card so the country still
+       reads as an object */
+    --map-ground: #1f262e;
+    --map-line: #171c22;
+    --map-paper: #2b343e;
+    --map-covered: #333d48;
 
     --ink-primary: #e7ebee;     /* 14.29:1 on the ground */
     --ink-secondary: #aeb8c0;   /* 8.50:1 */
@@ -896,6 +912,23 @@ body {
 }
 .slip-names {
   display: none;
+}
+
+/* The quote's favourite families: one tap, the whole family in the picker. */
+.qfav-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The register's chapter lines: quiet dividers, not headings shouting. */
+.quiet-chapter {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 12px 2px 4px;
 }
 
 /* The phone reads the top ten, as it always did — the rest of the ranking
@@ -2861,6 +2894,7 @@ input[type="datetime-local"] {
     color: var(--on-accent);
   }
   .tab-capture:hover {
+    background: var(--accent-strong);
     filter: brightness(1.05);
   }
   .tab-capture .tab-fab {
@@ -3424,14 +3458,14 @@ input[type="datetime-local"] {
   background: var(--surface-page);
 }
 .salesmap-pin {
-  fill: #115e59;
-  stroke: #fbfcfc;
+  fill: var(--accent-strong, #115e59);
+  stroke: var(--map-line);
   stroke-width: 2;
   cursor: default;
 }
 .salesmap-pin[data-quiet] {
-  fill: #fbfcfc;
-  stroke: #115e59;
+  fill: var(--map-line);
+  stroke: var(--accent-strong, #115e59);
 }
 .salesmap-legend {
   display: flex;
@@ -3466,17 +3500,17 @@ input[type="datetime-local"] {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #115e59;
+  background: var(--accent-strong, #115e59);
 }
 .salesmap-key-pin[data-quiet] {
-  background: #fbfcfc;
-  border: 2px solid #115e59;
+  background: var(--map-line);
+  border: 2px solid var(--accent-strong, #115e59);
 }
 .salesmap-key-paper {
   width: 12px;
   height: 9px;
   border-radius: 2px;
-  background: #f0f2f3;
+  background: var(--map-paper);
   border: 1px solid var(--rule);
 }
 
@@ -3592,7 +3626,7 @@ input[type="datetime-local"] {
   background: color-mix(in srgb, var(--cat-1) 80%, black);
 }
 .salesmap-key-paper {
-  background: #e2e7ea;
+  background: var(--map-paper);
 }
 
 /* Map, third pass: the dealer count written beside the pin — the honest
@@ -3604,7 +3638,9 @@ input[type="datetime-local"] {
   font-weight: 600;
   fill: var(--ink-primary);
   paint-order: stroke;
-  stroke: #fbfcfc;
+  /* the halo is the map's own ground — a white halo under light ink was
+     unreadable the moment the desk went dark */
+  stroke: var(--map-ground);
   stroke-width: 3;
   pointer-events: none;
 }

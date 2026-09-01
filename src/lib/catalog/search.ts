@@ -56,7 +56,6 @@ export async function searchCatalog(q: string): Promise<{
   items: CatalogItem[];
   refreshedAt: string | null;
 }> {
-  const url = process.env.CATALOG_URL!;
   const pattern =
     "*" +
     q
@@ -75,6 +74,16 @@ export async function searchCatalog(q: string): Promise<{
     order: "sku",
     limit: "150",
   });
+  return fetchAndFold(params);
+}
+
+// One fetch, one fold, every consumer — the typeahead, the voice agent's
+// tool, and the favourites all read the catalog through here.
+async function fetchAndFold(params: URLSearchParams): Promise<{
+  items: CatalogItem[];
+  refreshedAt: string | null;
+}> {
+  const url = process.env.CATALOG_URL!;
   const res = await fetch(`${url}/rest/v1/sales_catalog_view?${params}`, {
     headers: {
       apikey: process.env.CATALOG_APIKEY!,
@@ -130,6 +139,67 @@ export async function searchCatalog(q: string): Promise<{
     .slice(0, 25);
 
   return { items, refreshedAt };
+}
+
+// ── The counter's favourites ─────────────────────────────────────────────────
+//
+// The dozen products the reps actually quote (Andre, 2026-09-01), each mapped
+// BY SKU-FAMILY PREFIX against the live view that same day — a prefix is
+// exact where a word search is fuzzy: "ayous 1x6 v-joint" finds a bundle,
+// TAYCNGVJ16* finds the family, RL first. Two notes from the mapping run:
+//   · Ayous 1x12 has NO S4S in the catalog — JPL is the only 1x12 family, so
+//     that is what the favourite opens.
+//   · Ash favourites carry profile=Square, because the bare prefixes also
+//     match ship-lap and diamond-grooved cousins.
+export interface CatalogFavorite {
+  id: string;
+  /** Short chip label, the counter's own words. */
+  label: string;
+  /** SKU-family prefixes, verified against the view 2026-09-01. */
+  prefixes: readonly string[];
+  /** Extra profile filter where a prefix alone is too greedy. */
+  profile?: string;
+}
+
+export const CATALOG_FAVORITES: readonly CatalogFavorite[] = [
+  { id: "ayous-16-vjng", label: "Ayous 1x6 · T&G VJ/NG", prefixes: ["TAYCNGVJ16"] },
+  { id: "ayous-18-s4s", label: "Ayous 1x8 · S4S", prefixes: ["TAYL18"] },
+  { id: "ayous-112-jpl", label: "Ayous 1x12 · JPL", prefixes: ["TAYJPLL112"] },
+  { id: "ayous-22-s4s", label: "Ayous 2x2 · S4S", prefixes: ["TAYL22"] },
+  { id: "ayous-24-s4s", label: "Ayous 2x4 · S4S", prefixes: ["TAYL24"] },
+  { id: "ayous-26-s4s", label: "Ayous 2x6 · S4S", prefixes: ["TAYL26"] },
+  { id: "pine-16-vjng", label: "Scandi Pine 1x6 · T&G VJ/NG", prefixes: ["TPNGVJ16"] },
+  { id: "ash-16-s4s", label: "Ash 1x6 · S4S", prefixes: ["TA16", "TA0106"], profile: "Square" },
+  { id: "ash-546-s4s", label: "Ash 5/4x6 · S4S", prefixes: ["TA546"], profile: "Square" },
+  { id: "radiata-16-ng", label: "Radiata 1x6 · T&G NG", prefixes: ["TCRNGOPX16", "TCRTG16"] },
+  { id: "radiata-18-s4s", label: "Radiata 1x8 · S4S", prefixes: ["TCRS18"] },
+  { id: "radiata-112-s4s", label: "Radiata 1x12 · S4S", prefixes: ["TCRS112"] },
+];
+
+export async function favoriteCatalog(id: string): Promise<{
+  items: CatalogItem[];
+  refreshedAt: string | null;
+} | null> {
+  const fav = CATALOG_FAVORITES.find((f) => f.id === id);
+  if (!fav) return null;
+  const params = new URLSearchParams({
+    select: SELECT,
+    order: "sku",
+    // a family is ~20 skus across up to a dozen branches — headroom, not hope
+    limit: "500",
+  });
+  // Two or= params AND together in PostgREST: quotable, and in-family.
+  params.append("or", "(in_stock.eq.true,is_random_length.eq.true)");
+  if (fav.prefixes.length === 1) {
+    params.set("sku", `ilike.${fav.prefixes[0]}*`);
+  } else {
+    params.append(
+      "or",
+      `(${fav.prefixes.map((p) => `sku.ilike.${p}*`).join(",")})`,
+    );
+  }
+  if (fav.profile) params.set("profile", `eq.${fav.profile}`);
+  return fetchAndFold(params);
 }
 
 // ── The catalog's own vocabulary ─────────────────────────────────────────────

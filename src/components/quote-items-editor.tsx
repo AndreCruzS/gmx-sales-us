@@ -16,6 +16,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SearchIcon } from "@/components/icons";
+import { CATALOG_FAVORITES } from "@/lib/catalog/search";
 
 export interface QuoteLine {
   sku: string;
@@ -66,6 +67,9 @@ export function QuoteItemsEditor({
   // survey has lines it folds behind an explicit "add another product", so a
   // finished list reads as a list and not as a form still asking questions.
   const [adding, setAdding] = useState(false);
+  // The favourite whose family fills the results — cleared the moment the
+  // rep types, because typing IS a different question.
+  const [favOpen, setFavOpen] = useState<string | null>(null);
   const [results, setResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [connected, setConnected] = useState(true);
@@ -80,10 +84,16 @@ export function QuoteItemsEditor({
     const q = query.trim();
     timer.current = setTimeout(async () => {
       if (q.length < 2) {
-        setResults([]);
+        // an open favourite owns the empty query — the typeahead must not
+        // blank its family
         setSearching(false);
+        setFavOpen((f) => {
+          if (!f) setResults([]);
+          return f;
+        });
         return;
       }
+      setFavOpen(null);
       setSearching(true);
       try {
         const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}`);
@@ -111,6 +121,31 @@ export function QuoteItemsEditor({
     };
   }, [query]);
 
+  const openFavorite = async (id: string) => {
+    setQuery("");
+    setFavOpen(id);
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/catalog/search?fav=${encodeURIComponent(id)}`);
+      if (res.status === 503) {
+        setConnected(false);
+        setResults([]);
+        return;
+      }
+      const body = (await res.json()) as {
+        items: SearchItem[];
+        stockStale?: boolean;
+      };
+      setConnected(true);
+      setStockStale(Boolean(body.stockStale));
+      setResults(body.items ?? []);
+    } catch {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const add = (p: SearchItem) => {
     onChange([
       ...value,
@@ -131,6 +166,7 @@ export function QuoteItemsEditor({
     ]);
     setQuery("");
     setResults([]);
+    setFavOpen(null);
     setAdding(false);
   };
 
@@ -237,18 +273,40 @@ export function QuoteItemsEditor({
       )}
 
       {(value.length === 0 || adding) && (
-        <label className="search-field">
-          <SearchIcon size={18} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Find a product — e.g. thermo 1x6…"
-            type="search"
-            enterKeyHint="search"
-            aria-label="Find a product"
-            autoFocus={adding}
-          />
-        </label>
+        <>
+          <label className="search-field">
+            <SearchIcon size={18} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a product — e.g. thermo 1x6…"
+              type="search"
+              enterKeyHint="search"
+              aria-label="Find a product"
+              autoFocus={adding}
+            />
+          </label>
+          {/* THE FAVOURITES: the dozen families the counter actually quotes,
+              one tap each — a verified sku-family, not a word search, so the
+              RL front door and every length land at once. */}
+          <div className="qfav-row" role="group" aria-label="Favourite products">
+            {CATALOG_FAVORITES.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className="chip chip-sm"
+                aria-pressed={favOpen === f.id}
+                onClick={() =>
+                  favOpen === f.id
+                    ? (setFavOpen(null), setResults([]))
+                    : void openFavorite(f.id)
+                }
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {!connected && (

@@ -8,7 +8,11 @@
 // so the picker and the model can never disagree about what a search returns.
 
 import { NextRequest, NextResponse } from "next/server";
-import { catalogConfigured, searchCatalog } from "@/lib/catalog/search";
+import {
+  catalogConfigured,
+  favoriteCatalog,
+  searchCatalog,
+} from "@/lib/catalog/search";
 
 export async function GET(req: NextRequest) {
   if (!catalogConfigured()) {
@@ -18,10 +22,17 @@ export async function GET(req: NextRequest) {
   }
 
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
-  if (q.length < 2) return NextResponse.json({ connected: true, items: [] });
+  const fav = (req.nextUrl.searchParams.get("fav") ?? "").trim();
+  if (!fav && q.length < 2)
+    return NextResponse.json({ connected: true, items: [] });
 
   try {
-    const { items, refreshedAt } = await searchCatalog(q);
+    // A favourite is a verified sku-family, not a word search — same fold,
+    // same shape, so the picker cannot tell the difference.
+    const result = fav ? await favoriteCatalog(fav) : await searchCatalog(q);
+    if (result === null)
+      return NextResponse.json({ connected: true, items: [] });
+    const { items, refreshedAt } = result;
     // Stock is rebuilt hourly; older than two hours means the job died and
     // the availability numbers should be read with a raised eyebrow.
     const staleMs = refreshedAt ? Date.now() - Date.parse(refreshedAt) : null;
