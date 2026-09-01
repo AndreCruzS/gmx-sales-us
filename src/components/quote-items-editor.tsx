@@ -19,6 +19,8 @@ import { SearchIcon } from "@/components/icons";
 
 export interface QuoteLine {
   sku: string;
+  /** Random length: ordered in LF, always — pieces make no sense here. */
+  randomLength?: boolean;
   description: string;
   species: string | null;
   profile: string | null;
@@ -31,6 +33,7 @@ export interface QuoteLine {
 
 interface SearchItem {
   sku: string;
+  randomLength: boolean;
   description: string;
   species: string | null;
   profile: string | null;
@@ -117,11 +120,13 @@ export function QuoteItemsEditor({
         species: p.species,
         profile: p.profile,
         nominal_size: p.nominal_size,
-        lfPerPiece: p.lf_per_piece,
+        lfPerPiece: p.randomLength ? null : p.lf_per_piece,
+        randomLength: p.randomLength,
         qtyInput: "",
         // Pieces is how a counter talks when the product has a length; LF is
-        // the fallback for anything the catalog cannot convert.
-        inputUom: p.lf_per_piece ? "PC" : "LF",
+        // the fallback for anything the catalog cannot convert — and the ONLY
+        // language of a random-length order.
+        inputUom: !p.randomLength && p.lf_per_piece ? "PC" : "LF",
       },
     ]);
     setQuery("");
@@ -160,7 +165,15 @@ export function QuoteItemsEditor({
                   </button>
                 </div>
                 <span className="t-hint">
-                  {[l.species, l.nominal_size, l.lfPerPiece ? `${LF1.format(l.lfPerPiece)} LF/pc` : null]
+                  {[
+                    l.species,
+                    l.nominal_size,
+                    l.randomLength
+                      ? "random length"
+                      : l.lfPerPiece
+                        ? `${LF1.format(l.lfPerPiece)} LF/pc`
+                        : null,
+                  ]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
@@ -183,7 +196,7 @@ export function QuoteItemsEditor({
                         type="button"
                         className="chip chip-sm"
                         aria-pressed={l.inputUom === u}
-                        disabled={u === "PC" && !l.lfPerPiece}
+                        disabled={u === "PC" && (!l.lfPerPiece || l.randomLength)}
                         onClick={() => patch(i, { inputUom: u })}
                       >
                         {u === "PC" ? "pieces" : "LF"}
@@ -258,10 +271,16 @@ export function QuoteItemsEditor({
                     {[
                       p.thermo ? "Thermo" : p.species,
                       p.nominal_size,
-                      p.lf_per_piece ? `${LF1.format(p.lf_per_piece)} LF/pc` : null,
-                      p.piecesAvailable > 0
-                        ? `${QTY.format(p.piecesAvailable)} pc across ${p.branches} ${p.branches === 1 ? "branch" : "branches"}`
-                        : "none available",
+                      p.randomLength
+                        ? "random length · quoted in LF"
+                        : p.lf_per_piece
+                          ? `${LF1.format(p.lf_per_piece)} LF/pc`
+                          : null,
+                      p.randomLength
+                        ? null
+                        : p.piecesAvailable > 0
+                          ? `${QTY.format(p.piecesAvailable)} pc across ${p.branches} ${p.branches === 1 ? "branch" : "branches"}`
+                          : "none available",
                     ]
                       .filter(Boolean)
                       .join(" · ")}

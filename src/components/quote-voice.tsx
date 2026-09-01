@@ -1,21 +1,21 @@
 "use client";
 
-// The big mic on the quote: "What is this quote about?"
+// The big mic on the quote — and its ENGINE ROOM.
 //
-// This is the quote's front door for a rep standing at a counter: hold forth
-// the way you would brief a colleague — who wants what, sizes, quantities,
-// what happens next — and the system DRAFTS the survey: it searches the real
-// catalog while it listens, fills the product lines, the status, the next
-// action. Everything lands in the form, editable; the rep stays the gate.
+// Tap, talk the quote through, tap again. What used to be a silent wait is
+// now the show itself: the room narrates the real work as the server streams
+// it — the transcript as it lands, every catalog search with its hit count,
+// the draft arriving. No spinner theatre; every line on screen is a thing
+// that actually happened, which is both the loading state this flow was
+// missing and the technology made visible.
 //
-// Deliberately larger than the status mic elsewhere: on this form the voice
-// is not a convenience beside a field, it is the fastest way to build the
-// whole thing.
+// Everything still lands in the form, editable. The rep stays the gate.
 
 import { useEffect, useRef, useState } from "react";
 
 export interface QuoteDraftLine {
   sku: string;
+  random_length?: boolean;
   description: string;
   species: string | null;
   profile: string | null;
@@ -33,7 +33,17 @@ export interface QuoteDraft {
   expectedClose: string | null;
 }
 
-type Phase = "idle" | "recording" | "thinking";
+type RoomEvent =
+  | { type: "stage"; stage: "transcribing" | "reading" }
+  | { type: "transcript"; text: string }
+  | { type: "search"; query: string }
+  | { type: "found"; query: string; count: number; top?: string | null }
+  | { type: "draft"; draft: QuoteDraft }
+  | { type: "error"; message: string };
+
+type Phase = "idle" | "recording" | "working";
+
+const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 export function QuoteVoice({
   account,
@@ -43,8 +53,7 @@ export function QuoteVoice({
   onDraft: (draft: QuoteDraft) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [failed, setFailed] = useState(false);
-  const [unmatched, setUnmatched] = useState<string[]>([]);
+  const [events, setEvents] = useState<RoomEvent[]>([]);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
 
@@ -55,8 +64,7 @@ export function QuoteVoice({
   }, []);
 
   async function start() {
-    setFailed(false);
-    setUnmatched([]);
+    setEvents([]);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec = new MediaRecorder(stream);
@@ -72,13 +80,13 @@ export function QuoteVoice({
       rec.start();
       setPhase("recording");
     } catch {
-      setFailed(true);
+      setEvents([{ type: "error", message: "no microphone — type it instead" }]);
     }
   }
 
   function stop() {
     recorder.current?.stop();
-    setPhase("thinking");
+    setPhase("working");
   }
 
   async function send(blob: Blob) {
@@ -87,14 +95,97 @@ export function QuoteVoice({
       form.append("audio", blob, "quote.webm");
       form.append("account", account);
       const res = await fetch("/api/voice/quote", { method: "POST", body: form });
-      if (!res.ok) throw new Error(String(res.status));
-      const draft = (await res.json()) as QuoteDraft;
-      setUnmatched(draft.unmatched ?? []);
-      onDraft(draft);
+      if (!res.ok || !res.body) throw new Error(String(res.status));
+
+      // NDJSON, event by event — the room draws each line as it happens.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          const ev = JSON.parse(part) as RoomEvent;
+          setEvents((prev) => [...prev, ev]);
+          if (ev.type === "draft") onDraft(ev.draft);
+        }
+      }
     } catch {
-      setFailed(true);
+      setEvents((prev) => [
+        ...prev,
+        { type: "error", message: "couldn't draft from that — try again, or type it" },
+      ]);
     } finally {
       setPhase("idle");
+    }
+  }
+
+  // The room's reading of the raw event stream: searches pair with their
+  // results, the last unfinished thing breathes.
+  const draft = events.findLast?.((e) => e.type === "draft") as
+    | Extract<RoomEvent, { type: "draft" }>
+    | undefined;
+  const rows: {
+    key: string;
+    text: string;
+    sub?: string;
+    state: "doing" | "done" | "error";
+  }[] = [];
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    if (e.type === "stage" && e.stage === "transcribing") {
+      const heard = events.slice(i).some((x) => x.type === "transcript");
+      rows.push({
+        key: `t${i}`,
+        text: "listening back…",
+        state: heard ? "done" : "doing",
+      });
+    } else if (e.type === "transcript") {
+      rows.push({ key: `h${i}`, text: "heard", sub: `“${e.text}”`, state: "done" });
+    } else if (e.type === "stage" && e.stage === "reading") {
+      const moved = events
+        .slice(i + 1)
+        .some((x) => x.type === "search" || x.type === "draft");
+      rows.push({
+        key: `r${i}`,
+        text: "reading the note…",
+        state: moved ? "done" : "doing",
+      });
+    } else if (e.type === "search") {
+      const found = events
+        .slice(i + 1)
+        .find((x) => x.type === "found" && x.query === e.query) as
+        | Extract<RoomEvent, { type: "found" }>
+        | undefined;
+      rows.push({
+        key: `s${i}`,
+        text: `catalog · “${e.query}”`,
+        sub: found
+          ? found.count > 0
+            ? `${found.count} found${found.top ? ` · ${found.top}` : ""}`
+            : "nothing under that name"
+          : undefined,
+        state: found ? "done" : "doing",
+      });
+    } else if (e.type === "draft") {
+      const d = e.draft;
+      const bits = [
+        `${d.lines.length} ${d.lines.length === 1 ? "line" : "lines"}`,
+        d.nextAction
+          ? `follow-up${d.nextAction.due ? ` ${DAY.format(new Date(`${d.nextAction.due}T00:00:00`))}` : ""}`
+          : null,
+      ].filter(Boolean);
+      rows.push({
+        key: `d${i}`,
+        text: `drafted — ${bits.join(" · ")}. Yours to edit.`,
+        state: "done",
+      });
+    } else if (e.type === "error") {
+      rows.push({ key: `e${i}`, text: e.message, state: "error" });
     }
   }
 
@@ -106,14 +197,14 @@ export function QuoteVoice({
         aria-label={
           phase === "recording"
             ? "Stop — draft the quote from what you said"
-            : phase === "thinking"
+            : phase === "working"
               ? "Drafting the quote…"
               : "Talk the quote through"
         }
-        disabled={phase === "thinking"}
+        disabled={phase === "working"}
         onClick={() => (phase === "recording" ? stop() : void start())}
       >
-        {phase === "thinking" ? (
+        {phase === "working" ? (
           <span className="qvoice-dots" aria-hidden="true">
             …
           </span>
@@ -135,23 +226,37 @@ export function QuoteVoice({
           </svg>
         )}
       </button>
+
       {phase === "recording" && (
         <p className="t-hint" style={{ color: "var(--danger)" }}>
           listening — who wants what, sizes, quantities, what happens next.
           Tap to finish.
         </p>
       )}
-      {phase === "thinking" && (
-        <p className="t-hint">drafting — searching the catalog for what you said…</p>
-      )}
-      {failed && phase === "idle" && (
-        <p className="t-hint">couldn&rsquo;t draft from that — try again, or type it</p>
-      )}
-      {unmatched.length > 0 && phase === "idle" && (
-        <p className="t-hint" style={{ color: "var(--warn-ink)" }}>
-          Couldn&rsquo;t find in the catalog: {unmatched.join("; ")} — add these
-          by hand.
-        </p>
+
+      {(rows.length > 0 || phase === "working") && phase !== "recording" && (
+        <div className="qvoice-room" aria-live="polite">
+          {rows.map((r) => (
+            <p key={r.key} className="qvoice-row" data-state={r.state}>
+              <span className="qvoice-dot" aria-hidden="true" />
+              <span className="qvoice-row-body">
+                <span>{r.text}</span>
+                {r.sub && <span className="qvoice-sub">{r.sub}</span>}
+              </span>
+            </p>
+          ))}
+          {draft && draft.draft.unmatched.length > 0 && (
+            <p className="qvoice-row" data-state="error">
+              <span className="qvoice-dot" aria-hidden="true" />
+              <span className="qvoice-row-body">
+                <span>couldn&rsquo;t find in the catalog</span>
+                <span className="qvoice-sub">
+                  {draft.draft.unmatched.join("; ")} — add these by hand
+                </span>
+              </span>
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

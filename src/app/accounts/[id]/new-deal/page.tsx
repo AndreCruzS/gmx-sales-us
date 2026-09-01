@@ -181,6 +181,7 @@ function NewDealForm() {
             profile: l.profile,
             nominal_size: l.nominal_size,
             lfPerPiece: l.lf_per_piece,
+            randomLength: l.random_length,
             qtyInput: String(l.quantity),
             inputUom: l.uom,
           });
