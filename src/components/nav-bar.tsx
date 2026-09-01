@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CheckIcon, ChevronRightIcon, SearchIcon } from "./icons";
 import { useOffline } from "./offline-provider";
+import { SignOutButton } from "./sign-out";
 import { SyncBadge } from "./sync-badge";
 import { useReviewCount } from "@/lib/review/count";
 
@@ -157,6 +158,9 @@ export function NavBar() {
             </Link>
           )}
           <SyncBadge />
+          {/* the way out lives on ROOT screens only — deep in a form it
+              would be a misclick with a price */}
+          {isRoot && <SignOutButton />}
         </div>
       </div>
     </header>

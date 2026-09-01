@@ -21,12 +21,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { isAdmin } from "@/lib/domain/roles";
+import { isAdmin, manages } from "@/lib/domain/roles";
 import { useReviewCount } from "@/lib/review/count";
 import { SyncBadge } from "./sync-badge";
+import { SignOutButton } from "./sign-out";
 import {
   BuildingIcon,
   CalendarIcon,
+  ChartIcon,
   CheckIcon,
   FileIcon,
   HomeIcon,
@@ -186,6 +188,15 @@ export function TabBar() {
       : pathname.startsWith(href);
 
   const [today, agenda, accounts, quotes] = TABS;
+  // For the desk's roles every destination IS a dashboard — the first one is
+  // the overview, not anybody's "home", and it wears the chart, not the
+  // little house (Andre: "melhor do que a casinha"). A rep's day still
+  // starts at Home, under its roof.
+  const desk = manages(profile?.role);
+  const labelOf = (label: string) =>
+    label === "Home" && desk ? "Overview" : label;
+  const iconOf = (label: string, Icon: (p: IconProps) => React.ReactElement) =>
+    label === "Home" && desk ? ChartIcon : Icon;
 
   return (
     <>
@@ -226,24 +237,21 @@ export function TabBar() {
       )}
 
       <nav className="tabbar" aria-label="Primary">
-        {/* the app name belongs in the rail on desktop; on mobile the nav bar
-            carries the screen name instead and this stays hidden */}
-        <Link href="/" className="tabbar-brand">
-          Commercial OS
-        </Link>
-
-        {[today, agenda].map(({ href, label, Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="tab"
-            data-active={isActive(href)}
-            aria-current={isActive(href) ? "page" : undefined}
-          >
-            <Icon size={21} />
-            {label}
-          </Link>
-        ))}
+        {[today, agenda].map(({ href, label, Icon }) => {
+          const TabIcon = iconOf(label, Icon);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className="tab"
+              data-active={isActive(href)}
+              aria-current={isActive(href) ? "page" : undefined}
+            >
+              <TabIcon size={21} />
+              {labelOf(label)}
+            </Link>
+          );
+        })}
 
         <button
           type="button"
@@ -269,7 +277,7 @@ export function TabBar() {
             aria-current={isActive(href) ? "page" : undefined}
           >
             <Icon size={21} />
-            {label}
+            {labelOf(label)}
           </Link>
         ))}
 
@@ -299,6 +307,7 @@ export function TabBar() {
             </Link>
           )}
           <SyncBadge />
+          <SignOutButton />
         </span>
       </nav>
     </>

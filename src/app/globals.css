@@ -914,6 +914,39 @@ body {
   display: none;
 }
 
+/* FINISH YOUR SETUP — the rep's un-dismissable second handshake. Amber,
+   full-width, first thing on every screen until the connection stands. */
+.setup-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #b45309;
+  color: #fff7ed;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+.setup-banner strong {
+  font-weight: 700;
+  color: #ffffff;
+}
+.setup-banner-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #b45309;
+  font-weight: 800;
+  font-size: 13px;
+}
+.setup-banner > span:last-child {
+  margin-inline-start: auto;
+  font-size: 18px;
+}
+
 /* The line's two fields, sharing edges — labels above, the maths below. */
 .qline-grid {
   display: grid;
@@ -2843,9 +2876,6 @@ input[type="datetime-local"] {
    and the content column widens so tables stop scrolling sideways next to
    empty space. */
 
-.tabbar-brand {
-  display: none;
-}
 .tabbar-tools {
   display: none;
 }
@@ -2871,16 +2901,6 @@ input[type="datetime-local"] {
     border-bottom: 1px solid var(--rule);
     background: var(--surface-page);
     backdrop-filter: none;
-  }
-
-  .tabbar-brand {
-    display: block;
-    order: -2;
-    padding: 0 22px 0 0;
-    font-size: var(--text-base);
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--ink-primary);
   }
 
   .tab {
