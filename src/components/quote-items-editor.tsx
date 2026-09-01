@@ -30,6 +30,10 @@ export interface QuoteLine {
   /** As typed — the input is the fact, the LF is the derivation. */
   qtyInput: string;
   inputUom: "LF" | "PC";
+  /** The counter's own price PER LINEAR FOOT, given by the operator at quote
+   *  time — never fetched (pricing lives in Spruce; this is the estimate).
+   *  Pieces convert to LF first, so one price speaks for both units. */
+  priceInput: string;
 }
 
 interface SearchItem {
@@ -47,12 +51,25 @@ interface SearchItem {
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const LF1 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+const MONEY = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
 
 export function lineLf(l: QuoteLine): number {
   const q = Number(l.qtyInput);
   if (!Number.isFinite(q) || q <= 0) return 0;
   if (l.inputUom === "LF") return q;
   return l.lfPerPiece ? q * l.lfPerPiece : 0;
+}
+
+/** LF × the operator's price per LF — the line's worth, zero until both
+ *  halves of the multiplication exist. */
+export function lineValue(l: QuoteLine): number {
+  const price = Number(l.priceInput);
+  if (!Number.isFinite(price) || price <= 0) return 0;
+  return lineLf(l) * price;
 }
 
 export function QuoteItemsEditor({
@@ -158,6 +175,7 @@ export function QuoteItemsEditor({
         lfPerPiece: p.randomLength ? null : p.lf_per_piece,
         randomLength: p.randomLength,
         qtyInput: "",
+        priceInput: "",
         // Pieces is how a counter talks when the product has a length; LF is
         // the fallback for anything the catalog cannot convert — and the ONLY
         // language of a random-length order.
@@ -175,6 +193,7 @@ export function QuoteItemsEditor({
   const remove = (i: number) => onChange(value.filter((_, j) => j !== i));
 
   const total = value.reduce((n, l) => n + lineLf(l), 0);
+  const totalValue = value.reduce((n, l) => n + lineValue(l), 0);
 
   return (
     <div className="flex flex-col gap-2">
@@ -213,41 +232,81 @@ export function QuoteItemsEditor({
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-                <div className="qline-qty">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="any"
-                    className="field qline-input"
-                    value={l.qtyInput}
-                    placeholder="0"
-                    aria-label={`Quantity of ${l.description}`}
-                    onChange={(e) => patch(i, { qtyInput: e.target.value })}
-                  />
-                  <div className="chip-row" role="group" aria-label="Unit">
-                    {(["PC", "LF"] as const).map((u) => (
-                      <button
-                        key={u}
-                        type="button"
-                        className="chip chip-sm"
-                        aria-pressed={l.inputUom === u}
-                        disabled={u === "PC" && (!l.lfPerPiece || l.randomLength)}
-                        onClick={() => patch(i, { inputUom: u })}
-                      >
-                        {u === "PC" ? "pieces" : "LF"}
-                      </button>
-                    ))}
-                  </div>
-                  {/* The answer, beside the question — 36 pc = 282 LF. */}
-                  <span className="fig fig-md qline-lf">
-                    {l.inputUom === "PC" ? `= ${QTY.format(lf)} LF` : `${QTY.format(lf)} LF`}
+                {/* TWO LABELLED FIELDS ON ONE GRID — quantity and the
+                    operator's price per LF share edges, and the maths lands
+                    on its own line underneath, right-aligned like every
+                    figure in this app. */}
+                <div className="qline-grid">
+                  <span className="qfield">
+                    <span className="qfield-label">
+                      Quantity —{" "}
+                      {l.randomLength
+                        ? "LF (random length)"
+                        : l.inputUom === "PC"
+                          ? "pieces"
+                          : "LF"}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="any"
+                      className="field"
+                      value={l.qtyInput}
+                      placeholder="0"
+                      aria-label={`Quantity of ${l.description}`}
+                      onChange={(e) => patch(i, { qtyInput: e.target.value })}
+                    />
+                    {!l.randomLength && (
+                      <span className="chip-row" role="group" aria-label="Unit">
+                        {(["PC", "LF"] as const).map((u) => (
+                          <button
+                            key={u}
+                            type="button"
+                            className="chip chip-sm"
+                            aria-pressed={l.inputUom === u}
+                            disabled={u === "PC" && !l.lfPerPiece}
+                            onClick={() => patch(i, { inputUom: u })}
+                          >
+                            {u === "PC" ? "pieces" : "LF"}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                  <span className="qfield">
+                    <span className="qfield-label">Price — $ per LF</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="any"
+                      className="field"
+                      value={l.priceInput}
+                      placeholder="0.00"
+                      aria-label={`Price per linear foot of ${l.description}`}
+                      onChange={(e) => patch(i, { priceInput: e.target.value })}
+                    />
                   </span>
                 </div>
                 {pcWithoutLength && (
                   <span className="t-hint" style={{ color: "var(--warn-ink)" }}>
                     This item has no length in the catalog — enter it in LF.
                   </span>
+                )}
+                {(lf > 0 || lineValue(l) > 0) && (
+                  <p className="qline-figs fig fig-md">
+                    {[
+                      lf > 0
+                        ? l.inputUom === "PC"
+                          ? `= ${QTY.format(lf)} LF`
+                          : `${QTY.format(lf)} LF`
+                        : null,
+                      lineValue(l) > 0 ? MONEY.format(lineValue(l)) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
                 )}
               </li>
             );
@@ -258,7 +317,10 @@ export function QuoteItemsEditor({
       {value.length > 0 && (
         <p className="qtotal">
           <span className="t-hint">Quote total</span>
-          <span className="fig fig-lg">{QTY.format(total)} LF</span>
+          <span className="fig fig-lg">
+            {QTY.format(total)} LF
+            {totalValue > 0 ? ` · ${MONEY.format(totalValue)}` : ""}
+          </span>
         </p>
       )}
 

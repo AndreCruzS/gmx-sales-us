@@ -243,10 +243,17 @@ export const opportunityCreateSchema = z
     expected_close_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
     product: z.string().nullish(),
     competitor: z.string().nullish(),
-    lead_source: z.enum(LEAD_SOURCES_ALL),
+    // Nullable since the quote flow (2026-09-01): a quote asks WHO it is for,
+    // not where the deal came from — HubSpot's own defaults answer the source
+    // when the bridge creates the deal there. The full deal form still
+    // requires one; that requirement lives in the form, matching the column,
+    // which dropped its NOT NULL the same day.
+    lead_source: z.enum(LEAD_SOURCES_ALL).nullish(),
     source_detail: z.string().nullish(),
     referring_account_id: uuid.nullish(),
     project_id: uuid.nullish(),
+    /** The person this quote is FOR — a contact of the account. */
+    contact_id: uuid.nullish(),
     first_action: z.object({
       id: uuid,
       action: z.string().min(1),
@@ -261,6 +268,7 @@ export const opportunityCreateSchema = z
   })
   .refine(
     (o) =>
+      !o.lead_source ||
       !(REFERRAL_LEAD_SOURCES as readonly string[]).includes(o.lead_source) ||
       Boolean(o.referring_account_id),
     { message: "referral lead sources need the referring account (D7)" },

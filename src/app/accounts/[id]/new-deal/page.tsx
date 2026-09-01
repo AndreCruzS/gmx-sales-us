@@ -31,6 +31,7 @@ import { QuoteVoice, type QuoteDraft } from "@/components/quote-voice";
 import {
   QuoteItemsEditor,
   lineLf,
+  lineValue,
   type QuoteLine,
 } from "@/components/quote-items-editor";
 
@@ -45,6 +46,21 @@ const DEAL_STAGES = OPPORTUNITY_STAGES.filter(
 // derived from an account, never created directly.
 const ACTION_KINDS = ["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"] as const;
 type ActionKind = (typeof ACTION_KINDS)[number];
+
+// The quote's next step is one of three (Andre, 2026-09-01): send a sample,
+// follow the quote up, or something said in the rep's own words. A visit is
+// the pipeline's move, not the counter's.
+const QUOTE_ACTIONS: readonly { kind: ActionKind; label: string }[] = [
+  { kind: "SAMPLE_FOLLOW_UP", label: "Send sample" },
+  { kind: "QUOTE_FOLLOW_UP", label: "Follow-up quote" },
+  { kind: "OTHER", label: "Other" },
+];
+
+interface ContactLite {
+  id: string;
+  name: string;
+  job_title: string | null;
+}
 
 interface AccountLite {
   id: string;
@@ -103,7 +119,20 @@ function NewDealForm() {
   const [pickingReferring, setPickingReferring] = useState(false);
   const [actionText, setActionText] = useState("");
   const [actionDue, setActionDue] = useState("");
-  const [actionKind, setActionKind] = useState<ActionKind>("VISIT");
+  const [actionKind, setActionKind] = useState<ActionKind>(
+    initialStage === "QUOTE" ? "QUOTE_FOLLOW_UP" : "VISIT",
+  );
+  // The action text follows the picked kind until the rep writes their own —
+  // same fence the deal name uses.
+  const [actionTouched, setActionTouched] = useState(false);
+  // WHO the quote is for: a contact of the account, picked or born right
+  // here. The company alone is a building; a quote goes to a person.
+  const [contacts, setContacts] = useState<ContactLite[]>([]);
+  const [contactId, setContactId] = useState("");
+  const [newContact, setNewContact] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactRole, setContactRole] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // The survey: product lines for a QUOTE-stage deal. Kept even when the
@@ -156,6 +185,25 @@ function NewDealForm() {
     void getOfflineLayer().local.getAccounts().then(setAccounts);
   }, []);
 
+  useEffect(() => {
+    if (!quoteFlow) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const { data } = await getSupabaseBrowserClient()
+            .from("contacts")
+            .select("id, name, job_title")
+            .eq("account_id", accountId)
+            .order("name");
+          if (data) setContacts(data as ContactLite[]);
+        } catch {
+          // offline: the rep can still name a new person
+        }
+      })();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [quoteFlow, accountId]);
+
   const isReferral = leadSource
     ? (REFERRAL_LEAD_SOURCES as readonly string[]).includes(leadSource)
     : false;
@@ -184,6 +232,7 @@ function NewDealForm() {
             randomLength: l.random_length,
             qtyInput: String(l.quantity),
             inputUom: l.uom,
+            priceInput: "",
           });
         }
         return next;
@@ -197,7 +246,9 @@ function NewDealForm() {
         setActionDue(draft.nextAction.due);
       }
     }
-    if (draft.expectedClose && !closeDate && iso.test(draft.expectedClose)) {
+    // The quote flow gave up its close date (HubSpot's defaults own it when
+    // the bridge creates the deal) — only the full form still listens.
+    if (!quoteFlow && draft.expectedClose && !closeDate && iso.test(draft.expectedClose)) {
       setCloseDate(draft.expectedClose);
     }
   }
@@ -214,6 +265,13 @@ function NewDealForm() {
     } · ${bornDay}`;
   }, [quoteFlow, account, items, bornDay]);
   const dealName = quoteFlow && !nameTouched ? autoName : name;
+
+  // The estimate is ARITHMETIC, not a guess typed twice: Σ (LF × the
+  // operator's price per LF). Pieces became LF inside lineValue already.
+  const estimatedValue = useMemo(
+    () => items.reduce((n, l) => n + lineValue(l), 0),
+    [items],
+  );
 
   // Same quick-find idiom as accounts/new's referral picker.
   const filteredReferring = useMemo(() => {
@@ -242,19 +300,25 @@ function NewDealForm() {
       setError("Where does this stand? A quick line is needed.");
       return;
     }
-    if (!leadSource) {
-      setError("Where did this deal come from? Pick the source.");
+    if (quoteFlow && !contactId && !contactName.trim()) {
+      setError("Who is this quote for? Pick a contact or name one.");
       return;
     }
-    if (leadSource === "OTHER" && !sourceDetail.trim()) {
-      setError("A word on where it came from.");
-      return;
-    }
-    if (isReferral && !referringAccountId) {
-      setError(
-        "Who sent them your way? Referrals need the referring account.",
-      );
-      return;
+    if (!quoteFlow) {
+      if (!leadSource) {
+        setError("Where did this deal come from? Pick the source.");
+        return;
+      }
+      if (leadSource === "OTHER" && !sourceDetail.trim()) {
+        setError("A word on where it came from.");
+        return;
+      }
+      if (isReferral && !referringAccountId) {
+        setError(
+          "Who sent them your way? Referrals need the referring account.",
+        );
+        return;
+      }
     }
     if (!actionText.trim()) {
       setError("Every deal needs a first next action.");
@@ -284,6 +348,28 @@ function NewDealForm() {
       const dealId = queuedDealId ?? crypto.randomUUID();
       const actionId = crypto.randomUUID();
 
+      // A recipient named here is BORN here: the contact op rides the same
+      // outbox ahead of the deal that references it.
+      let recipientId = contactId || null;
+      if (quoteFlow && !recipientId && contactName.trim()) {
+        recipientId = crypto.randomUUID();
+        await layer.sync.enqueue({
+          clientId: recipientId,
+          entityType: "contact",
+          op: "create",
+          payload: {
+            id: recipientId,
+            org_id: profile.orgId,
+            account_id: accountId,
+            name: contactName.trim(),
+            job_title: contactRole.trim() || null,
+            email: contactEmail.trim() || null,
+          },
+          baseVersion: null,
+          blobRef: null,
+        });
+      }
+
       if (!queuedDealId) {
         await layer.sync.enqueue({
           clientId: dealId,
@@ -298,11 +384,23 @@ function NewDealForm() {
             owner_id: profile.membershipId,
             stage,
             current_status: currentStatus.trim(),
-            estimated_revenue: revenue === "" ? null : Number(revenue),
-            expected_close_date: closeDate || null,
-            lead_source: leadSource,
-            source_detail: sourceDetail.trim() || null,
-            referring_account_id: isReferral ? referringAccountId : null,
+            // The quote's value is computed from its priced lines; the full
+            // form still takes the number by hand.
+            estimated_revenue: quoteFlow
+              ? estimatedValue > 0
+                ? Math.round(estimatedValue)
+                : null
+              : revenue === ""
+                ? null
+                : Number(revenue),
+            expected_close_date: quoteFlow ? null : closeDate || null,
+            // No source on a quote — HubSpot's defaults answer when the
+            // bridge creates the deal over there.
+            lead_source: quoteFlow ? null : leadSource || null,
+            source_detail: quoteFlow ? null : sourceDetail.trim() || null,
+            referring_account_id:
+              !quoteFlow && isReferral ? referringAccountId : null,
+            contact_id: quoteFlow ? recipientId : null,
             first_action: {
               id: actionId,
               action: actionText.trim(),
@@ -337,6 +435,10 @@ function NewDealForm() {
               qty_input: Number(l.qtyInput),
               input_uom: l.inputUom,
               lf: lineLf(l),
+              price_per_lf:
+                l.priceInput !== "" && Number(l.priceInput) > 0
+                  ? Number(l.priceInput)
+                  : null,
               created_by: profile.membershipId,
             })),
           );
@@ -438,35 +540,116 @@ function NewDealForm() {
           </span>
         </label>
 
-        {/* THE SURVEY, only where the deal IS a quote. No price anywhere in
-            it by design — the priced quote is produced in Spruce; what is
-            ours is which products and how many linear feet. */}
+        {/* WHO IT IS FOR: a quote goes to a person, not a building. Pick a
+            contact of the account, or name one — the new contact is born in
+            the same save, riding the outbox ahead of the deal. */}
+        {quoteFlow && (
+          <div className="flex flex-col gap-1">
+            <span className="t-hint">Who is this quote for?</span>
+            <div className="chip-row" role="group" aria-label="Recipient">
+              {contacts.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="chip chip-sm"
+                  aria-pressed={contactId === c.id}
+                  onClick={() => {
+                    setContactId(contactId === c.id ? "" : c.id);
+                    setNewContact(false);
+                  }}
+                >
+                  {c.name}
+                  {c.job_title ? ` · ${c.job_title}` : ""}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="chip chip-sm"
+                aria-pressed={newContact}
+                onClick={() => {
+                  setNewContact(!newContact);
+                  setContactId("");
+                }}
+              >
+                + New contact
+              </button>
+            </div>
+            {newContact && (
+              <div className="flex flex-col gap-2 pt-1">
+                <input
+                  className="field"
+                  placeholder="Their name"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <input
+                    className="field"
+                    placeholder="Role (optional)"
+                    value={contactRole}
+                    onChange={(e) => setContactRole(e.target.value)}
+                  />
+                  <input
+                    className="field"
+                    type="email"
+                    placeholder="Email (optional)"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* THE SURVEY, only where the deal IS a quote. The price on each line
+            is the OPERATOR'S, per linear foot — pricing itself lives in
+            Spruce; what is ours is the estimate the maths gives. */}
         {isQuoteStage(stage) && (
           <QuoteItemsEditor value={items} onChange={setItems} />
         )}
 
-        <label className="flex flex-col gap-1">
-          <span className="t-hint">Estimated value (optional)</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={revenue}
-            onChange={(e) => setRevenue(e.target.value)}
-            className="field"
-            placeholder="$"
-          />
-        </label>
+        {quoteFlow ? (
+          estimatedValue > 0 && (
+            <p className="qtotal">
+              <span className="t-hint">Estimated value — LF × the prices above</span>
+              <span className="fig fig-lg">
+                {new Intl.NumberFormat("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                  maximumFractionDigits: 0,
+                }).format(estimatedValue)}
+              </span>
+            </p>
+          )
+        ) : (
+          <label className="flex flex-col gap-1">
+            <span className="t-hint">Estimated value (optional)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={revenue}
+              onChange={(e) => setRevenue(e.target.value)}
+              className="field"
+              placeholder="$"
+            />
+          </label>
+        )}
 
-        <label className="flex flex-col gap-1">
-          <span className="t-hint">Expected close (optional)</span>
-          <input
-            type="date"
-            value={closeDate}
-            onChange={(e) => setCloseDate(e.target.value)}
-            className="field"
-          />
-        </label>
+        {!quoteFlow && (
+          <label className="flex flex-col gap-1">
+            <span className="t-hint">Expected close (optional)</span>
+            <input
+              type="date"
+              value={closeDate}
+              onChange={(e) => setCloseDate(e.target.value)}
+              className="field"
+            />
+          </label>
+        )}
 
+        {!quoteFlow && (
         <label className="flex flex-col gap-1">
           <span className="t-hint">How did this deal come about?</span>
           <select
@@ -487,8 +670,9 @@ function NewDealForm() {
             ))}
           </select>
         </label>
+        )}
 
-        {leadSource === "OTHER" && (
+        {!quoteFlow && leadSource === "OTHER" && (
           <input
             placeholder="Where did this come from?"
             value={sourceDetail}
@@ -498,7 +682,7 @@ function NewDealForm() {
         )}
 
         {/* Referral picker — same type-to-filter idiom as accounts/new. */}
-        {isReferral && (
+        {!quoteFlow && isReferral && (
           <div className="flex flex-col gap-1">
             <span className="t-hint">Who sent them your way?</span>
             {referringAccount ? (
@@ -575,13 +759,42 @@ function NewDealForm() {
 
         <p className="t-section mt-2">First next step</p>
 
+        {quoteFlow && (
+          <div className="chip-row" role="group" aria-label="Next step">
+            {QUOTE_ACTIONS.map(({ kind, label }) => (
+              <button
+                key={kind}
+                type="button"
+                className="chip chip-sm"
+                aria-pressed={actionKind === kind}
+                onClick={() => {
+                  setActionKind(kind);
+                  // the label writes the line until the rep does
+                  if (!actionTouched) {
+                    setActionText(kind === "OTHER" ? "" : label);
+                  }
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <label className="flex flex-col gap-1">
-          <span className="t-hint">What are you doing next?</span>
+          <span className="t-hint">
+            {quoteFlow && actionKind !== "OTHER"
+              ? "A word on it (edit if you like)"
+              : "What are you doing next?"}
+          </span>
           <input
             value={actionText}
-            onChange={(e) => setActionText(e.target.value)}
+            onChange={(e) => {
+              setActionText(e.target.value);
+              setActionTouched(true);
+            }}
             className="field"
-            placeholder="e.g. Send a quote"
+            placeholder={quoteFlow ? "e.g. Send sample" : "e.g. Send a quote"}
           />
         </label>
 
@@ -595,20 +808,22 @@ function NewDealForm() {
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="t-hint">What kind of follow-up is this?</span>
-          <select
-            value={actionKind}
-            onChange={(e) => setActionKind(e.target.value as ActionKind)}
-            className="field"
-          >
-            {ACTION_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {humanize(k)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!quoteFlow && (
+          <label className="flex flex-col gap-1">
+            <span className="t-hint">What kind of follow-up is this?</span>
+            <select
+              value={actionKind}
+              onChange={(e) => setActionKind(e.target.value as ActionKind)}
+              className="field"
+            >
+              {ACTION_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {humanize(k)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {error && (
           <p className="t-sub" style={{ color: "var(--danger)" }}>
