@@ -11,6 +11,7 @@ const inter = Inter({
 });
 import { OfflineProvider } from "@/components/offline-provider";
 import { NavBar } from "@/components/nav-bar";
+import { SetupBanner } from "@/components/setup-banner";
 import { SwRegister } from "@/components/sw-register";
 import { TabBar } from "@/components/tab-bar";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
         style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
         <OfflineProvider>
+          <SetupBanner />
           <NavBar />
           <main
             className="mx-auto w-full max-w-lg px-4 pt-2"
