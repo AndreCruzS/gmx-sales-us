@@ -394,15 +394,18 @@ export function ManagerHome({ name }: { name: string }) {
   }, [focus, branches]);
 
   // GONE QUIET, MEANING QUIET (Andre, 2026-09-01: "se comprou esse mês que
-  // passou não é quiet"). The register holds ONLY the dealers absent from
-  // our latest file — whoever bought in it, however little, is out, and so
-  // is anyone who already came back in a later monthly file. The figure on
-  // each row is the volume that went silent: what they used to buy.
-  // Under "Year so far" two silences qualify: gone against last year's file
-  // (LY volume, zero this year) and gone mid-year (bought in the YTD window,
-  // nothing in the newest monthly file — provable only when that file is
-  // actually newer than the YTD cut). The year-long silence outranks the
-  // fresh one; inside each group, the biggest loss leads.
+  // passou não é quiet") — AND THEN THE FADING, because the silent alone
+  // made the card thinner than the trouble is (Andre, same day: "precisa
+  // ter mais dados como antes"). Two chapters, one register:
+  //   1. Silent — absent from our latest file. Gone against last year (LY
+  //      volume, zero this year) or gone mid-year (bought in the YTD window,
+  //      nothing in the newest monthly file, provable only when that file
+  //      is newer than the YTD cut). The figure is the volume that went
+  //      silent. Whoever came back in a later file is out.
+  //   2. Fading — still in the file, but buying LESS than before: the drop
+  //      named in percent, the figure their current volume.
+  // Stable and rising dealers stay out: this card is what's slipping, not
+  // the whole book. Inside each chapter the biggest loss leads.
   const quietYtd = salesMode === "ytd" && ytdSellRows.length > 0;
   const quietRanking = useMemo(() => {
     const base = quietYtd ? ytdSellRows : monthlyRows;
@@ -414,14 +417,18 @@ export function ManagerHome({ name }: { name: string }) {
         key: string;
         accountId: string | null;
         name: string;
-        /** The volume that went silent — what this dealer used to buy. */
+        /** Silent rows: the volume that went quiet. Fading rows: what they
+         *  still buy. Either way, the number that matters now. */
         stake: number;
         unit: string;
-        /** The verdict: "stopped buying", or silence since the newest file. */
+        /** The verdict: "stopped buying", silence since the newest file, or
+         *  the drop in percent. */
         verdict: string;
-        /** WHEN they were last heard, as honestly as the data allows
+        /** WHEN they were last heard, or what they used to buy
          *  (Andre, 2026-08-31: if we don't know, we say so). */
         when: string | null;
+        /** 0/1 = silent (year-long, then mid-year); 2 = fading. */
+        chapter: 0 | 1 | 2;
       }[],
       hasPrev: false,
     };
@@ -463,7 +470,11 @@ export function ManagerHome({ name }: { name: string }) {
     const laterFileExists = later.size > 0;
     const keys = new Set([...cur.keys(), ...prev.keys()]);
     const rows: (typeof empty)["rows"] = [];
-    const grouped: { group: number; row: (typeof empty)["rows"][number] }[] = [];
+    const grouped: {
+      group: number;
+      loss: number;
+      row: (typeof empty)["rows"][number];
+    }[] = [];
     for (const k of keys) {
       const c = cur.get(k) ?? 0;
       const p = prev.get(k) ?? 0;
@@ -479,6 +490,7 @@ export function ManagerHome({ name }: { name: string }) {
         if (quietYtd && (later.get(k) ?? 0) > 0) continue;
         grouped.push({
           group: 0,
+          loss: p,
           row: {
             ...common,
             stake: p,
@@ -488,23 +500,43 @@ export function ManagerHome({ name }: { name: string }) {
                 // and the gap is named rather than smoothed over.
                 `last bought in ${lyYear} · month unknown`
               : `last bought ${periodLabel(previous)}`,
+            chapter: 0 as const,
           },
         });
       } else if (quietYtd && c > 0 && laterFileExists && (later.get(k) ?? 0) === 0) {
         // Bought inside the YTD window, silent in the newest monthly file.
         grouped.push({
           group: 1,
+          loss: c,
           row: {
             ...common,
             stake: c,
             verdict: latest ? `nothing in ${periodLabel(latest)}` : "gone quiet",
             when: "bought earlier this year",
+            chapter: 1 as const,
+          },
+        });
+      } else if (hasPrev && p > 0 && c > 0 && c < p) {
+        // Still in the file, buying less — the fading chapter. The drop is
+        // named in percent; the biggest ABSOLUTE loss leads, because 90% of
+        // a thin account is smaller trouble than 30% of a fat one.
+        grouped.push({
+          group: 2,
+          loss: p - c,
+          row: {
+            ...common,
+            stake: c,
+            verdict: `down ${Math.round((100 * (p - c)) / p)}% on ${
+              quietYtd ? "last year" : periodLabel(previous)
+            }`,
+            when: `was ${QTY.format(p)} ${unit}`,
+            chapter: 2 as const,
           },
         });
       }
-      // Anyone with volume in the latest file is buying — not this card's business.
+      // Steady or growing means not slipping — not this card's business.
     }
-    grouped.sort((a, b) => a.group - b.group || b.row.stake - a.row.stake);
+    grouped.sort((a, b) => a.group - b.group || b.loss - a.loss);
     for (const g of grouped) rows.push(g.row);
     return { rows, hasPrev };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
@@ -730,14 +762,19 @@ export function ManagerHome({ name }: { name: string }) {
               <div className="quiet-head">
                 <span className="t-title">Account gone quiet</span>
                 <span className="t-hint">
-                  {quietYtd
-                    ? "silent in our newest file — the year-long silences first, biggest loss leading"
-                    : `bought before, nothing in ${periodLabel(latest)} — biggest loss first`}
+                  the silent first, then the fading — biggest loss leading
                 </span>
               </div>
               <div className="quiet-scroll">
               <ul className="list">
-                {quietRanking.rows.map((r) => {
+                {quietRanking.rows.map((r, i) => {
+                  const prevRow = quietRanking.rows[i - 1];
+                  const chapterLabel =
+                    r.chapter === 2 && (!prevRow || prevRow.chapter !== 2)
+                      ? "still buying, but fading"
+                      : r.chapter < 2 && !prevRow
+                        ? "gone quiet"
+                        : null;
                   const body = (
                     <>
                       <span className="row-body">
@@ -761,6 +798,9 @@ export function ManagerHome({ name }: { name: string }) {
                   );
                   return (
                     <li key={r.key}>
+                      {chapterLabel && (
+                        <p className="quiet-chapter">{chapterLabel}</p>
+                      )}
                       {r.accountId ? (
                         <Link href={`/accounts/${r.accountId}`} className="row quiet-row">
                           {body}
