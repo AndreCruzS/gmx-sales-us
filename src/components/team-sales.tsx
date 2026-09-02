@@ -1757,30 +1757,46 @@ function SalesBook({
   return (
     <div className="sales-step">
       <div className="card card-pad">
-        {/* The country over the whole spread — the same masthead the phone
-            reads, static here: the book's way of narrowing is the left page,
-            not a stripe isolation. */}
-        <div className="sales-row">
-          <p className="sales-title">{SELL_ROOT_LABEL[lens]}</p>
-          <p className="sales-count">
-            <span className="sales-count-qty sales-count-hero">
-              {QTY.format(Math.round(step.total))} {step.unit}
-            </span>
-            <span className="sales-count-when">· {month}</span>
-            {(() => {
-              const prevTotal = step.groups.reduce((n, x) => n + x.prevTotal, 0);
-              const m = movementLabel(step.total, prevTotal, previous, mv);
-              return m ? (
-                <span
-                  className="sales-move sales-count-move"
-                  data-dir={moveDir(step.total, prevTotal, previous)}
-                >
-                  {m}
+        {/* The masthead FOLLOWS THE PICK (Andre, 2026-09-02): at rest it is
+            the country; click a market's ground — a stripe of the total bar,
+            its state, its card — and the name and the figure become that
+            market's, sliding in. The key remounts the row so the slide plays
+            on every change of subject, and the same click on the picked
+            ground brings the country back the same way. */}
+        {(() => {
+          const pickedGroup =
+            lens === "region" && picked
+              ? (step.groups.find((g) => g.key === picked) ?? null)
+              : null;
+          const mastTitle = pickedGroup ? pickedGroup.title : SELL_ROOT_LABEL[lens];
+          const mastTotal = pickedGroup ? pickedGroup.total : step.total;
+          const mastPrev = pickedGroup
+            ? pickedGroup.prevTotal
+            : step.groups.reduce((n, x) => n + x.prevTotal, 0);
+          const m = movementLabel(mastTotal, mastPrev, previous, mv);
+          return (
+            <div
+              key={pickedGroup ? pickedGroup.key : "country"}
+              className="sales-row sales-masthead"
+            >
+              <p className="sales-title">{mastTitle}</p>
+              <p className="sales-count">
+                <span className="sales-count-qty sales-count-hero">
+                  {QTY.format(Math.round(mastTotal))} {step.unit}
                 </span>
-              ) : null;
-            })()}
-          </p>
-        </div>
+                <span className="sales-count-when">· {month}</span>
+                {m ? (
+                  <span
+                    className="sales-move sales-count-move"
+                    data-dir={moveDir(mastTotal, mastPrev, previous)}
+                  >
+                    {m}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          );
+        })()}
 
         {lens === "region" ? (
           /* THE REGION VIEW IS THE COUNTRY: the map first — coverage and
@@ -1789,21 +1805,35 @@ function SalesBook({
              chain, full width, underneath. */
           <>
             {/* THE TOTAL BAR, back over the whole spread — the same segmented
-                read the phone opens on, and the key the map inherits. */}
+                read the phone opens on, and the key the map inherits. Each
+                stripe is the same clickable ground as its states and its card:
+                click the blue and the masthead becomes Southern California;
+                click it again and the country returns. */}
             {step.summary && (
-              <div className="sales-track sales-track-total" aria-hidden="true">
-                {step.summary.segments.map((seg) => (
-                  <span
-                    key={seg.key}
-                    className="sales-seg"
-                    style={{
-                      flexGrow: 0,
-                      flexBasis: `${seg.share}%`,
-                      background: seg.colour,
-                      opacity: picked === null || seg.key === picked ? 1 : 0.22,
-                    }}
-                  />
-                ))}
+              <div className="sales-track sales-track-total">
+                {step.summary.segments.map((seg) => {
+                  const g = step.groups.find((x) => x.key === seg.key);
+                  return (
+                    <button
+                      key={seg.key}
+                      type="button"
+                      className="sales-seg sales-seg-click"
+                      aria-label={
+                        g
+                          ? `${g.title} — ${QTY.format(g.total)} ${g.unit}`
+                          : undefined
+                      }
+                      aria-pressed={picked === seg.key}
+                      onClick={() => pickRegion(seg.key)}
+                      style={{
+                        flexGrow: 0,
+                        flexBasis: `${seg.share}%`,
+                        background: seg.colour,
+                        opacity: picked === null || seg.key === picked ? 1 : 0.22,
+                      }}
+                    />
+                  );
+                })}
               </div>
             )}
             <div

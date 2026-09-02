@@ -141,6 +141,12 @@ export function SalesMap({
   const [tip, setTip] = useState<{
     name: string;
     sub: string;
+    /** A branch pin's dealers, stacked as rows — a one-line join of the
+        distributor's shouty labels overflowed the card and the screen. */
+    dealers?: { name: string; qty: number }[];
+    more?: number;
+    /** Near the top edge the card opens BELOW the cursor instead of above. */
+    flip: boolean;
     x: number;
     y: number;
   } | null>(null);
@@ -241,11 +247,24 @@ export function SalesMap({
   const centroidOf = (postal: string | null) =>
     states?.find((s) => FIPS_POSTAL[s.id] === postal)?.centroid ?? null;
 
-  const show = (e: React.MouseEvent, name: string, sub: string) => {
+  const show = (
+    e: React.MouseEvent,
+    name: string,
+    sub: string,
+    dealers?: { name: string; qty: number }[],
+    more?: number,
+  ) => {
     const rect = (e.currentTarget as Element)
       .closest(".salesmap")!
       .getBoundingClientRect();
-    setTip({ name, sub, x: e.clientX - rect.left, y: e.clientY - rect.top });
+    // Kept inside the map: the card is centred on the cursor and ~280px at
+    // its widest, so the anchor never comes closer than half of that to
+    // either edge — and near the top it opens downward instead of off-card.
+    const pad = Math.min(150, rect.width / 2);
+    const x = Math.min(Math.max(e.clientX - rect.left, pad), rect.width - pad);
+    const y = e.clientY - rect.top;
+    const flip = y < (dealers?.length ? 200 : 70);
+    setTip({ name, sub, dealers, more, flip, x, y });
   };
 
   const placed = pins
@@ -373,20 +392,15 @@ export function SalesMap({
                           p.qty > 0
                             ? `${QTY.format(p.qty)} ${unit} · ${p.dealers.length} ${
                                 p.dealers.length === 1 ? "dealer" : "dealers"
-                              }${
-                                p.dealers.length > 0
-                                  ? ` — ${p.dealers
-                                      .slice(0, 3)
-                                      .map((d) => d.name)
-                                      .join(", ")}${
-                                      p.dealers.length > 3 ? "…" : ""
-                                    }`
-                                  : ""
                               }`
                             : "quiet this period",
                         ]
                           .filter(Boolean)
                           .join(" · "),
+                        p.qty > 0 ? p.dealers.slice(0, 5) : undefined,
+                        p.qty > 0
+                          ? Math.max(p.dealers.length - 5, 0)
+                          : undefined,
                       )
                     }
                     onMouseLeave={() => setTip(null)}
@@ -431,11 +445,25 @@ export function SalesMap({
       {tip && (
         <div
           className="cols-tip"
+          data-flip={tip.flip || undefined}
           style={{ left: tip.x, top: tip.y }}
           role="status"
         >
           <span className="cols-tip-name">{tip.name}</span>
           <span className="cols-tip-sub">{tip.sub}</span>
+          {tip.dealers && tip.dealers.length > 0 && (
+            <span className="cols-tip-rows">
+              {tip.dealers.map((d) => (
+                <span key={d.name} className="cols-tip-row">
+                  <span className="cols-tip-dealer">{d.name}</span>
+                  <span className="cols-tip-qty">{QTY.format(d.qty)}</span>
+                </span>
+              ))}
+              {tip.more ? (
+                <span className="cols-tip-more">+ {tip.more} more</span>
+              ) : null}
+            </span>
+          )}
         </div>
       )}
     </div>

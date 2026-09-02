@@ -265,7 +265,7 @@ export function TabBar() {
           <span className="tab-fab">
             <PlusIcon size={22} strokeWidth={3} />
           </span>
-          Add
+          <span className="tab-capture-label">Add</span>
         </button>
 
         {[accounts, quotes].map(({ href, label, Icon }) => (
