@@ -41,6 +41,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SalesMap } from "@/components/sales-map";
+import { ChevronDownIcon } from "@/components/icons";
 import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
@@ -142,6 +143,8 @@ export function TeamSales({
   branches,
   latest: latestMonth,
   previous: previousMonth,
+  months,
+  onPickMonth,
   path,
   onPath,
   onFocus,
@@ -160,6 +163,11 @@ export function TeamSales({
   /** The month the book is good to, and the one before it. */
   latest: string | null;
   previous: string | null;
+  /** Every month the book holds, newest first. More than one is what turns
+   *  the masthead's "· July 2026" into a picker — with a single file the
+   *  label stays a label, because a menu of one is a lie about choice. */
+  months?: readonly string[];
+  onPickMonth?: (period: string) => void;
   /** Both the walk and the focus are owned by the PAGE, not by this section:
    *  picking a customer re-asks every question on the screen, and "Show all" up
    *  in the focus bar has to be able to undo the walk as well as the focus. */
@@ -722,6 +730,9 @@ export function TeamSales({
           previous={previous}
           mv={mv}
           month={month}
+          months={mode === "ytd" ? undefined : months}
+          pickedMonth={latest}
+          onPickMonth={onPickMonth}
         />
       ) : (
       <div className="sales-step" key={`${lens}-${mode}-${pathKey}`}>
@@ -1495,6 +1506,9 @@ function SalesBook({
   previous,
   mv,
   month,
+  months,
+  pickedMonth,
+  onPickMonth,
 }: {
   step: ReturnType<typeof buildStep>;
   current: readonly SellThroughRow[];
@@ -1504,6 +1518,10 @@ function SalesBook({
   previous: string | null;
   mv?: { on?: string; fresh?: string };
   month: string;
+  /** Undefined under the YTD window — a year has no month to pick. */
+  months?: readonly string[];
+  pickedMonth?: string | null;
+  onPickMonth?: (period: string) => void;
 }) {
   const colourOf = (key: string) =>
     step.summary?.bands.find((b) => b.key === key)?.colour ?? "var(--ink-muted)";
@@ -1784,7 +1802,30 @@ function SalesBook({
                 <span className="sales-count-qty sales-count-hero">
                   {QTY.format(Math.round(mastTotal))} {step.unit}
                 </span>
-                <span className="sales-count-when">· {month}</span>
+                {/* The WHEN is a picker once the book holds more than one
+                    month (the YTD window passes no months — a year has no
+                    month to pick). The native select sits invisible over the
+                    label — the menu is the browser's, the label stays the
+                    masthead's. */}
+                {onPickMonth && months && months.length > 1 ? (
+                  <span className="sales-count-when sales-when-pick">
+                    · {month}
+                    <ChevronDownIcon size={11} aria-hidden="true" />
+                    <select
+                      value={pickedMonth ?? ""}
+                      aria-label="Which month to read"
+                      onChange={(e) => onPickMonth(e.target.value)}
+                    >
+                      {months.map((p) => (
+                        <option key={p} value={p}>
+                          {periodLabel(p)}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                ) : (
+                  <span className="sales-count-when">· {month}</span>
+                )}
                 {m ? (
                   <span
                     className="sales-move sales-count-move"

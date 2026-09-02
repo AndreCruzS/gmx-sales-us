@@ -85,6 +85,11 @@ export function ManagerHome({ name }: { name: string }) {
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [sellRows, setSellRows] = useState<SellThroughRow[]>([]);
+  // Every month the book holds, newest first — the masthead's period picker.
+  // The picked month is a REQUEST: load() honours it while it exists and
+  // falls back to the newest when it doesn't (a removed upload, say).
+  const [months, setMonths] = useState<string[]>([]);
+  const [pickedMonth, setPickedMonth] = useState<string | null>(null);
   const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -114,7 +119,51 @@ export function ManagerHome({ name }: { name: string }) {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ch, sc, ex, wm, pl, st, sb, br] = await Promise.all([
+    // WHICH months exist, before fetching any of them. The old shape — rows
+    // newest-first under a blind limit(2000) — held the whole book while the
+    // book was one distributor and two files, but five distributors sending
+    // months would hit the cap MID-PERIOD and silently corrupt even the
+    // latest reading. The periods view is a handful of rows per month; the
+    // row fetches below then name their periods exactly.
+    const pv = await supabase
+      .from("sell_through_periods")
+      .select("period, period_kind")
+      .limit(2000);
+    const periodRows =
+      (pv.data as { period: string; period_kind: "MONTH" | "YTD" | null }[] | null) ?? [];
+    const monthsAvail = [
+      ...new Set(
+        periodRows.filter((r) => r.period_kind !== "YTD").map((r) => r.period),
+      ),
+    ]
+      .sort()
+      .reverse();
+    // The month being read: the chosen one while it still exists, else the
+    // newest. Its comparison month is the previous UPLOADED month, not the
+    // calendar's — a distributor that skips a month must not read against
+    // nothing.
+    const chosen =
+      pickedMonth && monthsAvail.includes(pickedMonth)
+        ? pickedMonth
+        : (monthsAvail[0] ?? null);
+    const prevOfChosen = chosen
+      ? (monthsAvail[monthsAvail.indexOf(chosen) + 1] ?? null)
+      : null;
+    const wantedMonths = [chosen, prevOfChosen].filter(
+      (p): p is string => p !== null,
+    );
+    const ytdPeriod =
+      [
+        ...new Set(
+          periodRows.filter((r) => r.period_kind === "YTD").map((r) => r.period),
+        ),
+      ]
+        .sort()
+        .reverse()[0] ?? null;
+    const SELL_COLS =
+      "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
+    const none = Promise.resolve({ data: [], error: null });
+    const [ch, sc, ex, wm, pl, st, sy, sb, br] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -138,16 +187,26 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("dashboard_pipeline")
         .select("stage, opportunity_count, total_value"),
-      // The distributors' own report. Newest months first and capped, because
-      // only the latest month and the one before it are ever drawn — a year of
-      // history would be a year of rows shipped to a phone to show two.
-      supabase
-        .from("sell_through_rows")
-        .select(
-          "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind",
-        )
-        .order("period", { ascending: false })
-        .limit(2000),
+      // The distributors' own report: exactly the month being read and the
+      // one before it. `period_kind is null` rides along for rows loaded
+      // before the kind existed — they were always monthly.
+      wantedMonths.length > 0
+        ? supabase
+            .from("sell_through_rows")
+            .select(SELL_COLS)
+            .in("period", wantedMonths)
+            .or("period_kind.eq.MONTH,period_kind.is.null")
+            .limit(10000)
+        : none,
+      // And the year-so-far aggregate, its latest file only.
+      ytdPeriod
+        ? supabase
+            .from("sell_through_rows")
+            .select(SELL_COLS)
+            .eq("period_kind", "YTD")
+            .eq("period", ytdPeriod)
+            .limit(10000)
+        : none,
       // Including the branches that bought nothing — the gaps are the point of
       // a coverage map, and sell_through_rows only carries branches with sales.
       supabase
@@ -166,11 +225,15 @@ export function ManagerHome({ name }: { name: string }) {
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
-    setSellRows(st.error ? [] : ((st.data as SellThroughRow[]) ?? []));
+    setSellRows([
+      ...(st.error ? [] : ((st.data as SellThroughRow[]) ?? [])),
+      ...(sy.error ? [] : ((sy.data as SellThroughRow[]) ?? [])),
+    ]);
+    setMonths(monthsAvail);
     setSellBranches(sb.error ? [] : ((sb.data as BranchRef[]) ?? []));
     setBranches(br.error ? [] : ((br.data as BranchRow[]) ?? []));
     setLoadedAt(Date.now());
-  }, []);
+  }, [pickedMonth]);
 
   // Every attempt must CONCLUDE, or the skeleton is a spinner with no way out —
   // the exact failure this whole change was meant to avoid, moved one screen
@@ -702,6 +765,8 @@ export function ManagerHome({ name }: { name: string }) {
         branches={sellBranches}
         latest={latest}
         previous={previous}
+        months={months}
+        onPickMonth={setPickedMonth}
         path={path}
         onPath={setPath}
         onFocus={setFocus}
