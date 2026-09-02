@@ -26,6 +26,8 @@ const TITLES: Record<string, string> = {
   "/accounts/new": "New account",
   "/quotes": "Quotes",
   "/quotes/new": "New quote",
+  "/contacts": "Contacts",
+  "/orders": "Orders",
   "/record": "Record",
   "/review": "Review",
   "/dashboard": "Insights",
@@ -37,7 +39,7 @@ const TITLES: Record<string, string> = {
 // Kept in step with TABS in tab-bar.tsx: /record, /review and /dashboard are
 // reached from somewhere now rather than tapped into, so they need the way
 // back that a root does not.
-const ROOTS = new Set(["/", "/visits", "/accounts", "/quotes"]);
+const ROOTS = new Set(["/", "/visits", "/accounts", "/quotes", "/contacts"]);
 
 /** "deon@gmxgroup.com" → "Deon". The cache never holds a display name. */
 function nameFromEmail(email: string): string {

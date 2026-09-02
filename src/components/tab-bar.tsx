@@ -36,14 +36,21 @@ import {
   PlusIcon,
   SearchIcon,
   UploadIcon,
+  UsersIcon,
   type IconProps,
 } from "./icons";
 
+// In the order Andre set for the desk (2026-09-02): Overview · Agenda ·
+// Quotes · Accounts · Contacts — the day, the plan, the money, the doors,
+// the people behind them. Contacts is the desk's destination only: on the
+// phone a rep reaches a person through the account they stand in front of,
+// and a sixth slot would crowd the bar that pays the bills.
 const TABS = [
   { href: "/", label: "Home", Icon: HomeIcon },
   { href: "/visits", label: "Agenda", Icon: CalendarIcon },
-  { href: "/accounts", label: "Accounts", Icon: BuildingIcon },
   { href: "/quotes", label: "Quotes", Icon: FileIcon },
+  { href: "/accounts", label: "Accounts", Icon: BuildingIcon },
+  { href: "/contacts", label: "Contacts", Icon: UsersIcon },
 ];
 
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
@@ -187,7 +194,7 @@ export function TabBar() {
       ? pathname === "/" || pathname.startsWith("/routine")
       : pathname.startsWith(href);
 
-  const [today, agenda, accounts, quotes] = TABS;
+  const [today, agenda, quotes, accounts, contacts] = TABS;
   // For the desk's roles every destination IS a dashboard — the first one is
   // the overview, not anybody's "home", and it wears the chart, not the
   // little house (Andre: "melhor do que a casinha"). A rep's day still
@@ -268,11 +275,11 @@ export function TabBar() {
           <span className="tab-capture-label">Add</span>
         </button>
 
-        {[accounts, quotes].map(({ href, label, Icon }) => (
+        {[quotes, accounts, contacts].map(({ href, label, Icon }) => (
           <Link
             key={href}
             href={href}
-            className="tab"
+            className={label === "Contacts" ? "tab tab-desk" : "tab"}
             data-active={isActive(href)}
             aria-current={isActive(href) ? "page" : undefined}
           >

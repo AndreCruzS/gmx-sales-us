@@ -24,6 +24,7 @@ function baseDraft(overrides: Partial<DebriefDraft> = {}): DebriefDraft {
     follow_up_required: false,
     next_actions: [],
     routine_dispositions: [],
+    contacts: [],
     ...overrides,
   };
 }
@@ -66,6 +67,40 @@ describe("debriefDraftSchema", () => {
 });
 
 describe("sanitizeDraft", () => {
+  it("keeps only contact suggestions with a name and something worth keeping", () => {
+    const draft = baseDraft({
+      contacts: [
+        // trimmed, e-mail lowercased — kept
+        {
+          name: " Robert Davis ",
+          job_title: null,
+          email: " RobertD@Big-Creek.com ",
+          phone: null,
+        },
+        // a name with nothing to reach them by and no role — dropped
+        { name: "Nobody Reachable", job_title: null, email: null, phone: null },
+        // no name at all — dropped
+        { name: "  ", job_title: "Manager", email: null, phone: null },
+      ],
+    });
+    const out = sanitizeDraft(draft, [], []);
+    expect(out.contacts).toEqual([
+      {
+        name: "Robert Davis",
+        job_title: null,
+        email: "robertd@big-creek.com",
+        phone: null,
+      },
+    ]);
+  });
+
+  it("defends drafts extracted before the contacts field existed", () => {
+    const legacy = baseDraft();
+    // simulate a stored ai_draft from before the field
+    delete (legacy as Partial<DebriefDraft>).contacts;
+    expect(sanitizeDraft(legacy, [], []).contacts).toEqual([]);
+  });
+
   it("drops any routine_disposition whose item_id is not in openItemIds", () => {
     const draft = baseDraft({
       routine_dispositions: [

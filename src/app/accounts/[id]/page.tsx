@@ -21,14 +21,15 @@ import {
   resolvePosition,
   type ChainPosition,
 } from "@/lib/domain/chain";
-import { humanize } from "@/lib/domain/enums";
+import { ACCOUNT_TYPES, humanize, type AccountType } from "@/lib/domain/enums";
 import {
   displayAccountName,
   formatDay,
   formatPhone,
   telHref,
 } from "@/lib/format";
-import { getOfflineLayer } from "@/lib/offline";
+import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
+import { type RelationshipType } from "@/lib/domain/enums";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface Account {
@@ -44,6 +45,10 @@ interface Account {
   display_last_verified_at: string | null;
   parent_account_id: string | null;
   lead_source: string;
+  // baseVersion for the edit sheet's LWW guard (D61). Optional because the
+  // offline cache predates it — with no version there is no edit offline,
+  // which is honest: a guard you cannot check is not a guard.
+  updated_at?: string;
 }
 interface Contact {
   id: string;
@@ -116,6 +121,77 @@ export default function AccountPage() {
   const [stageSheetOpp, setStageSheetOpp] = useState<Opportunity | null>(
     null,
   );
+  // The hierarchy, linked by hand (Andre, 2026-09-02): "nem sempre sabemos
+  // de quem a empresa compra" — when a rep learns it, one form records it.
+  // The sell-through trigger records the same fact automatically when a
+  // spreadsheet proves it; both land on account_relationships, one truth.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkType, setLinkType] = useState<RelationshipType>("PURCHASES_FROM");
+  const [linkAccountId, setLinkAccountId] = useState("");
+  const [linkQuery, setLinkQuery] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [cachedAccounts, setCachedAccounts] = useState<CachedAccount[]>([]);
+  useEffect(() => {
+    if (!profile) return;
+    void getOfflineLayer().local.getAccounts().then(setCachedAccounts);
+  }, [profile]);
+
+  // The account's own orders — GMX's sell-in to this door, from the synced
+  // order book (orders_mirror), reached through the customer link table.
+  const [orderSummary, setOrderSummary] = useState<{
+    count: number;
+    value: number;
+    open: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!profile || !id) return;
+    let stale = false;
+    void (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data: linkRows } = await supabase
+          .from("order_customer_links")
+          .select("customer_id")
+          .eq("account_id", id);
+        const customerIds = (linkRows ?? []).map(
+          (l) => (l as { customer_id: string }).customer_id,
+        );
+        if (customerIds.length === 0) return;
+        const { data: orderRows } = await supabase
+          .from("orders_mirror")
+          .select("total_value, status, archived_at")
+          .in("customer_id", customerIds);
+        if (stale || !orderRows) return;
+        const live = (
+          orderRows as {
+            total_value: number | null;
+            status: string;
+            archived_at: string | null;
+          }[]
+        ).filter((o) => !o.archived_at);
+        setOrderSummary({
+          count: live.length,
+          value: live.reduce((n, o) => n + (Number(o.total_value) || 0), 0),
+          open: live.filter((o) => o.status !== "Completed").length,
+        });
+      } catch {
+        // no signal — the section simply doesn't render
+      }
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [profile, id]);
+
+  // The identity edit (Andre, 2026-09-02): the fields a person corrects —
+  // name, kind of door, city. Ownership and history stay what they are.
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState<AccountType>("DEALER");
+  const [editCity, setEditCity] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
 
   // No signal: serve the account from the cached working set so the rep still
   // sees the account in front of them (D56).
@@ -175,7 +251,7 @@ export default function AccountPage() {
       const { data: acc, error } = await supabase
         .from("accounts")
         .select(
-          "id, name, account_type, city, state, website, strategic_importance, relationship_status, has_display_wall, display_last_verified_at, parent_account_id, lead_source",
+          "id, name, account_type, city, state, website, strategic_importance, relationship_status, has_display_wall, display_last_verified_at, parent_account_id, lead_source, updated_at",
         )
         .eq("id", id)
         .single();
@@ -334,14 +410,127 @@ export default function AccountPage() {
     <div className="stack pt-1">
       {/* Identity */}
       <section>
-        <h1 className="text-[26px] font-extrabold leading-tight tracking-tight">
-          {displayAccountName(account.name)}
-        </h1>
-        <p className="t-sub mt-1">
-          {humanize(account.account_type)}
-          {account.city ? ` · ${account.city}` : ""}
-          {account.state ? `, ${account.state}` : ""}
-        </p>
+        {editing ? (
+          <form
+            className="card card-pad flex flex-col gap-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!account.updated_at) return;
+              if (!editName.trim()) {
+                setEditError("The account needs a name.");
+                return;
+              }
+              setEditBusy(true);
+              setEditError(null);
+              try {
+                const layer = getOfflineLayer();
+                // D61: lands only if the row hasn't moved since it was read.
+                await layer.sync.enqueue({
+                  clientId: account.id,
+                  entityType: "account",
+                  op: "update",
+                  payload: {
+                    id: account.id,
+                    name: editName.trim(),
+                    account_type: editType,
+                    city: editCity.trim() || null,
+                  },
+                  baseVersion: account.updated_at,
+                  blobRef: null,
+                });
+                setAccount({
+                  ...account,
+                  name: editName.trim(),
+                  account_type: editType,
+                  city: editCity.trim() || null,
+                });
+                setEditing(false);
+                void layer.sync.drain();
+              } catch (err) {
+                setEditError(
+                  err instanceof Error ? err.message : String(err),
+                );
+              } finally {
+                setEditBusy(false);
+              }
+            }}
+          >
+            <input
+              autoFocus
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="field"
+              placeholder="Account name"
+              aria-label="Account name"
+            />
+            <select
+              value={editType}
+              onChange={(e) => setEditType(e.target.value as AccountType)}
+              className="field"
+              aria-label="Account type"
+            >
+              {ACCOUNT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {humanize(t)}
+                </option>
+              ))}
+            </select>
+            <input
+              value={editCity}
+              onChange={(e) => setEditCity(e.target.value)}
+              className="field"
+              placeholder="City (optional)"
+              aria-label="City"
+            />
+            {editError && (
+              <p className="t-sub" style={{ color: "var(--danger)" }}>
+                {editError}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button type="submit" disabled={editBusy} className="btn-primary">
+                Save
+              </button>
+              <button
+                type="button"
+                className="btn-quiet"
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-2">
+              <h1 className="text-[26px] font-extrabold leading-tight tracking-tight">
+                {displayAccountName(account.name)}
+              </h1>
+              {/* Editing needs the row's version for the LWW guard, and the
+                  cache may not carry one — no version, no edit, honestly. */}
+              {account.updated_at && (
+                <button
+                  type="button"
+                  className="btn-quiet shrink-0"
+                  onClick={() => {
+                    setEditName(account.name);
+                    setEditType(account.account_type as AccountType);
+                    setEditCity(account.city ?? "");
+                    setEditError(null);
+                    setEditing(true);
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+            <p className="t-sub mt-1">
+              {humanize(account.account_type)}
+              {account.city ? ` · ${account.city}` : ""}
+              {account.state ? `, ${account.state}` : ""}
+            </p>
+          </>
+        )}
 
         <div className="mt-3 flex flex-wrap gap-2">
           {account.strategic_importance === "STRATEGIC" && (
@@ -519,15 +708,209 @@ export default function AccountPage() {
         )}
       </section>
 
-      {/* The commercial network (D4) — how this account connects to the market.
-          One row per counterpart: a contractor that both buys here AND was
-          referred here is one relationship in the rep's head, not two. */}
-      {network.length > 0 && (
+      {/* GMX's sell-in to this door — the synced order book, one line and a
+          door to the full list. Rendered only when the account is linked to
+          an order customer and something has synced. */}
+      {orderSummary && orderSummary.count > 0 && (
         <section>
           <div className="section-head">
-            <h2 className="t-section">Commercial network</h2>
-            <span className="t-meta">{network.length}</span>
+            <h2 className="t-section">Orders</h2>
+            <Link href={`/orders?account=${id}`} className="t-action">
+              All of them
+            </Link>
           </div>
+          <p className="t-sub px-1">
+            {orderSummary.count} {orderSummary.count === 1 ? "order" : "orders"}{" "}
+            ·{" "}
+            {new Intl.NumberFormat("en-US", {
+              style: "currency",
+              currency: "USD",
+              maximumFractionDigits: 0,
+            }).format(orderSummary.value)}
+            {orderSummary.open > 0
+              ? ` · ${orderSummary.open} still moving`
+              : " · none open"}
+          </p>
+        </section>
+      )}
+
+      {/* The commercial network (D4) — how this account connects to the market.
+          One row per counterpart: a contractor that both buys here AND was
+          referred here is one relationship in the rep's head, not two.
+          Always rendered, even empty — "nem sempre sabemos de cara" (Andre,
+          2026-09-02), and the door to say so the day you learn it must exist
+          before there is anything to list. A link a spreadsheet later proves
+          lands here too, by the sell-through trigger. */}
+      <section>
+          <div className="section-head">
+            <h2 className="t-section">Commercial network</h2>
+            <button
+              type="button"
+              className="t-action"
+              onClick={() => {
+                setLinkError(null);
+                setLinkOpen((v) => !v);
+              }}
+            >
+              {linkOpen ? "Close" : "Add a connection"}
+            </button>
+          </div>
+
+          {linkOpen && (
+            <form
+              className="card card-pad mb-2 flex flex-col gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!profile) return;
+                if (!linkAccountId) {
+                  setLinkError("Pick the other company.");
+                  return;
+                }
+                setLinkBusy(true);
+                setLinkError(null);
+                try {
+                  const layer = getOfflineLayer();
+                  const relId = crypto.randomUUID();
+                  await layer.sync.enqueue({
+                    clientId: relId,
+                    entityType: "account_relationship",
+                    op: "create",
+                    payload: {
+                      id: relId,
+                      org_id: profile.orgId,
+                      account_a_id: account.id,
+                      relationship_type: linkType,
+                      account_b_id: linkAccountId,
+                      created_by: profile.membershipId,
+                    },
+                    baseVersion: null,
+                    blobRef: null,
+                  });
+                  const other = cachedAccounts.find(
+                    (a) => a.id === linkAccountId,
+                  );
+                  setRelationships((prev) => [
+                    ...prev,
+                    {
+                      id: relId,
+                      relationship_type: linkType,
+                      account_a_id: account.id,
+                      account_b_id: linkAccountId,
+                      a: { name: account.name, account_type: account.account_type },
+                      b: other
+                        ? { name: other.name, account_type: other.account_type }
+                        : null,
+                    },
+                  ]);
+                  setLinkOpen(false);
+                  setLinkAccountId("");
+                  setLinkQuery("");
+                  void layer.sync.drain();
+                } catch (err) {
+                  setLinkError(
+                    err instanceof Error ? err.message : String(err),
+                  );
+                } finally {
+                  setLinkBusy(false);
+                }
+              }}
+            >
+              <select
+                value={linkType}
+                onChange={(e) =>
+                  setLinkType(e.target.value as RelationshipType)
+                }
+                className="field"
+                aria-label="How they connect"
+              >
+                {/* The trade's four everyday links; the rarer ones can join
+                    when somebody needs them. */}
+                <option value="PURCHASES_FROM">This account buys from…</option>
+                <option value="SUPPLIES">This account supplies…</option>
+                <option value="WORKS_WITH">Works with…</option>
+                <option value="REFERRED_BY">Was referred by…</option>
+              </select>
+              {linkAccountId ? (
+                <div className="row" style={{ padding: 0 }}>
+                  <span className="row-body">
+                    <span className="t-title block truncate">
+                      {cachedAccounts.find((a) => a.id === linkAccountId)
+                        ?.name ?? "—"}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-quiet shrink-0"
+                    onClick={() => setLinkAccountId("")}
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div className="card overflow-hidden">
+                  <input
+                    autoFocus
+                    placeholder="Find the other company"
+                    value={linkQuery}
+                    onChange={(e) => setLinkQuery(e.target.value)}
+                    className="field"
+                    style={{ borderRadius: 0, border: 0 }}
+                  />
+                  <ul>
+                    {cachedAccounts
+                      .filter(
+                        (a) =>
+                          a.id !== account.id &&
+                          (!linkQuery.trim() ||
+                            a.name
+                              .toLowerCase()
+                              .includes(linkQuery.trim().toLowerCase())),
+                      )
+                      .slice(0, 6)
+                      .map((a) => (
+                        <li key={a.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLinkAccountId(a.id);
+                              setLinkQuery("");
+                            }}
+                            className="flex w-full items-baseline gap-2 px-4 py-3 text-left"
+                            style={{ borderTop: "1px solid var(--rule)" }}
+                          >
+                            <span className="t-title">{a.name}</span>
+                            <span className="t-hint">
+                              {humanize(a.account_type)}
+                              {a.city ? ` · ${a.city}` : ""}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+              {linkError && (
+                <p className="t-sub" style={{ color: "var(--danger)" }}>
+                  {linkError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={linkBusy}
+                className="btn-primary mt-1"
+              >
+                Link them
+              </button>
+            </form>
+          )}
+
+          {network.length === 0 && !linkOpen && (
+            <p className="t-sub px-1">
+              No connections on file yet. Who do they buy from? Link it the
+              day you learn it — a sell-through file that proves a link adds
+              it here on its own.
+            </p>
+          )}
           {networkByPosition.map((group) => (
             <div key={group.position}>
               {/* The heading only earns its place when there is more than one
@@ -561,8 +944,7 @@ export default function AccountPage() {
               </ul>
             </div>
           ))}
-        </section>
-      )}
+      </section>
 
       {/* Account history — built from activities, never separately maintained */}
       <section>

@@ -654,6 +654,42 @@ function ReviewSheet({
   const [dispositions, setDispositions] = useState(
     (draft.routine_dispositions ?? []).map((d) => ({ ...d, confirmed: true })),
   );
+  // The people the note carried (Andre, 2026-09-02): offered pre-checked,
+  // the same contract as the routine confirmations — the rep unchecks a
+  // wrong one rather than opting in from zero. `?? []` defends drafts
+  // extracted before the field existed.
+  const [people, setPeople] = useState(
+    (draft.contacts ?? []).map((c) => ({
+      ...c,
+      confirmed: true,
+      onFile: false,
+    })),
+  );
+  // A suggestion matching a contact already on the chosen account starts
+  // unchecked and says so — the model re-hearing a person is not a second
+  // person. Cache-read, so the check works with no signal.
+  useEffect(() => {
+    if (!accountId) return;
+    let stale = false;
+    void getOfflineLayer()
+      .local.getContacts(accountId)
+      .then((existing) => {
+        if (stale) return;
+        const names = new Set(
+          existing.map((e) => e.name.trim().toLowerCase()),
+        );
+        setPeople((prev) =>
+          prev.map((p) =>
+            names.has(p.name.trim().toLowerCase())
+              ? { ...p, confirmed: false, onFile: true }
+              : { ...p, onFile: false },
+          ),
+        );
+      });
+    return () => {
+      stale = true;
+    };
+  }, [accountId]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -808,6 +844,32 @@ function ReviewSheet({
               // it, so drop OTHER rather than trip the check.
               objective:
                 na.objective === "OTHER" ? null : (na.objective ?? null),
+            },
+            baseVersion: null,
+            blobRef: null,
+          }),
+        );
+      }
+
+      // The people the note carried, still checked at Send (D9): each becomes
+      // a real contact on the chosen account, riding the same fan-out and the
+      // same compensation. Idempotent by client-minted id like every create.
+      for (const p of people) {
+        if (!p.confirmed || !p.name.trim()) continue;
+        const contactId = crypto.randomUUID();
+        enqueuedSeqs.push(
+          await layer.sync.enqueue({
+            clientId: contactId,
+            entityType: "contact",
+            op: "create",
+            payload: {
+              id: contactId,
+              org_id: profile.orgId,
+              account_id: accountId,
+              name: p.name.trim(),
+              job_title: p.job_title,
+              email: p.email,
+              phone: p.phone,
             },
             baseVersion: null,
             blobRef: null,
@@ -1064,6 +1126,41 @@ function ReviewSheet({
                     className="h-4 w-4 accent-[var(--accent)]"
                   />
                   {dispositionLabel(d, agenda)}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {people.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="t-hint">
+                People in this note — save them as contacts
+              </span>
+              {people.map((p, i) => (
+                <label key={`${p.name}-${i}`} className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={p.confirmed}
+                    onChange={() =>
+                      setPeople((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, confirmed: !x.confirmed } : x,
+                        ),
+                      )
+                    }
+                    className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">
+                      {p.name}
+                      {p.onFile ? " — already on file" : ""}
+                    </span>
+                    <span className="t-sub block truncate">
+                      {[p.job_title, p.email, p.phone]
+                        .filter(Boolean)
+                        .join(" · ") || "no details"}
+                    </span>
+                  </span>
                 </label>
               ))}
             </div>

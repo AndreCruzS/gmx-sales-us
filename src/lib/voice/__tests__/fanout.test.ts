@@ -23,6 +23,7 @@ function baseDraft(overrides: Partial<DebriefDraft> = {}): DebriefDraft {
     follow_up_required: false,
     next_actions: [],
     routine_dispositions: [],
+    contacts: [],
     ...overrides,
   };
 }

@@ -172,6 +172,21 @@ export const contactCreateSchema = z.object({
 });
 export type ContactCreate = z.infer<typeof contactCreateSchema>;
 
+// Editing the person (Andre, 2026-09-02): the fields a rep corrects at a
+// counter — a misspelt name, a new e-mail, the title that changed, the
+// champion flag. account_id is deliberately NOT here: moving a person to
+// another company is a different act from correcting their card, and no
+// screen offers it.
+export const contactUpdateSchema = z.object({
+  id: uuid,
+  name: z.string().min(1).optional(),
+  job_title: z.string().nullish(),
+  email: z.string().nullish(),
+  phone: z.string().nullish(),
+  is_champion: z.boolean().optional(),
+});
+export type ContactUpdate = z.infer<typeof contactUpdateSchema>;
+
 // Quick-create from a card (D43): forces lead-source attribution at first
 // contact. Mirrors the DB checks so a bad payload fails at capture, not replay:
 // OTHER needs source_detail (D8); referral sources need the referring account (D7).
@@ -217,9 +232,15 @@ export type AccountRelationshipCreate = z.infer<
 >;
 
 // Task 10 (D-routine): the DISPLAY_VERIFIED disposition fan-out is a scalar
-// edit, LWW-guarded like next_action's — same shape, one field.
+// edit, LWW-guarded like next_action's. Widened 2026-09-02 for the account
+// edit sheet: the identity fields a person corrects — the name, the kind of
+// door, the city. Ownership, territory and lead source stay out: those are
+// history and hierarchy, not typos.
 export const accountUpdateSchema = z.object({
   id: uuid,
+  name: z.string().min(1).optional(),
+  account_type: z.enum(ACCOUNT_TYPES).optional(),
+  city: z.string().nullish(),
   display_last_verified_at: isoTimestamp.nullish(),
 });
 export type AccountUpdate = z.infer<typeof accountUpdateSchema>;
@@ -311,6 +332,7 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "contact_candidate:create": contactCandidateCreateSchema,
   "contact_candidate:update": contactCandidateUpdateSchema,
   "contact:create": contactCreateSchema,
+  "contact:update": contactUpdateSchema,
   "account:create": accountCreateSchema,
   "account:update": accountUpdateSchema,
   "account_relationship:create": accountRelationshipCreateSchema,

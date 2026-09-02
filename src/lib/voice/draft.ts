@@ -91,6 +91,32 @@ export const debriefDraftSchema = z.object({
       }),
     )
     .describe("ONLY items the rep actually addressed; empty when none"),
+  // The people the note carries (Andre, 2026-09-02): a debrief often ends
+  // with "she sent me the contacts" and a recitation of names and e-mails
+  // that used to land in key_information as a text blob nobody could call.
+  // Each one extracted here is OFFERED on review — checked by default,
+  // nothing saved without the rep looking (D9).
+  contacts: z
+    .array(
+      z.object({
+        name: z.string().describe("the person's name, exactly as spoken"),
+        job_title: z
+          .string()
+          .nullable()
+          .describe(
+            "their role or place as given — 'Marketing Manager', 'Atwater yard' — null when none was said",
+          ),
+        email: z.string().nullable().describe("e-mail exactly as given, lowercased"),
+        phone: z.string().nullable().describe("phone number exactly as given"),
+      }),
+    )
+    .default([])
+    .describe(
+      "people the note names WITH a detail worth keeping — an e-mail, a phone, " +
+        "a role at an account. People merely mentioned in passing, with nothing " +
+        "to reach them by and no stated role, do not belong here. Never invent " +
+        "or complete a detail that was not said. Empty when none.",
+    ),
 });
 export type DebriefDraft = z.infer<typeof debriefDraftSchema>;
 
@@ -120,6 +146,18 @@ export function sanitizeDraft(
     routine_dispositions: draft.routine_dispositions.filter((d) =>
       allowed.has(d.item_id),
     ),
+    // Hygiene, not judgment: a contact suggestion needs a name and at least
+    // one thing worth keeping — reachability or a role. What survives is
+    // still only an OFFER; the review gate decides. `?? []` because drafts
+    // extracted before the field existed lack it.
+    contacts: (draft.contacts ?? [])
+      .map((c) => ({
+        name: c.name.trim(),
+        job_title: c.job_title?.trim() || null,
+        email: c.email?.trim().toLowerCase() || null,
+        phone: c.phone?.trim() || null,
+      }))
+      .filter((c) => c.name && (c.email || c.phone || c.job_title)),
   };
 }
 
@@ -139,7 +177,15 @@ Extract ONLY what was actually said — do not invent commitments, dates, or
 assessments. Resolve relative dates ("next Friday", "in two weeks") against the
 capture date. Every follow-up or promise gets a next action with a concrete
 date. If no follow-ups were mentioned, return an empty next_actions array and
-follow_up_required=false.`;
+follow_up_required=false.
+
+When the note names PEOPLE with details worth keeping — an e-mail address, a
+phone number, a role or a yard/branch they answer for — list each one in
+contacts, exactly as spoken. A recited list of contacts ("she sent me the
+contacts: Robert at Atwater, robertd@...") is the classic case: every entry
+becomes one contact. Spell e-mails out plainly (lowercase); never guess at or
+complete a detail that was not said. People mentioned only in passing, with
+nothing to reach them by and no stated role, are not contacts.`;
 
   const parts = [base];
 

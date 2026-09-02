@@ -257,6 +257,25 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
+export function UsersIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden={props.title ? undefined : true}
+      role={props.title ? "img" : undefined}
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      className={props.className}
+      style={{ flexShrink: 0, ...props.style }}
+    >
+      {props.title ? <title>{props.title}</title> : null}
+      <path d="M16 4.46776C17.4817 5.20411 18.5 6.73314 18.5 8.5C18.5 10.2669 17.4817 11.7959 16 12.5322M18 16.7664C19.5115 17.4503 20.8725 18.565 22 20M2 20C3.94649 17.5226 6.58918 16 9.5 16C12.4108 16 15.0535 17.5226 17 20M14 8.5C14 10.9853 11.9853 13 9.5 13C7.01472 13 5 10.9853 5 8.5C5 6.01472 7.01472 4 9.5 4C11.9853 4 14 6.01472 14 8.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <svg
