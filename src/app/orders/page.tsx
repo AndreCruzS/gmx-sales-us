@@ -70,6 +70,11 @@ const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 // The order system's stages, read as the two questions a desk asks.
 const DONE_STATUSES = new Set(["Completed"]);
+// Only an INVOICED order is a sale (Andre, 2026-09-03): a PO received can
+// still change or die, and material in preparation has not fed anybody's
+// floor. Every figure that claims "we shipped/sold" gates on these; open
+// orders stay visible in the working list as what they are — in motion.
+const INVOICED_STATUSES = new Set(["Invoice_Sent", "Completed"]);
 
 function statusLabel(s: string): string {
   return s.replaceAll("_", " ");
@@ -195,8 +200,10 @@ function OrdersView() {
     >();
     for (const o of orders) {
       // Archived orders STAY in the ledger: filed-away paperwork still fed
-      // the floor. Only the working list below hides them.
-      if (!o.customer_id) continue;
+      // the floor. Only the working list below hides them. But an order
+      // that was never invoiced never fed it at all — a PO in preparation
+      // on our side is not material on theirs.
+      if (!o.customer_id || !INVOICED_STATUSES.has(o.status)) continue;
       const acct = accountOf.get(o.customer_id);
       if (!acct?.name) continue;
       const entry = byAccount.get(acct.id) ?? {
