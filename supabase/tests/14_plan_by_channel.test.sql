@@ -45,7 +45,7 @@ select is(
 select is(
   (select distributor_name from dashboard_plan_by_channel
     where account_id = 'd0000000-0000-0000-0000-000000000002' limit 1),
-  'Hardwoods Specialty',
+  'Hardwoods Inc.',
   'two branches of one banner can run through two houses'
 );
 

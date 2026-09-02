@@ -202,11 +202,11 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
    -- alarm.
    'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
   ('d0000000-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111',
-   'Hardwoods Specialty', 'DISTRIBUTOR', 'Santa Fe Springs', 'CA',
+   'Hardwoods Inc.', 'DISTRIBUTOR', 'Santa Fe Springs', 'CA',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
    'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
   ('d0000000-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111',
-   'Russin Lumber', 'DISTRIBUTOR', 'Montgomery', 'NY',
+   'Russin', 'DISTRIBUTOR', 'Montgomery', 'NY',
    'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003',
    'EXISTING_RELATIONSHIP', null, null, null, false, null, 'HIGH'),
   -- org2
