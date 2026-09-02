@@ -1,0 +1,123 @@
+// Linear feet out of an order's item lines (Andre, 2026-09-02): "o LF vai
+// ser o marco de comparativo mais comum". The return (sell-through) speaks
+// only LF; the orders speak LF, board feet and pieces, in whatever spelling
+// the person typing the PO used. The stock-position read needs one unit, so
+// this module converts what it can PROVE and refuses the rest — an estimate
+// that quietly guessed tile counts into feet would poison the subtraction.
+//
+// Three methods, in order of trust:
+//   native      the line is already linear feet (lf / LF / LFT)
+//   board-feet  bf × 12 / (thickness × width), both read from the nominal
+//               dimension the description leads with ("01X06", "5/4X6")
+//   pieces      pieces × the piece's own length ("1X6-189\"" → 189 inches;
+//               "…x8'" → 8 feet)
+//
+// Anything else — hardware, tiles, a random-length run sold by the piece —
+// comes back null and is COUNTED as unconverted, so every reading built on
+// this can say how much of the book it actually covers.
+
+export interface OrderItemLike {
+  sku?: string | null;
+  description?: string | null;
+  uom?: string | null;
+  quantity?: number | null;
+  total_amount?: number | null;
+}
+
+export interface LinearRead {
+  lf: number;
+  method: "native" | "board-feet" | "pieces";
+}
+
+// "01X06", "1X12", "02X04", "5/4X6", '1-1/2" X 3-1/2"' — the nominal section
+// a lumber line leads with. Fractions and mixed numbers are real ("5/4",
+// "1-1/2"), and an inch mark may sit between the number and the X.
+const SECTION =
+  /(\d+(?:-\d+\/\d+|\/\d+|\.\d+)?)\s*["”]?\s*[xX]\s*(\d+(?:-\d+\/\d+|\/\d+|\.\d+)?)/;
+
+// "1X6-189\"" — the piece length in inches that the 083… catalogue speaks.
+const INCH_LENGTH = /\dx\d+-(\d{2,3})\s*(?:"|”|in\b)/i;
+
+// "…x8'" / "X 8'" — a piece length in feet. Refused when the text goes on to
+// say "TO" (a random-length range has no single piece length).
+const FOOT_LENGTH = /[xX]\s*(\d{1,2})\s*'/;
+
+function parseNumberish(raw: string): number | null {
+  // "5/4" → 1.25 · "1-1/2" → 1.5 · "1.65" → 1.65 · "06" → 6
+  const mixed = raw.match(/^(\d+)-(\d+)\/(\d+)$/);
+  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+  const frac = raw.match(/^(\d+)\/(\d+)$/);
+  if (frac) return Number(frac[1]) / Number(frac[2]);
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function itemLinearFeet(item: OrderItemLike): LinearRead | null {
+  const qty = Number(item.quantity);
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  const uom = (item.uom ?? "").trim().toLowerCase();
+  const text = `${item.sku ?? ""} ${item.description ?? ""}`;
+
+  if (uom === "lf" || uom === "lft") {
+    return { lf: qty, method: "native" };
+  }
+
+  if (uom === "bf" || uom === "bft") {
+    const m = text.match(SECTION);
+    if (!m) return null;
+    const t = parseNumberish(m[1]);
+    const w = parseNumberish(m[2]);
+    if (!t || !w) return null;
+    return { lf: (qty * 12) / (t * w), method: "board-feet" };
+  }
+
+  if (uom === "each" || uom === "pc" || uom === "ea" || uom === "unit") {
+    const inches = text.match(INCH_LENGTH);
+    if (inches) {
+      return { lf: (qty * Number(inches[1])) / 12, method: "pieces" };
+    }
+    // A range ("4' TO 16'") has no single piece length to multiply by.
+    if (!/'\s*TO\s/i.test(text)) {
+      const feet = text.match(FOOT_LENGTH);
+      if (feet) return { lf: qty * Number(feet[1]), method: "pieces" };
+    }
+    return null;
+  }
+
+  return null;
+}
+
+export interface VolumeReading {
+  /** Proven linear feet across the convertible lines. */
+  lf: number;
+  convertedLines: number;
+  totalLines: number;
+  /** Dollar value on converted vs. all lines (where lines carry amounts) —
+   *  the honest "this LF figure covers N% of the money". */
+  convertedValue: number;
+  totalValue: number;
+}
+
+export function orderVolume(items: readonly OrderItemLike[]): VolumeReading {
+  let lf = 0;
+  let convertedLines = 0;
+  let convertedValue = 0;
+  let totalValue = 0;
+  for (const item of items) {
+    const value = Number(item.total_amount) || 0;
+    totalValue += value;
+    const read = itemLinearFeet(item);
+    if (read) {
+      lf += read.lf;
+      convertedLines += 1;
+      convertedValue += value;
+    }
+  }
+  return {
+    lf,
+    convertedLines,
+    totalLines: items.length,
+    convertedValue,
+    totalValue,
+  };
+}

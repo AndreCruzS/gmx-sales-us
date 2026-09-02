@@ -731,6 +731,22 @@ body {
   border: 0;
   cursor: pointer;
 }
+/* The masthead's WHEN, once the book holds more than one month: the label
+   keeps its face and the native select sits invisible on top — the browser
+   brings the menu, the masthead keeps the typography. */
+.sales-when-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+.sales-when-pick select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
 @media (prefers-reduced-motion: reduce) {
   .sales-masthead {
     animation: none;
@@ -2906,6 +2922,12 @@ input[type="datetime-local"] {
 .tabbar-tools {
   display: none;
 }
+/* Contacts is the desk's destination: on the phone a rep reaches a person
+   through the account they stand in front of, and a sixth slot would crowd
+   the bar. Shown again inside the desktop block below. */
+.tab-desk {
+  display: none;
+}
 
 @media (min-width: 1024px) {
   /* THE DESKTOP NAV IS A TOP BAR (Andre, 2026-09-01: the side rail "tá só
@@ -2940,6 +2962,9 @@ input[type="datetime-local"] {
     font-size: var(--text-md);
     font-weight: 600;
     color: var(--ink-secondary);
+  }
+  .tab-desk {
+    display: flex;
   }
   .tab:hover {
     background: var(--surface-card);
@@ -4012,6 +4037,9 @@ input[type="datetime-local"] {
   min-width: 0;
 }
 .agcal-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--text-2xs);
   font-weight: 600;
   padding: 2px 6px;
@@ -4021,6 +4049,114 @@ input[type="datetime-local"] {
   white-space: nowrap;
   background: var(--surface-sunken);
   color: var(--ink-primary);
+}
+
+/* ── Everybody's month (Andre, 2026-09-02) ──────────────────────────────────
+   Each visit wears its rep's dot, and the rep rail above the grid is legend
+   and filter in one. Filtering FADES the rest instead of hiding it: the
+   chosen rep keeps full clarity, everyone else recedes to a murmur — a
+   manager filtering is still reading the whole month. */
+.agcal-reps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.agcal-rep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  transition: opacity 0.18s ease;
+}
+.agcal-rep[aria-pressed="true"] {
+  color: var(--ink-primary);
+  border-color: var(--ink-primary);
+}
+/* Who, by INITIALS — recognisable without memorising a palette (Andre,
+   2026-09-02). The rep's hue stays as reinforcement: a tinted ground with
+   the hue's own ink, the same recipe the accent tags use, so it holds up
+   in both themes without white-on-amber accidents. */
+.agcal-ini {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  font-size: 8.5px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--rep-hue) 16%, var(--surface-card));
+  color: color-mix(in srgb, var(--rep-hue) 78%, var(--ink-primary));
+}
+/* ── The stock ledger cards ─────────────────────────────────────────────────
+   One card per house: shipped, sold through, still on the floor. Three
+   figures side by side; the honesty (window, coverage) underneath. */
+.stock-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 10px;
+}
+.stock-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* ── The order book's item lists ────────────────────────────────────────────
+   A table, because an item list IS one — inside its own scroll container so
+   a wide description never scrolls the page sideways. */
+.order-items {
+  margin: 4px 0 10px;
+  overflow-x: auto;
+}
+.order-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+.order-items-table th {
+  text-align: left;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  padding: 4px 10px 6px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.order-items-table td {
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-secondary);
+  vertical-align: top;
+}
+.order-items-table tr:last-child td {
+  border-bottom: 0;
+}
+.order-items-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agcal-rep[data-dim],
+.agcal-chip[data-dim],
+.agcal-day-panel .row[data-dim] {
+  opacity: 0.25;
+}
+.agcal-chip,
+.agcal-day-panel .row {
+  transition: opacity 0.18s ease;
 }
 .agcal-chip[data-state="overdue"] {
   background: var(--danger-tint);
