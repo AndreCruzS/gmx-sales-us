@@ -17,6 +17,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { AgendaCalendar } from "@/components/agenda-calendar";
+import { manages } from "@/lib/domain/roles";
 import {
   AlertIcon,
   CalendarIcon,
@@ -123,6 +125,20 @@ function VisitsPageInner() {
     () => Boolean(searchParams.get("plan")) || Boolean(searchParams.get("objective")),
   );
   const [error, setError] = useState<string | null>(null);
+  // THE DESK'S AGENDA IS A CALENDAR (Andre, 2026-09-01): month on the wall
+  // for the roles that read a team, the day-list for the rep in the field.
+  // Behavioural, not just CSS — the calendar loads its own month — so the
+  // same matchMedia the sales desk uses decides which one exists.
+  const [desk, setDesk] = useState(false);
+  const [calBump, setCalBump] = useState(0);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setDesk(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  const calendarView = desk && manages(profile?.role);
 
   const [planAccount, setPlanAccount] = useState(() => {
     const plan = searchParams.get("plan");
@@ -302,6 +318,8 @@ function VisitsPageInner() {
     setPlanObjective("");
     setPlanObjectiveDetail("");
     void layer.sync.drain();
+    // the wall calendar re-reads once the outbox lands it
+    setTimeout(() => setCalBump((b) => b + 1), 800);
   }
 
   async function logout() {
@@ -435,7 +453,7 @@ function VisitsPageInner() {
           </p>
         )}
 
-        {nothingPlanned && (
+        {!calendarView && nothingPlanned && (
           <p className="t-sub mt-3 px-1">
             Nothing planned. Next week should be on the plan by Friday — the
             system notices when it isn&apos;t.
@@ -443,7 +461,10 @@ function VisitsPageInner() {
         )}
       </section>
 
-      {(["Overdue", "Today", "Tomorrow"] as const).map((label) =>
+      {calendarView && <AgendaCalendar bump={calBump} onError={setError} />}
+
+      {!calendarView &&
+        (["Overdue", "Today", "Tomorrow"] as const).map((label) =>
         groups[label].length === 0 ? null : (
           <section key={label}>
             <div className="section-head">
@@ -563,7 +584,7 @@ function VisitsPageInner() {
         </section>
       )}
 
-      {groups["Later this week"].length > 0 && (
+      {!calendarView && groups["Later this week"].length > 0 && (
         <section>
           <div className="section-head">
             <h2 className="t-section">Later this week</h2>

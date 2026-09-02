@@ -3841,3 +3841,107 @@ input[type="datetime-local"] {
 .rcard[data-dim] {
   opacity: 0.55;
 }
+
+/* ── The desk's agenda: a month on the wall ─────────────────────────────────
+   Rendered only for desk manager roles (behavioural gate in the page), so
+   these styles never touch the phone. */
+.agcal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.agcal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.agcal-nav {
+  display: flex;
+  gap: 6px;
+}
+.agcal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  overflow: hidden;
+  padding: 6px;
+}
+.agcal-wd {
+  padding: 8px 10px 6px;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.agcal-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-height: 96px;
+  padding: 8px;
+  border: none;
+  border-top: 1px solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.agcal-cell:hover:not(.agcal-pad) {
+  background: var(--surface-page);
+}
+.agcal-cell[aria-pressed="true"] {
+  background: var(--surface-accent);
+}
+.agcal-pad {
+  cursor: default;
+  background: var(--surface-page);
+  opacity: 0.55;
+}
+.agcal-day {
+  color: var(--ink-secondary);
+}
+.agcal-cell[data-today] .agcal-day {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  color: var(--on-accent);
+}
+.agcal-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.agcal-chip {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--surface-sunken);
+  color: var(--ink-primary);
+}
+.agcal-chip[data-state="overdue"] {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+.agcal-chip[data-state="done"] {
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+.agcal-more {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+  padding-inline: 6px;
+}
+.agcal-day-panel {
+  margin-top: 2px;
+}
