@@ -69,6 +69,31 @@ interface BranchRow {
   pk_count: number;
 }
 
+// Our sell-out, read light: the Overview needs money and status, never the
+// item lists — those live on /orders.
+interface SellOutOrder {
+  customer_id: string | null;
+  status: string;
+  total_value: number | null;
+  order_date_po: string | null;
+  created_at: string | null;
+  archived_at: string | null;
+}
+interface OrderLinkRow {
+  customer_id: string;
+  account_id: string;
+  accounts: { name: string } | null;
+}
+interface HouseReturnRow {
+  distributor_id: string | null;
+  period: string;
+  period_kind: "MONTH" | "YTD" | null;
+}
+
+// THE LAW (Andre, 2026-09-03): only an invoiced order is a sale. Everything
+// else is material in motion — visible, never revenue.
+const INVOICED_STATUSES = new Set(["Invoice_Sent", "Completed"]);
+
 function greeting(hour: number | null): string {
   if (hour === null) return "Hello";
   if (hour < 12) return "Good morning";
@@ -92,6 +117,12 @@ export function ManagerHome({ name }: { name: string }) {
   const [pickedMonth, setPickedMonth] = useState<string | null>(null);
   const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
+  // The synced order book, read light, plus who each customer is and which
+  // houses have ever sent their return — the sell-out tiles and the
+  // return-chasing read are built from these three.
+  const [sellOut, setSellOut] = useState<SellOutOrder[]>([]);
+  const [orderLinks, setOrderLinks] = useState<OrderLinkRow[]>([]);
+  const [houseReturns, setHouseReturns] = useState<HouseReturnRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   // The walk down the chain lives here, not in the section: "Show all" has to
   // undo where you are as well as what the page is answering for.
@@ -163,7 +194,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -219,6 +250,20 @@ export function ManagerHome({ name }: { name: string }) {
           "account_id, org_id, name, pk_state, merchandiser_state, display_wall_state, material_state, pk_count",
         )
         .limit(500),
+      // Our sell-out, money and status only — the item lists stay on /orders.
+      supabase
+        .from("orders_mirror")
+        .select(
+          "customer_id, status, total_value, order_date_po, created_at, archived_at",
+        )
+        .limit(1000),
+      supabase
+        .from("order_customer_links")
+        .select("customer_id, account_id, accounts(name)"),
+      supabase
+        .from("sell_through_house_periods")
+        .select("distributor_id, period, period_kind")
+        .limit(2000),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -232,6 +277,11 @@ export function ManagerHome({ name }: { name: string }) {
     setMonths(monthsAvail);
     setSellBranches(sb.error ? [] : ((sb.data as BranchRef[]) ?? []));
     setBranches(br.error ? [] : ((br.data as BranchRow[]) ?? []));
+    setSellOut(so.error ? [] : ((so.data as unknown as SellOutOrder[]) ?? []));
+    setOrderLinks(ol.error ? [] : ((ol.data as unknown as OrderLinkRow[]) ?? []));
+    setHouseReturns(
+      hr.error ? [] : ((hr.data as unknown as HouseReturnRow[]) ?? []),
+    );
     setLoadedAt(Date.now());
   }, [pickedMonth]);
 
@@ -632,6 +682,88 @@ export function ManagerHome({ name }: { name: string }) {
       .slice(0, 4);
   }, [slipping, focus]);
 
+  // ── Our sell-out, on the masthead of the day ──────────────────────────────
+  // Invoiced POs by their PO month (the invoice date is the order system's
+  // fact and doesn't ride the mirror; the PO month is the honest attribution
+  // we hold). "In motion" is everything accepted and not yet invoiced —
+  // visible, never counted as sold.
+  const sellOutTiles = useMemo(() => {
+    const now = new Date();
+    const ym = (y: number, m: number) =>
+      `${y}-${String(m + 1).padStart(2, "0")}`;
+    const thisMonth = ym(now.getFullYear(), now.getMonth());
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = ym(prev.getFullYear(), prev.getMonth());
+    let invoicedThis = 0;
+    let invoicedPrev = 0;
+    let motion = 0;
+    let motionCount = 0;
+    for (const o of sellOut) {
+      const v = Number(o.total_value) || 0;
+      if (INVOICED_STATUSES.has(o.status)) {
+        const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
+        if (m === thisMonth) invoicedThis += v;
+        else if (m === prevMonth) invoicedPrev += v;
+      } else if (!o.archived_at) {
+        motion += v;
+        motionCount += 1;
+      }
+    }
+    return {
+      invoicedThis,
+      invoicedPrev,
+      motion,
+      motionCount,
+      monthName: now.toLocaleString("en-US", { month: "long" }),
+      prevMonthName: prev.toLocaleString("en-US", { month: "long" }),
+    };
+  }, [sellOut]);
+
+  // The houses to chase: sold to (invoiced), linked to an account, and not a
+  // single monthly return since their first invoiced PO. The distributor's
+  // own file is the only proof their floor is moving — its absence is a
+  // slipping item with a name and a number, not a mystery.
+  const returnChasers = useMemo(() => {
+    const accountOf = new Map(
+      orderLinks.map((l) => [
+        l.customer_id,
+        { id: l.account_id, name: l.accounts?.name ?? null },
+      ]),
+    );
+    const byAccount = new Map<
+      string,
+      { id: string; name: string; dollars: number; firstMonth: string | null }
+    >();
+    for (const o of sellOut) {
+      if (!o.customer_id || !INVOICED_STATUSES.has(o.status)) continue;
+      const acct = accountOf.get(o.customer_id);
+      if (!acct?.name) continue;
+      const entry = byAccount.get(acct.id) ?? {
+        id: acct.id,
+        name: acct.name,
+        dollars: 0,
+        firstMonth: null,
+      };
+      entry.dollars += Number(o.total_value) || 0;
+      const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7) || null;
+      if (m && (!entry.firstMonth || m < entry.firstMonth)) entry.firstMonth = m;
+      byAccount.set(acct.id, entry);
+    }
+    const list = [...byAccount.values()]
+      .filter((h) => {
+        if (h.dollars <= 0) return false;
+        const mark = h.firstMonth ? `${h.firstMonth}-01` : null;
+        return !houseReturns.some(
+          (r) =>
+            r.distributor_id === h.id &&
+            r.period_kind !== "YTD" &&
+            (!mark || r.period >= mark),
+        );
+      })
+      .sort((a, b) => b.dollars - a.dollars);
+    return focus ? list.filter((h) => h.id === focus.accountId) : list;
+  }, [sellOut, orderLinks, houseReturns, focus]);
+
   // The figures travel to their new value rather than jumping, so a number
   // that changed because someone asked a different question looks like it.
   const openTween = useTween(totals.open);
@@ -753,6 +885,59 @@ export function ManagerHome({ name }: { name: string }) {
           </div>
           <div className="t-hint mt-0.5">{totals.quotesHint}</div>
         </div>
+
+        {/* Our sell-out, beside the pipeline pair — the money that already
+            exists. Both tiles are the Overview's door to /orders. Hidden
+            while a customer is chosen: the pair above already switched to
+            that door's own buying, and a company-wide figure under a focus
+            bar would be two screens disagreeing. */}
+        {!focus && (
+          <>
+            {/* Early in a month nothing is invoiced yet, and a leading "$0"
+                reads dead the way the placeholder zeros once did — so until
+                the current month has money, the tile leads with the last
+                month that does and says so. Both statements are true; one
+                of them is also useful. */}
+            {sellOutTiles.invoicedThis > 0 ? (
+              <Link href="/orders" className="card card-pad">
+                <div className="t-meta uppercase tracking-wide">
+                  Sell-out · {sellOutTiles.monthName}
+                </div>
+                <div className="fig fig-xl mt-1">
+                  {formatMoney(Math.round(sellOutTiles.invoicedThis))}
+                </div>
+                <div className="t-hint mt-0.5">
+                  invoiced POs ·{" "}
+                  {formatMoney(Math.round(sellOutTiles.invoicedPrev))} in{" "}
+                  {sellOutTiles.prevMonthName}
+                </div>
+              </Link>
+            ) : (
+              <Link href="/orders" className="card card-pad">
+                <div className="t-meta uppercase tracking-wide">
+                  Sell-out · {sellOutTiles.prevMonthName}
+                </div>
+                <div className="fig fig-xl mt-1">
+                  {formatMoney(Math.round(sellOutTiles.invoicedPrev))}
+                </div>
+                <div className="t-hint mt-0.5">
+                  invoiced POs · nothing invoiced in {sellOutTiles.monthName}{" "}
+                  yet
+                </div>
+              </Link>
+            )}
+            <Link href="/orders" className="card card-pad">
+              <div className="t-meta uppercase tracking-wide">In motion</div>
+              <div className="fig fig-xl mt-1">
+                {QTY.format(sellOutTiles.motionCount)}
+              </div>
+              <div className="t-hint mt-0.5">
+                {formatMoney(Math.round(sellOutTiles.motion))} on the way — not
+                sold yet
+              </div>
+            </Link>
+          </>
+        )}
       </section>
 
       {/* Sales first: the distributors' sell-through, banded by whoever is not
@@ -808,7 +993,7 @@ export function ManagerHome({ name }: { name: string }) {
         <MonthByMonth rows={monthRows} nowMs={loadedAt} />
       </div>
 
-      {(slippingGroups.length > 0 || quietAsRanking) && (
+      {(slippingGroups.length > 0 || quietAsRanking || returnChasers.length > 0) && (
         <section className="adapt" data-desk="slipping" key={`slip-${focus?.id ?? "all"}`}>
           <div className="section-head">
             <h2 className="t-section">What&rsquo;s slipping</h2>
@@ -816,6 +1001,45 @@ export function ManagerHome({ name }: { name: string }) {
               All of it
             </Link>
           </div>
+
+          {/* The missing returns: houses we have INVOICED and never heard
+              back from — no sell-through file since their first PO. Their
+              floor cannot be read until the paper arrives, so the absence
+              itself is the slipping item, with the money that is waiting on
+              it. */}
+          {returnChasers.length > 0 && (
+            <ul className="list mb-3">
+              <li>
+                <Link href="/orders" className="row slip-group">
+                  <span className="slip-group-head">
+                    <span className="row-body">
+                      <span className="t-title">
+                        Sold to, but no sell-through return on file
+                      </span>
+                    </span>
+                    <span
+                      className="fig fig-lg shrink-0"
+                      style={{ color: "var(--danger)" }}
+                    >
+                      {returnChasers.length}
+                    </span>
+                  </span>
+                  <span className="slip-names">
+                    {returnChasers.slice(0, 6).map((h) => (
+                      <span key={h.id} className="slip-name">
+                        {h.name} — {formatMoney(Math.round(h.dollars))}
+                      </span>
+                    ))}
+                    {returnChasers.length > 6 && (
+                      <span className="t-hint">
+                        + {returnChasers.length - 6} more
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            </ul>
+          )}
 
           {/* The quiet accounts, RANKED by their buying — the one that stopped
               is first and the one still growing is last, so "who do I call
