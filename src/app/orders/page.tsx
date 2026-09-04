@@ -18,7 +18,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { SearchIcon } from "@/components/icons";
-import { orderVolume, type OrderItemLike } from "@/lib/domain/order-volume";
+import {
+  ORDERS_CONSISTENT_FROM,
+  orderVolume,
+  type OrderItemLike,
+} from "@/lib/domain/order-volume";
 import { periodLabel } from "@/lib/domain/sell-through";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -202,8 +206,12 @@ function OrdersView() {
       // Archived orders STAY in the ledger: filed-away paperwork still fed
       // the floor. Only the working list below hides them. But an order
       // that was never invoiced never fed it at all — a PO in preparation
-      // on our side is not material on theirs.
+      // on our side is not material on theirs. And the ledger reads only
+      // the CONSISTENT ERA: pre-June-2026 rows are sparse retroactive
+      // backfill and would anchor a window on paper nobody kept.
       if (!o.customer_id || !INVOICED_STATUSES.has(o.status)) continue;
+      const poMonth = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
+      if (poMonth < ORDERS_CONSISTENT_FROM) continue;
       const acct = accountOf.get(o.customer_id);
       if (!acct?.name) continue;
       const entry = byAccount.get(acct.id) ?? {

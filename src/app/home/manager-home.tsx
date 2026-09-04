@@ -32,7 +32,11 @@ import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type { PkAccount, RolloutCounts } from "@/lib/domain/rollout";
 import { formatMoney } from "@/lib/format";
-import { orderVolume, type OrderItemLike } from "@/lib/domain/order-volume";
+import {
+  ORDERS_CONSISTENT_FROM,
+  orderVolume,
+  type OrderItemLike,
+} from "@/lib/domain/order-volume";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
@@ -707,9 +711,13 @@ export function ManagerHome({ name }: { name: string }) {
       if (INVOICED_STATUSES.has(o.status)) {
         if (!readingMonth) continue;
         const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
+        // The YTD sweep stays inside the CONSISTENT ERA — the scattered
+        // backfill months before June 2026 are paper, not a record.
         if (
           salesMode === "ytd"
-            ? m.slice(0, 4) === readingMonth.slice(0, 4) && m <= readingMonth
+            ? m.slice(0, 4) === readingMonth.slice(0, 4) &&
+              m <= readingMonth &&
+              m >= ORDERS_CONSISTENT_FROM
             : m === readingMonth
         ) {
           // The window's LF, proven line by line — the figure the two
@@ -763,7 +771,9 @@ export function ManagerHome({ name }: { name: string }) {
         firstMonth: null,
       };
       // THE MEASURE: the figure beside a missing return is LF — the very
-      // unit the missing paper would account for.
+      // unit the missing paper would account for. Consistent era only.
+      const poMonth = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
+      if (poMonth < ORDERS_CONSISTENT_FROM) continue;
       entry.lf += orderVolume(o.items ?? []).lf;
       const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7) || null;
       if (m && (!entry.firstMonth || m < entry.firstMonth)) entry.firstMonth = m;

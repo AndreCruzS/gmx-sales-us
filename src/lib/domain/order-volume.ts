@@ -16,6 +16,14 @@
 // comes back null and is COUNTED as unconverted, so every reading built on
 // this can say how much of the book it actually covers.
 
+/** The order book's CONSISTENT ERA (Andre, 2026-09-04): the system was
+ *  adopted in May 2026 and "junho, julho e agosto são meses consistentes" —
+ *  ~40–48 orders a month from June on. What sits before that is sparse
+ *  retroactive backfill (a 2025 PO typed in later), and no window or ledger
+ *  should anchor on it. Compare against `(order_date_po ?? created_at)`'s
+ *  YYYY-MM prefix. */
+export const ORDERS_CONSISTENT_FROM = "2026-06";
+
 export interface OrderItemLike {
   sku?: string | null;
   description?: string | null;
