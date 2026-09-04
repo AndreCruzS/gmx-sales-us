@@ -98,6 +98,39 @@ describe("itemLinearFeet", () => {
     ).toBeCloseTo((12 * 177) / 12);
   });
 
+  it("reads the length as a bare third dimension", () => {
+    // 1844 — 5/4X6X12 IPE PREM: twelve nominal feet, no mark
+    expect(
+      itemLinearFeet({
+        uom: "PC",
+        quantity: 336,
+        sku: "1844",
+        description: "5/4X6X12 IPE PREM",
+      }),
+    ).toEqual({ lf: 4032, method: "pieces" });
+  });
+
+  it("reads the Ipe decking family's length out of its own SKU", () => {
+    // IPEKD54610S — 5/4x6, ten feet, confirmed by the line that spells it
+    // out ("IPEKD54620S Ipe Maximo 5/4x6x20")
+    expect(
+      itemLinearFeet({
+        uom: "PC",
+        quantity: 495,
+        sku: "IPEKD54610S",
+        description: "5/4X6 IPE DECKING S4S E4E KD",
+      }),
+    ).toEqual({ lf: 4950, method: "pieces" });
+    expect(
+      itemLinearFeet({
+        uom: "PC",
+        quantity: 224,
+        sku: "IPEKD1612S",
+        description: "1X6 IPE DECKING S4S E4E KD",
+      })?.lf,
+    ).toBe(2688);
+  });
+
   it("refuses what it cannot prove", () => {
     // a deck tile is not linear product
     expect(

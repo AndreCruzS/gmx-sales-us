@@ -49,6 +49,18 @@ const FOOT_LENGTH = /[xX]\s*(\d{1,2})\s*'/;
 // after the section are feet; three digits, or an inch mark, are inches.
 const BARE_FEET = /\dx\d+-(\d{1,2})(?![\d'"”])/i;
 
+// "5/4X6X12 IPE PREM" — the length as a bare THIRD dimension. Same
+// convention: one or two bare digits are feet. A tile's "24\"x24\"" cannot
+// reach here — its inch marks break the digit-x-digit chain.
+const THIRD_DIM_FEET = /\d\s*[xX]\s*\d{1,2}\s*[xX]\s*(\d{1,2})(?![\d'"”])/;
+
+// IPEKD54610S / IPEKD1612S — the Ipe decking family carries its length
+// INSIDE the SKU: section code (546 = 5/4x6, 16 = 1x6), then the feet, then
+// S. The grammar is confirmed by the one line that spells it out —
+// "IPEKD54620S Ipe Maximo 5/4x6x20". Scoped to the family; never a general
+// guess about SKUs.
+const IPEKD_SKU = /^IPEKD(?:546|16)(\d{1,2})S$/i;
+
 function parseNumberish(raw: string): number | null {
   // "5/4" → 1.25 · "1-1/2" → 1.5 · "1.65" → 1.65 · "06" → 6
   const mixed = raw.match(/^(\d+)-(\d+)\/(\d+)$/);
@@ -87,8 +99,12 @@ export function itemLinearFeet(item: OrderItemLike): LinearRead | null {
     if (!/'\s*TO\s/i.test(text)) {
       const feet = text.match(FOOT_LENGTH);
       if (feet) return { lf: qty * Number(feet[1]), method: "pieces" };
+      const third = text.match(THIRD_DIM_FEET);
+      if (third) return { lf: qty * Number(third[1]), method: "pieces" };
       const bare = text.match(BARE_FEET);
       if (bare) return { lf: qty * Number(bare[1]), method: "pieces" };
+      const sku = (item.sku ?? "").trim().match(IPEKD_SKU);
+      if (sku) return { lf: qty * Number(sku[1]), method: "pieces" };
     }
     return null;
   }

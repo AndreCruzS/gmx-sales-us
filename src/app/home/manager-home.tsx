@@ -727,8 +727,11 @@ export function ManagerHome({ name }: { name: string }) {
     return {
       invoiced,
       lf,
-      // How much of the window's money the LF reading covers — what stays
-      // out is mostly tiles and hardware, which are not linear product.
+      // How much of the window's money the LF reading covers. What stays
+      // out (checked against the source, 2026-09-04 — no hardware in the
+      // invoiced book, Andre was right): tiles, which are not linear
+      // product; a few prefinished lines that carry no unit at all; and
+      // freight.
       lfCoverage:
         itemValue > 0 ? Math.round((100 * convertedValue) / itemValue) : null,
       motion,
