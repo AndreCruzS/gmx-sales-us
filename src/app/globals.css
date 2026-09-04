@@ -4097,6 +4097,45 @@ input[type="datetime-local"] {
   background: color-mix(in srgb, var(--rep-hue) 16%, var(--surface-card));
   color: color-mix(in srgb, var(--rep-hue) 78%, var(--ink-primary));
 }
+/* ── The Overview's figure strip ────────────────────────────────────────────
+   Inline, ruled, no boxes (Andre, 2026-09-04): four numbers on one line are
+   a masthead; four cards are furniture. Hairlines divide the stats; the
+   first one sits flush with the page's left edge. Wraps two-up where a row
+   cannot hold four. */
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 14px;
+}
+.stat {
+  flex: 1 1 0;
+  /* Phone: even PAIRS (2×2), never a ragged 3+1. */
+  min-width: 42%;
+  padding: 2px 14px;
+  border-left: 1px solid var(--rule);
+}
+/* In pairs, the odd stats open their row — no dangling rule at a line start. */
+.stat:nth-child(odd) {
+  border-left: 0;
+  padding-left: 0;
+}
+@media (min-width: 1024px) {
+  /* The desk holds all four on ONE line — that is the point of a strip.
+     flex-basis 0 with no minimum means they share the row and never wrap;
+     a long hint folds inside its own column instead. */
+  .stat {
+    min-width: 0;
+    padding: 2px 12px;
+  }
+  .stat:nth-child(odd):not(:first-child) {
+    border-left: 1px solid var(--rule);
+    padding-left: 12px;
+  }
+  .stat:first-child {
+    padding-left: 0;
+  }
+}
+
 /* ── The stock ledger cards ─────────────────────────────────────────────────
    One card per house: shipped, sold through, still on the floor. Three
    figures side by side; the honesty (window, coverage) underneath. */

@@ -862,23 +862,26 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
       )}
 
+      {/* The figures read INLINE, one ruled strip, not a grid of boxes
+          (Andre, 2026-09-04: "não faz sentido, poderia ser inline") — four
+          numbers on one line are a masthead; four cards are furniture. */}
       <section
-        className="adapt grid grid-cols-2 gap-3"
+        className="adapt stat-row"
         data-desk="tiles"
         key={`tiles-${focus?.id ?? "all"}`}
       >
-        <div className="card card-pad">
+        <div className="stat">
           <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
-          <div className="fig fig-xl mt-1">
+          <div className="fig fig-lg mt-1">
             {totals.openIsMoney
               ? formatMoney(Math.round(openTween))
               : `${QTY.format(Math.round(openTween))} LF`}
           </div>
           <div className="t-hint mt-0.5">{totals.openHint}</div>
         </div>
-        <div className="card card-pad">
+        <div className="stat">
           <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
-          <div className="fig fig-xl mt-1">
+          <div className="fig fig-lg mt-1">
             {totals.openIsMoney
               ? QTY.format(Math.round(quotesTween))
               : `${QTY.format(Math.round(quotesTween))} LF`}
@@ -886,8 +889,8 @@ export function ManagerHome({ name }: { name: string }) {
           <div className="t-hint mt-0.5">{totals.quotesHint}</div>
         </div>
 
-        {/* Our sell-out, beside the pipeline pair — the money that already
-            exists. Both tiles are the Overview's door to /orders. Hidden
+        {/* Our sell-out beside the pipeline pair — the money that already
+            exists. Both stats are the Overview's door to /orders. Hidden
             while a customer is chosen: the pair above already switched to
             that door's own buying, and a company-wide figure under a focus
             bar would be two screens disagreeing. */}
@@ -895,45 +898,42 @@ export function ManagerHome({ name }: { name: string }) {
           <>
             {/* Early in a month nothing is invoiced yet, and a leading "$0"
                 reads dead the way the placeholder zeros once did — so until
-                the current month has money, the tile leads with the last
+                the current month has money, the stat leads with the last
                 month that does and says so. Both statements are true; one
                 of them is also useful. */}
             {sellOutTiles.invoicedThis > 0 ? (
-              <Link href="/orders" className="card card-pad">
+              <Link href="/orders" className="stat">
                 <div className="t-meta uppercase tracking-wide">
                   Sell-out · {sellOutTiles.monthName}
                 </div>
-                <div className="fig fig-xl mt-1">
+                <div className="fig fig-lg mt-1">
                   {formatMoney(Math.round(sellOutTiles.invoicedThis))}
                 </div>
                 <div className="t-hint mt-0.5">
-                  invoiced POs ·{" "}
                   {formatMoney(Math.round(sellOutTiles.invoicedPrev))} in{" "}
                   {sellOutTiles.prevMonthName}
                 </div>
               </Link>
             ) : (
-              <Link href="/orders" className="card card-pad">
+              <Link href="/orders" className="stat">
                 <div className="t-meta uppercase tracking-wide">
                   Sell-out · {sellOutTiles.prevMonthName}
                 </div>
-                <div className="fig fig-xl mt-1">
+                <div className="fig fig-lg mt-1">
                   {formatMoney(Math.round(sellOutTiles.invoicedPrev))}
                 </div>
                 <div className="t-hint mt-0.5">
-                  invoiced POs · nothing invoiced in {sellOutTiles.monthName}{" "}
-                  yet
+                  nothing invoiced in {sellOutTiles.monthName} yet
                 </div>
               </Link>
             )}
-            <Link href="/orders" className="card card-pad">
+            <Link href="/orders" className="stat">
               <div className="t-meta uppercase tracking-wide">In motion</div>
-              <div className="fig fig-xl mt-1">
+              <div className="fig fig-lg mt-1">
                 {QTY.format(sellOutTiles.motionCount)}
               </div>
               <div className="t-hint mt-0.5">
-                {formatMoney(Math.round(sellOutTiles.motion))} on the way — not
-                sold yet
+                {formatMoney(Math.round(sellOutTiles.motion))} on the way
               </div>
             </Link>
           </>
