@@ -35,7 +35,12 @@ import {
 import { useTween } from "@/lib/ui/use-tween";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
-import type { MaterialAccount, PkAccount, RolloutCounts } from "@/lib/domain/rollout";
+import type {
+  DisplayAccount,
+  MaterialAccount,
+  PkAccount,
+  RolloutCounts,
+} from "@/lib/domain/rollout";
 import { formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
@@ -108,6 +113,13 @@ interface MaterialEvidenceRow {
   period: string;
   lf: number | string;
 }
+// The wall itself lives on the account: up + verified = OK, up alone =
+// going up. The date is the Display gate's citation.
+interface DisplayWallRow {
+  id: string;
+  has_display_wall: boolean | null;
+  display_last_verified_at: string | null;
+}
 
 // THE LAW (Andre, 2026-09-03): only an invoiced order is a sale. Everything
 // else is material in motion — visible, never revenue.
@@ -144,6 +156,7 @@ export function ManagerHome({ name }: { name: string }) {
   const [orderLinks, setOrderLinks] = useState<OrderLinkRow[]>([]);
   const [houseReturns, setHouseReturns] = useState<HouseReturnRow[]>([]);
   const [materialEvidence, setMaterialEvidence] = useState<MaterialEvidenceRow[]>([]);
+  const [displayWalls, setDisplayWalls] = useState<DisplayWallRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   // The walk down the chain lives here, not in the section: "Show all" has to
   // undo where you are as well as what the page is answering for.
@@ -223,7 +236,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -300,6 +313,13 @@ export function ManagerHome({ name }: { name: string }) {
         .from("account_material_evidence")
         .select("account_id, period, lf")
         .limit(1000),
+      // The walls, straight from the accounts: the Display gate's yes/no
+      // writes here, and the verified date is its citation.
+      supabase
+        .from("accounts")
+        .select("id, has_display_wall, display_last_verified_at")
+        .eq("account_type", "DEALER")
+        .limit(500),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -320,6 +340,9 @@ export function ManagerHome({ name }: { name: string }) {
     );
     setMaterialEvidence(
       me.error ? [] : ((me.data as unknown as MaterialEvidenceRow[]) ?? []),
+    );
+    setDisplayWalls(
+      dw.error ? [] : ((dw.data as unknown as DisplayWallRow[]) ?? []),
     );
     setLoadedAt(Date.now());
   }, [period]);
@@ -644,6 +667,51 @@ export function ManagerHome({ name }: { name: string }) {
     [branches, attempt],
   );
 
+  const displayAccounts = useMemo<DisplayAccount[]>(() => {
+    const walls = new Map(displayWalls.map((w) => [w.id, w]));
+    return branches.map((b) => ({
+      account_id: b.account_id,
+      name: b.name,
+      on: b.display_wall_state === "OK",
+      pending: b.display_wall_state === "PENDING",
+      verifiedAt: walls.get(b.account_id)?.display_last_verified_at ?? null,
+    }));
+  }, [branches, displayWalls]);
+
+  // The wall's yes/no writes to the ACCOUNT: checking says "it is up, I saw
+  // it" — so it stamps the verification too. Unchecking takes both back.
+  const setDisplay = useCallback(
+    async (accountId: string, next: boolean) => {
+      const stamp = new Date().toISOString();
+      setBranches((prev) =>
+        prev.map((b) =>
+          b.account_id === accountId
+            ? { ...b, display_wall_state: next ? "OK" : "NO" }
+            : b,
+        ),
+      );
+      setDisplayWalls((prev) => {
+        const row = {
+          id: accountId,
+          has_display_wall: next,
+          display_last_verified_at: next ? stamp : null,
+        };
+        return prev.some((w) => w.id === accountId)
+          ? prev.map((w) => (w.id === accountId ? row : w))
+          : [...prev, row];
+      });
+      const { error } = await getSupabaseBrowserClient()
+        .from("accounts")
+        .update({
+          has_display_wall: next,
+          display_last_verified_at: next ? stamp : null,
+        })
+        .eq("id", accountId);
+      if (error) void attempt();
+    },
+    [attempt],
+  );
+
   const focusedGates = useMemo(() => {
     if (!focus) return null;
     const b = branches.find((x) => x.account_id === focus.accountId);
@@ -679,6 +747,12 @@ export function ManagerHome({ name }: { name: string }) {
     const b = materialAccounts.find((x) => x.account_id === focus.accountId);
     return b ? [b] : undefined;
   }, [focus, materialAccounts]);
+
+  const focusedDisplay = useMemo<DisplayAccount[] | undefined>(() => {
+    if (!focus) return undefined;
+    const b = displayAccounts.find((x) => x.account_id === focus.accountId);
+    return b ? [b] : undefined;
+  }, [focus, displayAccounts]);
 
   // GONE QUIET, MEANING QUIET (Andre, 2026-09-01: "se comprou esse mês que
   // passou não é quiet") — AND THEN THE FADING, because the silent alone
@@ -1211,6 +1285,8 @@ export function ManagerHome({ name }: { name: string }) {
                 onPkCount={setPkCount}
                 materialAccounts={focusedMaterial}
                 onMaterial={setMaterial}
+                displayAccounts={focusedDisplay}
+                onDisplay={setDisplay}
               />
             ) : null
           ) : (
@@ -1221,6 +1297,8 @@ export function ManagerHome({ name }: { name: string }) {
                 onPkCount={setPkCount}
                 materialAccounts={materialAccounts}
                 onMaterial={setMaterial}
+                displayAccounts={displayAccounts}
+                onDisplay={setDisplay}
               />
             )
           )}

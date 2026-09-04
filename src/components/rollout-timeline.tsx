@@ -15,6 +15,7 @@
 import {
   GATE_COUNT,
   PIPELINE_GATES,
+  type DisplayAccount,
   type MaterialAccount,
   type PkAccount,
   type RolloutCounts,
@@ -31,6 +32,12 @@ function evidenceMonth(period: string): string {
   return `${MONTHS_SHORT[Number(m) - 1]} ${y}`;
 }
 
+/** A verification stamp → "Aug 12, 2026" — the freshness of the word. */
+function verifiedDate(iso: string): string {
+  const d = new Date(iso);
+  return `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 export function RolloutTimeline({
   counts,
   heading = "Getting dealers selling",
@@ -38,6 +45,8 @@ export function RolloutTimeline({
   onPkCount,
   materialAccounts,
   onMaterial,
+  displayAccounts,
+  onDisplay,
 }: {
   counts: RolloutCounts;
   heading?: string;
@@ -50,6 +59,10 @@ export function RolloutTimeline({
    *  vouches for it cited beside the name when one exists. */
   materialAccounts?: readonly MaterialAccount[];
   onMaterial?: (accountId: string, next: boolean) => void;
+  /** Who has something to point at — the manual yes/no, with the verified
+   *  date cited beside the name so the freshness of the word is visible. */
+  displayAccounts?: readonly DisplayAccount[];
+  onDisplay?: (accountId: string, next: boolean) => void;
 }) {
   const total = counts.branches ?? 0;
   if (total === 0) return null;
@@ -74,6 +87,15 @@ export function RolloutTimeline({
   );
   const stocked = materialRows.filter((a) => a.on);
   const vouched = materialRows.filter((a) => a.evidence && !a.on);
+  // Verified first, then walls going up, then the rest — each tier by name.
+  const displayRows = [...(displayAccounts ?? [])].sort(
+    (a, b) =>
+      Number(b.on) - Number(a.on) ||
+      Number(b.pending) - Number(a.pending) ||
+      a.name.localeCompare(b.name),
+  );
+  const pointed = displayRows.filter((a) => a.on);
+  const rising = displayRows.filter((a) => a.pending);
 
   return (
     <section>
@@ -221,6 +243,53 @@ export function RolloutTimeline({
                             </span>
                           ) : a.pending ? (
                             <span className="pk-side t-hint">in progress</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                {/* THE DISPLAY UNFOLD: same manual yes/no, wall by wall. The
+                    citation here is the verified DATE — a wall checked in May
+                    and a wall checked yesterday are different facts, and the
+                    date is what tells them apart. Checking stamps today;
+                    a wall marked up but never verified reads as going up. */}
+                {g.key === "display_wall_done" && displayRows.length > 0 && (
+                  <details className="pk-unfold">
+                    <summary className="t-hint">
+                      {pointed.length > 0
+                        ? `who has something to point at — ${pointed.length} of ${displayRows.length}`
+                        : rising.length > 0
+                          ? `none verified yet — ${
+                              rising.length === 1
+                                ? "one wall going up"
+                                : `${rising.length} walls going up`
+                            }`
+                          : "none marked yet — mark the first"}
+                    </summary>
+                    <ul className="pk-list">
+                      {displayRows.map((a) => (
+                        <li key={a.account_id} className="pk-row">
+                          <label className="pk-check">
+                            <input
+                              type="checkbox"
+                              checked={a.on}
+                              disabled={!onDisplay}
+                              onChange={(e) =>
+                                onDisplay?.(a.account_id, e.target.checked)
+                              }
+                            />
+                            <span className="pk-name">{a.name}</span>
+                          </label>
+                          {a.on && a.verifiedAt ? (
+                            <span className="pk-side t-hint">
+                              verified {verifiedDate(a.verifiedAt)}
+                            </span>
+                          ) : a.pending ? (
+                            <span className="pk-side t-hint">
+                              up — not verified yet
+                            </span>
                           ) : null}
                         </li>
                       ))}

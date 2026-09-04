@@ -45,6 +45,18 @@ export interface MaterialAccount {
   evidence?: { period: string; lf: number };
 }
 
+/** One branch's display standing. The wall lives on the ACCOUNT (D-model):
+ *  has_display_wall + display_last_verified_at — up and verified reads OK,
+ *  up but unverified reads PENDING. The verified date is the citation: it
+ *  says how fresh the word is. */
+export interface DisplayAccount {
+  account_id: string;
+  name: string;
+  on: boolean;
+  pending: boolean;
+  verifiedAt?: string | null;
+}
+
 export type GateKey =
   | "pk_done"
   | "merchandiser_done"
