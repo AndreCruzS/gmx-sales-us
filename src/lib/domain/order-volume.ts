@@ -24,6 +24,37 @@
  *  YYYY-MM prefix. */
 export const ORDERS_CONSISTENT_FROM = "2026-06";
 
+// ── Where the order went ────────────────────────────────────────────────────
+// The ship-to state, normalized to the USPS code the Master Territory Map is
+// written in. The order system's paper is typed by people: "CA" and "NEW
+// YORK" both occur. Anything that is neither a code nor a full state name
+// comes back null — an order with an unreadable destination belongs to no
+// region, and only the nationwide read sees it.
+
+const STATE_CODE: Record<string, string> = {
+  ALABAMA: "AL", ALASKA: "AK", ARIZONA: "AZ", ARKANSAS: "AR",
+  CALIFORNIA: "CA", COLORADO: "CO", CONNECTICUT: "CT", DELAWARE: "DE",
+  "DISTRICT OF COLUMBIA": "DC", FLORIDA: "FL", GEORGIA: "GA", HAWAII: "HI",
+  IDAHO: "ID", ILLINOIS: "IL", INDIANA: "IN", IOWA: "IA", KANSAS: "KS",
+  KENTUCKY: "KY", LOUISIANA: "LA", MAINE: "ME", MARYLAND: "MD",
+  MASSACHUSETTS: "MA", MICHIGAN: "MI", MINNESOTA: "MN", MISSISSIPPI: "MS",
+  MISSOURI: "MO", MONTANA: "MT", NEBRASKA: "NE", NEVADA: "NV",
+  "NEW HAMPSHIRE": "NH", "NEW JERSEY": "NJ", "NEW MEXICO": "NM",
+  "NEW YORK": "NY", "NORTH CAROLINA": "NC", "NORTH DAKOTA": "ND", OHIO: "OH",
+  OKLAHOMA: "OK", OREGON: "OR", PENNSYLVANIA: "PA", "RHODE ISLAND": "RI",
+  "SOUTH CAROLINA": "SC", "SOUTH DAKOTA": "SD", TENNESSEE: "TN", TEXAS: "TX",
+  UTAH: "UT", VERMONT: "VT", VIRGINIA: "VA", WASHINGTON: "WA",
+  "WEST VIRGINIA": "WV", WISCONSIN: "WI", WYOMING: "WY",
+};
+const STATE_CODES = new Set(Object.values(STATE_CODE).concat("DC"));
+
+export function shipToState(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim().toUpperCase();
+  if (STATE_CODES.has(s)) return s;
+  return STATE_CODE[s] ?? null;
+}
+
 export interface OrderItemLike {
   sku?: string | null;
   description?: string | null;

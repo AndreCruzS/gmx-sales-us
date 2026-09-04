@@ -3,7 +3,7 @@
 // POs, not against tidy inventions.
 
 import { describe, expect, it } from "vitest";
-import { itemLinearFeet, orderVolume } from "../order-volume";
+import { itemLinearFeet, orderVolume, shipToState } from "../order-volume";
 
 describe("itemLinearFeet", () => {
   it("passes native linear feet through, whatever the spelling", () => {
@@ -176,5 +176,21 @@ describe("orderVolume", () => {
     expect(reading.totalLines).toBe(3);
     expect(reading.convertedValue).toBe(2300);
     expect(reading.totalValue).toBe(2350);
+  });
+});
+
+describe("shipToState", () => {
+  it("reads codes and full names alike — both occur in the real book", () => {
+    // Real ship_to_address states from the synced book (2026-09-04):
+    expect(shipToState("FL")).toBe("FL");
+    expect(shipToState("NEW YORK")).toBe("NY");
+    expect(shipToState(" ca ")).toBe("CA");
+  });
+
+  it("refuses what it cannot prove — no region beats a wrong region", () => {
+    expect(shipToState("")).toBeNull();
+    expect(shipToState(null)).toBeNull();
+    expect(shipToState("N/A")).toBeNull();
+    expect(shipToState("ONTARIO")).toBeNull();
   });
 });

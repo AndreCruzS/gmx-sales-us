@@ -144,6 +144,7 @@ export function TeamSales({
   path,
   onPath,
   onFocus,
+  onRegion,
   lens,
   mode,
   windowLabel,
@@ -167,6 +168,9 @@ export function TeamSales({
   path: readonly PathStep[];
   onPath: (next: PathStep[]) => void;
   onFocus: (next: Focus | null) => void;
+  /** The desk book's region pick, reported up for the page's buy-in cards —
+   *  the pane's walk stays its own state (see SalesBook). */
+  onRegion?: (r: { key: string; name: string } | null) => void;
   /** The lens and the window are the PAGE's now (Andre, 2026-09-04): the
    *  filter row sits above the whole Overview so it visibly governs
    *  everything — the figure cards included — and this card reads the
@@ -680,6 +684,7 @@ export function TeamSales({
           mv={mv}
           month={month}
           windowNote={windowNote}
+          onRegion={onRegion}
         />
       ) : (
       <div className="sales-step" key={`${lens}-${mode}-${pathKey}`}>
@@ -1454,6 +1459,7 @@ function SalesBook({
   mv,
   month,
   windowNote,
+  onRegion,
 }: {
   step: ReturnType<typeof buildStep>;
   current: readonly SellThroughRow[];
@@ -1464,6 +1470,9 @@ function SalesBook({
   mv?: { on?: string; fresh?: string };
   month: string;
   windowNote?: string;
+  /** The pane's walk is its own (panePath) — but the page's buy-in cards
+   *  follow a region pick, so the picked market is reported upward. */
+  onRegion?: (r: { key: string; name: string } | null) => void;
 }) {
   const colourOf = (key: string) =>
     step.summary?.bands.find((b) => b.key === key)?.colour ?? "var(--ink-muted)";
@@ -1479,6 +1488,19 @@ function SalesBook({
     () => buildStep(current, prior, lens, panePath, branches),
     [current, prior, lens, panePath, branches],
   );
+
+  // Report the picked market upward — every route into and out of a pick
+  // (map click, list click, back, the keyed remount on a lens flip) settles
+  // panePath, so one effect covers them all.
+  const pickedRegion =
+    lens === "region" && panePath[0]?.dim === "region" ? panePath[0] : null;
+  useEffect(() => {
+    onRegion?.(
+      pickedRegion ? { key: pickedRegion.key, name: pickedRegion.name } : null,
+    );
+    // The book leaving the screen takes its pick with it.
+    return () => onRegion?.(null);
+  }, [onRegion, pickedRegion]);
   // Below the top there is exactly one row: the thing the pane walked into.
   const g = paneStep.groups[0] ?? null;
   const gMoved = g ? movementLabel(g.total, g.prevTotal, previous, mv) : null;

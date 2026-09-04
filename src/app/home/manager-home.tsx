@@ -45,6 +45,7 @@ import { formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
   orderVolume,
+  shipToState,
   type OrderItemLike,
 } from "@/lib/domain/order-volume";
 
@@ -95,6 +96,21 @@ interface SellOutOrder {
   created_at: string | null;
   archived_at: string | null;
   items: OrderItemLike[] | null;
+  /** Where it went — the state off the PO's ship-to, for the region read. */
+  ship_to_state: string | null;
+  ship_to_city: string | null;
+}
+// One row of the Master Territory Map: which territory a state belongs to.
+interface TerritoryStateRow {
+  state: string;
+  territory_id: string;
+}
+// The split state's hand-placed map: CA is decided city by city (Riverside
+// is Southern California, Stockton is not — no state code can say so).
+interface TerritoryCityRow {
+  state: string;
+  city: string;
+  territory_id: string;
 }
 interface OrderLinkRow {
   customer_id: string;
@@ -157,7 +173,12 @@ export function ManagerHome({ name }: { name: string }) {
   const [houseReturns, setHouseReturns] = useState<HouseReturnRow[]>([]);
   const [materialEvidence, setMaterialEvidence] = useState<MaterialEvidenceRow[]>([]);
   const [displayWalls, setDisplayWalls] = useState<DisplayWallRow[]>([]);
+  const [territoryStates, setTerritoryStates] = useState<TerritoryStateRow[]>([]);
+  const [territoryCities, setTerritoryCities] = useState<TerritoryCityRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
+  // The desk book's region pick — its walk (panePath) is the book's own, so
+  // the pick arrives by report rather than through `path`.
+  const [buyRegion, setBuyRegion] = useState<{ key: string; name: string } | null>(null);
   // The walk down the chain lives here, not in the section: "Show all" has to
   // undo where you are as well as what the page is answering for.
   const [path, setPath] = useState<PathStep[]>([]);
@@ -236,7 +257,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -296,7 +317,7 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("orders_mirror")
         .select(
-          "customer_id, status, total_value, order_date_po, created_at, archived_at, items",
+          "customer_id, status, total_value, order_date_po, created_at, archived_at, items, ship_to_state, ship_to_city",
         )
         .limit(1000),
       supabase
@@ -320,6 +341,11 @@ export function ManagerHome({ name }: { name: string }) {
         .select("id, has_display_wall, display_last_verified_at")
         .eq("account_type", "DEALER")
         .limit(500),
+      // The Master Territory Map, state by state — how a PO's ship-to state
+      // finds its region, so the buy-in can answer the region lens.
+      supabase.from("territory_states").select("state, territory_id").limit(200),
+      // And city by city for the split state: CA never resolves by code.
+      supabase.from("territory_cities").select("state, city, territory_id").limit(500),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -343,6 +369,12 @@ export function ManagerHome({ name }: { name: string }) {
     );
     setDisplayWalls(
       dw.error ? [] : ((dw.data as unknown as DisplayWallRow[]) ?? []),
+    );
+    setTerritoryStates(
+      ts.error ? [] : ((ts.data as unknown as TerritoryStateRow[]) ?? []),
+    );
+    setTerritoryCities(
+      tc.error ? [] : ((tc.data as unknown as TerritoryCityRow[]) ?? []),
     );
     setLoadedAt(Date.now());
   }, [period]);
@@ -949,7 +981,39 @@ export function ManagerHome({ name }: { name: string }) {
   // and order lines that cannot speak it — tiles, unit-less lines, freight
   // (there is no hardware in the invoiced book) — are IGNORED for now:
   // excluded from the figures, LF and dollars alike, not disclaimed.
+  // THE REGION FOLLOWS THE WALK (Andre, 2026-09-04: "os buy tb filtre por
+  // região"): a region picked on the map narrows the buy-in cards too. The
+  // order's region is its ship-to state read against the Master Territory
+  // Map — a PO whose destination no territory covers belongs to no region,
+  // and only the nationwide read sees it.
   const sellOutTiles = useMemo(() => {
+    // The pick can arrive two ways: the phone walk writes `path`, the desk
+    // book reports `buyRegion`. Either narrows the cards.
+    const pathRegion = path.find((s) => s.dim === "region") ?? null;
+    const regionStep = pathRegion
+      ? { key: pathRegion.key, name: pathRegion.name }
+      : buyRegion;
+    const stateRegion = new Map(
+      territoryStates.map((t) => [t.state, t.territory_id]),
+    );
+    // The split state resolves city by city — CA never resolves by code.
+    const cityRegion = new Map(
+      territoryCities.map((t) => [
+        `${t.state}|${t.city.trim().toUpperCase()}`,
+        t.territory_id,
+      ]),
+    );
+    const inRegion = (o: SellOutOrder): boolean => {
+      if (!regionStep) return true;
+      const code = shipToState(o.ship_to_state);
+      if (code === null) return false;
+      const region =
+        stateRegion.get(code) ??
+        (o.ship_to_city
+          ? cityRegion.get(`${code}|${o.ship_to_city.trim().toUpperCase()}`)
+          : undefined);
+      return region === regionStep.key;
+    };
     const anchorYm = latest ? latest.slice(0, 7) : null;
     const inWindow = (m: string): boolean => {
       switch (windowInfo.kind) {
@@ -973,6 +1037,7 @@ export function ManagerHome({ name }: { name: string }) {
     let motion = 0;
     let motionCount = 0;
     for (const o of sellOut) {
+      if (!inRegion(o)) continue;
       if (INVOICED_STATUSES.has(o.status)) {
         const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
         if (inWindow(m)) {
@@ -990,12 +1055,13 @@ export function ManagerHome({ name }: { name: string }) {
       linearValue,
       motion,
       motionCount,
+      regionName: regionStep?.name ?? null,
       windowLabel:
         windowInfo.kind === "year" && anchorYm
           ? `${anchorYm.slice(0, 4)} through ${periodLabel(latest)}`
           : windowInfo.label,
     };
-  }, [sellOut, latest, windowInfo]);
+  }, [sellOut, latest, windowInfo, path, buyRegion, territoryStates, territoryCities]);
 
   // The houses to chase: sold to (invoiced), linked to an account, and not a
   // single monthly return since their first invoiced PO. The distributor's
@@ -1206,11 +1272,15 @@ export function ManagerHome({ name }: { name: string }) {
             <div className="t-hint mt-0.5">{totals.quotesHint}</div>
           </div>
 
-          {/* Our sell-out beside the pipeline pair — the money that already
-              exists. Both cards are the Overview's door to /orders. Hidden
-              while a customer is chosen: the pair above already switched to
-              that door's own buying, and a company-wide figure under a focus
-              bar would be two screens disagreeing. */}
+          {/* THEIR BUY-IN beside the pipeline pair — the money that already
+              exists. BUY-IN, not sell-out (Andre, 2026-09-04): the figure is
+              what the DISTRIBUTORS bought from us — invoiced orders — and
+              calling it sell-out claimed the wrong side of the counter. The
+              sell-out proper is the sell-through book above. Both cards are
+              the Overview's door to /orders. Hidden while a customer is
+              chosen: the pair above already switched to that door's own
+              buying, and a company-wide figure under a focus bar would be
+              two screens disagreeing. */}
           {!focus && (
             <>
               {/* The card answers for the SAME window the filter set — the
@@ -1219,13 +1289,14 @@ export function ManagerHome({ name }: { name: string }) {
               {/* LF leads — the page's own measure — and the dollars beside
                   it are those same lines' dollars. */}
               <Link href="/orders" className="card card-pad">
-                <div className="t-meta uppercase tracking-wide">Sell-out</div>
+                <div className="t-meta uppercase tracking-wide">Buy-in</div>
                 <div className="fig fig-xl mt-1">
                   {QTY.format(Math.round(sellOutTiles.lf))} LF
                 </div>
                 <div className="t-hint mt-0.5">
                   {formatMoney(Math.round(sellOutTiles.linearValue))} invoiced
                   · {sellOutTiles.windowLabel}
+                  {sellOutTiles.regionName ? ` · ${sellOutTiles.regionName}` : ""}
                 </div>
               </Link>
               <Link href="/orders" className="card card-pad">
@@ -1235,6 +1306,7 @@ export function ManagerHome({ name }: { name: string }) {
                 </div>
                 <div className="t-hint mt-0.5">
                   {formatMoney(Math.round(sellOutTiles.motion))} on the way
+                  {sellOutTiles.regionName ? ` · ${sellOutTiles.regionName}` : ""}
                 </div>
               </Link>
             </>
@@ -1263,6 +1335,7 @@ export function ManagerHome({ name }: { name: string }) {
         path={path}
         onPath={setPath}
         onFocus={setFocus}
+        onRegion={setBuyRegion}
         lens={salesLens}
         mode={salesMode}
       />
