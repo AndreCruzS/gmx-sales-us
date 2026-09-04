@@ -42,6 +42,13 @@ const INCH_LENGTH = /\dx\d+-(\d{2,3})\s*(?:"|”|in\b)/i;
 // say "TO" (a random-length range has no single piece length).
 const FOOT_LENGTH = /[xX]\s*(\d{1,2})\s*'/;
 
+// "1X6-13" — the SAME catalogue family spoken in NOMINAL FEET, bare: the
+// order system writes "1X6-13" where the sell-through writes "1X6-154\""
+// (154 in ≈ 12.8 ft, nominal 13 — the pairs line up one to one across the
+// 083… range). The trade's convention disambiguates: one or two bare digits
+// after the section are feet; three digits, or an inch mark, are inches.
+const BARE_FEET = /\dx\d+-(\d{1,2})(?![\d'"”])/i;
+
 function parseNumberish(raw: string): number | null {
   // "5/4" → 1.25 · "1-1/2" → 1.5 · "1.65" → 1.65 · "06" → 6
   const mixed = raw.match(/^(\d+)-(\d+)\/(\d+)$/);
@@ -80,6 +87,8 @@ export function itemLinearFeet(item: OrderItemLike): LinearRead | null {
     if (!/'\s*TO\s/i.test(text)) {
       const feet = text.match(FOOT_LENGTH);
       if (feet) return { lf: qty * Number(feet[1]), method: "pieces" };
+      const bare = text.match(BARE_FEET);
+      if (bare) return { lf: qty * Number(bare[1]), method: "pieces" };
     }
     return null;
   }

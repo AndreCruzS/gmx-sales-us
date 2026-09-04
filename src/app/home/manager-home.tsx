@@ -32,6 +32,7 @@ import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type { PkAccount, RolloutCounts } from "@/lib/domain/rollout";
 import { formatMoney } from "@/lib/format";
+import { orderVolume, type OrderItemLike } from "@/lib/domain/order-volume";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
@@ -70,8 +71,8 @@ interface BranchRow {
   pk_count: number;
 }
 
-// Our sell-out, read light: the Overview needs money and status, never the
-// item lists — those live on /orders.
+// Our sell-out. The item lists ride along since 2026-09-04 — the card
+// speaks LF as well as dollars, and LF is proven line by line.
 interface SellOutOrder {
   customer_id: string | null;
   status: string;
@@ -79,6 +80,7 @@ interface SellOutOrder {
   order_date_po: string | null;
   created_at: string | null;
   archived_at: string | null;
+  items: OrderItemLike[] | null;
 }
 interface OrderLinkRow {
   customer_id: string;
@@ -251,11 +253,11 @@ export function ManagerHome({ name }: { name: string }) {
           "account_id, org_id, name, pk_state, merchandiser_state, display_wall_state, material_state, pk_count",
         )
         .limit(500),
-      // Our sell-out, money and status only — the item lists stay on /orders.
+      // Our sell-out, items included: the card proves its LF line by line.
       supabase
         .from("orders_mirror")
         .select(
-          "customer_id, status, total_value, order_date_po, created_at, archived_at",
+          "customer_id, status, total_value, order_date_po, created_at, archived_at, items",
         )
         .limit(1000),
       supabase
@@ -694,6 +696,9 @@ export function ManagerHome({ name }: { name: string }) {
   const sellOutTiles = useMemo(() => {
     const readingMonth = latest ? latest.slice(0, 7) : null;
     let invoiced = 0;
+    let lf = 0;
+    let convertedValue = 0;
+    let itemValue = 0;
     let motion = 0;
     let motionCount = 0;
     for (const o of sellOut) {
@@ -707,6 +712,12 @@ export function ManagerHome({ name }: { name: string }) {
             : m === readingMonth
         ) {
           invoiced += v;
+          // The window's LF, proven line by line — the return speaks only
+          // LF, so this is the figure the two halves of the funnel share.
+          const vol = orderVolume(o.items ?? []);
+          lf += vol.lf;
+          convertedValue += vol.convertedValue;
+          itemValue += vol.totalValue;
         }
       } else if (!o.archived_at) {
         motion += v;
@@ -715,6 +726,11 @@ export function ManagerHome({ name }: { name: string }) {
     }
     return {
       invoiced,
+      lf,
+      // How much of the window's money the LF reading covers — what stays
+      // out is mostly tiles and hardware, which are not linear product.
+      lfCoverage:
+        itemValue > 0 ? Math.round((100 * convertedValue) / itemValue) : null,
       motion,
       motionCount,
       windowLabel:
@@ -956,8 +972,21 @@ export function ManagerHome({ name }: { name: string }) {
                   {formatMoney(Math.round(sellOutTiles.invoiced))}
                 </div>
                 <div className="t-hint mt-0.5">
+                  {sellOutTiles.lf > 0
+                    ? `≈ ${QTY.format(Math.round(sellOutTiles.lf))} LF · `
+                    : ""}
                   invoiced · {sellOutTiles.windowLabel}
                 </div>
+                {/* The ≈ owns up: what the LF read leaves out is mostly
+                    tiles — not linear product — and the card says how much
+                    of the money it speaks for whenever that is not nearly
+                    all of it. */}
+                {sellOutTiles.lfCoverage !== null &&
+                  sellOutTiles.lfCoverage < 90 && (
+                    <div className="t-hint mt-0.5">
+                      LF read covers {sellOutTiles.lfCoverage}% of the value
+                    </div>
+                  )}
               </Link>
               <Link href="/orders" className="card card-pad">
                 <div className="t-meta uppercase tracking-wide">In motion</div>

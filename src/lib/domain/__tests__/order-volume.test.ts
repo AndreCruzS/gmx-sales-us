@@ -76,6 +76,28 @@ describe("itemLinearFeet", () => {
     ).toEqual({ lf: 392, method: "pieces" });
   });
 
+  it("reads the catalogue family spoken in bare nominal feet", () => {
+    // The order system writes "1X6-13" where the sell-through writes
+    // "1X6-154\"" — same SKU, nominal feet with no unit mark.
+    expect(
+      itemLinearFeet({
+        uom: "PC",
+        quantity: 735,
+        sku: "083003213",
+        description: "1X6-13 THERMOWOOD CLAD V-GRV/NCKL GAP AYOUS",
+      }),
+    ).toEqual({ lf: 9555, method: "pieces" });
+    // …while three digits stay inches even without the mark's help
+    expect(
+      itemLinearFeet({
+        uom: "PC",
+        quantity: 12,
+        sku: "083003215",
+        description: '1X6-177" THERMOWOOD CLAD V-GRV/NCKL GAP AYOUS',
+      })?.lf,
+    ).toBeCloseTo((12 * 177) / 12);
+  });
+
   it("refuses what it cannot prove", () => {
     // a deck tile is not linear product
     expect(
