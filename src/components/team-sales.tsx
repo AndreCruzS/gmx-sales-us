@@ -146,6 +146,8 @@ export function TeamSales({
   onFocus,
   lens,
   mode,
+  windowLabel,
+  windowNote,
 }: {
   /** Sell-through, at least for the two most recent months. MONTH rows only —
    *  a year-to-date aggregate in here would double the book. */
@@ -171,6 +173,12 @@ export function TeamSales({
    *  choice rather than owning it. */
   lens: SellLens;
   mode: "month" | "ytd";
+  /** Overrides the masthead's WHEN for windows a single month cannot name —
+   *  a range of months, or the backfill era. */
+  windowLabel?: string;
+  /** A window summed over holes says where the holes are — which of the
+   *  range's months actually have their return on file. */
+  windowNote?: string;
 }) {
   // THE DESK READS AS AN OPEN BOOK (>=1280px): markets on the left page, the
   // picked market's chain on the right, both visible at once. Behaviour, not
@@ -548,7 +556,8 @@ export function TeamSales({
     counterColour ??
     compositionRail(step.summary !== null ? [step.summary] : step.groups);
 
-  const month = ytdOn ? `${latest?.slice(0, 4)} so far` : periodLabel(latest);
+  const month =
+    windowLabel ?? (ytdOn ? `${latest?.slice(0, 4)} so far` : periodLabel(latest));
   const waiting = housesMissing(ytdOn ? (ytdRows ?? []) : rows, latest);
 
   // The movement beside the counter follows whatever the counter is showing. A
@@ -587,32 +596,21 @@ export function TeamSales({
         ? SELL_ROOT_LABEL[lens]
         : backPath[backPath.length - 1].name;
 
-  if (rows.length === 0) {
+  // A WINDOW WAS PICKED THAT HOLDS NO RETURN (the period filter offers
+  // every consistent-era month and range, marked or not). The sell-out card
+  // above still answers for it; this card says why it cannot, by name,
+  // instead of drawing zeros. With no name to give — no book at all — the
+  // generic first-run message stands.
+  if (!ytdOn && current.length === 0) {
+    const name =
+      windowLabel ?? (latestMonth ? periodLabel(latestMonth) : null);
     return (
       <section>
         <div className="card card-pad">
           <p className="t-sub">
-            No distributor report loaded yet. Boise and Hardwoods send a
-            spreadsheet a month behind; once one is uploaded, the sell-through for
-            that month appears here.
-          </p>
-        </div>
-      </section>
-    );
-  }
-
-  // A MONTH WAS PICKED THAT HOLDS NO RETURN YET (the period filter offers
-  // every consistent-era month, marked or not — Andre, 2026-09-04). The
-  // sell-out card above still answers for it; this card says why it cannot,
-  // by name, instead of drawing zeros.
-  if (!ytdOn && current.length === 0 && latestMonth) {
-    return (
-      <section>
-        <div className="card card-pad">
-          <p className="t-sub">
-            No sell-through return on file for {periodLabel(latestMonth)} yet.
-            The distributors send their month a few weeks behind — once the
-            file is loaded, this reading fills in.
+            {name
+              ? `No sell-through return on file for ${name} yet. The distributors send their month a few weeks behind — once the file is loaded, this reading fills in.`
+              : "No distributor report loaded yet. Boise and Hardwoods send a spreadsheet a month behind; once one is uploaded, the sell-through for that month appears here."}
           </p>
         </div>
       </section>
@@ -681,6 +679,7 @@ export function TeamSales({
           previous={previous}
           mv={mv}
           month={month}
+          windowNote={windowNote}
         />
       ) : (
       <div className="sales-step" key={`${lens}-${mode}-${pathKey}`}>
@@ -1454,6 +1453,7 @@ function SalesBook({
   previous,
   mv,
   month,
+  windowNote,
 }: {
   step: ReturnType<typeof buildStep>;
   current: readonly SellThroughRow[];
@@ -1463,6 +1463,7 @@ function SalesBook({
   previous: string | null;
   mv?: { on?: string; fresh?: string };
   month: string;
+  windowNote?: string;
 }) {
   const colourOf = (key: string) =>
     step.summary?.bands.find((b) => b.key === key)?.colour ?? "var(--ink-muted)";
@@ -1755,6 +1756,7 @@ function SalesBook({
                   </span>
                 ) : null}
               </p>
+              {windowNote && <p className="t-hint mt-0.5">{windowNote}</p>}
             </div>
           );
         })()}

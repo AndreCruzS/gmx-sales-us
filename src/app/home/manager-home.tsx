@@ -16,8 +16,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
 import { ManagerHomeSkeleton } from "./home-skeleton";
-import { ChevronDownIcon } from "@/components/icons";
 import { TeamSales, type Focus } from "@/components/team-sales";
+import {
+  PeriodPicker,
+  periodChipLabel,
+  shortMonthLabel,
+  type SalesPeriod,
+} from "@/components/period-picker";
 import {
   movementLabel,
   periodLabel,
@@ -117,11 +122,12 @@ export function ManagerHome({ name }: { name: string }) {
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [sellRows, setSellRows] = useState<SellThroughRow[]>([]);
-  // Every month the book holds, newest first — the masthead's period picker.
-  // The picked month is a REQUEST: load() honours it while it exists and
-  // falls back to the newest when it doesn't (a removed upload, say).
+  // Every month the book holds a return for, newest first.
   const [months, setMonths] = useState<string[]>([]);
-  const [pickedMonth, setPickedMonth] = useState<string | null>(null);
+  // THE WINDOW, as the booking-style picker speaks it (Andre, 2026-09-04):
+  // an isolated month, a range of months, the year to date, or the sparse
+  // era before adoption. null = the newest month with a return on file.
+  const [period, setPeriod] = useState<SalesPeriod | null>(null);
   const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   // The synced order book, read light, plus who each customer is and which
@@ -138,9 +144,6 @@ export function ManagerHome({ name }: { name: string }) {
   // the rollout book answers for REPS — under Region or Distribution it is a
   // list about people nobody on the screen is asking about (João, 2026-08-28).
   const [salesLens, setSalesLens] = useState<SellLens>("region");
-  // And which window: the footnote and the quiet ranking answer for the same
-  // reading the card is giving, month or year-so-far.
-  const [salesMode, setSalesMode] = useState<"month" | "ytd">("month");
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   // Set when the load did not come back at all. Distinct from "every query
   // errored", which load() already absorbs into empty lists — this is the case
@@ -176,17 +179,31 @@ export function ManagerHome({ name }: { name: string }) {
     ]
       .sort()
       .reverse();
-    // The month being read: exactly the requested one — a month with no
-    // return yet is still an honest request (its rows come back empty and
-    // the card says why). Default: the newest month with a file. The
-    // comparison month is the previous month that HAS a file.
-    const chosen = pickedMonth ?? monthsAvail[0] ?? null;
-    const prevOfChosen = chosen
-      ? (monthsAvail.find((m) => m < chosen) ?? null)
-      : null;
-    const wantedMonths = [chosen, prevOfChosen].filter(
-      (p): p is string => p !== null,
-    );
+    // The months to fetch follow the picked WINDOW: a single month brings
+    // its comparison month along (the previous month that HAS a file); a
+    // range brings every file inside it; "before" brings the backfill era's
+    // files (if any ever exist); the year rides the YTD fetch below.
+    let wantedMonths: string[];
+    if (period?.kind === "range") {
+      wantedMonths = monthsAvail.filter(
+        (m) => m.slice(0, 7) >= period.from && m.slice(0, 7) <= period.to,
+      );
+    } else if (period?.kind === "before") {
+      wantedMonths = monthsAvail.filter(
+        (m) => m.slice(0, 7) < ORDERS_CONSISTENT_FROM,
+      );
+    } else {
+      const chosen =
+        period?.kind === "month"
+          ? `${period.ym}-01`
+          : (monthsAvail[0] ?? null);
+      const prevOfChosen = chosen
+        ? (monthsAvail.find((m) => m < chosen) ?? null)
+        : null;
+      wantedMonths = [chosen, prevOfChosen].filter(
+        (p): p is string => p !== null,
+      );
+    }
     const ytdPeriod =
       [
         ...new Set(
@@ -287,7 +304,7 @@ export function ManagerHome({ name }: { name: string }) {
       hr.error ? [] : ((hr.data as unknown as HouseReturnRow[]) ?? []),
     );
     setLoadedAt(Date.now());
-  }, [pickedMonth]);
+  }, [period]);
 
   // Every attempt must CONCLUDE, or the skeleton is a spinner with no way out —
   // the exact failure this whole change was meant to avoid, moved one screen
@@ -352,37 +369,90 @@ export function ManagerHome({ name }: { name: string }) {
     () => sellRows.filter((r) => r.period_kind === "YTD"),
     [sellRows],
   );
-  // Every month of the consistent era, newest first, for the period
-  // selector — marked when its sell-through return is on file, so the
-  // missing paper is visible right in the filter.
-  const monthOptions = useMemo(() => {
-    const out: { period: string; label: string; hasReturn: boolean }[] = [];
-    const now = new Date();
-    const d = new Date(now.getFullYear(), now.getMonth(), 1);
-    for (;;) {
-      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (ym < ORDERS_CONSISTENT_FROM) break;
-      const period = `${ym}-01`;
-      out.push({
-        period,
-        label: periodLabel(period),
-        hasReturn: months.includes(period),
-      });
-      d.setMonth(d.getMonth() - 1);
-    }
-    return out;
-  }, [months]);
-
-  // The reading month is the FILTER's word, not the rows': a picked month
-  // with no return yet still IS the month being read (the sell-out answers,
-  // the sell-through card says why it can't). Default: the newest month
-  // with a return on file. The comparison month is the previous month that
-  // HAS a file — a skipped month never reads against nothing.
-  const latest = pickedMonth ?? months[0] ?? null;
-  const previous = useMemo(
-    () => months.find((m) => m < (latest ?? "")) ?? null,
-    [months, latest],
+  // The picker's dots: which months have their return on file.
+  const monthsWithReturn = useMemo(
+    () => new Set(months.map((p) => p.slice(0, 7))),
+    [months],
   );
+
+  // The window, resolved. The reading is the FILTER's word, not the rows':
+  // a month with no return yet still IS the window being read (the sell-out
+  // answers, the sell-through card says why it can't). A single month reads
+  // against the previous month that HAS a file; a range or the backfill era
+  // reads against nothing (there is no honest "previous" for them).
+  const salesMode: "month" | "ytd" = period?.kind === "year" ? "ytd" : "month";
+  const windowInfo = useMemo(() => {
+    if (period?.kind === "range") {
+      // Which of the range's months actually have a return on file — a
+      // window summed over holes must say where the holes are.
+      const wanted: string[] = [];
+      for (let ym = period.from; ym <= period.to; ) {
+        wanted.push(ym);
+        const [y, m] = ym.split("-").map(Number);
+        ym = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+      }
+      const have = wanted.filter((ym) =>
+        months.some((p) => p.slice(0, 7) === ym),
+      );
+      return {
+        kind: "range" as const,
+        anchor: `${period.to}-01`,
+        previous: null,
+        from: period.from,
+        to: period.to,
+        label: periodChipLabel(period, ""),
+        note:
+          have.length < wanted.length
+            ? have.length === 0
+              ? "no return files inside this window yet"
+              : `return files on hand: ${have.map(shortMonthLabel).join(", ")} — the rest of the window is still unreported`
+            : undefined,
+      };
+    }
+    if (period?.kind === "before") {
+      return {
+        kind: "before" as const,
+        anchor: null,
+        previous: null,
+        from: null,
+        to: null,
+        label: periodChipLabel(period, ""),
+      };
+    }
+    const ym =
+      period?.kind === "month" ? period.ym : (months[0]?.slice(0, 7) ?? null);
+    const anchor = ym ? `${ym}-01` : null;
+    return {
+      kind: period?.kind === "year" ? ("year" as const) : ("month" as const),
+      anchor,
+      previous: months.find((m) => m < (anchor ?? "")) ?? null,
+      from: null,
+      to: null,
+      label: anchor ? periodLabel(anchor) : "no month yet",
+    };
+  }, [period, months]);
+  const latest = windowInfo.anchor;
+  const previous = windowInfo.previous;
+
+  // The rows the sales card reads. A RANGE folds its months onto one anchor
+  // period so the card's machinery (built for one month) reads the whole
+  // window as one figure; "before" gathers whatever backfill files exist.
+  const cardRows = useMemo(() => {
+    if (windowInfo.kind === "range") {
+      return monthlyRows
+        .filter((r) => {
+          const ym = r.period.slice(0, 7);
+          return ym >= windowInfo.from! && ym <= windowInfo.to!;
+        })
+        .map((r) => ({ ...r, period: windowInfo.anchor! }));
+    }
+    if (windowInfo.kind === "before") {
+      return monthlyRows.filter(
+        (r) => r.period.slice(0, 7) < ORDERS_CONSISTENT_FROM,
+      );
+    }
+    return monthlyRows;
+  }, [monthlyRows, windowInfo]);
 
   // The two figures at the top. With nothing chosen they are the money a
   // director asks for first: what is open, and what is waiting on somebody.
@@ -691,9 +761,10 @@ export function ManagerHome({ name }: { name: string }) {
     salesLens === "region" &&
     !focus &&
     quietRanking.rows.length > 0 &&
-    // No return file for the picked month means the buying is UNKNOWN, not
-    // stopped — a ranking built on a missing file would cry wolf about
-    // every dealer at once.
+    // The ranking only opines on a SINGLE month with its file on hand: a
+    // missing file means the buying is UNKNOWN, not stopped, and a range
+    // has no one "latest file" to be absent from.
+    windowInfo.kind === "month" &&
     monthlyRows.some((r) => r.period === latest);
 
   // Grouped by what is wrong, most of it first — the same union a rep meets one
@@ -732,26 +803,32 @@ export function ManagerHome({ name }: { name: string }) {
   // (there is no hardware in the invoiced book) — are IGNORED for now:
   // excluded from the figures, LF and dollars alike, not disclaimed.
   const sellOutTiles = useMemo(() => {
-    const readingMonth = latest ? latest.slice(0, 7) : null;
+    const anchorYm = latest ? latest.slice(0, 7) : null;
+    const inWindow = (m: string): boolean => {
+      switch (windowInfo.kind) {
+        case "range":
+          return m >= windowInfo.from! && m <= windowInfo.to!;
+        case "before":
+          return m < ORDERS_CONSISTENT_FROM;
+        case "year":
+          return (
+            anchorYm !== null &&
+            m.slice(0, 4) === anchorYm.slice(0, 4) &&
+            m <= anchorYm &&
+            m >= ORDERS_CONSISTENT_FROM
+          );
+        default:
+          return anchorYm !== null && m === anchorYm;
+      }
+    };
     let lf = 0;
     let linearValue = 0;
     let motion = 0;
     let motionCount = 0;
     for (const o of sellOut) {
       if (INVOICED_STATUSES.has(o.status)) {
-        if (!readingMonth) continue;
         const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
-        // The YTD sweep stays inside the CONSISTENT ERA — the scattered
-        // backfill months before June 2026 are paper, not a record.
-        if (
-          salesMode === "ytd"
-            ? m.slice(0, 4) === readingMonth.slice(0, 4) &&
-              m <= readingMonth &&
-              m >= ORDERS_CONSISTENT_FROM
-            : m === readingMonth
-        ) {
-          // The window's LF, proven line by line — the figure the two
-          // halves of the funnel share — and the money of those same lines.
+        if (inWindow(m)) {
           const vol = orderVolume(o.items ?? []);
           lf += vol.lf;
           linearValue += vol.convertedValue;
@@ -767,13 +844,11 @@ export function ManagerHome({ name }: { name: string }) {
       motion,
       motionCount,
       windowLabel:
-        readingMonth === null
-          ? "no month on file"
-          : salesMode === "ytd"
-            ? `${readingMonth.slice(0, 4)} through ${periodLabel(latest)}`
-            : periodLabel(latest),
+        windowInfo.kind === "year" && anchorYm
+          ? `${anchorYm.slice(0, 4)} through ${periodLabel(latest)}`
+          : windowInfo.label,
     };
-  }, [sellOut, latest, salesMode]);
+  }, [sellOut, latest, windowInfo]);
 
   // The houses to chase: sold to (invoiced), linked to an account, and not a
   // single monthly return since their first invoiced PO. The distributor's
@@ -949,35 +1024,13 @@ export function ManagerHome({ name }: { name: string }) {
             "Compare to" (two periods, a comparison UI) is the agreed next
             step, deliberately not yet. */}
         <div className="chip-row mb-3" role="group" aria-label="Which period">
-          <label className="chip chip-select" aria-pressed="true">
-            {salesMode === "ytd"
-              ? "2026 · year to date"
-              : periodLabel(latest)}
-            <ChevronDownIcon size={11} aria-hidden="true" />
-            <select
-              value={salesMode === "ytd" ? "y" : `m:${latest ?? ""}`}
-              aria-label="Which period to read"
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "y") {
-                  setSalesMode("ytd");
-                } else {
-                  setSalesMode("month");
-                  setPickedMonth(v.slice(2));
-                }
-              }}
-            >
-              {monthOptions.map((m) => (
-                <option key={m.period} value={`m:${m.period}`}>
-                  {m.label}
-                  {m.hasReturn ? " · return ✓" : ""}
-                </option>
-              ))}
-              {ytdSellRows.length > 0 && (
-                <option value="y">2026 · year to date</option>
-              )}
-            </select>
-          </label>
+          <PeriodPicker
+            period={period}
+            defaultYm={months[0]?.slice(0, 7) ?? null}
+            monthsWithReturn={monthsWithReturn}
+            hasYear={ytdSellRows.length > 0}
+            onChange={setPeriod}
+          />
         </div>
       </section>
 
@@ -1047,7 +1100,15 @@ export function ManagerHome({ name }: { name: string }) {
           than sending anyone to another screen. */}
       <div data-desk="sales">
       <TeamSales
-        rows={monthlyRows}
+        rows={cardRows}
+        windowLabel={
+          windowInfo.kind === "range" || windowInfo.kind === "before"
+            ? windowInfo.label
+            : undefined
+        }
+        windowNote={
+          windowInfo.kind === "range" ? windowInfo.note : undefined
+        }
         ytdRows={ytdSellRows}
         branches={sellBranches}
         latest={latest}

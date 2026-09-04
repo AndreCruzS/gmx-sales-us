@@ -4102,22 +4102,97 @@ input[type="datetime-local"] {
   background: color-mix(in srgb, var(--rep-hue) 16%, var(--surface-card));
   color: color-mix(in srgb, var(--rep-hue) 78%, var(--ink-primary));
 }
-/* ── The period chip ────────────────────────────────────────────────────────
-   One selector for the WHEN — an isolated month or the year — wearing the
-   chip's own face, the native select invisible on top (same recipe the
-   masthead's picker used before the filter row took the job). */
-.chip-select {
+/* ── The period picker ──────────────────────────────────────────────────────
+   Booking-style, in months (Andre, 2026-09-04): a chip opens a panel — the
+   year with ‹ › over a twelve-month grid. One click is a month, a second
+   click stretches a range; a dot marks months whose return is on file. */
+.ppick {
   position: relative;
+  display: inline-flex;
+}
+.ppick > .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
 }
-.chip-select select {
+.ppick-panel {
   position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 264px;
+  padding: 10px;
+  border-radius: var(--r-card, 12px);
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+}
+.ppick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.ppick-year {
+  font-weight: 700;
+}
+.ppick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.ppick-month {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 40px;
+  border-radius: var(--r-control);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+.ppick-month:hover:not(:disabled) {
+  background: var(--surface-page);
+}
+.ppick-month:disabled {
+  color: var(--ink-muted);
+  opacity: 0.4;
+}
+.ppick-month[data-sel="end"] {
+  background: var(--accent-strong);
+  color: var(--on-accent);
+}
+.ppick-month[data-sel="mid"] {
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+}
+.ppick-dot {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+.ppick-month[data-sel="end"] .ppick-dot {
+  background: var(--on-accent);
+}
+.ppick-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 2px 8px;
+}
+.ppick-hint .ppick-dot {
+  position: static;
+  flex-shrink: 0;
+}
+.ppick-foot {
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
 }
 
 /* ── The stock ledger cards ─────────────────────────────────────────────────
