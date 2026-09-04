@@ -33,6 +33,12 @@ select is(
 
 -- Every public base table has created_at + updated_at and a set_updated_at
 -- trigger (updated_at is the LWW version key, D61).
+--
+-- Except the ORDER-SYSTEM MIRRORS (2026-09-04): orders_mirror and
+-- order_customers_mirror carry the SOURCE's updated_at, copied by the
+-- five-minute sync — it is the other system's LWW key, and a local trigger
+-- would overwrite it on every upsert. They are system-written copies, never
+-- app-written rows, so D61 does not apply to them.
 select is(
   (select count(*)::int
    from information_schema.tables t
@@ -53,6 +59,7 @@ select is(
    from information_schema.tables t
    where t.table_schema = 'public'
      and t.table_type = 'BASE TABLE'
+     and t.table_name not in ('orders_mirror', 'order_customers_mirror')
      and not exists (
        select 1 from pg_trigger tr
        join pg_class cl on cl.oid = tr.tgrelid
@@ -62,7 +69,7 @@ select is(
          and tr.tgname = 'set_updated_at'
      )),
   0,
-  'every table has the set_updated_at trigger'
+  'every table has the set_updated_at trigger (mirrors excluded: they carry the source''s clock)'
 );
 
 -- Spot-check the load-bearing objects exist.
