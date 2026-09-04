@@ -750,7 +750,7 @@ export function ManagerHome({ name }: { name: string }) {
     );
     const byAccount = new Map<
       string,
-      { id: string; name: string; dollars: number; firstMonth: string | null }
+      { id: string; name: string; lf: number; firstMonth: string | null }
     >();
     for (const o of sellOut) {
       if (!o.customer_id || !INVOICED_STATUSES.has(o.status)) continue;
@@ -759,19 +759,19 @@ export function ManagerHome({ name }: { name: string }) {
       const entry = byAccount.get(acct.id) ?? {
         id: acct.id,
         name: acct.name,
-        dollars: 0,
+        lf: 0,
         firstMonth: null,
       };
-      // THE MEASURE: the money named beside a missing return is the linear
-      // product's money — the same scope every order figure reads now.
-      entry.dollars += orderVolume(o.items ?? []).convertedValue;
+      // THE MEASURE: the figure beside a missing return is LF — the very
+      // unit the missing paper would account for.
+      entry.lf += orderVolume(o.items ?? []).lf;
       const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7) || null;
       if (m && (!entry.firstMonth || m < entry.firstMonth)) entry.firstMonth = m;
       byAccount.set(acct.id, entry);
     }
     const list = [...byAccount.values()]
       .filter((h) => {
-        if (h.dollars <= 0) return false;
+        if (h.lf <= 0) return false;
         const mark = h.firstMonth ? `${h.firstMonth}-01` : null;
         return !houseReturns.some(
           (r) =>
@@ -780,7 +780,7 @@ export function ManagerHome({ name }: { name: string }) {
             (!mark || r.period >= mark),
         );
       })
-      .sort((a, b) => b.dollars - a.dollars);
+      .sort((a, b) => b.lf - a.lf);
     return focus ? list.filter((h) => h.id === focus.accountId) : list;
   }, [sellOut, orderLinks, houseReturns, focus]);
 
@@ -1076,7 +1076,7 @@ export function ManagerHome({ name }: { name: string }) {
                   <span className="slip-names">
                     {returnChasers.slice(0, 6).map((h) => (
                       <span key={h.id} className="slip-name">
-                        {h.name} — {formatMoney(Math.round(h.dollars))}
+                        {h.name} — {QTY.format(Math.round(h.lf))} LF
                       </span>
                     ))}
                     {returnChasers.length > 6 && (
