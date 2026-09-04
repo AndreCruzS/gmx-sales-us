@@ -3185,6 +3185,9 @@ input[type="datetime-local"] {
   .mgr-home > [data-desk="tiles"] {
     grid-column: 1 / -1;
   }
+  .mgr-home > [data-desk="filters"] {
+    grid-column: 1 / -1;
+  }
   .mgr-home > [data-desk="focus"] {
     grid-column: 1 / -1;
   }

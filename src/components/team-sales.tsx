@@ -59,7 +59,6 @@ import {
   scopeVolume,
   periodLabel,
   rowMatchesPath,
-  SELL_LENSES,
   stepFor,
   type BranchRef,
   type PathStep,
@@ -148,8 +147,8 @@ export function TeamSales({
   path,
   onPath,
   onFocus,
-  onLens,
-  onMode,
+  lens,
+  mode,
 }: {
   /** Sell-through, at least for the two most recent months. MONTH rows only —
    *  a year-to-date aggregate in here would double the book. */
@@ -174,14 +173,13 @@ export function TeamSales({
   path: readonly PathStep[];
   onPath: (next: PathStep[]) => void;
   onFocus: (next: Focus | null) => void;
-  /** The page listens because sections below answer per-lens — the rollout
-   *  book only makes sense while the card is being read by rep. */
-  onLens?: (lens: SellLens) => void;
-  /** And per-window: the footnote and the quiet ranking follow the same
-   *  month-or-year reading the card is giving. */
-  onMode?: (mode: "month" | "ytd") => void;
+  /** The lens and the window are the PAGE's now (Andre, 2026-09-04): the
+   *  filter row sits above the whole Overview so it visibly governs
+   *  everything — the figure cards included — and this card reads the
+   *  choice rather than owning it. */
+  lens: SellLens;
+  mode: "month" | "ytd";
 }) {
-  const [lens, setLens] = useState<SellLens>("region");
   // THE DESK READS AS AN OPEN BOOK (>=1280px): markets on the left page, the
   // picked market's chain on the right, both visible at once. Behaviour, not
   // just layout, so a media query in CSS is not enough — the component has to
@@ -194,11 +192,6 @@ export function TeamSales({
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
-  // Which WINDOW the card is read through. "month" is the book as it has
-  // always been; "ytd" is the year-so-far aggregate compared against its own
-  // last-year column. The pair of periods below follows this, so everything
-  // downstream — the walk, the movement, the counter — works unchanged.
-  const [mode, setMode] = useState<"month" | "ytd">("month");
   const [selected, setSelected] = useState<Selection | null>(null);
   // "slide" = travelling to the start, "fill" = stretching to own the bar.
   const [phase, setPhase] = useState<"idle" | "slide" | "fill">("idle");
@@ -348,6 +341,17 @@ export function TeamSales({
     },
     [clearTimers, onPath, onFocus, toFocus],
   );
+
+  // The chips live on the PAGE now, so a lens or window change arrives as a
+  // prop — and a walk taken under one lens is still not a walk under the
+  // next: the same reset the chips used to fire travels with the change.
+  const lensMode = `${lens}:${mode}`;
+  const seenLensMode = useRef(lensMode);
+  useEffect(() => {
+    if (seenLensMode.current === lensMode) return;
+    seenLensMode.current = lensMode;
+    goTo([]);
+  }, [lensMode, goTo]);
 
   const toggleQuiet = useCallback((key: string) => {
     setQuietOpen((prev) => {
@@ -617,63 +621,8 @@ export function TeamSales({
         </Link>
       </div>
 
-      <div className="sales-filters">
-      <div className="chip-row mb-3" role="group" aria-label="Read the book by">
-        {SELL_LENSES.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            className="chip"
-            aria-pressed={lens === key}
-            onClick={() => {
-              // Tapping the lens you are already in is how you get back to the
-              // start of it. Three links deep, the chip is the thing a thumb
-              // reaches for first — it should not be the one control on the
-              // screen that does nothing.
-              if (lens !== key) {
-                setLens(key);
-                onLens?.(key);
-              }
-              // And a walk taken under one lens is not a walk under the next.
-              goTo([]);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* The window, only once there is more than one to read: a YTD upload is
-          what makes "Year so far" a real question. Flipping it abandons the
-          walk for the same reason a lens change does — a walk taken through
-          one window is not a walk through the next. */}
-      {ytd !== null && (
-        <div className="chip-row mb-3" role="group" aria-label="Read the book over">
-          {(
-            [
-              ["month", "This month"],
-              ["ytd", "Year so far"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              className="chip"
-              aria-pressed={mode === key}
-              onClick={() => {
-                if (mode !== key) {
-                  setMode(key);
-                  onMode?.(key);
-                }
-                goTo([]);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      </div>
+      {/* The lens and window chips moved to the PAGE, above the figure
+          cards — one filter row visibly governing the whole Overview. */}
 
       {/* Where the walk has got to, and TWO ways back out of it.
 

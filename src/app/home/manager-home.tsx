@@ -21,6 +21,7 @@ import {
   latestPeriods,
   movementLabel,
   periodLabel,
+  SELL_LENSES,
   type BranchRef,
   type PathStep,
   type SellLens,
@@ -682,42 +683,48 @@ export function ManagerHome({ name }: { name: string }) {
       .slice(0, 4);
   }, [slipping, focus]);
 
-  // ── Our sell-out, on the masthead of the day ──────────────────────────────
-  // Invoiced POs by their PO month (the invoice date is the order system's
-  // fact and doesn't ride the mirror; the PO month is the honest attribution
-  // we hold). "In motion" is everything accepted and not yet invoiced —
-  // visible, never counted as sold.
+  // ── Our sell-out, under the page's own filter ─────────────────────────────
+  // The filter row governs EVERYTHING (Andre, 2026-09-04), so the sell-out
+  // card reads the same window the dashboard reads: the picked month, or
+  // that month's year-to-date under the YTD chip. Attribution is by PO month
+  // (the invoice date is the order system's fact and doesn't ride the
+  // mirror), invoiced only — THE LAW. "In motion" and the pipeline pair are
+  // stocks: a count of what stands right now, which no month filter can
+  // rephrase.
   const sellOutTiles = useMemo(() => {
-    const now = new Date();
-    const ym = (y: number, m: number) =>
-      `${y}-${String(m + 1).padStart(2, "0")}`;
-    const thisMonth = ym(now.getFullYear(), now.getMonth());
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonth = ym(prev.getFullYear(), prev.getMonth());
-    let invoicedThis = 0;
-    let invoicedPrev = 0;
+    const readingMonth = latest ? latest.slice(0, 7) : null;
+    let invoiced = 0;
     let motion = 0;
     let motionCount = 0;
     for (const o of sellOut) {
       const v = Number(o.total_value) || 0;
       if (INVOICED_STATUSES.has(o.status)) {
+        if (!readingMonth) continue;
         const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
-        if (m === thisMonth) invoicedThis += v;
-        else if (m === prevMonth) invoicedPrev += v;
+        if (
+          salesMode === "ytd"
+            ? m.slice(0, 4) === readingMonth.slice(0, 4) && m <= readingMonth
+            : m === readingMonth
+        ) {
+          invoiced += v;
+        }
       } else if (!o.archived_at) {
         motion += v;
         motionCount += 1;
       }
     }
     return {
-      invoicedThis,
-      invoicedPrev,
+      invoiced,
       motion,
       motionCount,
-      monthName: now.toLocaleString("en-US", { month: "long" }),
-      prevMonthName: prev.toLocaleString("en-US", { month: "long" }),
+      windowLabel:
+        readingMonth === null
+          ? "no month on file"
+          : salesMode === "ytd"
+            ? `${readingMonth.slice(0, 4)} through ${periodLabel(latest)}`
+            : periodLabel(latest),
     };
-  }, [sellOut]);
+  }, [sellOut, latest, salesMode]);
 
   // The houses to chase: sold to (invoiced), linked to an account, and not a
   // single monthly return since their first invoiced PO. The distributor's
@@ -862,25 +869,57 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
       )}
 
-      {/* CARDS, with the month lifted OFF the label (Andre, 2026-09-04: he
-          liked the cards; "SELL-OUT · AUGUST" was the problem). One period
-          tag heads the whole group of four, so every card keeps a short
-          name and the when is said exactly once. */}
+      {/* THE FILTER ROW GOVERNS THE WHOLE PAGE (Andre, 2026-09-04): the lens
+          and the window sit ABOVE the figure cards, so what they scope is
+          everything beneath them — the cards included — and no per-card tag
+          has to say so. The chips used to live inside the sales card. */}
+      <section className="adapt sales-filters" data-desk="filters">
+        <div className="chip-row mb-3" role="group" aria-label="Read the book by">
+          {SELL_LENSES.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className="chip"
+              aria-pressed={salesLens === key}
+              onClick={() => setSalesLens(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* The window, only once there is more than one to read: a YTD
+            upload is what makes "Year so far" a real question. */}
+        {ytdSellRows.length > 0 && (
+          <div
+            className="chip-row mb-3"
+            role="group"
+            aria-label="Read the book over"
+          >
+            {(
+              [
+                ["month", "This month"],
+                ["ytd", "Year so far"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className="chip"
+                aria-pressed={salesMode === key}
+                onClick={() => setSalesMode(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section
         className="adapt"
         data-desk="tiles"
         key={`tiles-${focus?.id ?? "all"}`}
       >
-        {!focus && (
-          <div className="mb-2 flex items-center justify-between">
-            <span className="t-hint">At a glance</span>
-            <span className="tag tag-accent">
-              {sellOutTiles.invoicedThis > 0
-                ? sellOutTiles.monthName
-                : sellOutTiles.prevMonthName}
-            </span>
-          </div>
-        )}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="card card-pad">
             <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
@@ -908,33 +947,18 @@ export function ManagerHome({ name }: { name: string }) {
               bar would be two screens disagreeing. */}
           {!focus && (
             <>
-              {/* Early in a month nothing is invoiced yet, and a leading "$0"
-                  reads dead the way the placeholder zeros once did — so until
-                  the current month has money, the group's tag and this card
-                  read the last month that does, and the hint says why. */}
-              {sellOutTiles.invoicedThis > 0 ? (
-                <Link href="/orders" className="card card-pad">
-                  <div className="t-meta uppercase tracking-wide">Sell-out</div>
-                  <div className="fig fig-xl mt-1">
-                    {formatMoney(Math.round(sellOutTiles.invoicedThis))}
-                  </div>
-                  <div className="t-hint mt-0.5">
-                    invoiced ·{" "}
-                    {formatMoney(Math.round(sellOutTiles.invoicedPrev))} in{" "}
-                    {sellOutTiles.prevMonthName}
-                  </div>
-                </Link>
-              ) : (
-                <Link href="/orders" className="card card-pad">
-                  <div className="t-meta uppercase tracking-wide">Sell-out</div>
-                  <div className="fig fig-xl mt-1">
-                    {formatMoney(Math.round(sellOutTiles.invoicedPrev))}
-                  </div>
-                  <div className="t-hint mt-0.5">
-                    nothing invoiced in {sellOutTiles.monthName} yet
-                  </div>
-                </Link>
-              )}
+              {/* The card answers for the SAME window the filter set — the
+                  hint names it, so the number and the dashboard below can
+                  never be read as two different months. */}
+              <Link href="/orders" className="card card-pad">
+                <div className="t-meta uppercase tracking-wide">Sell-out</div>
+                <div className="fig fig-xl mt-1">
+                  {formatMoney(Math.round(sellOutTiles.invoiced))}
+                </div>
+                <div className="t-hint mt-0.5">
+                  invoiced · {sellOutTiles.windowLabel}
+                </div>
+              </Link>
               <Link href="/orders" className="card card-pad">
                 <div className="t-meta uppercase tracking-wide">In motion</div>
                 <div className="fig fig-xl mt-1">
@@ -964,8 +988,8 @@ export function ManagerHome({ name }: { name: string }) {
         path={path}
         onPath={setPath}
         onFocus={setFocus}
-        onLens={setSalesLens}
-        onMode={setSalesMode}
+        lens={salesLens}
+        mode={salesMode}
       />
       </div>
 
