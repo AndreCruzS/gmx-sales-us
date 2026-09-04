@@ -35,7 +35,7 @@ import {
 import { useTween } from "@/lib/ui/use-tween";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
-import type { PkAccount, RolloutCounts } from "@/lib/domain/rollout";
+import type { MaterialAccount, PkAccount, RolloutCounts } from "@/lib/domain/rollout";
 import { formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
@@ -101,6 +101,13 @@ interface HouseReturnRow {
   period: string;
   period_kind: "MONTH" | "YTD" | null;
 }
+// A monthly return that shows a branch account selling — proof material was
+// there that month, cited beside the Material gate's yes/no.
+interface MaterialEvidenceRow {
+  account_id: string;
+  period: string;
+  lf: number | string;
+}
 
 // THE LAW (Andre, 2026-09-03): only an invoiced order is a sale. Everything
 // else is material in motion — visible, never revenue.
@@ -136,6 +143,7 @@ export function ManagerHome({ name }: { name: string }) {
   const [sellOut, setSellOut] = useState<SellOutOrder[]>([]);
   const [orderLinks, setOrderLinks] = useState<OrderLinkRow[]>([]);
   const [houseReturns, setHouseReturns] = useState<HouseReturnRow[]>([]);
+  const [materialEvidence, setMaterialEvidence] = useState<MaterialEvidenceRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   // The walk down the chain lives here, not in the section: "Show all" has to
   // undo where you are as well as what the page is answering for.
@@ -215,7 +223,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -285,6 +293,13 @@ export function ManagerHome({ name }: { name: string }) {
         .from("sell_through_house_periods")
         .select("distributor_id, period, period_kind")
         .limit(2000),
+      // Every month a return shows a branch account selling — the Material
+      // gate's citations. All months on purpose, not the picked window: the
+      // proof does not blink when the picker moves.
+      supabase
+        .from("account_material_evidence")
+        .select("account_id, period, lf")
+        .limit(1000),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -302,6 +317,9 @@ export function ManagerHome({ name }: { name: string }) {
     setOrderLinks(ol.error ? [] : ((ol.data as unknown as OrderLinkRow[]) ?? []));
     setHouseReturns(
       hr.error ? [] : ((hr.data as unknown as HouseReturnRow[]) ?? []),
+    );
+    setMaterialEvidence(
+      me.error ? [] : ((me.data as unknown as MaterialEvidenceRow[]) ?? []),
     );
     setLoadedAt(Date.now());
   }, [period]);
@@ -577,6 +595,55 @@ export function ManagerHome({ name }: { name: string }) {
     [branches, attempt],
   );
 
+  // The latest month each branch account is seen selling in — the Material
+  // gate's citation. Latest, not a list: one month of proof reads; three
+  // read as a spreadsheet.
+  const latestEvidence = useMemo(() => {
+    const m = new Map<string, { period: string; lf: number }>();
+    for (const r of materialEvidence) {
+      const cur = m.get(r.account_id);
+      if (!cur || r.period > cur.period)
+        m.set(r.account_id, { period: r.period, lf: Number(r.lf) });
+    }
+    return m;
+  }, [materialEvidence]);
+
+  const materialAccounts = useMemo<MaterialAccount[]>(
+    () =>
+      branches.map((b) => ({
+        account_id: b.account_id,
+        name: b.name,
+        on: b.material_state === "OK",
+        pending: b.material_state === "PENDING",
+        evidence: latestEvidence.get(b.account_id),
+      })),
+    [branches, latestEvidence],
+  );
+
+  // The manual yes/no, for now (Andre, 2026-09-04): the box is the word of
+  // whoever last stood in the store — the evidence beside it never ticks it.
+  const setMaterial = useCallback(
+    async (accountId: string, next: boolean) => {
+      const row = branches.find((b) => b.account_id === accountId);
+      if (!row) return;
+      setBranches((prev) =>
+        prev.map((b) =>
+          b.account_id === accountId
+            ? { ...b, material_state: next ? "OK" : "NO" }
+            : b,
+        ),
+      );
+      const { error } = await getSupabaseBrowserClient()
+        .from("account_rollout")
+        .upsert(
+          { account_id: accountId, org_id: row.org_id, material_state: next ? "OK" : "NO" },
+          { onConflict: "account_id" },
+        );
+      if (error) void attempt();
+    },
+    [branches, attempt],
+  );
+
   const focusedGates = useMemo(() => {
     if (!focus) return null;
     const b = branches.find((x) => x.account_id === focus.accountId);
@@ -606,6 +673,12 @@ export function ManagerHome({ name }: { name: string }) {
     const b = branches.find((x) => x.account_id === focus.accountId);
     return b ? [{ account_id: b.account_id, name: b.name, pk_count: b.pk_count }] : undefined;
   }, [focus, branches]);
+
+  const focusedMaterial = useMemo<MaterialAccount[] | undefined>(() => {
+    if (!focus) return undefined;
+    const b = materialAccounts.find((x) => x.account_id === focus.accountId);
+    return b ? [b] : undefined;
+  }, [focus, materialAccounts]);
 
   // GONE QUIET, MEANING QUIET (Andre, 2026-09-01: "se comprou esse mês que
   // passou não é quiet") — AND THEN THE FADING, because the silent alone
@@ -1136,6 +1209,8 @@ export function ManagerHome({ name }: { name: string }) {
                 heading="Their rollout"
                 pkAccounts={focusedPk}
                 onPkCount={setPkCount}
+                materialAccounts={focusedMaterial}
+                onMaterial={setMaterial}
               />
             ) : null
           ) : (
@@ -1144,6 +1219,8 @@ export function ManagerHome({ name }: { name: string }) {
                 counts={rollout}
                 pkAccounts={pkAccounts}
                 onPkCount={setPkCount}
+                materialAccounts={materialAccounts}
+                onMaterial={setMaterial}
               />
             )
           )}

@@ -12,13 +12,32 @@
 // the book exists to show. So each gate carries its own count against the
 // same total, and the rail says "next", not "therefore".
 
-import { GATE_COUNT, PIPELINE_GATES, type PkAccount, type RolloutCounts } from "@/lib/domain/rollout";
+import {
+  GATE_COUNT,
+  PIPELINE_GATES,
+  type MaterialAccount,
+  type PkAccount,
+  type RolloutCounts,
+} from "@/lib/domain/rollout";
+
+const MONTHS_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "2026-07…" → "Jul 2026", for the evidence citation. */
+function evidenceMonth(period: string): string {
+  const [y, m] = period.split("-");
+  return `${MONTHS_SHORT[Number(m) - 1]} ${y}`;
+}
 
 export function RolloutTimeline({
   counts,
   heading = "Getting dealers selling",
   pkAccounts,
   onPkCount,
+  materialAccounts,
+  onMaterial,
 }: {
   counts: RolloutCounts;
   heading?: string;
@@ -27,6 +46,10 @@ export function RolloutTimeline({
   pkAccounts?: readonly PkAccount[];
   /** Marking the checkbox writes 1, unmarking writes 0, "again" adds one. */
   onPkCount?: (accountId: string, next: number) => void;
+  /** Who has material on the floor — the manual yes/no, with the return that
+   *  vouches for it cited beside the name when one exists. */
+  materialAccounts?: readonly MaterialAccount[];
+  onMaterial?: (accountId: string, next: boolean) => void;
 }) {
   const total = counts.branches ?? 0;
   if (total === 0) return null;
@@ -41,6 +64,16 @@ export function RolloutTimeline({
   const pkTotal = counts.pk_total ?? 0;
   const taught = pkAccounts?.filter((a) => a.pk_count > 0) ?? [];
   const waiting = pkAccounts?.filter((a) => a.pk_count === 0) ?? [];
+  // Marked first, then evidenced-but-unmarked (the rows asking for a look),
+  // then the rest — each tier by name.
+  const materialRows = [...(materialAccounts ?? [])].sort(
+    (a, b) =>
+      Number(b.on) - Number(a.on) ||
+      Number(!!b.evidence) - Number(!!a.evidence) ||
+      a.name.localeCompare(b.name),
+  );
+  const stocked = materialRows.filter((a) => a.on);
+  const vouched = materialRows.filter((a) => a.evidence && !a.on);
 
   return (
     <section>
@@ -143,6 +176,52 @@ export function RolloutTimeline({
                               )}
                             </span>
                           )}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                {/* THE MATERIAL UNFOLD: the manual yes/no, per branch — and,
+                    where a monthly return shows the branch selling, the proof
+                    cited beside the name. The citation never ticks the box:
+                    selling in July proves July's floor, not today's, so the
+                    box stays the word of whoever last stood in the store. */}
+                {g.key === "material_done" && materialRows.length > 0 && (
+                  <details className="pk-unfold">
+                    <summary className="t-hint">
+                      {stocked.length > 0
+                        ? `who has it on the floor — ${stocked.length} of ${materialRows.length}`
+                        : vouched.length > 0
+                          ? `none marked yet — ${
+                              vouched.length === 1
+                                ? "a return already vouches for one"
+                                : `returns already vouch for ${vouched.length}`
+                            }`
+                          : "none marked yet — mark the first"}
+                    </summary>
+                    <ul className="pk-list">
+                      {materialRows.map((a) => (
+                        <li key={a.account_id} className="pk-row">
+                          <label className="pk-check">
+                            <input
+                              type="checkbox"
+                              checked={a.on}
+                              disabled={!onMaterial}
+                              onChange={(e) =>
+                                onMaterial?.(a.account_id, e.target.checked)
+                              }
+                            />
+                            <span className="pk-name">{a.name}</span>
+                          </label>
+                          {a.evidence ? (
+                            <span className="pk-side t-hint">
+                              sold {Math.round(a.evidence.lf).toLocaleString("en-US")}{" "}
+                              LF · {evidenceMonth(a.evidence.period)}
+                            </span>
+                          ) : a.pending ? (
+                            <span className="pk-side t-hint">in progress</span>
+                          ) : null}
                         </li>
                       ))}
                     </ul>

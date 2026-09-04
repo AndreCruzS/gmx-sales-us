@@ -33,6 +33,18 @@ export interface PkAccount {
   pk_count: number;
 }
 
+/** One branch's material standing: the manual yes/no, and — when a monthly
+ *  return shows the branch selling — the proof beside it. The evidence never
+ *  writes the gate: past sales prove material was there THAT month, not that
+ *  it is on the floor today, so the yes/no stays a person's word. */
+export interface MaterialAccount {
+  account_id: string;
+  name: string;
+  on: boolean;
+  pending: boolean;
+  evidence?: { period: string; lf: number };
+}
+
 export type GateKey =
   | "pk_done"
   | "merchandiser_done"
