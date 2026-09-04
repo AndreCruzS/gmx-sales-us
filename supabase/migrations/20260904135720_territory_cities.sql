@@ -37,7 +37,13 @@ grant select, insert, update, delete on territory_cities to authenticated;
 -- Riverside is the client's own example of Southern California; Perris and
 -- Anaheim sit beside it; San Francisco and Healdsburg are Northern
 -- California beyond doubt.
-insert into territory_cities (org_id, state, city, territory_id) values
+--
+-- Guarded like every prod-data seed: the org and the two territories are
+-- production rows, absent from a fresh local reset (the CI suite), where
+-- this is a clean no-op instead of a foreign-key failure.
+insert into territory_cities (org_id, state, city, territory_id)
+select v.org_id::uuid, v.state, v.city, v.territory_id::uuid
+from (values
   ('11111111-1111-1111-1111-111111111111', 'CA', 'RIVERSIDE',
    'b0000000-0000-0000-0000-000000000002'),
   ('11111111-1111-1111-1111-111111111111', 'CA', 'PERRIS',
@@ -48,4 +54,7 @@ insert into territory_cities (org_id, state, city, territory_id) values
    'b0000000-0000-0000-0000-000000000011'),
   ('11111111-1111-1111-1111-111111111111', 'CA', 'HEALDSBURG',
    'b0000000-0000-0000-0000-000000000011')
+) as v(org_id, state, city, territory_id)
+where exists (select 1 from organizations o where o.id = v.org_id::uuid)
+  and exists (select 1 from territories t where t.id = v.territory_id::uuid)
 on conflict do nothing;
