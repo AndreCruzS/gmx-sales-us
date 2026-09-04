@@ -881,7 +881,7 @@ export function ManagerHome({ name }: { name: string }) {
             </span>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="card card-pad">
             <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
             <div className="fig fig-xl mt-1">

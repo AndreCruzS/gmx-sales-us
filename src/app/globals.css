@@ -3175,13 +3175,15 @@ input[type="datetime-local"] {
     grid-auto-flow: dense;
     align-items: start;
   }
+  /* One row for the four figures (Andre, 2026-09-04: "porque não podem
+     ficar em uma fila só?") — the greeting takes the full width and the
+     card quartet runs the whole line beneath it, instead of the two of
+     them splitting a row and forcing the cards into pairs. */
   .mgr-home > [data-desk="hero"] {
-    grid-column: 1;
-    align-self: center;
+    grid-column: 1 / -1;
   }
   .mgr-home > [data-desk="tiles"] {
-    grid-column: 2;
-    align-self: center;
+    grid-column: 1 / -1;
   }
   .mgr-home > [data-desk="focus"] {
     grid-column: 1 / -1;
