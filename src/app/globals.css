@@ -534,8 +534,13 @@ body {
    content that was replaced. */
 .adapt {
   /* Held back by roughly the slide, so the page settles after the bar has
-     moved rather than everything lurching together. */
-  animation: adapt-in 0.52s cubic-bezier(0.25, 0.6, 0.35, 1) 0.2s both;
+     moved rather than everything lurching together.
+
+     `backwards`, NOT `both`: the forwards fill keeps the animated transform
+     applied after the entrance, which leaves every section a permanent
+     stacking context — and a later section then paints OVER any popover
+     (the period picker's panel) opened from an earlier one. */
+  animation: adapt-in 0.52s cubic-bezier(0.25, 0.6, 0.35, 1) 0.2s backwards;
 }
 .adapt:nth-of-type(2) {
   animation-delay: 0.28s;
@@ -4110,6 +4115,13 @@ input[type="datetime-local"] {
   position: relative;
   display: inline-flex;
 }
+/* A chip-row hosting the picker must NOT take the phone scroll treatment:
+   overflow-x auto computes overflow-y auto with it, and the panel — absolute,
+   hanging BELOW the 32px row — gets clipped whole. The a11y tree still lists
+   clipped elements, which is how this shipped looking fine. */
+.chip-row:has(> .ppick) {
+  overflow: visible;
+}
 .ppick > .chip {
   display: inline-flex;
   align-items: center;
@@ -4151,7 +4163,9 @@ input[type="datetime-local"] {
   font-weight: 600;
   color: var(--ink-primary);
 }
-.ppick-month:hover:not(:disabled) {
+/* :not([data-sel]) keeps the hover wash off a chosen month — the two pseudo-
+   classes otherwise outweigh [data-sel="end"] and grey out the teal. */
+.ppick-month:hover:not(:disabled):not([data-sel]) {
   background: var(--surface-page);
 }
 .ppick-month:disabled {
