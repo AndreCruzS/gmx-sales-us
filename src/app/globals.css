@@ -4132,7 +4132,8 @@ input[type="datetime-local"] {
   top: calc(100% + 6px);
   left: 0;
   z-index: 30;
-  width: 264px;
+  /* Wide enough that each hint sentence holds a line of its own. */
+  width: 352px;
   padding: 10px;
   border-radius: var(--r-card, 12px);
   background: var(--surface-card);
@@ -4192,10 +4193,17 @@ input[type="datetime-local"] {
 .ppick-month[data-sel="end"] .ppick-dot {
   background: var(--on-accent);
 }
-/* One flowing sentence, NOT flex: flex made each text node its own column
-   and broke the line in odd places. The dot travels inline with the words. */
+/* Two short sentences, each on a line of its own (Andre, 2026-09-04): the
+   how-to-pick first, the dot's meaning under it. NOT flex — flex made each
+   text node its own column and broke the lines in odd places. */
 .ppick-hint {
   margin: 8px 2px 8px;
+}
+.ppick-hint p {
+  margin: 0;
+}
+.ppick-hint p + p {
+  margin-top: 3px;
 }
 .ppick-hint .ppick-dot {
   position: static;

@@ -180,11 +180,13 @@ export function PeriodPicker({
             })}
           </div>
 
-          <p className="ppick-hint t-hint">
-            One click reads a month; a second stretches it into a period.
-            A <i className="ppick-dot" aria-hidden="true" /> marks a return
-            on file.
-          </p>
+          <div className="ppick-hint t-hint">
+            <p>One click reads a month; a second stretches it into a period.</p>
+            <p>
+              A <i className="ppick-dot" aria-hidden="true" /> marks a return
+              on file.
+            </p>
+          </div>
 
           {/* "Before Jun 2026" retired from here (Andre, 2026-09-04) — the
               sparse backfill era earns no chip for now; the `before` kind
