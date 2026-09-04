@@ -181,13 +181,16 @@ export function PeriodPicker({
           </div>
 
           <p className="ppick-hint t-hint">
-            One click reads a month; a second click stretches it into a
-            period. <i className="ppick-dot" aria-hidden="true" /> = return on
-            file.
+            One click reads a month; a second stretches it into a period.
+            A <i className="ppick-dot" aria-hidden="true" /> marks a return
+            on file.
           </p>
 
-          <div className="ppick-foot">
-            {hasYear && (
+          {/* "Before Jun 2026" retired from here (Andre, 2026-09-04) — the
+              sparse backfill era earns no chip for now; the `before` kind
+              stays in the type should it come back. */}
+          {hasYear && (
+            <div className="ppick-foot">
               <button
                 type="button"
                 className="chip"
@@ -199,19 +202,8 @@ export function PeriodPicker({
               >
                 Year to date
               </button>
-            )}
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={period?.kind === "before"}
-              onClick={() => {
-                onChange({ kind: "before" });
-                close();
-              }}
-            >
-              Before {shortMonthLabel(ORDERS_CONSISTENT_FROM)}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -4192,15 +4192,16 @@ input[type="datetime-local"] {
 .ppick-month[data-sel="end"] .ppick-dot {
   background: var(--on-accent);
 }
+/* One flowing sentence, NOT flex: flex made each text node its own column
+   and broke the line in odd places. The dot travels inline with the words. */
 .ppick-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   margin: 8px 2px 8px;
 }
 .ppick-hint .ppick-dot {
   position: static;
-  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 1px 2px;
 }
 .ppick-foot {
   display: flex;
