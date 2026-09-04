@@ -598,9 +598,6 @@ export function TeamSales({
   if (rows.length === 0) {
     return (
       <section>
-        <div className="section-head">
-          <h2 className="t-section">Sales dashboard</h2>
-        </div>
         <div className="card card-pad">
           <p className="t-sub">
             No distributor report loaded yet. Boise and Hardwoods send a
@@ -614,15 +611,10 @@ export function TeamSales({
 
   return (
     <section>
-      <div className="section-head">
-        <h2 className="t-section">Sales dashboard</h2>
-        <Link href="/quotes" className="t-action">
-          Open quotes
-        </Link>
-      </div>
-
-      {/* The lens and window chips moved to the PAGE, above the figure
-          cards — one filter row visibly governing the whole Overview. */}
+      {/* No masthead of its own (Andre, 2026-09-04): the page's filter row
+          already crowns this card, its own first line already names what is
+          being read, and the Quotes tab sits in the nav — a "Sales
+          dashboard" heading and an "Open quotes" link were furniture. */}
 
       {/* Where the walk has got to, and TWO ways back out of it.
 
