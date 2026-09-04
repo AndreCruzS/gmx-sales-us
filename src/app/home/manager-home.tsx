@@ -693,16 +693,17 @@ export function ManagerHome({ name }: { name: string }) {
   // mirror), invoiced only — THE LAW. "In motion" and the pipeline pair are
   // stocks: a count of what stands right now, which no month filter can
   // rephrase.
+  // THE MEASURE (Andre, 2026-09-04): LF is the system's priority measure,
+  // and order lines that cannot speak it — tiles, unit-less lines, freight
+  // (there is no hardware in the invoiced book) — are IGNORED for now:
+  // excluded from the figures, LF and dollars alike, not disclaimed.
   const sellOutTiles = useMemo(() => {
     const readingMonth = latest ? latest.slice(0, 7) : null;
-    let invoiced = 0;
     let lf = 0;
-    let convertedValue = 0;
-    let itemValue = 0;
+    let linearValue = 0;
     let motion = 0;
     let motionCount = 0;
     for (const o of sellOut) {
-      const v = Number(o.total_value) || 0;
       if (INVOICED_STATUSES.has(o.status)) {
         if (!readingMonth) continue;
         const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
@@ -711,29 +712,20 @@ export function ManagerHome({ name }: { name: string }) {
             ? m.slice(0, 4) === readingMonth.slice(0, 4) && m <= readingMonth
             : m === readingMonth
         ) {
-          invoiced += v;
-          // The window's LF, proven line by line — the return speaks only
-          // LF, so this is the figure the two halves of the funnel share.
+          // The window's LF, proven line by line — the figure the two
+          // halves of the funnel share — and the money of those same lines.
           const vol = orderVolume(o.items ?? []);
           lf += vol.lf;
-          convertedValue += vol.convertedValue;
-          itemValue += vol.totalValue;
+          linearValue += vol.convertedValue;
         }
       } else if (!o.archived_at) {
-        motion += v;
+        motion += Number(o.total_value) || 0;
         motionCount += 1;
       }
     }
     return {
-      invoiced,
       lf,
-      // How much of the window's money the LF reading covers. What stays
-      // out (checked against the source, 2026-09-04 — no hardware in the
-      // invoiced book, Andre was right): tiles, which are not linear
-      // product; a few prefinished lines that carry no unit at all; and
-      // freight.
-      lfCoverage:
-        itemValue > 0 ? Math.round((100 * convertedValue) / itemValue) : null,
+      linearValue,
       motion,
       motionCount,
       windowLabel:
@@ -770,7 +762,9 @@ export function ManagerHome({ name }: { name: string }) {
         dollars: 0,
         firstMonth: null,
       };
-      entry.dollars += Number(o.total_value) || 0;
+      // THE MEASURE: the money named beside a missing return is the linear
+      // product's money — the same scope every order figure reads now.
+      entry.dollars += orderVolume(o.items ?? []).convertedValue;
       const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7) || null;
       if (m && (!entry.firstMonth || m < entry.firstMonth)) entry.firstMonth = m;
       byAccount.set(acct.id, entry);
@@ -969,27 +963,17 @@ export function ManagerHome({ name }: { name: string }) {
               {/* The card answers for the SAME window the filter set — the
                   hint names it, so the number and the dashboard below can
                   never be read as two different months. */}
+              {/* LF leads — the page's own measure — and the dollars beside
+                  it are those same lines' dollars. */}
               <Link href="/orders" className="card card-pad">
                 <div className="t-meta uppercase tracking-wide">Sell-out</div>
                 <div className="fig fig-xl mt-1">
-                  {formatMoney(Math.round(sellOutTiles.invoiced))}
+                  {QTY.format(Math.round(sellOutTiles.lf))} LF
                 </div>
                 <div className="t-hint mt-0.5">
-                  {sellOutTiles.lf > 0
-                    ? `≈ ${QTY.format(Math.round(sellOutTiles.lf))} LF · `
-                    : ""}
-                  invoiced · {sellOutTiles.windowLabel}
+                  {formatMoney(Math.round(sellOutTiles.linearValue))} invoiced
+                  · {sellOutTiles.windowLabel}
                 </div>
-                {/* The ≈ owns up: what the LF read leaves out is mostly
-                    tiles — not linear product — and the card says how much
-                    of the money it speaks for whenever that is not nearly
-                    all of it. */}
-                {sellOutTiles.lfCoverage !== null &&
-                  sellOutTiles.lfCoverage < 90 && (
-                    <div className="t-hint mt-0.5">
-                      LF read covers {sellOutTiles.lfCoverage}% of the value
-                    </div>
-                  )}
               </Link>
               <Link href="/orders" className="card card-pad">
                 <div className="t-meta uppercase tracking-wide">In motion</div>

@@ -326,10 +326,6 @@ function OrdersView() {
           </div>
           <div className="stock-cards">
             {shownStock.map((h) => {
-              const coverage =
-                h.totalValue > 0
-                  ? Math.round((100 * h.convertedValue) / h.totalValue)
-                  : null;
               return (
                 <div key={h.id} className="card card-pad stock-card">
                   <Link href={`/accounts/${h.id}`} className="t-title block truncate">
@@ -341,7 +337,12 @@ function OrdersView() {
                       <span className="fig-sm block">
                         {QTY.format(Math.round(h.inLF))} LF
                       </span>
-                      <span className="t-meta">{MONEY.format(h.inValue)}</span>
+                      {/* THE MEASURE (2026-09-04): the dollars are the
+                          linear product's dollars — non-LF lines are out of
+                          every order figure, not disclaimed. */}
+                      <span className="t-meta">
+                        {MONEY.format(Math.round(h.convertedValue))}
+                      </span>
                     </div>
                     <div>
                       <span className="t-hint block">They sold through</span>
@@ -370,10 +371,8 @@ function OrdersView() {
                   </div>
                   <p className="t-meta mt-2">
                     {h.orders} {h.orders === 1 ? "order" : "orders"}
-                    {h.firstOrder ? ` since ${h.firstOrder}` : ""}
-                    {coverage !== null && coverage < 100
-                      ? ` · LF read covers ${coverage}% of the order value`
-                      : ""}
+                    {h.firstOrder ? ` since ${h.firstOrder}` : ""} · linear
+                    product only
                   </p>
                 </div>
               );
