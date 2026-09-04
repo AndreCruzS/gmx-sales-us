@@ -4102,6 +4102,24 @@ input[type="datetime-local"] {
   background: color-mix(in srgb, var(--rep-hue) 16%, var(--surface-card));
   color: color-mix(in srgb, var(--rep-hue) 78%, var(--ink-primary));
 }
+/* ── The period chip ────────────────────────────────────────────────────────
+   One selector for the WHEN — an isolated month or the year — wearing the
+   chip's own face, the native select invisible on top (same recipe the
+   masthead's picker used before the filter row took the job). */
+.chip-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.chip-select select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 /* ── The stock ledger cards ─────────────────────────────────────────────────
    One card per house: shipped, sold through, still on the floor. Three
    figures side by side; the honesty (window, coverage) underneath. */

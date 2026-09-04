@@ -16,9 +16,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
 import { ManagerHomeSkeleton } from "./home-skeleton";
+import { ChevronDownIcon } from "@/components/icons";
 import { TeamSales, type Focus } from "@/components/team-sales";
 import {
-  latestPeriods,
   movementLabel,
   periodLabel,
   SELL_LENSES,
@@ -176,16 +176,13 @@ export function ManagerHome({ name }: { name: string }) {
     ]
       .sort()
       .reverse();
-    // The month being read: the chosen one while it still exists, else the
-    // newest. Its comparison month is the previous UPLOADED month, not the
-    // calendar's — a distributor that skips a month must not read against
-    // nothing.
-    const chosen =
-      pickedMonth && monthsAvail.includes(pickedMonth)
-        ? pickedMonth
-        : (monthsAvail[0] ?? null);
+    // The month being read: exactly the requested one — a month with no
+    // return yet is still an honest request (its rows come back empty and
+    // the card says why). Default: the newest month with a file. The
+    // comparison month is the previous month that HAS a file.
+    const chosen = pickedMonth ?? monthsAvail[0] ?? null;
     const prevOfChosen = chosen
-      ? (monthsAvail[monthsAvail.indexOf(chosen) + 1] ?? null)
+      ? (monthsAvail.find((m) => m < chosen) ?? null)
       : null;
     const wantedMonths = [chosen, prevOfChosen].filter(
       (p): p is string => p !== null,
@@ -355,9 +352,36 @@ export function ManagerHome({ name }: { name: string }) {
     () => sellRows.filter((r) => r.period_kind === "YTD"),
     [sellRows],
   );
-  const { latest, previous } = useMemo(
-    () => latestPeriods(monthlyRows),
-    [monthlyRows],
+  // Every month of the consistent era, newest first, for the period
+  // selector — marked when its sell-through return is on file, so the
+  // missing paper is visible right in the filter.
+  const monthOptions = useMemo(() => {
+    const out: { period: string; label: string; hasReturn: boolean }[] = [];
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (;;) {
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (ym < ORDERS_CONSISTENT_FROM) break;
+      const period = `${ym}-01`;
+      out.push({
+        period,
+        label: periodLabel(period),
+        hasReturn: months.includes(period),
+      });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return out;
+  }, [months]);
+
+  // The reading month is the FILTER's word, not the rows': a picked month
+  // with no return yet still IS the month being read (the sell-out answers,
+  // the sell-through card says why it can't). Default: the newest month
+  // with a return on file. The comparison month is the previous month that
+  // HAS a file — a skipped month never reads against nothing.
+  const latest = pickedMonth ?? months[0] ?? null;
+  const previous = useMemo(
+    () => months.find((m) => m < (latest ?? "")) ?? null,
+    [months, latest],
   );
 
   // The two figures at the top. With nothing chosen they are the money a
@@ -664,7 +688,13 @@ export function ManagerHome({ name }: { name: string }) {
   // The ranking answers for the whole book under the region lens; a chosen
   // customer narrows the section to themselves like everything else does.
   const quietAsRanking =
-    salesLens === "region" && !focus && quietRanking.rows.length > 0;
+    salesLens === "region" &&
+    !focus &&
+    quietRanking.rows.length > 0 &&
+    // No return file for the picked month means the buying is UNKNOWN, not
+    // stopped — a ranking built on a missing file would cry wolf about
+    // every dealer at once.
+    monthlyRows.some((r) => r.period === latest);
 
   // Grouped by what is wrong, most of it first — the same union a rep meets one
   // row at a time, read as a list of problems with names against them.
@@ -910,32 +940,45 @@ export function ManagerHome({ name }: { name: string }) {
             </button>
           ))}
         </div>
-        {/* The window, only once there is more than one to read: a YTD
-            upload is what makes "Year so far" a real question. */}
-        {ytdSellRows.length > 0 && (
-          <div
-            className="chip-row mb-3"
-            role="group"
-            aria-label="Read the book over"
-          >
-            {(
-              [
-                ["month", "This month"],
-                ["ytd", "Year so far"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className="chip"
-                aria-pressed={salesMode === key}
-                onClick={() => setSalesMode(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* THE PERIOD (Andre, 2026-09-04, designed together): one selector,
+            an isolated month or the year — replacing This month/Year so
+            far. Every consistent-era month is offered, marked "✓ return"
+            when its file is on hand, so the missing returns are visible in
+            the filter itself. A month without one is still selectable: the
+            sell-out answers, and the sell-through card says why it cannot.
+            "Compare to" (two periods, a comparison UI) is the agreed next
+            step, deliberately not yet. */}
+        <div className="chip-row mb-3" role="group" aria-label="Which period">
+          <label className="chip chip-select" aria-pressed="true">
+            {salesMode === "ytd"
+              ? "2026 · year to date"
+              : periodLabel(latest)}
+            <ChevronDownIcon size={11} aria-hidden="true" />
+            <select
+              value={salesMode === "ytd" ? "y" : `m:${latest ?? ""}`}
+              aria-label="Which period to read"
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "y") {
+                  setSalesMode("ytd");
+                } else {
+                  setSalesMode("month");
+                  setPickedMonth(v.slice(2));
+                }
+              }}
+            >
+              {monthOptions.map((m) => (
+                <option key={m.period} value={`m:${m.period}`}>
+                  {m.label}
+                  {m.hasReturn ? " · return ✓" : ""}
+                </option>
+              ))}
+              {ytdSellRows.length > 0 && (
+                <option value="y">2026 · year to date</option>
+              )}
+            </select>
+          </label>
+        </div>
       </section>
 
       <section
@@ -1009,8 +1052,6 @@ export function ManagerHome({ name }: { name: string }) {
         branches={sellBranches}
         latest={latest}
         previous={previous}
-        months={months}
-        onPickMonth={setPickedMonth}
         path={path}
         onPath={setPath}
         onFocus={setFocus}
