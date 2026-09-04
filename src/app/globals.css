@@ -3316,6 +3316,31 @@ input[type="datetime-local"] {
     margin-bottom: 0;
   }
 
+  /* Getting dealers selling earns the whole line too (Andre, 2026-09-04):
+     it sat alone in the right rail with the left half of the page empty.
+     The three gates open SIDE BY SIDE — each keeps its node (the state),
+     but the connecting rail is the phone's vertical reading; three columns
+     against one total say the same thing the timeline said, wider. */
+  .mgr-home > [data-desk="gates"] {
+    grid-column: 1 / -1;
+  }
+  .mgr-home > [data-desk="gates"] .spine {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 36px;
+  }
+  .mgr-home > [data-desk="gates"] .spine-seg {
+    display: none;
+  }
+  .mgr-home > [data-desk="gates"] .spine-rail {
+    width: auto;
+    flex: 0 0 auto;
+    padding-top: 3px;
+  }
+  .mgr-home > [data-desk="gates"] .spine-body {
+    padding-bottom: 6px;
+  }
+
   .sales-filters {
     display: flex;
     align-items: flex-start;
