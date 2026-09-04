@@ -862,82 +862,91 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
       )}
 
-      {/* The figures read INLINE, one ruled strip, not a grid of boxes
-          (Andre, 2026-09-04: "não faz sentido, poderia ser inline") — four
-          numbers on one line are a masthead; four cards are furniture. */}
+      {/* CARDS, with the month lifted OFF the label (Andre, 2026-09-04: he
+          liked the cards; "SELL-OUT · AUGUST" was the problem). One period
+          tag heads the whole group of four, so every card keeps a short
+          name and the when is said exactly once. */}
       <section
-        className="adapt stat-row"
+        className="adapt"
         data-desk="tiles"
         key={`tiles-${focus?.id ?? "all"}`}
       >
-        <div className="stat">
-          <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
-          <div className="fig fig-lg mt-1">
-            {totals.openIsMoney
-              ? formatMoney(Math.round(openTween))
-              : `${QTY.format(Math.round(openTween))} LF`}
-          </div>
-          <div className="t-hint mt-0.5">{totals.openHint}</div>
-        </div>
-        <div className="stat">
-          <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
-          <div className="fig fig-lg mt-1">
-            {totals.openIsMoney
-              ? QTY.format(Math.round(quotesTween))
-              : `${QTY.format(Math.round(quotesTween))} LF`}
-          </div>
-          <div className="t-hint mt-0.5">{totals.quotesHint}</div>
-        </div>
-
-        {/* Our sell-out beside the pipeline pair — the money that already
-            exists. Both stats are the Overview's door to /orders. Hidden
-            while a customer is chosen: the pair above already switched to
-            that door's own buying, and a company-wide figure under a focus
-            bar would be two screens disagreeing. */}
         {!focus && (
-          <>
-            {/* Early in a month nothing is invoiced yet, and a leading "$0"
-                reads dead the way the placeholder zeros once did — so until
-                the current month has money, the stat leads with the last
-                month that does and says so. Both statements are true; one
-                of them is also useful. */}
-            {sellOutTiles.invoicedThis > 0 ? (
-              <Link href="/orders" className="stat">
-                <div className="t-meta uppercase tracking-wide">
-                  Sell-out · {sellOutTiles.monthName}
-                </div>
-                <div className="fig fig-lg mt-1">
-                  {formatMoney(Math.round(sellOutTiles.invoicedThis))}
-                </div>
-                <div className="t-hint mt-0.5">
-                  {formatMoney(Math.round(sellOutTiles.invoicedPrev))} in{" "}
-                  {sellOutTiles.prevMonthName}
-                </div>
-              </Link>
-            ) : (
-              <Link href="/orders" className="stat">
-                <div className="t-meta uppercase tracking-wide">
-                  Sell-out · {sellOutTiles.prevMonthName}
-                </div>
-                <div className="fig fig-lg mt-1">
-                  {formatMoney(Math.round(sellOutTiles.invoicedPrev))}
-                </div>
-                <div className="t-hint mt-0.5">
-                  nothing invoiced in {sellOutTiles.monthName} yet
-                </div>
-              </Link>
-            )}
-            <Link href="/orders" className="stat">
-              <div className="t-meta uppercase tracking-wide">In motion</div>
-              <div className="fig fig-lg mt-1">
-                {QTY.format(sellOutTiles.motionCount)}
-              </div>
-              <div className="t-hint mt-0.5">
-                {formatMoney(Math.round(sellOutTiles.motion))} on the way
-              </div>
-            </Link>
-          </>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="t-hint">At a glance</span>
+            <span className="tag tag-accent">
+              {sellOutTiles.invoicedThis > 0
+                ? sellOutTiles.monthName
+                : sellOutTiles.prevMonthName}
+            </span>
+          </div>
         )}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
+            <div className="fig fig-xl mt-1">
+              {totals.openIsMoney
+                ? formatMoney(Math.round(openTween))
+                : `${QTY.format(Math.round(openTween))} LF`}
+            </div>
+            <div className="t-hint mt-0.5">{totals.openHint}</div>
+          </div>
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
+            <div className="fig fig-xl mt-1">
+              {totals.openIsMoney
+                ? QTY.format(Math.round(quotesTween))
+                : `${QTY.format(Math.round(quotesTween))} LF`}
+            </div>
+            <div className="t-hint mt-0.5">{totals.quotesHint}</div>
+          </div>
+
+          {/* Our sell-out beside the pipeline pair — the money that already
+              exists. Both cards are the Overview's door to /orders. Hidden
+              while a customer is chosen: the pair above already switched to
+              that door's own buying, and a company-wide figure under a focus
+              bar would be two screens disagreeing. */}
+          {!focus && (
+            <>
+              {/* Early in a month nothing is invoiced yet, and a leading "$0"
+                  reads dead the way the placeholder zeros once did — so until
+                  the current month has money, the group's tag and this card
+                  read the last month that does, and the hint says why. */}
+              {sellOutTiles.invoicedThis > 0 ? (
+                <Link href="/orders" className="card card-pad">
+                  <div className="t-meta uppercase tracking-wide">Sell-out</div>
+                  <div className="fig fig-xl mt-1">
+                    {formatMoney(Math.round(sellOutTiles.invoicedThis))}
+                  </div>
+                  <div className="t-hint mt-0.5">
+                    invoiced ·{" "}
+                    {formatMoney(Math.round(sellOutTiles.invoicedPrev))} in{" "}
+                    {sellOutTiles.prevMonthName}
+                  </div>
+                </Link>
+              ) : (
+                <Link href="/orders" className="card card-pad">
+                  <div className="t-meta uppercase tracking-wide">Sell-out</div>
+                  <div className="fig fig-xl mt-1">
+                    {formatMoney(Math.round(sellOutTiles.invoicedPrev))}
+                  </div>
+                  <div className="t-hint mt-0.5">
+                    nothing invoiced in {sellOutTiles.monthName} yet
+                  </div>
+                </Link>
+              )}
+              <Link href="/orders" className="card card-pad">
+                <div className="t-meta uppercase tracking-wide">In motion</div>
+                <div className="fig fig-xl mt-1">
+                  {QTY.format(sellOutTiles.motionCount)}
+                </div>
+                <div className="t-hint mt-0.5">
+                  {formatMoney(Math.round(sellOutTiles.motion))} on the way
+                </div>
+              </Link>
+            </>
+          )}
+        </div>
       </section>
 
       {/* Sales first: the distributors' sell-through, banded by whoever is not
