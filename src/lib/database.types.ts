@@ -421,7 +421,7 @@ export type Database = {
           strategic_importance:
             | Database["public"]["Enums"]["strategic_importance"]
             | null
-          territory_id: string
+          territory_id: string | null
           updated_at: string
           website: string | null
         }
@@ -448,7 +448,7 @@ export type Database = {
           strategic_importance?:
             | Database["public"]["Enums"]["strategic_importance"]
             | null
-          territory_id: string
+          territory_id?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -475,7 +475,7 @@ export type Database = {
           strategic_importance?:
             | Database["public"]["Enums"]["strategic_importance"]
             | null
-          territory_id?: string
+          territory_id?: string | null
           updated_at?: string
           website?: string | null
         }

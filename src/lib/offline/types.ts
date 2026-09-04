@@ -37,7 +37,9 @@ export interface CachedAccount {
   name: string;
   account_type: string;
   city: string | null;
-  territory_id: string;
+  /** Null since 2026-09-04: an admin-created account starts unplaced — the
+   *  map assigns its patch later, the owner keeps it visible meanwhile. */
+  territory_id: string | null;
   has_display_wall: boolean;
   display_last_verified_at: string | null;
   parent_account_id: string | null;

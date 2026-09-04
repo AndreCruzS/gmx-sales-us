@@ -70,12 +70,10 @@ export default function NewAccountPage() {
       setError("You're signed out.");
       return;
     }
-    if (!profile.territoryId) {
-      setError(
-        "Your login has no territory, so it can't create accounts.",
-      );
-      return;
-    }
+    // No territory on the login is NOT a refusal any more (Andre, 2026-09-04):
+    // admins have no patch by design, and they create dealers and distributors.
+    // The account lands unplaced — the owner still makes it visible — and the
+    // map places it later, the same way an off-map branch waits for its state.
     if (!name.trim()) {
       setError("The account needs a name.");
       return;
@@ -117,7 +115,7 @@ export default function NewAccountPage() {
             name: name.trim(),
             account_type: accountType,
             city: city.trim() || null,
-            territory_id: profile.territoryId,
+            territory_id: profile.territoryId ?? null,
             owner_id: profile.membershipId,
             lead_source: leadSource,
             source_detail: sourceDetail.trim() || null,
@@ -185,7 +183,7 @@ export default function NewAccountPage() {
         name: name.trim(),
         account_type: accountType,
         city: city.trim() || null,
-        territory_id: profile.territoryId,
+        territory_id: profile.territoryId ?? null,
         has_display_wall: false,
         display_last_verified_at: null,
         parent_account_id: null,

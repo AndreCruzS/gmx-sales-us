@@ -62,10 +62,12 @@ interface ContactLite {
   job_title: string | null;
 }
 
+// territory_id can be null since 2026-09-04: admin-created accounts start
+// unplaced. A DEAL still needs a patch — see the fallback at enqueue time.
 interface AccountLite {
   id: string;
   name: string;
-  territory_id: string;
+  territory_id: string | null;
 }
 
 export default function NewDealPage() {
@@ -328,6 +330,16 @@ function NewDealForm() {
       setError("When is that action due?");
       return;
     }
+    // An unplaced account (admin-created, no territory yet) can hold a deal
+    // only if the deal itself gets a patch: the account's, else the
+    // creator's. Neither existing is a named refusal, not a silent failure.
+    const dealTerritory = account.territory_id ?? profile.territoryId ?? null;
+    if (!dealTerritory) {
+      setError(
+        "This account has no territory yet and neither does your login — give the account its territory first, so the deal lands in a patch.",
+      );
+      return;
+    }
 
     // A quote's lines must add up before anything is written: a quantity of
     // nothing, or pieces of an item the catalog cannot convert, is not a line.
@@ -380,7 +392,7 @@ function NewDealForm() {
             org_id: profile.orgId,
             name: dealName.trim(),
             primary_account_id: accountId,
-            territory_id: account.territory_id,
+            territory_id: dealTerritory,
             owner_id: profile.membershipId,
             stage,
             current_status: currentStatus.trim(),
