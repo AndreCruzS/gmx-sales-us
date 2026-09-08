@@ -901,7 +901,7 @@ select
   null
 from (values
   -- Riverside: Deon's patch, and the only one of the eight branches inside it.
-  ('Riverside Branch', 'Ganahl Lumber (Banner)',        'GANLUGG - GANAHL LUMBER',                  'Thermo-Ayous Cladding', 18564, 1.11),
+  ('Riverside Branch', 'Ganahl Lumber',        'GANLUGG - GANAHL LUMBER',                  'Thermo-Ayous Cladding', 18564, 1.11),
   ('Riverside Branch', 'Builders FirstSource (Banner)', 'BUIFIDE - BUILDERS FIRSTSOURCE',           'Thermo-Ayous Cladding', 11885, 1.26),
   ('Riverside Branch', 'Valencia Lumber & Panel',       'VALLUPVN - VALENCIA LUMBER & PANEL',       'Thermo-Ayous Cladding',  6607, 0.93),
   ('Riverside Branch', null,                            'LUMMEWA - LUMBERMENS MERCHANDISING',       'Thermo-Ayous Cladding',  3058, 1.04),
