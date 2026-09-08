@@ -70,7 +70,7 @@ select is(
 -- it always was, by a rule that no longer breaks in Texas.
 select is(
   (select rep_name from sell_through_rows
-    where dealer_name = 'Ganahl Lumber (Banner)'
+    where dealer_name = 'Ganahl Lumber' -- the banner, suffix retired 2026-09-08
       and branch_name = 'Riverside Branch' limit 1),
   'Deonn Deford',
   'a row is attributed to the owner of the region it shipped from'
