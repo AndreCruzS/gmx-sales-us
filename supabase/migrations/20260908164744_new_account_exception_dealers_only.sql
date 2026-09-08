@@ -4,7 +4,14 @@
 -- um norte para o time de vendas nos Estados Unidos" — and the field works
 -- DEALERS. A distributor gets set up once and lives by orders and returns,
 -- not first-visit follow-ups. The exception now speaks only of dealers.
-create or replace view public.exception_new_account_no_follow_up as
+--
+-- security_invoker is RESTATED because CREATE OR REPLACE VIEW drops
+-- reloptions it is not told about — the first push of this migration
+-- shipped without it and the leakage suite caught a rep reading peers'
+-- exceptions (fixed in 20260908170521, kept here so a fresh reset builds
+-- the view right the first time).
+create or replace view public.exception_new_account_no_follow_up
+with (security_invoker = true) as
 select 'NEW_ACCOUNT_NO_FOLLOW_UP'::text as exception_type,
     a.org_id,
     'account'::text as subject_type,
