@@ -195,13 +195,15 @@ export function TabBar() {
       : pathname.startsWith(href);
 
   const [today, agenda, quotes, accounts, contacts] = TABS;
-  // For the desk's roles every destination IS a dashboard — the first one is
-  // the overview, not anybody's "home", and it wears the chart, not the
-  // little house (Andre: "melhor do que a casinha"). A rep's day still
-  // starts at Home, under its roof.
+  // For the desk's roles every destination IS a dashboard, and every tab
+  // OPENS on its own overview — so the first tab is named for its subject,
+  // SALES, not for the word "overview" (Bianca, 2026-09-08: "cada um desses,
+  // quando eu clico, eu vejo o overview... aqui eu colocaria Sales"). It
+  // wears the chart, not the little house. A rep's day still starts at
+  // Home, under its roof.
   const desk = manages(profile?.role);
   const labelOf = (label: string) =>
-    label === "Home" && desk ? "Overview" : label;
+    label === "Home" && desk ? "Sales" : label;
   const iconOf = (label: string, Icon: (p: IconProps) => React.ReactElement) =>
     label === "Home" && desk ? ChartIcon : Icon;
 

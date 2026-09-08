@@ -237,7 +237,7 @@ function VisitsPageInner() {
       .from("exceptions")
       .select("exception_type, subject_type, subject_id, title, detail")
       .order("since", { ascending: true })
-      .limit(8)
+      .limit(20)
       .then(({ data }) => setAttention((data as ExceptionRow[]) ?? []));
   }, [profile, status.lastPulledAt]);
 
@@ -347,20 +347,34 @@ function VisitsPageInner() {
     return buckets;
   }, [items, dayRefs]);
 
+  // The unplanned week moved here from the sales Overview (Bianca,
+  // 2026-09-08: "eu jogaria para a agenda") — on the manager's calendar it
+  // is its own card beside the month it is about, not a line in a sales
+  // list two screens away.
+  const unplannedWeek = useMemo(
+    () =>
+      calendarView
+        ? attention.filter((e) => e.exception_type === "NEXT_WEEK_NOT_PLANNED")
+        : [],
+    [attention, calendarView],
+  );
+
   const flagged = useMemo(() => {
     // An exception that merely restates a commitment already visible above
     // (the engine's overdue echo of an agenda row) is noise on this screen.
     const visible = new Set(items.map((i) => i.id));
     const kept = attention.filter(
       (e) => !(e.subject_type === "next_action" && visible.has(e.subject_id)),
-    );
+    // On the calendar view the unplanned week has its own card above —
+    // repeating it down here would be the same fact wearing two hats.
+    ).filter((e) => !(calendarView && e.exception_type === "NEXT_WEEK_NOT_PLANNED"));
     // Danger first — the tier order is the read order.
     return kept.sort(
       (a, b) =>
         Number(DANGER_EXCEPTIONS.has(b.exception_type)) -
         Number(DANGER_EXCEPTIONS.has(a.exception_type)),
     );
-  }, [attention, items]);
+  }, [attention, items, calendarView]);
 
   const nothingPlanned = items.length === 0;
 
@@ -462,6 +476,27 @@ function VisitsPageInner() {
       </section>
 
       {calendarView && <AgendaCalendar bump={calBump} onError={setError} />}
+
+      {/* The week nobody planned, beside the month it is about. Moved from
+          the sales Overview (Bianca, 2026-09-08). */}
+      {unplannedWeek.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section">Next week not planned</h2>
+            <span className="t-meta">{unplannedWeek.length}</span>
+          </div>
+          <ul className="list">
+            {unplannedWeek.map((e) => (
+              <li key={`${e.exception_type}-${e.subject_id}`} className="row">
+                <span className="row-body min-w-0">
+                  <span className="t-title block truncate">{e.title}</span>
+                  <span className="t-sub">nothing on the plan for next week</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {!calendarView &&
         (["Overdue", "Today", "Tomorrow"] as const).map((label) =>

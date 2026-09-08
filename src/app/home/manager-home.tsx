@@ -90,6 +90,9 @@ interface BranchRow {
 // speaks LF as well as dollars, and LF is proven line by line.
 interface SellOutOrder {
   customer_id: string | null;
+  /** The paper's own name for the buyer — the fallback identity when the
+   *  order carries no customer reference (Russin's June/July book does). */
+  customer_name: string | null;
   status: string;
   total_value: number | null;
   order_date_po: string | null;
@@ -111,6 +114,12 @@ interface TerritoryCityRow {
   state: string;
   city: string;
   territory_id: string;
+}
+// A region's monthly LF goal (Bianca, 2026-09-08): the number the book is
+// read against, because "625% pra cima de nada" deceives and a goal does not.
+interface TerritoryTargetRow {
+  territory_id: string;
+  monthly_lf: number | string;
 }
 interface OrderLinkRow {
   customer_id: string;
@@ -175,6 +184,7 @@ export function ManagerHome({ name }: { name: string }) {
   const [displayWalls, setDisplayWalls] = useState<DisplayWallRow[]>([]);
   const [territoryStates, setTerritoryStates] = useState<TerritoryStateRow[]>([]);
   const [territoryCities, setTerritoryCities] = useState<TerritoryCityRow[]>([]);
+  const [targets, setTargets] = useState<TerritoryTargetRow[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   // The desk book's region pick — its walk (panePath) is the book's own, so
   // the pick arrives by report rather than through `path`.
@@ -257,7 +267,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc, tt] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -317,7 +327,7 @@ export function ManagerHome({ name }: { name: string }) {
       supabase
         .from("orders_mirror")
         .select(
-          "customer_id, status, total_value, order_date_po, created_at, archived_at, items, ship_to_state, ship_to_city",
+          "customer_id, customer_name, status, total_value, order_date_po, created_at, archived_at, items, ship_to_state, ship_to_city",
         )
         .limit(1000),
       supabase
@@ -346,6 +356,8 @@ export function ManagerHome({ name }: { name: string }) {
       supabase.from("territory_states").select("state, territory_id").limit(200),
       // And city by city for the split state: CA never resolves by code.
       supabase.from("territory_cities").select("state, city, territory_id").limit(500),
+      // The month goals, region by region — what the book is read against.
+      supabase.from("territory_targets").select("territory_id, monthly_lf").limit(100),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -375,6 +387,9 @@ export function ManagerHome({ name }: { name: string }) {
     );
     setTerritoryCities(
       tc.error ? [] : ((tc.data as unknown as TerritoryCityRow[]) ?? []),
+    );
+    setTargets(
+      tt.error ? [] : ((tt.data as unknown as TerritoryTargetRow[]) ?? []),
     );
     setLoadedAt(Date.now());
   }, [period]);
@@ -563,13 +578,18 @@ export function ManagerHome({ name }: { name: string }) {
         quotes += Number(r.opportunity_count);
       }
     }
+    // OPEN QUOTES, alone (Bianca, 2026-09-08): "a hora que eu cotei, ele já
+    // está no meu pipeline" — the deal-stage split is HubSpot's world, and
+    // GMX's is a three-person room where a distributor asks for a price and
+    // waits. One card: the quotes out, waiting on an answer. The open-
+    // pipeline dollars still exist in `open` for the focused pair's tween.
     return {
       open,
       openIsMoney: true,
       openLabel: "Open pipeline",
       openHint: `${openCount} open ${openCount === 1 ? "deal" : "deals"}`,
       quotes,
-      quotesLabel: "Out for quote",
+      quotesLabel: "Open quotes",
       quotesHint: "waiting on an answer",
     };
   }, [pipeline, focus, latest, previous]);
@@ -742,6 +762,42 @@ export function ManagerHome({ name }: { name: string }) {
       if (error) void attempt();
     },
     [attempt],
+  );
+
+  const targetMap = useMemo(
+    () => new Map(targets.map((t) => [t.territory_id, Number(t.monthly_lf)])),
+    [targets],
+  );
+
+  // The goal is admin work, edited right where the misleading percent used
+  // to stand alone. Null clears it — a region can stop having a goal.
+  const setTarget = useCallback(
+    async (territoryId: string, monthlyLf: number | null) => {
+      if (!profile) return;
+      setTargets((prev) => {
+        const rest = prev.filter((t) => t.territory_id !== territoryId);
+        return monthlyLf === null
+          ? rest
+          : [...rest, { territory_id: territoryId, monthly_lf: monthlyLf }];
+      });
+      const supabase = getSupabaseBrowserClient();
+      const { error } =
+        monthlyLf === null
+          ? await supabase
+              .from("territory_targets")
+              .delete()
+              .eq("territory_id", territoryId)
+          : await supabase.from("territory_targets").upsert(
+              {
+                org_id: profile.orgId,
+                territory_id: territoryId,
+                monthly_lf: monthlyLf,
+              },
+              { onConflict: "org_id,territory_id" },
+            );
+      if (error) void attempt();
+    },
+    [profile, attempt],
   );
 
   const focusedGates = useMemo(() => {
@@ -952,6 +1008,10 @@ export function ManagerHome({ name }: { name: string }) {
     const map = new Map<string, { count: number; names: string[] }>();
     for (const e of slipping) {
       if (!e.exception_type) continue;
+      // An unplanned week is an AGENDA problem, not a sales one — it lives
+      // on the Agenda screen now (Bianca, 2026-09-08: "eu jogaria para a
+      // agenda"), where the person reading it can see the empty week itself.
+      if (e.exception_type === "NEXT_WEEK_NOT_PLANNED") continue;
       if (focus && e.subject_id !== focus.accountId) continue;
       const g = map.get(e.exception_type) ?? { count: 0, names: [] };
       g.count += 1;
@@ -1074,13 +1134,31 @@ export function ManagerHome({ name }: { name: string }) {
         { id: l.account_id, name: l.accounts?.name ?? null },
       ]),
     );
+    // The NAME fallback (found chasing Russin, 2026-09-08): the order system
+    // deleted and recreated the Russin customer, so her June/July invoiced
+    // book carries a customer NAME and no customer id. When the paper's name
+    // equals one of our linked accounts' names exactly — case aside — the
+    // order belongs to that account. Exact equality only: "BOISE CASCADE
+    // BMD" is not "Boise Cascade", and a guessed match books volume on the
+    // wrong house.
+    const byName = new Map<string, { id: string; name: string }>();
+    for (const l of orderLinks) {
+      if (l.accounts?.name)
+        byName.set(l.accounts.name.trim().toUpperCase(), {
+          id: l.account_id,
+          name: l.accounts.name,
+        });
+    }
+    const resolve = (o: SellOutOrder) =>
+      (o.customer_id ? accountOf.get(o.customer_id) : undefined) ??
+      byName.get((o.customer_name ?? "").trim().toUpperCase());
     const byAccount = new Map<
       string,
       { id: string; name: string; lf: number; firstMonth: string | null }
     >();
     for (const o of sellOut) {
-      if (!o.customer_id || !INVOICED_STATUSES.has(o.status)) continue;
-      const acct = accountOf.get(o.customer_id);
+      if (!INVOICED_STATUSES.has(o.status)) continue;
+      const acct = resolve(o);
       if (!acct?.name) continue;
       const entry = byAccount.get(acct.id) ?? {
         id: acct.id,
@@ -1252,16 +1330,24 @@ export function ManagerHome({ name }: { name: string }) {
         data-desk="tiles"
         key={`tiles-${focus?.id ?? "all"}`}
       >
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="card card-pad">
-            <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
-            <div className="fig fig-xl mt-1">
-              {totals.openIsMoney
-                ? formatMoney(Math.round(openTween))
-                : `${QTY.format(Math.round(openTween))} LF`}
+        <div
+          className={`grid grid-cols-2 gap-3 ${focus ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}
+        >
+          {/* The first tile only exists under a FOCUS, where the pair reads
+              "Bought · month / Bought · month before". Unfocused it was the
+              Open pipeline — retired (Bianca, 2026-09-08): a quote IS the
+              pipeline here, and two cards said one thing twice. */}
+          {focus && (
+            <div className="card card-pad">
+              <div className="t-meta uppercase tracking-wide">{totals.openLabel}</div>
+              <div className="fig fig-xl mt-1">
+                {totals.openIsMoney
+                  ? formatMoney(Math.round(openTween))
+                  : `${QTY.format(Math.round(openTween))} LF`}
+              </div>
+              <div className="t-hint mt-0.5">{totals.openHint}</div>
             </div>
-            <div className="t-hint mt-0.5">{totals.openHint}</div>
-          </div>
+          )}
           <div className="card card-pad">
             <div className="t-meta uppercase tracking-wide">{totals.quotesLabel}</div>
             <div className="fig fig-xl mt-1">
@@ -1289,7 +1375,8 @@ export function ManagerHome({ name }: { name: string }) {
               {/* LF leads — the page's own measure — and the dollars beside
                   it are those same lines' dollars. */}
               <Link href="/orders" className="card card-pad">
-                <div className="t-meta uppercase tracking-wide">Buy-in</div>
+                {/* "Distributor buy-in, só para ficar claro" (Bianca, 2026-09-08). */}
+                <div className="t-meta uppercase tracking-wide">Distributor buy-in</div>
                 <div className="fig fig-xl mt-1">
                   {QTY.format(Math.round(sellOutTiles.lf))} LF
                 </div>
@@ -1338,6 +1425,9 @@ export function ManagerHome({ name }: { name: string }) {
         onRegion={setBuyRegion}
         lens={salesLens}
         mode={salesMode}
+        targets={targetMap}
+        onTarget={profile?.role === "admin" ? setTarget : undefined}
+        goalMonth={windowInfo.kind === "month"}
       />
       </div>
 
@@ -1414,8 +1504,12 @@ export function ManagerHome({ name }: { name: string }) {
                     </span>
                   </span>
                   <span className="slip-names">
+                    {/* The red mark Bianca asked for (2026-09-08): each house
+                        here is a chase she owes somebody — the dot says so
+                        before the name is even read. */}
                     {returnChasers.slice(0, 6).map((h) => (
                       <span key={h.id} className="slip-name">
+                        <i className="chase-dot" aria-hidden="true" />
                         {h.name} — {QTY.format(Math.round(h.lf))} LF
                       </span>
                     ))}

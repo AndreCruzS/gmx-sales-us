@@ -150,6 +150,20 @@ function OrdersView() {
     [links],
   );
 
+  // Linked account names, uppercased — the fallback identity for orders the
+  // source left without a customer reference (see the ledger loop).
+  const linkedByName = useMemo(() => {
+    const m = new Map<string, { id: string; name: string }>();
+    for (const l of links) {
+      if (l.accounts?.name)
+        m.set(l.accounts.name.trim().toUpperCase(), {
+          id: l.account_id,
+          name: l.accounts.name,
+        });
+    }
+    return m;
+  }, [links]);
+
   const shown = useMemo(() => {
     let base = orders.filter((o) => !o.archived_at);
     if (accountFilter) {
@@ -209,10 +223,15 @@ function OrdersView() {
       // on our side is not material on theirs. And the ledger reads only
       // the CONSISTENT ERA: pre-June-2026 rows are sparse retroactive
       // backfill and would anchor a window on paper nobody kept.
-      if (!o.customer_id || !INVOICED_STATUSES.has(o.status)) continue;
+      if (!INVOICED_STATUSES.has(o.status)) continue;
       const poMonth = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
       if (poMonth < ORDERS_CONSISTENT_FROM) continue;
-      const acct = accountOf.get(o.customer_id);
+      // Same NAME fallback as the Overview's chasers (Russin, 2026-09-08):
+      // her June/July invoiced book carries a customer name and no id — the
+      // source deleted and recreated the customer. Exact equality only.
+      const acct =
+        (o.customer_id ? accountOf.get(o.customer_id) : undefined) ??
+        linkedByName.get(o.customer_name.trim().toUpperCase());
       if (!acct?.name) continue;
       const entry = byAccount.get(acct.id) ?? {
         id: acct.id,
@@ -260,7 +279,7 @@ function OrdersView() {
         return { ...h, outLF, lastThrough, position: h.inLF - outLF };
       })
       .sort((a, b) => b.inValue - a.inValue);
-  }, [orders, accountOf, housePeriods]);
+  }, [orders, accountOf, linkedByName, housePeriods]);
 
   const shownStock = accountFilter
     ? stock.filter((h) => h.id === accountFilter)

@@ -149,6 +149,9 @@ export function TeamSales({
   mode,
   windowLabel,
   windowNote,
+  targets,
+  onTarget,
+  goalMonth,
 }: {
   /** Sell-through, at least for the two most recent months. MONTH rows only —
    *  a year-to-date aggregate in here would double the book. */
@@ -171,6 +174,14 @@ export function TeamSales({
   /** The desk book's region pick, reported up for the page's buy-in cards —
    *  the pane's walk stays its own state (see SalesBook). */
   onRegion?: (r: { key: string; name: string } | null) => void;
+  /** Monthly LF goal per region (Bianca, 2026-09-08): the number the book is
+   *  read against — "625% pra cima de nada" deceives, a goal does not. */
+  targets?: ReadonlyMap<string, number>;
+  /** Present only for admins: sets (or clears, with null) a region's goal. */
+  onTarget?: (territoryId: string, monthlyLf: number | null) => void;
+  /** Goals speak only over a single month — a range or the YTD has no
+   *  honest "month goal" to be read against. */
+  goalMonth?: boolean;
   /** The lens and the window are the PAGE's now (Andre, 2026-09-04): the
    *  filter row sits above the whole Overview so it visibly governs
    *  everything — the figure cards included — and this card reads the
@@ -685,6 +696,9 @@ export function TeamSales({
           month={month}
           windowNote={windowNote}
           onRegion={onRegion}
+          targets={targets}
+          onTarget={onTarget}
+          goalMonth={goalMonth}
         />
       ) : (
       <div className="sales-step" key={`${lens}-${mode}-${pathKey}`}>
@@ -1460,6 +1474,9 @@ function SalesBook({
   month,
   windowNote,
   onRegion,
+  targets,
+  onTarget,
+  goalMonth,
 }: {
   step: ReturnType<typeof buildStep>;
   current: readonly SellThroughRow[];
@@ -1473,6 +1490,9 @@ function SalesBook({
   /** The pane's walk is its own (panePath) — but the page's buy-in cards
    *  follow a region pick, so the picked market is reported upward. */
   onRegion?: (r: { key: string; name: string } | null) => void;
+  targets?: ReadonlyMap<string, number>;
+  onTarget?: (territoryId: string, monthlyLf: number | null) => void;
+  goalMonth?: boolean;
 }) {
   const colourOf = (key: string) =>
     step.summary?.bands.find((b) => b.key === key)?.colour ?? "var(--ink-muted)";
@@ -1504,6 +1524,24 @@ function SalesBook({
   // Below the top there is exactly one row: the thing the pane walked into.
   const g = paneStep.groups[0] ?? null;
   const gMoved = g ? movementLabel(g.total, g.prevTotal, previous, mv) : null;
+
+  // THE GOAL LINE (Bianca, 2026-09-08): a picked region reads against its
+  // monthly LF goal, because "625% pra cima de nada" deceives — last month
+  // sold nothing, so of course it is 625% up. The goal is the parameter she
+  // operates by; admins edit it right here, where the percent used to
+  // mislead. null draft = not editing.
+  const [goalDraft, setGoalDraft] = useState<string | null>(null);
+  const goalRegion =
+    lens === "region" && panePath.length === 1 && panePath[0].dim === "region"
+      ? panePath[0]
+      : null;
+  const goalTarget = goalRegion ? (targets?.get(goalRegion.key) ?? null) : null;
+  const saveGoal = () => {
+    if (!goalRegion || !onTarget || goalDraft === null) return;
+    const n = Math.round(Number(goalDraft.replace(/[,.\s]/g, "")));
+    onTarget(goalRegion.key, Number.isFinite(n) && n > 0 ? n : null);
+    setGoalDraft(null);
+  };
 
   // What each region card shows besides its number: the branches that make
   // up its bar and the dealers behind it — read straight off the rows, so a
@@ -1600,6 +1638,75 @@ function SalesBook({
                     </span>
                   </span>
                 </div>
+
+                {/* The goal, read where the percent used to stand alone. Only
+                    over a single month — a range has no honest month goal. */}
+                {goalRegion && goalMonth && (
+                  <div className="bkp-goal">
+                    {goalDraft !== null ? (
+                      <>
+                        <input
+                          className="field bkp-goal-input"
+                          inputMode="numeric"
+                          autoFocus
+                          placeholder="monthly LF goal"
+                          value={goalDraft}
+                          onChange={(e) => setGoalDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveGoal();
+                            if (e.key === "Escape") setGoalDraft(null);
+                          }}
+                        />
+                        <button type="button" className="btn-mini" onClick={saveGoal}>
+                          save
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-mini"
+                          onClick={() => setGoalDraft(null)}
+                        >
+                          cancel
+                        </button>
+                      </>
+                    ) : goalTarget !== null ? (
+                      <>
+                        <span className="bkp-goal-track" aria-hidden="true">
+                          <span
+                            className={`bkp-goal-fill${
+                              g.total >= goalTarget ? " is-met" : ""
+                            }`}
+                            style={{
+                              width: `${Math.min(100, Math.max(0, (g.total / goalTarget) * 100))}%`,
+                            }}
+                          />
+                        </span>
+                        <span className="t-hint bkp-goal-read">
+                          <span className="fig-sm">
+                            {Math.round((g.total / goalTarget) * 100)}%
+                          </span>{" "}
+                          of the {QTY.format(goalTarget)} LF month goal
+                        </span>
+                        {onTarget && (
+                          <button
+                            type="button"
+                            className="btn-mini"
+                            onClick={() => setGoalDraft(String(goalTarget))}
+                          >
+                            edit
+                          </button>
+                        )}
+                      </>
+                    ) : onTarget ? (
+                      <button
+                        type="button"
+                        className="btn-mini"
+                        onClick={() => setGoalDraft("")}
+                      >
+                        set a month goal
+                      </button>
+                    ) : null}
+                  </div>
+                )}
 
                 {g.segments.length > 1 && (
                   <div className="sales-track bkp-track" aria-hidden="true">
@@ -1910,6 +2017,11 @@ function SalesBook({
                               <span className="bkm-name">{m.title}</span>
                               <span className="fig-sm bkm-qty">
                                 {QTY.format(m.total)} {m.unit}
+                                {/* against the goal, not last month — the
+                                    percent Bianca operates by */}
+                                {goalMonth && targets?.get(m.key)
+                                  ? ` · ${Math.round((m.total / targets.get(m.key)!) * 100)}% of goal`
+                                  : ""}
                               </span>
                             </span>
                             <span

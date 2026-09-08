@@ -4136,6 +4136,49 @@ input[type="datetime-local"] {
    Booking-style, in months (Andre, 2026-09-04): a chip opens a panel — the
    year with ‹ › over a twelve-month grid. One click is a month, a second
    click stretches a range; a dot marks months whose return is on file. */
+/* ── The month goal (Bianca, 2026-09-08) ────────────────────────────────────
+   A picked region reads against its monthly LF goal — the percent that does
+   not deceive. A quiet bar and one sentence; admins get the edit beside it. */
+.bkp-goal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 2px;
+}
+.bkp-goal-track {
+  flex: 0 1 220px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.bkp-goal-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+.bkp-goal-fill.is-met {
+  background: var(--success-ink, var(--accent-strong));
+}
+.bkp-goal-read {
+  white-space: nowrap;
+}
+.bkp-goal-input {
+  max-width: 160px;
+}
+
+/* The chase mark: a house that owes its return wears the red dot. */
+.chase-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  vertical-align: middle;
+}
+
 .ppick {
   position: relative;
   display: inline-flex;
