@@ -166,7 +166,7 @@ insert into accounts (id, org_id, name, account_type, city, state, territory_id,
                       parent_account_id, has_display_wall, display_last_verified_at,
                       strategic_importance) values
   ('d0000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111',
-   'Ganahl Lumber (Banner)', 'DEALER', null, 'CA',
+   'Ganahl Lumber', 'DEALER', null, 'CA',
    'b0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004',
    'EXISTING_RELATIONSHIP', null, null, null, false, null, 'STRATEGIC'),
   ('d0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',

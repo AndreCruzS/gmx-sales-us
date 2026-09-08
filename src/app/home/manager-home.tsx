@@ -1012,6 +1012,12 @@ export function ManagerHome({ name }: { name: string }) {
       // on the Agenda screen now (Bianca, 2026-09-08: "eu jogaria para a
       // agenda"), where the person reading it can see the empty week itself.
       if (e.exception_type === "NEXT_WEEK_NOT_PLANNED") continue;
+      // The captain card left the sales Overview too (Bianca, same review —
+      // she had asked before): "não me interessa se eu tô jantando com o
+      // capitão... meta e recorrência é o que define que está indo bem."
+      // The flag still lives where the work happens — the Accounts filter
+      // and each account's own page.
+      if (e.exception_type === "NO_CHAMPION") continue;
       if (focus && e.subject_id !== focus.accountId) continue;
       const g = map.get(e.exception_type) ?? { count: 0, names: [] };
       g.count += 1;
