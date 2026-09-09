@@ -3240,8 +3240,8 @@ input[type="datetime-local"] {
   /* the three cells sit together on the left — spread over the whole
      line they read as three unrelated numbers; the bar keeps the width */
   .mgr-home > [data-desk="recurrence"] .recur-cells {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px;
   }
   .mgr-home > [data-desk="recurrence"] .recur-name:nth-child(n + 4) {
     display: flex;
@@ -4441,8 +4441,8 @@ input[type="datetime-local"] {
 }
 
 /* ── Who kept buying — recurrence (Bianca, 2026-09-08: "meta e recorrência") ──
-   Three facts in one strip: bought again, new, dropped — each a count of
-   dealers over the LF behind it. The bar underneath is the share of this
+   Two facts in one strip: bought again and new — each a count of dealers
+   over the LF behind it; the dropped live in the gone-quiet register. The bar underneath is the share of this
    month's dealers that were in the file before too: the same reading the
    words give, at a glance. Flat, aligned bases, LF last in every cell. */
 .recur {
@@ -4470,9 +4470,6 @@ input[type="datetime-local"] {
 }
 .recur-cell .fig-xl {
   line-height: 1.1;
-}
-.recur-cell[data-dir="down"] .fig-xl {
-  color: var(--danger);
 }
 /* the names under each cell: biggest first, the LF closing the row; the
    phone reads the top three and counts the rest, the desk reads them all */

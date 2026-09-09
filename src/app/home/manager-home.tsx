@@ -1501,8 +1501,10 @@ export function ManagerHome({ name }: { name: string }) {
       </div>
 
       {/* WHO KEPT BUYING — recurrence, the half of "meta e recorrência" the
-          goal line does not answer. Three facts in one strip: bought again,
-          new, dropped, each counted in dealers and weighed in LF. */}
+          goal line does not answer. Two facts in one strip: bought again and
+          new, each counted in dealers and weighed in LF. The dropped are
+          NOT here (Andre, 2026-09-09): the gone-quiet register below already
+          names them, and the same ten houses twice on one page is noise. */}
       {recur && (
         <section
           className="adapt card recur"
@@ -1520,16 +1522,11 @@ export function ManagerHome({ name }: { name: string }) {
           <div className="recur-cells">
             {(
               [
-                { label: "Bought again", side: recur.again, tail: "this month", down: false },
-                { label: "New", side: recur.fresh, tail: "this month", down: false },
-                { label: "Dropped", side: recur.dropped, tail: "went silent", down: true },
+                { label: "Bought again", side: recur.again, tail: "this month" },
+                { label: "New", side: recur.fresh, tail: "this month" },
               ] as const
             ).map((c) => (
-              <div
-                key={c.label}
-                className="recur-cell"
-                data-dir={c.down && c.side.count > 0 ? "down" : undefined}
-              >
+              <div key={c.label} className="recur-cell">
                 <span className="t-meta uppercase tracking-wide">{c.label}</span>
                 <span className="fig fig-xl">{QTY.format(c.side.count)}</span>
                 <span className="t-hint">
