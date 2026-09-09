@@ -1540,16 +1540,6 @@ export function ManagerHome({ name }: { name: string }) {
               </div>
             ))}
           </div>
-          {/* the share of this month's dealers that were here last month —
-              one bar, the same reading the words above give, at a glance */}
-          {recur.buying > 0 && (
-            <div className="recur-track" aria-hidden="true">
-              <span
-                className="recur-fill"
-                style={{ width: `${(100 * recur.again.count) / recur.buying}%` }}
-              />
-            </div>
-          )}
         </section>
       )}
 

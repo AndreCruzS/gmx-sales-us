@@ -4436,9 +4436,8 @@ input[type="datetime-local"] {
 
 /* ── Who kept buying — recurrence (Bianca, 2026-09-08: "meta e recorrência") ──
    Two facts in one strip: bought again and new — each a count of dealers
-   over the LF behind it; the dropped live in the gone-quiet register. The bar underneath is the share of this
-   month's dealers that were in the file before too: the same reading the
-   words give, at a glance. Flat, aligned bases, LF last in every cell. */
+   over the LF behind it; the dropped live in the gone-quiet register.
+   Flat, aligned bases, LF last in every cell. */
 .recur {
   padding: 14px 16px 16px;
 }
@@ -4531,19 +4530,6 @@ input[type="datetime-local"] {
 .recur-pager-btn:disabled {
   opacity: 0.35;
   cursor: default;
-}
-.recur-track {
-  margin-top: 14px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--rule);
-  overflow: hidden;
-}
-.recur-fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--success-ink);
 }
 
 /* ── Month against goal — bars for the months on file, the goal as a line ──
