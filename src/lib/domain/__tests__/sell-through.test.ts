@@ -19,6 +19,8 @@ import {
   moveDir,
   periodLabel,
   recurrence,
+  monthsOnFile,
+  regionsOnFile,
   rowMatchesPath,
   scopeVolume,
   shortBranchName,
@@ -998,5 +1000,43 @@ describe("recurrence", () => {
   it("leaves YTD aggregates out of the pair", () => {
     const withYtd = [...two, row({ period: JUL, dealer_id: "ytd-only", period_kind: "YTD", quantity: 9999 })];
     expect(recurrence(withYtd, JUL, JUN)!.fresh).toEqual({ count: 1, lf: 250 });
+  });
+});
+
+// MONTH AGAINST GOAL — the trend drawn from the months on file, holes kept.
+describe("monthsOnFile", () => {
+  const totals = [
+    { period: "2026-05-01", period_kind: "MONTH" as const, region_id: "socal", quantity: 100 },
+    { period: "2026-05-01", period_kind: "MONTH" as const, region_id: "texas", quantity: 50 },
+    { period: "2026-07-01", period_kind: null, region_id: "socal", quantity: "70" },
+    { period: "2026-06-01", period_kind: "YTD" as const, region_id: "socal", quantity: 9999 },
+  ];
+
+  it("sums the regions into one bar per month and keeps the hole", () => {
+    expect(monthsOnFile(totals)).toEqual([
+      { period: "2026-05-01", lf: 150 },
+      { period: "2026-06-01", lf: null },
+      { period: "2026-07-01", lf: 70 },
+    ]);
+  });
+
+  it("narrows to a region, and a YTD file is never a month", () => {
+    expect(monthsOnFile(totals, "texas")).toEqual([{ period: "2026-05-01", lf: 50 }]);
+    expect(monthsOnFile(totals, "socal").map((m) => m.lf)).toEqual([100, null, 70]);
+  });
+
+  it("walks across a year end without inventing a thirteenth month", () => {
+    const t = [
+      { period: "2025-11-01", period_kind: "MONTH" as const, region_id: "socal", quantity: 1 },
+      { period: "2026-02-01", period_kind: "MONTH" as const, region_id: "socal", quantity: 2 },
+    ];
+    expect(monthsOnFile(t).map((m) => m.period)).toEqual([
+      "2025-11-01", "2025-12-01", "2026-01-01", "2026-02-01",
+    ]);
+  });
+
+  it("names the regions a country goal adds up", () => {
+    expect(regionsOnFile(totals)).toEqual(["socal", "texas"]);
+    expect(monthsOnFile([])).toEqual([]);
   });
 });

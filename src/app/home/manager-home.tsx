@@ -24,17 +24,22 @@ import {
   type SalesPeriod,
 } from "@/components/period-picker";
 import {
+  goalFor,
+  monthsOnFile,
   movementLabel,
   periodLabel,
   periodShort,
   recurrence,
+  regionsOnFile,
   SELL_LENSES,
+  type PeriodTotal,
   type BranchRef,
   type PathStep,
   type SellLens,
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
 import { useTween } from "@/lib/ui/use-tween";
+import { GoalMonths } from "@/components/goal-months";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type {
@@ -187,6 +192,8 @@ export function ManagerHome({ name }: { name: string }) {
   const [territoryStates, setTerritoryStates] = useState<TerritoryStateRow[]>([]);
   const [territoryCities, setTerritoryCities] = useState<TerritoryCityRow[]>([]);
   const [targets, setTargets] = useState<TerritoryTargetRow[]>([]);
+  // Every month on file, one total per region — the backbone of the trend.
+  const [sellPeriods, setSellPeriods] = useState<PeriodTotal[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   // The desk book's region pick — its walk (panePath) is the book's own, so
   // the pick arrives by report rather than through `path`.
@@ -222,10 +229,10 @@ export function ManagerHome({ name }: { name: string }) {
     // row fetches below then name their periods exactly.
     const pv = await supabase
       .from("sell_through_periods")
-      .select("period, period_kind")
+      .select("period, period_kind, region_id, quantity")
       .limit(2000);
-    const periodRows =
-      (pv.data as { period: string; period_kind: "MONTH" | "YTD" | null }[] | null) ?? [];
+    const periodRows = (pv.data as PeriodTotal[] | null) ?? [];
+    setSellPeriods(periodRows);
     const monthsAvail = [
       ...new Set(
         periodRows.filter((r) => r.period_kind !== "YTD").map((r) => r.period),
@@ -1005,6 +1012,26 @@ export function ManagerHome({ name }: { name: string }) {
     [salesLens, focus, windowInfo.kind, monthlyRows, latest, previous, buyRegion],
   );
 
+  // MONTH AGAINST GOAL — the goal line across every month on file. The
+  // country reads against the goals of the regions in the book added up;
+  // a picked region against its own. Region lens only, like the strip.
+  const goalMonths = useMemo(() => {
+    if (salesLens !== "region" || focus) return null;
+    const regionId = buyRegion?.key ?? null;
+    const months = monthsOnFile(sellPeriods, regionId);
+    if (months.length === 0) return null;
+    const goal = regionId
+      ? goalFor(targetMap, regionId)
+      : regionsOnFile(sellPeriods).reduce(
+          (acc, r) => {
+            const g = goalFor(targetMap, r);
+            return { lf: acc.lf + g.lf, own: acc.own && g.own };
+          },
+          { lf: 0, own: true },
+        );
+    return { months, goal: goal.lf, goalIsDefault: !goal.own };
+  }, [salesLens, focus, buyRegion, sellPeriods, targetMap]);
+
   // The register's two chapters, each already ranked biggest loss first:
   // the houses that went silent, and the ones still in the file but buying
   // less. The desk lays them side by side; the phone reads the top ten of
@@ -1523,6 +1550,32 @@ export function ManagerHome({ name }: { name: string }) {
               />
             </div>
           )}
+        </section>
+      )}
+
+      {/* MONTH AGAINST GOAL — her first sentence, drawn. Bars for the
+          months on file, the goal as a line across them, holes kept. */}
+      {goalMonths && (
+        <section
+          className="adapt card gmcard"
+          data-desk="goalmonths"
+          key={`gm-${buyRegion?.key ?? "all"}`}
+        >
+          <div className="recur-head">
+            <span className="t-title">Month against goal</span>
+            <span className="t-hint">
+              {buyRegion ? buyRegion.name : "USA Nationwide"} ·{" "}
+              {goalMonths.months.filter((m) => m.lf !== null).length} month
+              {goalMonths.months.filter((m) => m.lf !== null).length === 1 ? "" : "s"} on file
+            </span>
+          </div>
+          <GoalMonths
+            months={goalMonths.months}
+            goal={goalMonths.goal}
+            unit="LF"
+            picked={windowInfo.kind === "month" ? latest : null}
+            goalIsDefault={goalMonths.goalIsDefault}
+          />
         </section>
       )}
 

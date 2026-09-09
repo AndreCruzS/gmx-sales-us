@@ -1197,3 +1197,65 @@ export function recurrence(
     unit,
   };
 }
+
+// ── Month against goal — the trend, honestly drawn ────────────────────────
+// One point per month ON FILE, from the first file to the last; a calendar
+// month between them with no file is a HOLE (lf null), never a zero — a
+// missing return means unknown, not nothing sold. Two files make two bars,
+// and two bars are not a trend; the reading grows as returns land.
+
+export interface PeriodTotal {
+  period: string;
+  period_kind: "MONTH" | "YTD" | null;
+  region_id: string | null;
+  quantity: number | string;
+}
+
+export interface GoalMonth {
+  /** YYYY-MM-01 */
+  period: string;
+  /** null = no file for this month */
+  lf: number | null;
+}
+
+export function monthsOnFile(
+  totals: readonly PeriodTotal[],
+  regionId: string | null = null,
+): GoalMonth[] {
+  const byMonth = new Map<string, number>();
+  for (const t of totals) {
+    if (t.period_kind === "YTD") continue;
+    if (regionId !== null && t.region_id !== regionId) continue;
+    const key = `${t.period.slice(0, 7)}-01`;
+    byMonth.set(key, (byMonth.get(key) ?? 0) + Number(t.quantity));
+  }
+  const keys = [...byMonth.keys()].sort();
+  if (keys.length === 0) return [];
+  const out: GoalMonth[] = [];
+  const first = keys[0];
+  const last = keys[keys.length - 1];
+  let y = Number(first.slice(0, 4));
+  let m = Number(first.slice(5, 7));
+  for (;;) {
+    const key = `${y}-${String(m).padStart(2, "0")}-01`;
+    out.push({ period: key, lf: byMonth.get(key) ?? null });
+    if (key === last) break;
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}
+
+/** The regions that appear in any monthly file — the ones a country-wide goal
+ *  adds up. Sorted for a stable sum. */
+export function regionsOnFile(totals: readonly PeriodTotal[]): string[] {
+  const s = new Set<string>();
+  for (const t of totals) {
+    if (t.period_kind === "YTD") continue;
+    if (t.region_id) s.add(t.region_id);
+  }
+  return [...s].sort();
+}
