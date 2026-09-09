@@ -1152,6 +1152,9 @@ export interface Recurrence {
   /** Dealers buying this month: again + fresh. */
   buying: number;
   unit: string;
+  /** Houses with only one of the two months on file — left out, and named,
+   *  because "not counted" must never pass for "nobody came back". */
+  oneFileHouses: string[];
 }
 
 /** The two-month recurrence over the monthly files. `regionId` narrows it to
@@ -1165,6 +1168,19 @@ export function recurrence(
   regionId: string | null = null,
 ): Recurrence | null {
   if (!latest || !previous) return null;
+  // A HOUSE WITH ONE FILE CANNOT SAY WHO CAME BACK. Russin's first return is
+  // August: every dealer in it would read as "new" against a July Russin
+  // never reported, and a house that stops sending would read as everyone
+  // "dropped". Only houses with BOTH months on hand take part; the rest are
+  // unknown, not new and not gone (the same rule the chasers and the quiet
+  // register keep — a missing file is a missing file).
+  const housesLatest = new Set<string>();
+  const housesPrevious = new Set<string>();
+  for (const r of rows) {
+    if (r.period_kind === "YTD") continue;
+    if (r.period === latest) housesLatest.add(r.distributor_id);
+    else if (r.period === previous) housesPrevious.add(r.distributor_id);
+  }
   const cur = new Map<string, number>();
   const prev = new Map<string, number>();
   const names = new Map<string, string>();
@@ -1174,6 +1190,7 @@ export function recurrence(
   for (const r of rows) {
     if (r.period_kind === "YTD") continue;
     if (regionId !== null && r.region_id !== regionId) continue;
+    if (!housesLatest.has(r.distributor_id) || !housesPrevious.has(r.distributor_id)) continue;
     const key = r.dealer_id ?? r.dealer_label;
     names.set(key, r.dealer_name ?? r.dealer_label);
     ids.set(key, r.dealer_id);
@@ -1186,6 +1203,12 @@ export function recurrence(
     }
   }
   if (!sawPrevious) return null;
+  const houseNames = new Map<string, string>();
+  for (const r of rows) houseNames.set(r.distributor_id, r.distributor_name);
+  const oneFileHouses = [...new Set([...housesLatest, ...housesPrevious])]
+    .filter((h) => !(housesLatest.has(h) && housesPrevious.has(h)))
+    .map((h) => houseNames.get(h) ?? h)
+    .sort();
   const side = (): RecurrenceSide => ({ count: 0, lf: 0, dealers: [] });
   const again = side();
   const fresh = side();
@@ -1218,6 +1241,7 @@ export function recurrence(
     dropped,
     buying: again.count + fresh.count,
     unit,
+    oneFileHouses,
   };
 }
 

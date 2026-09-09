@@ -1010,6 +1010,17 @@ describe("recurrence", () => {
     expect(recurrence(two.filter((r) => r.period === JUL), JUL, JUN)).toBeNull();
   });
 
+  it("counts only houses with both months on file — one file is unknown, not new", () => {
+    const withRussin = [
+      ...two,
+      row({ period: JUL, distributor_id: "russin", distributor_name: "Russin", dealer_id: null, dealer_label: "TIMBERLINE - BRAINTREE", quantity: 34213 }),
+    ];
+    const r = recurrence(withRussin, JUL, JUN)!;
+    expect(r.fresh).toMatchObject({ count: 1, lf: 250 });
+    expect(r.oneFileHouses).toEqual(["Russin"]);
+    expect(recurrence(two, JUL, JUN)!.oneFileHouses).toEqual([]);
+  });
+
   it("leaves YTD aggregates out of the pair", () => {
     const withYtd = [...two, row({ period: JUL, dealer_id: "ytd-only", period_kind: "YTD", quantity: 9999 })];
     expect(recurrence(withYtd, JUL, JUN)!.fresh).toMatchObject({ count: 1, lf: 250 });

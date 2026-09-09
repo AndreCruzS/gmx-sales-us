@@ -1518,6 +1518,12 @@ export function ManagerHome({ name }: { name: string }) {
               {periodLabel(recur.latest)} against {periodShort(recur.previous)}
               {buyRegion ? ` · ${buyRegion.name}` : ""} · {QTY.format(recur.buying)}{" "}
               {recur.buying === 1 ? "dealer" : "dealers"} bought this month
+              {/* a house with one of the two months on file is left out and
+                  SAID so — not counted must never read as nobody came back */}
+              {recur.oneFileHouses.length > 0 &&
+                ` · ${recur.oneFileHouses.join(", ")} sent only one of the two months, so ${
+                  recur.oneFileHouses.length === 1 ? "its" : "their"
+                } dealers are not counted`}
             </span>
           </div>
           <div className="recur-cells">
