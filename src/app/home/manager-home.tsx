@@ -990,6 +990,23 @@ export function ManagerHome({ name }: { name: string }) {
     return { rows, hasPrev };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
 
+  // The register's two chapters, each already ranked biggest loss first:
+  // the houses that went silent, and the ones still in the file but buying
+  // less. The desk lays them side by side; the phone reads the top ten of
+  // each and counts the rest in the footer.
+  const quietChapters = useMemo(() => {
+    const silent = quietRanking.rows.filter((r) => r.chapter < 2);
+    const fading = quietRanking.rows.filter((r) => r.chapter === 2);
+    return [
+      { label: "gone quiet", rows: silent },
+      { label: "still buying, but fading", rows: fading },
+    ].filter((c) => c.rows.length > 0);
+  }, [quietRanking]);
+  const quietHidden = quietChapters.reduce(
+    (n, c) => n + Math.max(0, c.rows.length - 10),
+    0,
+  );
+
   // The ranking answers for the whole book under the region lens; a chosen
   // customer narrows the section to themselves like everything else does.
   const quietAsRanking =
@@ -1544,60 +1561,65 @@ export function ManagerHome({ name }: { name: string }) {
               <div className="quiet-head">
                 <span className="t-title">Account gone quiet</span>
                 <span className="t-hint">
-                  the silent first, then the fading — biggest loss leading
+                  who stopped, and who is fading — biggest loss first in each
                 </span>
               </div>
-              <div className="quiet-scroll">
-              <ul className="list">
-                {quietRanking.rows.map((r, i) => {
-                  const prevRow = quietRanking.rows[i - 1];
-                  const chapterLabel =
-                    r.chapter === 2 && (!prevRow || prevRow.chapter !== 2)
-                      ? "still buying, but fading"
-                      : r.chapter < 2 && !prevRow
-                        ? "gone quiet"
-                        : null;
-                  const body = (
-                    <>
-                      <span className="row-body">
-                        <span className="quiet-name">{r.name}</span>
-                        {/* WHEN they were last heard — under the name, where
-                            there is room; the figure column keeps the verdict
-                            and the volume that went silent. */}
-                        {r.when && (
-                          <span className="t-hint quiet-since">{r.when}</span>
-                        )}
-                      </span>
-                      <span className="quiet-fig">
-                        <span className="fig fig-md">
-                          {QTY.format(r.stake)} {r.unit}
-                        </span>
-                        <span className="sales-move" data-dir="down">
-                          {r.verdict}
-                        </span>
-                      </span>
-                    </>
-                  );
-                  return (
-                    <li key={r.key}>
-                      {chapterLabel && (
-                        <p className="quiet-chapter">{chapterLabel}</p>
-                      )}
-                      {r.accountId ? (
-                        <Link href={`/accounts/${r.accountId}`} className="row quiet-row">
-                          {body}
-                        </Link>
-                      ) : (
-                        <div className="row quiet-row">{body}</div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              {/* TWO CHAPTERS, TWO COLUMNS on the desk (Andre, 2026-09-09):
+                  the silent on the left, the fading on the right, each
+                  ranked by its own loss. The phone stacks them, top ten of
+                  each, as it always read. */}
+              <div className="quiet-scroll quiet-cols">
+                {quietChapters.map((c) => (
+                  <div key={c.label} className="quiet-col">
+                    <p className="quiet-chapter">
+                      {c.label}
+                      <span className="quiet-chapter-n">{c.rows.length}</span>
+                    </p>
+                    <ul className="list">
+                      {c.rows.map((r) => {
+                        const body = (
+                          <>
+                            <span className="row-body">
+                              <span className="quiet-name">{r.name}</span>
+                              {/* WHEN they were last heard — under the name;
+                                  the figure column keeps the verdict and the
+                                  volume that went silent. */}
+                              {r.when && (
+                                <span className="t-hint quiet-since">{r.when}</span>
+                              )}
+                            </span>
+                            <span className="quiet-fig">
+                              <span className="fig fig-md">
+                                {QTY.format(r.stake)} {r.unit}
+                              </span>
+                              <span className="sales-move" data-dir="down">
+                                {r.verdict}
+                              </span>
+                            </span>
+                          </>
+                        );
+                        return (
+                          <li key={r.key}>
+                            {r.accountId ? (
+                              <Link
+                                href={`/accounts/${r.accountId}`}
+                                className="row quiet-row"
+                              >
+                                {body}
+                              </Link>
+                            ) : (
+                              <div className="row quiet-row">{body}</div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
               </div>
-              {quietRanking.rows.length > 10 && (
+              {quietHidden > 0 && (
                 <p className="t-hint quiet-more">
-                  and {quietRanking.rows.length - 10} more —{" "}
+                  and {quietHidden} more —{" "}
                   <Link href="/accounts" className="underline underline-offset-2">
                     all accounts
                   </Link>

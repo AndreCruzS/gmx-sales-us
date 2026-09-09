@@ -1044,8 +1044,22 @@ body {
   padding: 12px 2px 4px;
 }
 
-/* The phone reads the top ten, as it always did — the rest of the ranking
-   exists for the desk's auto-scroll and stays hidden here. */
+.quiet-chapter-n {
+  margin-left: 8px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
+/* The two chapters stack on the phone; the desk sets them side by side. */
+.quiet-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.quiet-col {
+  min-width: 0;
+}
+/* The phone reads the top ten of each chapter, as it always did — the rest
+   of the ranking exists for the desk and stays hidden here. */
 .quiet-scroll .list > li:nth-child(n + 11) {
   display: none;
 }
@@ -3311,8 +3325,13 @@ input[type="datetime-local"] {
   .mgr-home > [data-desk="slipping"] > .section-head {
     grid-column: 1 / -1;
   }
+  /* The register starts at the top of the section and runs the full
+     height beside BOTH sidebar lists — the chasers above, the exception
+     groups below. Without the explicit row, auto-placement left an empty
+     cell above it once the chasers list arrived (2026-09-08). */
   .mgr-home > [data-desk="slipping"] > .card {
     grid-column: 1;
+    grid-row: 2 / span 2;
     margin-bottom: 0;
   }
 
@@ -3358,10 +3377,13 @@ input[type="datetime-local"] {
   }
 
   /* ── What's slipping, groomed ── */
-  /* ONE column, every fact whole. Two columns truncated every name and every
-     when-line; a register nobody can read ranks nothing. The whole ranking
-     lives in a fixed window with a plain scroll — the top of the list is the
-     top of the need, always in view. */
+  /* TWO columns, one per CHAPTER (Andre, 2026-09-09): the silent left, the
+     fading right, each ranked on its own. Not the two-column register that
+     was sent back in August — that split ONE ranking down the middle and
+     truncated every name. Here every fact stays whole because the when-line
+     sits under the name instead of beside it. The whole ranking lives in a
+     fixed window with a plain scroll — the top of each list is the top of
+     the need, always in view. */
   .mgr-home > [data-desk="slipping"] .card .list {
     padding-inline: 16px;
   }
@@ -3371,6 +3393,16 @@ input[type="datetime-local"] {
   .mgr-home > [data-desk="slipping"] .quiet-scroll {
     max-height: 432px;
     overflow-y: auto;
+  }
+  .mgr-home > [data-desk="slipping"] .quiet-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 24px;
+    align-items: start;
+  }
+  .mgr-home > [data-desk="slipping"] .quiet-col .quiet-chapter {
+    margin-inline: 16px;
+    padding-inline: 0;
+    border-bottom: 1px solid var(--rule);
   }
   .mgr-home > [data-desk="slipping"] .quiet-row {
     min-width: 0;
@@ -3392,10 +3424,12 @@ input[type="datetime-local"] {
   .mgr-home > [data-desk="slipping"] .quiet-row:hover .quiet-name {
     color: var(--accent);
   }
+  /* the when-line under the name, not beside it — half a card is not wide
+     enough for both on one line, and a name cut short names nobody */
   .mgr-home > [data-desk="slipping"] .quiet-row .row-body {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
+    flex-direction: column;
+    gap: 1px;
     min-width: 0;
   }
   .mgr-home > [data-desk="slipping"] .quiet-since {
@@ -3404,12 +3438,21 @@ input[type="datetime-local"] {
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* the verdict speaks first, the figure CLOSES the row — the LF is always
-     the last thing the eye meets */
+  /* half a card is not wide enough for name, verdict and figure in one
+     line, so the name may take a second line — whole, never cut — and the
+     figure column stacks: the LF on top where the eye lands last, the
+     verdict under it */
+  .mgr-home > [data-desk="slipping"] .quiet-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+  }
   .mgr-home > [data-desk="slipping"] .quiet-fig {
-    flex-direction: row-reverse;
-    align-items: baseline;
-    gap: 10px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    padding-left: 12px;
   }
   /* The exception groups: the register's sidebar — one card row each,
      stacked in the narrow column, reading as part of the same section. */
