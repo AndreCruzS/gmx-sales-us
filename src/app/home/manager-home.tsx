@@ -1018,6 +1018,10 @@ export function ManagerHome({ name }: { name: string }) {
       // The flag still lives where the work happens — the Accounts filter
       // and each account's own page.
       if (e.exception_type === "NO_CHAMPION") continue;
+      // An overdue follow-up is a promise on somebody's calendar, not a
+      // sales fact — it joined the unplanned week on the Agenda (Andre,
+      // 2026-09-09, after Bianca: the sales page is about sales).
+      if (e.exception_type === "OVERDUE_FOLLOW_UP") continue;
       if (focus && e.subject_id !== focus.accountId) continue;
       const g = map.get(e.exception_type) ?? { count: 0, names: [] };
       g.count += 1;

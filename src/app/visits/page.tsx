@@ -359,15 +359,35 @@ function VisitsPageInner() {
     [attention, calendarView],
   );
 
+  // The overdue follow-ups came off the sales board the same way (Andre,
+  // 2026-09-09): a broken promise belongs beside the calendar it was made
+  // on. The manager's calendar view does not list the day buckets, so
+  // without this card an overdue action would show nowhere on the desk.
+  const overdueFollowUps = useMemo(
+    () =>
+      calendarView
+        ? attention.filter((e) => e.exception_type === "OVERDUE_FOLLOW_UP")
+        : [],
+    [attention, calendarView],
+  );
+
   const flagged = useMemo(() => {
     // An exception that merely restates a commitment already visible above
     // (the engine's overdue echo of an agenda row) is noise on this screen.
     const visible = new Set(items.map((i) => i.id));
     const kept = attention.filter(
       (e) => !(e.subject_type === "next_action" && visible.has(e.subject_id)),
-    // On the calendar view the unplanned week has its own card above —
-    // repeating it down here would be the same fact wearing two hats.
-    ).filter((e) => !(calendarView && e.exception_type === "NEXT_WEEK_NOT_PLANNED"));
+    // On the calendar view the unplanned week and the overdue follow-ups
+    // have their own cards above — repeating them down here would be the
+    // same fact wearing two hats.
+    ).filter(
+      (e) =>
+        !(
+          calendarView &&
+          (e.exception_type === "NEXT_WEEK_NOT_PLANNED" ||
+            e.exception_type === "OVERDUE_FOLLOW_UP")
+        ),
+    );
     // Danger first — the tier order is the read order.
     return kept.sort(
       (a, b) =>
@@ -491,6 +511,32 @@ function VisitsPageInner() {
                 <span className="row-body min-w-0">
                   <span className="t-title block truncate">{e.title}</span>
                   <span className="t-sub">nothing on the plan for next week</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* The promises that slipped past their date. Moved from the sales
+          Overview's slipping board (Andre, 2026-09-09) — the board is about
+          sales, and a follow-up is agenda. */}
+      {overdueFollowUps.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2 className="t-section" style={{ color: "var(--danger)" }}>
+              Follow-up overdue
+            </h2>
+            <span className="tag tag-danger">{overdueFollowUps.length}</span>
+          </div>
+          <ul className="list">
+            {overdueFollowUps.map((e) => (
+              <li key={`${e.exception_type}-${e.subject_id}`} className="row">
+                <span className="row-body min-w-0">
+                  <span className="t-title block truncate">{e.title}</span>
+                  {e.detail && (
+                    <span className="t-sub">{relativizeDates(e.detail)}</span>
+                  )}
                 </span>
               </li>
             ))}

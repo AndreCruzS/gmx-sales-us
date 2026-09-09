@@ -1080,3 +1080,38 @@ export function movementLabel(
   if (rounded === 0) return `level with ${on}`;
   return `${rounded > 0 ? "up" : "down"} ${Math.abs(rounded)}% on ${on}`;
 }
+
+/** THE GOAL EVERY REGION STARTS WITH (Andre, 2026-09-09): 30,000 LF a month
+ *  until an admin writes the region's own. With a default there is never a
+ *  region without a goal, so the sales board never falls back to reading a
+ *  month against the month before it — the "up 625% on nothing" Bianca sent
+ *  back (2026-09-08). */
+export const DEFAULT_MONTHLY_LF_GOAL = 30_000;
+
+/** A region's month goal: its own if an admin set one, the default if not.
+ *  `own` says which, so a screen can whisper "default" beside the number. */
+export function goalFor(
+  targets: ReadonlyMap<string, number> | undefined,
+  key: string,
+): { lf: number; own: boolean } {
+  const own = targets?.get(key);
+  return own !== undefined && own > 0
+    ? { lf: own, own: true }
+    : { lf: DEFAULT_MONTHLY_LF_GOAL, own: false };
+}
+
+/** How far into the goal, as a whole percent. */
+export function goalPct(now: number, goal: number): number {
+  return goal > 0 ? Math.round((now / goal) * 100) : 0;
+}
+
+/** "57% of goal" — the reading that stands where "up 625% on Jul" used to. */
+export function goalLabel(now: number, goal: number): string {
+  return `${goalPct(now, goal)}% of goal`;
+}
+
+/** A met goal reads green; short of it is a plain fact, not a red one — the
+ *  month is not over, and "down" would say it was. */
+export function goalDir(now: number, goal: number): MoveDir {
+  return goal > 0 && now >= goal ? "up" : "none";
+}

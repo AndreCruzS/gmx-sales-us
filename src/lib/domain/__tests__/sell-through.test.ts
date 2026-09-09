@@ -5,6 +5,11 @@ import {
   compositionRail,
   entityAt,
   focusAccount,
+  DEFAULT_MONTHLY_LF_GOAL,
+  goalDir,
+  goalFor,
+  goalLabel,
+  goalPct,
   housesMissing,
   isUnmatched,
   latestPeriods,
@@ -918,5 +923,33 @@ describe("a row's second line describes the whole row", () => {
       [], "rep", [],
     );
     expect(step.groups[0].sub).toBe("Texas has no Market Owner yet");
+  });
+});
+
+// THE GOAL, NOT THE PERCENT (Bianca 2026-09-08; the default Andre 2026-09-09).
+describe("the month goal", () => {
+  it("is 30,000 LF for a region nobody has set — never 'no goal'", () => {
+    expect(DEFAULT_MONTHLY_LF_GOAL).toBe(30_000);
+    expect(goalFor(undefined, "Mountain")).toEqual({ lf: 30_000, own: false });
+    expect(goalFor(new Map(), "Mountain")).toEqual({ lf: 30_000, own: false });
+  });
+
+  it("is the region's own once an admin wrote one", () => {
+    const targets = new Map([["Mountain", 45_000]]);
+    expect(goalFor(targets, "Mountain")).toEqual({ lf: 45_000, own: true });
+    expect(goalFor(targets, "Texas")).toEqual({ lf: 30_000, own: false });
+  });
+
+  it("reads as a share of the goal, not a movement on last month", () => {
+    // 16,996 over 30,000 — the Mountain that used to say "up 625% on Jul".
+    expect(goalLabel(16_996, 30_000)).toBe("57% of goal");
+    expect(goalPct(0, 30_000)).toBe(0);
+    expect(goalPct(30_000, 0)).toBe(0);
+  });
+
+  it("colours only a met goal — short of it is not 'down'", () => {
+    expect(goalDir(16_996, 30_000)).toBe("none");
+    expect(goalDir(30_000, 30_000)).toBe("up");
+    expect(goalDir(41_199, 30_000)).toBe("up");
   });
 });

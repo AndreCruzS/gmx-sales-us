@@ -53,6 +53,10 @@ import {
   ALL_ROWS,
   SELL_ROOT_LABEL,
   focusAccount,
+  goalDir,
+  goalFor,
+  goalLabel,
+  goalPct,
   movementLabel,
   moveDir,
   scopeVolume,
@@ -581,7 +585,26 @@ export function TeamSales({
   const stepPrevTotal = step.groups.reduce((n, g) => n + g.prevTotal, 0);
   const counterPrev =
     chosenBand !== null && phase !== "slide" ? chosenBand.prevQty : stepPrevTotal;
-  const stepMoved = movementLabel(counterTarget, counterPrev, previous, mv);
+  // THE GOAL, NOT THE PERCENT (Bianca, 2026-09-08): over a single month the
+  // region book reads every figure against a month goal — each region's own
+  // or the 30,000 LF default (Andre, 2026-09-09) — never against the month
+  // before, whose "up 625%" from nothing is what she sent back. A range has
+  // no honest month goal, so it still reads on the period before it.
+  const regionGoals = Boolean(goalMonth) && lens === "region" && step.unit === "LF";
+  const goalOf = (key: string) => goalFor(targets, key).lf;
+  const counterGoal = regionGoals
+    ? chosenBand !== null && phase !== "slide" && chosenGroup
+      ? goalOf(chosenGroup.key)
+      : step.groups.reduce((n, g) => n + goalOf(g.key), 0)
+    : null;
+  const stepMoved =
+    counterGoal !== null
+      ? `${goalPct(counterTarget, counterGoal)}% of the ${QTY.format(counterGoal)} LF goal`
+      : movementLabel(counterTarget, counterPrev, previous, mv);
+  const stepMovedDir =
+    counterGoal !== null
+      ? goalDir(counterTarget, counterGoal)
+      : moveDir(counterTarget, counterPrev, previous);
 
 
 
@@ -760,10 +783,7 @@ export function TeamSales({
                 {showCounterFigure ? `· ${month}` : month}
               </span>
               {showCounterFigure && stepMoved && (
-                <span
-                  className="sales-move sales-count-move"
-                  data-dir={moveDir(counterTarget, counterPrev, previous)}
-                >
+                <span className="sales-move sales-count-move" data-dir={stepMovedDir}>
                   {stepMoved}
                 </span>
               )}
@@ -838,9 +858,22 @@ export function TeamSales({
 
           {step.groups.map((g) => {
             const open = chosenGroup?.key === g.key ? chosenBand : null;
-            const moved = movementLabel(g.total, g.prevTotal, previous, mv);
+            // A region reads against its month goal (Bianca, 2026-09-08),
+            // and so does every house inside it — its part of that goal.
+            // Only a range, with no honest month goal, reads on last month.
+            const gGoal = regionGoals ? goalOf(g.key) : null;
+            const moved =
+              gGoal !== null
+                ? goalLabel(g.total, gGoal)
+                : movementLabel(g.total, g.prevTotal, previous, mv);
+            const movedDir =
+              gGoal !== null
+                ? goalDir(g.total, gGoal)
+                : moveDir(g.total, g.prevTotal, previous);
             const openMoved = open
-              ? movementLabel(open.qty, open.prevQty, previous, mv)
+              ? gGoal !== null
+                ? goalLabel(open.qty, gGoal)
+                : movementLabel(open.qty, open.prevQty, previous, mv)
               : null;
             const isolated = isolatedKey !== null && g.key === isolatedKey;
             // The isolated row's stripe on the total bar, looked up by key
@@ -1012,10 +1045,7 @@ export function TeamSales({
                         <span className="sales-head-qty">
                           {QTY.format(g.total)} {g.unit}
                         </span>
-                        <span
-                          className="sales-move"
-                          data-dir={moveDir(g.total, g.prevTotal, previous)}
-                        >
+                        <span className="sales-move" data-dir={movedDir}>
                           {moved ?? "no earlier file"}
                         </span>
                       </span>
@@ -1173,7 +1203,14 @@ export function TeamSales({
                       );
                     }
 
-                    const bandMoved = movementLabel(b.qty, b.prevQty, previous, mv);
+                    const bandMoved =
+                      gGoal !== null
+                        ? goalLabel(b.qty, gGoal)
+                        : movementLabel(b.qty, b.prevQty, previous, mv);
+                    const bandDir =
+                      gGoal !== null
+                        ? goalDir(b.qty, gGoal)
+                        : moveDir(b.qty, b.prevQty, previous);
                     const bandReturning =
                       held === null &&
                       bandReleasing !== null &&
@@ -1238,10 +1275,7 @@ export function TeamSales({
                                 <span className="sales-item-qty">
                                   {QTY.format(b.qty)} {g.unit}
                                 </span>
-                                <span
-                                  className="sales-move"
-                                  data-dir={moveDir(b.qty, b.prevQty, previous)}
-                                >
+                                <span className="sales-move" data-dir={bandDir}>
                                   {bandMoved ?? "—"}
                                 </span>
                               </span>
@@ -1535,10 +1569,13 @@ function SalesBook({
     lens === "region" && panePath.length === 1 && panePath[0].dim === "region"
       ? panePath[0]
       : null;
-  const goalTarget = goalRegion ? (targets?.get(goalRegion.key) ?? null) : null;
+  // Every region has a goal — its own or the 30,000 LF default (Andre,
+  // 2026-09-09) — so the header never falls back to last month's percent.
+  const goal = goalRegion && goalMonth ? goalFor(targets, goalRegion.key) : null;
   const saveGoal = () => {
     if (!goalRegion || !onTarget || goalDraft === null) return;
     const n = Math.round(Number(goalDraft.replace(/[,.\s]/g, "")));
+    // An empty save returns the region to the default, it does not unset it.
     onTarget(goalRegion.key, Number.isFinite(n) && n > 0 ? n : null);
     setGoalDraft(null);
   };
@@ -1630,18 +1667,29 @@ function SalesBook({
                     <span className="sales-head-qty">
                       {QTY.format(g.total)} {g.unit}
                     </span>
-                    <span
-                      className="sales-move"
-                      data-dir={moveDir(g.total, g.prevTotal, previous)}
-                    >
-                      {gMoved ?? "no earlier file"}
-                    </span>
+                    {/* Against the goal when there is one to read against;
+                        the month before only when there is not (a range). */}
+                    {goal ? (
+                      <span
+                        className="sales-move"
+                        data-dir={goalDir(g.total, goal.lf)}
+                      >
+                        {goalLabel(g.total, goal.lf)}
+                      </span>
+                    ) : (
+                      <span
+                        className="sales-move"
+                        data-dir={moveDir(g.total, g.prevTotal, previous)}
+                      >
+                        {gMoved ?? "no earlier file"}
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 {/* The goal, read where the percent used to stand alone. Only
                     over a single month — a range has no honest month goal. */}
-                {goalRegion && goalMonth && (
+                {goal && (
                   <div className="bkp-goal">
                     {goalDraft !== null ? (
                       <>
@@ -1668,43 +1716,38 @@ function SalesBook({
                           cancel
                         </button>
                       </>
-                    ) : goalTarget !== null ? (
+                    ) : (
                       <>
                         <span className="bkp-goal-track" aria-hidden="true">
                           <span
                             className={`bkp-goal-fill${
-                              g.total >= goalTarget ? " is-met" : ""
+                              g.total >= goal.lf ? " is-met" : ""
                             }`}
                             style={{
-                              width: `${Math.min(100, Math.max(0, (g.total / goalTarget) * 100))}%`,
+                              width: `${Math.min(100, Math.max(0, goalPct(g.total, goal.lf)))}%`,
                             }}
                           />
                         </span>
                         <span className="t-hint bkp-goal-read">
                           <span className="fig-sm">
-                            {Math.round((g.total / goalTarget) * 100)}%
+                            {goalPct(g.total, goal.lf)}%
                           </span>{" "}
-                          of the {QTY.format(goalTarget)} LF month goal
+                          of the {QTY.format(goal.lf)} LF month goal
+                          {/* honest about whose number it is: the default is
+                              a placeholder until the region gets its own */}
+                          {!goal.own && " (default)"}
                         </span>
                         {onTarget && (
                           <button
                             type="button"
                             className="btn-mini"
-                            onClick={() => setGoalDraft(String(goalTarget))}
+                            onClick={() => setGoalDraft(String(goal.lf))}
                           >
                             edit
                           </button>
                         )}
                       </>
-                    ) : onTarget ? (
-                      <button
-                        type="button"
-                        className="btn-mini"
-                        onClick={() => setGoalDraft("")}
-                      >
-                        set a month goal
-                      </button>
-                    ) : null}
+                    )}
                   </div>
                 )}
 
@@ -1754,12 +1797,25 @@ function SalesBook({
                             <span className="sales-item-qty">
                               {QTY.format(b.qty)} {g.unit}
                             </span>
-                            <span
-                              className="sales-move"
-                              data-dir={moveDir(b.qty, b.prevQty, previous)}
-                            >
-                              {bandMoved ?? "—"}
-                            </span>
+                            {/* Each house's part of the REGION's goal — the
+                                only goal there is — instead of its own
+                                month-on-month, which is the "625% on
+                                nothing" line Bianca sent back. */}
+                            {goal ? (
+                              <span
+                                className="sales-move"
+                                data-dir={goalDir(b.qty, goal.lf)}
+                              >
+                                {goalLabel(b.qty, goal.lf)}
+                              </span>
+                            ) : (
+                              <span
+                                className="sales-move"
+                                data-dir={moveDir(b.qty, b.prevQty, previous)}
+                              >
+                                {bandMoved ?? "—"}
+                              </span>
+                            )}
                           </span>
                           <span className="sales-item-go" aria-hidden="true">
                             {b.drillable ? "›" : ""}
@@ -1862,7 +1918,27 @@ function SalesBook({
           const mastPrev = pickedGroup
             ? pickedGroup.prevTotal
             : step.groups.reduce((n, x) => n + x.prevTotal, 0);
-          const m = movementLabel(mastTotal, mastPrev, previous, mv);
+          // THE GOAL, NOT THE PERCENT (Bianca, 2026-09-08). Over a single
+          // month the region masthead reads against its month goal; the
+          // country reads against the goals of the markets in the book,
+          // added up. Only a range, with no honest month goal, still reads
+          // against the period before it.
+          const mastGoal =
+            goalMonth && lens === "region" && step.unit === "LF"
+              ? pickedGroup
+                ? goalFor(targets, pickedGroup.key).lf
+                : step.groups.reduce((n, x) => n + goalFor(targets, x.key).lf, 0)
+              : null;
+          const m =
+            mastGoal !== null
+              ? `${goalPct(mastTotal, mastGoal)}% of the ${QTY.format(mastGoal)} LF goal${
+                  pickedGroup ? "" : ` across ${step.groups.length} markets`
+                }`
+              : movementLabel(mastTotal, mastPrev, previous, mv);
+          const mDir =
+            mastGoal !== null
+              ? goalDir(mastTotal, mastGoal)
+              : moveDir(mastTotal, mastPrev, previous);
           return (
             <div
               key={pickedGroup ? pickedGroup.key : "country"}
@@ -1877,10 +1953,7 @@ function SalesBook({
                     masthead only states it. */}
                 <span className="sales-count-when">· {month}</span>
                 {m ? (
-                  <span
-                    className="sales-move sales-count-move"
-                    data-dir={moveDir(mastTotal, mastPrev, previous)}
-                  >
+                  <span className="sales-move sales-count-move" data-dir={mDir}>
                     {m}
                   </span>
                 ) : null}
@@ -2019,8 +2092,8 @@ function SalesBook({
                                 {QTY.format(m.total)} {m.unit}
                                 {/* against the goal, not last month — the
                                     percent Bianca operates by */}
-                                {goalMonth && targets?.get(m.key)
-                                  ? ` · ${Math.round((m.total / targets.get(m.key)!) * 100)}% of goal`
+                                {goalMonth
+                                  ? ` · ${goalLabel(m.total, goalFor(targets, m.key).lf)}`
                                   : ""}
                               </span>
                             </span>
@@ -2054,7 +2127,18 @@ function SalesBook({
                 const isPicked = picked === m.key;
                 const ex = cardExtras.get(m.key);
                 const hue = colourOf(m.key);
-                const moved = movementLabel(m.total, m.prevTotal, previous, mv);
+                // The card's second line: the goal over a month, the month
+                // before only over a range (Bianca, 2026-09-08 — "625% pra
+                // cima de nada" is exactly what this line used to say).
+                const cardGoal = goalMonth ? goalFor(targets, m.key).lf : null;
+                const moved =
+                  cardGoal !== null
+                    ? goalLabel(m.total, cardGoal)
+                    : movementLabel(m.total, m.prevTotal, previous, mv);
+                const movedDir =
+                  cardGoal !== null
+                    ? goalDir(m.total, cardGoal)
+                    : moveDir(m.total, m.prevTotal, previous);
                 const topDealer = ex?.dealers[0]?.qty ?? 1;
                 return (
                   <button
@@ -2069,10 +2153,7 @@ function SalesBook({
                     {/* the movement gets its own line — sharing the name's
                         line truncated both, and the name loses that fight */}
                     {moved && (
-                      <span
-                        className="sales-move rcard-move"
-                        data-dir={moveDir(m.total, m.prevTotal, previous)}
-                      >
+                      <span className="sales-move rcard-move" data-dir={movedDir}>
                         {moved}
                       </span>
                     )}
