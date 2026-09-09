@@ -3240,8 +3240,14 @@ input[type="datetime-local"] {
   /* the three cells sit together on the left — spread over the whole
      line they read as three unrelated numbers; the bar keeps the width */
   .mgr-home > [data-desk="recurrence"] .recur-cells {
-    grid-template-columns: repeat(3, minmax(0, 220px));
-    gap: 32px;
+    gap: 24px;
+  }
+  .mgr-home > [data-desk="recurrence"] .recur-name:nth-child(n + 4) {
+    display: flex;
+  }
+  .mgr-home > [data-desk="recurrence"] .recur-names {
+    max-height: 264px;
+    overflow-y: auto;
   }
   /* The .adapt entrance animation staggers by nth-of-type for the phone's
      top-to-bottom read; on the desk the columns arrive together. */
@@ -4464,6 +4470,44 @@ input[type="datetime-local"] {
 .recur-cell[data-dir="down"] .fig-xl {
   color: var(--danger);
 }
+/* the names under each cell: biggest first, the LF closing the row; the
+   phone reads the top three and counts the rest, the desk reads them all */
+.recur-names {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+.recur-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  min-width: 0;
+}
+/* a name cut short names nobody: it wraps to a second line instead */
+.recur-name-link,
+.recur-name-text {
+  min-width: 0;
+  line-height: 1.25;
+}
+.recur-name-link {
+  color: var(--ink-primary);
+}
+.recur-name-link:hover {
+  color: var(--accent);
+}
+.recur-name-lf {
+  flex-shrink: 0;
+  color: var(--ink-primary);
+}
+.recur-name:nth-child(n + 4) {
+  display: none;
+}
 .recur-track {
   margin-top: 14px;
   height: 6px;
@@ -4490,8 +4534,7 @@ input[type="datetime-local"] {
 }
 .gm-area,
 .gm-feet {
-  display: flex;
-  justify-content: space-around;
+  display: grid;
   gap: 12px;
 }
 .gm-area {
@@ -4500,12 +4543,39 @@ input[type="datetime-local"] {
   height: 168px;
   border-bottom: 1px solid var(--rule);
 }
+/* the trend over the bar tops: an SVG stretched over the whole area so its
+   100x100 space IS the area's percent space; the stroke stays 2px */
+.gm-trend {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.gm-trend polyline {
+  fill: none;
+  stroke: var(--ink-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.gm-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--surface-card);
+  border: 2px solid var(--ink-primary);
+  pointer-events: none;
+}
 .gm-col,
 .gm-foot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 0 1 96px;
   min-width: 0;
 }
 .gm-col {
@@ -4515,7 +4585,8 @@ input[type="datetime-local"] {
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ink-secondary);
-  margin-bottom: 4px;
+  /* room for the trend's dot, which sits on the bar top under this label */
+  margin-bottom: 10px;
 }
 .gm-col[data-hole] .gm-val {
   font-weight: 400;

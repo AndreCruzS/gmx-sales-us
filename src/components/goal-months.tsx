@@ -5,13 +5,16 @@
 // One column per month from the first return to the last; the goal is a line
 // across all of them. A month with no file is a HOLE with the words "no file"
 // where a bar would be — a missing return is unknown, not zero, and a chart
-// that dipped to nothing would say the market died. Bars, not a line: two
-// files are two facts, and a line through them would claim a trend the data
-// has not earned (Andre, 2026-09-09). The reading grows as returns land.
+// that dipped to nothing would say the market died. Over the bar tops runs
+// a line, so the eye reads rising or falling without comparing heights
+// (Andre, 2026-09-09) — it BREAKS at a hole rather than bridging it, because
+// a bridge would draw a month nobody reported.
 //
-// Two rows, one scale: the bar area holds the bars AND the goal line, so a
-// percent means the same height for both; the feet below carry month and LF
-// and share the columns' sizing so they line up without measuring anything.
+// Two rows, one scale: the bar area holds the bars, the goal line and the
+// trend, so a percent means the same height for all three; the feet below
+// carry month and LF and share the columns' sizing so they line up without
+// measuring anything. The area is a grid of equal columns, which is what
+// lets the trend's x coordinates be computed rather than measured.
 
 import { goalPct, periodShort, type GoalMonth } from "@/lib/domain/sell-through";
 
@@ -38,13 +41,31 @@ export function GoalMonths({
   // sit and a bar over the goal still shows its percent.
   const top = Math.max(goal, ...months.map((m) => m.lf ?? 0)) * 1.25;
   const goalY = (100 * goal) / top;
+  const n = months.length;
+  // The trend: one point per month with a file, at the bar's centre and top,
+  // in a 100×100 space stretched over the area. Runs of consecutive files
+  // become separate polylines, so a hole is a gap in the line.
+  const runs: string[][] = [];
+  months.forEach((m, i) => {
+    if (m.lf === null) {
+      if (runs.length === 0 || runs[runs.length - 1].length > 0) runs.push([]);
+      return;
+    }
+    if (runs.length === 0) runs.push([]);
+    runs[runs.length - 1].push(`${((i + 0.5) * 100) / n},${100 - (100 * m.lf) / top}`);
+  });
+  const points = months
+    .map((m, i) =>
+      m.lf === null ? null : { x: ((i + 0.5) * 100) / n, y: 100 - (100 * m.lf) / top },
+    )
+    .filter((p): p is { x: number; y: number } => p !== null);
   return (
     <div
       className="gm"
       role="img"
       aria-label={`${unit} by month against the ${QTY.format(goal)} ${unit} goal`}
     >
-      <div className="gm-area">
+      <div className="gm-area" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
         <span className="gm-goal" style={{ bottom: `${goalY}%` }} aria-hidden="true">
           <span className="gm-goal-label">
             goal {QTY.format(goal)} {unit}
@@ -71,8 +92,31 @@ export function GoalMonths({
             </div>
           );
         })}
+        {points.length >= 2 && (
+          <svg
+            className="gm-trend"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            {runs
+              .filter((r) => r.length >= 2)
+              .map((r, i) => (
+                <polyline key={i} points={r.join(" ")} />
+              ))}
+          </svg>
+        )}
+        {points.length >= 2 &&
+          points.map((p, i) => (
+            <span
+              key={i}
+              className="gm-dot"
+              style={{ left: `${p.x}%`, top: `${p.y}%` }}
+              aria-hidden="true"
+            />
+          ))}
       </div>
-      <div className="gm-feet">
+      <div className="gm-feet" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
         {months.map((m) => (
           <div
             key={m.period}

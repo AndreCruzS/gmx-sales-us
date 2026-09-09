@@ -1518,27 +1518,47 @@ export function ManagerHome({ name }: { name: string }) {
             </span>
           </div>
           <div className="recur-cells">
-            <div className="recur-cell">
-              <span className="t-meta uppercase tracking-wide">Bought again</span>
-              <span className="fig fig-xl">{QTY.format(recur.again.count)}</span>
-              <span className="t-hint">
-                {QTY.format(Math.round(recur.again.lf))} {recur.unit} this month
-              </span>
-            </div>
-            <div className="recur-cell">
-              <span className="t-meta uppercase tracking-wide">New</span>
-              <span className="fig fig-xl">{QTY.format(recur.fresh.count)}</span>
-              <span className="t-hint">
-                {QTY.format(Math.round(recur.fresh.lf))} {recur.unit} this month
-              </span>
-            </div>
-            <div className="recur-cell" data-dir={recur.dropped.count > 0 ? "down" : undefined}>
-              <span className="t-meta uppercase tracking-wide">Dropped</span>
-              <span className="fig fig-xl">{QTY.format(recur.dropped.count)}</span>
-              <span className="t-hint">
-                {QTY.format(Math.round(recur.dropped.lf))} {recur.unit} went silent
-              </span>
-            </div>
+            {(
+              [
+                { label: "Bought again", side: recur.again, tail: "this month", down: false },
+                { label: "New", side: recur.fresh, tail: "this month", down: false },
+                { label: "Dropped", side: recur.dropped, tail: "went silent", down: true },
+              ] as const
+            ).map((c) => (
+              <div
+                key={c.label}
+                className="recur-cell"
+                data-dir={c.down && c.side.count > 0 ? "down" : undefined}
+              >
+                <span className="t-meta uppercase tracking-wide">{c.label}</span>
+                <span className="fig fig-xl">{QTY.format(c.side.count)}</span>
+                <span className="t-hint">
+                  {QTY.format(Math.round(c.side.lf))} {recur.unit} {c.tail}
+                </span>
+                {/* WHO — every name, biggest first, with its LF. The phone
+                    shows the top few and counts the rest; the desk shows
+                    them all (Andre, 2026-09-09: the count alone said
+                    nothing). */}
+                {c.side.dealers.length > 0 && (
+                  <ul className="recur-names">
+                    {c.side.dealers.map((d) => (
+                      <li key={d.key} className="recur-name">
+                        {d.accountId ? (
+                          <Link href={`/accounts/${d.accountId}`} className="recur-name-link">
+                            {d.name}
+                          </Link>
+                        ) : (
+                          <span className="recur-name-text">{d.name}</span>
+                        )}
+                        <span className="fig-sm recur-name-lf">
+                          {QTY.format(Math.round(d.lf))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
           </div>
           {/* the share of this month's dealers that were here last month —
               one bar, the same reading the words above give, at a glance */}

@@ -1124,9 +1124,20 @@ export function goalDir(now: number, goal: number): MoveDir {
 // the volume they bought this month, or for the dropped, the volume that
 // went silent. A dealer at zero in a file did not buy: a row is not a purchase.
 
+export interface RecurrenceDealer {
+  key: string;
+  name: string;
+  accountId: string | null;
+  /** This month's LF, or for the dropped, the LF that went silent. */
+  lf: number;
+}
+
 export interface RecurrenceSide {
   count: number;
   lf: number;
+  /** Every dealer on this side, biggest LF first — a count with no names
+   *  is a question, not an answer (Andre, 2026-09-09). */
+  dealers: RecurrenceDealer[];
 }
 
 export interface Recurrence {
@@ -1156,12 +1167,16 @@ export function recurrence(
   if (!latest || !previous) return null;
   const cur = new Map<string, number>();
   const prev = new Map<string, number>();
+  const names = new Map<string, string>();
+  const ids = new Map<string, string | null>();
   let unit = "LF";
   let sawPrevious = false;
   for (const r of rows) {
     if (r.period_kind === "YTD") continue;
     if (regionId !== null && r.region_id !== regionId) continue;
     const key = r.dealer_id ?? r.dealer_label;
+    names.set(key, r.dealer_name ?? r.dealer_label);
+    ids.set(key, r.dealer_id);
     unit = r.unit || unit;
     const qty = Number(r.quantity);
     if (r.period === latest) cur.set(key, (cur.get(key) ?? 0) + qty);
@@ -1171,22 +1186,30 @@ export function recurrence(
     }
   }
   if (!sawPrevious) return null;
-  const again = { count: 0, lf: 0 };
-  const fresh = { count: 0, lf: 0 };
-  const dropped = { count: 0, lf: 0 };
+  const side = (): RecurrenceSide => ({ count: 0, lf: 0, dealers: [] });
+  const again = side();
+  const fresh = side();
+  const dropped = side();
+  const put = (s: RecurrenceSide, key: string, lf: number) => {
+    s.count += 1;
+    s.lf += lf;
+    s.dealers.push({
+      key,
+      name: names.get(key) ?? key,
+      accountId: ids.get(key) ?? null,
+      lf,
+    });
+  };
   for (const [k, c] of cur) {
     if (c <= 0) continue;
-    const p = prev.get(k) ?? 0;
-    const side = p > 0 ? again : fresh;
-    side.count += 1;
-    side.lf += c;
+    put((prev.get(k) ?? 0) > 0 ? again : fresh, k, c);
   }
   for (const [k, p] of prev) {
     if (p <= 0) continue;
     if ((cur.get(k) ?? 0) > 0) continue;
-    dropped.count += 1;
-    dropped.lf += p;
+    put(dropped, k, p);
   }
+  for (const s of [again, fresh, dropped]) s.dealers.sort((a, b) => b.lf - a.lf);
   return {
     latest,
     previous,

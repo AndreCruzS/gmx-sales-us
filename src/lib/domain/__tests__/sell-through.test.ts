@@ -963,21 +963,34 @@ describe("recurrence", () => {
   const two = [
     // June: anaheim 1000, corona 500, orange 200 (orange at zero — a row, not a purchase)
     row({ period: JUN, dealer_id: "anaheim", quantity: 1000 }),
-    row({ period: JUN, dealer_id: "corona", dealer_label: "CORONA", quantity: 500 }),
-    row({ period: JUN, dealer_id: "orange", dealer_label: "ORANGE", quantity: 0 }),
+    row({ period: JUN, dealer_id: "corona", dealer_name: null, dealer_label: "CORONA", quantity: 500 }),
+    row({ period: JUN, dealer_id: "orange", dealer_name: null, dealer_label: "ORANGE", quantity: 0 }),
     // July: anaheim again (split over two products), fresno new, corona gone
     row({ period: JUL, dealer_id: "anaheim", quantity: 600 }),
     row({ period: JUL, dealer_id: "anaheim", product: "Pine", quantity: 300 }),
-    row({ period: JUL, dealer_id: "fresno", dealer_label: "FRESNO", region_id: "norcal", quantity: 250 }),
+    row({ period: JUL, dealer_id: "fresno", dealer_name: null, dealer_label: "FRESNO", region_id: "norcal", quantity: 250 }),
   ];
 
   it("counts again, new and dropped by dealer, weighed in LF", () => {
     const r = recurrence(two, JUL, JUN);
     expect(r).not.toBeNull();
-    expect(r!.again).toEqual({ count: 1, lf: 900 });
-    expect(r!.fresh).toEqual({ count: 1, lf: 250 });
-    expect(r!.dropped).toEqual({ count: 1, lf: 500 });
+    expect(r!.again).toMatchObject({ count: 1, lf: 900 });
+    expect(r!.fresh).toMatchObject({ count: 1, lf: 250 });
+    expect(r!.dropped).toMatchObject({ count: 1, lf: 500 });
     expect(r!.buying).toBe(2);
+  });
+
+  it("names every dealer on each side, biggest LF first — a count with no names is a question", () => {
+    const r = recurrence(two, JUL, JUN)!;
+    expect(r.again.dealers).toEqual([
+      { key: "anaheim", name: "Ganahl Anaheim", accountId: "anaheim", lf: 900 },
+    ]);
+    expect(r.dropped.dealers.map((d) => [d.name, d.lf])).toEqual([["CORONA", 500]]);
+    const many = [
+      ...two,
+      row({ period: JUL, dealer_id: "big", dealer_label: "BIG", quantity: 5000 }),
+    ];
+    expect(recurrence(many, JUL, JUN)!.fresh.dealers.map((d) => d.key)).toEqual(["big", "fresno"]);
   });
 
   it("does not count a zero row as a purchase, coming or going", () => {
@@ -988,7 +1001,7 @@ describe("recurrence", () => {
 
   it("narrows to the region the book walked into", () => {
     const r = recurrence(two, JUL, JUN, "socal")!;
-    expect(r.fresh).toEqual({ count: 0, lf: 0 });
+    expect(r.fresh).toMatchObject({ count: 0, lf: 0 });
     expect(r.again.count).toBe(1);
   });
 
@@ -999,7 +1012,7 @@ describe("recurrence", () => {
 
   it("leaves YTD aggregates out of the pair", () => {
     const withYtd = [...two, row({ period: JUL, dealer_id: "ytd-only", period_kind: "YTD", quantity: 9999 })];
-    expect(recurrence(withYtd, JUL, JUN)!.fresh).toEqual({ count: 1, lf: 250 });
+    expect(recurrence(withYtd, JUL, JUN)!.fresh).toMatchObject({ count: 1, lf: 250 });
   });
 });
 
