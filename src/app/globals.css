@@ -3219,6 +3219,22 @@ input[type="datetime-local"] {
   .mgr-home > [data-desk="slipping"] {
     grid-column: 2;
   }
+  /* the recurrence strip runs the whole line under the book, three cells
+     with room to breathe, before the page splits into its two columns */
+  .mgr-home > [data-desk="recurrence"] {
+    grid-column: 1 / -1;
+  }
+  .mgr-home > [data-desk="recurrence"] .recur-head {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 12px;
+  }
+  /* the three cells sit together on the left — spread over the whole
+     line they read as three unrelated numbers; the bar keeps the width */
+  .mgr-home > [data-desk="recurrence"] .recur-cells {
+    grid-template-columns: repeat(3, minmax(0, 220px));
+    gap: 32px;
+  }
   /* The .adapt entrance animation staggers by nth-of-type for the phone's
      top-to-bottom read; on the desk the columns arrive together. */
   .mgr-home > .adapt {
@@ -4407,4 +4423,49 @@ input[type="datetime-local"] {
 }
 .agcal-day-panel {
   margin-top: 2px;
+}
+
+/* ── Who kept buying — recurrence (Bianca, 2026-09-08: "meta e recorrência") ──
+   Three facts in one strip: bought again, new, dropped — each a count of
+   dealers over the LF behind it. The bar underneath is the share of this
+   month's dealers that were in the file before too: the same reading the
+   words give, at a glance. Flat, aligned bases, LF last in every cell. */
+.recur {
+  padding: 14px 16px 16px;
+}
+.recur-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 12px;
+}
+.recur-cells {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.recur-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.recur-cell .fig-xl {
+  line-height: 1.1;
+}
+.recur-cell[data-dir="down"] .fig-xl {
+  color: var(--danger);
+}
+.recur-track {
+  margin-top: 14px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.recur-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--success-ink);
 }

@@ -18,6 +18,7 @@ import {
   movementLabel,
   moveDir,
   periodLabel,
+  recurrence,
   rowMatchesPath,
   scopeVolume,
   shortBranchName,
@@ -951,5 +952,51 @@ describe("the month goal", () => {
     expect(goalDir(16_996, 30_000)).toBe("none");
     expect(goalDir(30_000, 30_000)).toBe("up");
     expect(goalDir(41_199, 30_000)).toBe("up");
+  });
+});
+
+// RECURRENCE — Bianca's other word (2026-09-08): who bought again, who is
+// new, who dropped, counted by dealer and weighed in LF.
+describe("recurrence", () => {
+  const two = [
+    // June: anaheim 1000, corona 500, orange 200 (orange at zero — a row, not a purchase)
+    row({ period: JUN, dealer_id: "anaheim", quantity: 1000 }),
+    row({ period: JUN, dealer_id: "corona", dealer_label: "CORONA", quantity: 500 }),
+    row({ period: JUN, dealer_id: "orange", dealer_label: "ORANGE", quantity: 0 }),
+    // July: anaheim again (split over two products), fresno new, corona gone
+    row({ period: JUL, dealer_id: "anaheim", quantity: 600 }),
+    row({ period: JUL, dealer_id: "anaheim", product: "Pine", quantity: 300 }),
+    row({ period: JUL, dealer_id: "fresno", dealer_label: "FRESNO", region_id: "norcal", quantity: 250 }),
+  ];
+
+  it("counts again, new and dropped by dealer, weighed in LF", () => {
+    const r = recurrence(two, JUL, JUN);
+    expect(r).not.toBeNull();
+    expect(r!.again).toEqual({ count: 1, lf: 900 });
+    expect(r!.fresh).toEqual({ count: 1, lf: 250 });
+    expect(r!.dropped).toEqual({ count: 1, lf: 500 });
+    expect(r!.buying).toBe(2);
+  });
+
+  it("does not count a zero row as a purchase, coming or going", () => {
+    const r = recurrence(two, JUL, JUN)!;
+    // orange was at zero in June: neither dropped nor anything else
+    expect(r.dropped.count).toBe(1);
+  });
+
+  it("narrows to the region the book walked into", () => {
+    const r = recurrence(two, JUL, JUN, "socal")!;
+    expect(r.fresh).toEqual({ count: 0, lf: 0 });
+    expect(r.again.count).toBe(1);
+  });
+
+  it("answers null without an earlier file — not 'nobody came back'", () => {
+    expect(recurrence(two, JUL, null)).toBeNull();
+    expect(recurrence(two.filter((r) => r.period === JUL), JUL, JUN)).toBeNull();
+  });
+
+  it("leaves YTD aggregates out of the pair", () => {
+    const withYtd = [...two, row({ period: JUL, dealer_id: "ytd-only", period_kind: "YTD", quantity: 9999 })];
+    expect(recurrence(withYtd, JUL, JUN)!.fresh).toEqual({ count: 1, lf: 250 });
   });
 });

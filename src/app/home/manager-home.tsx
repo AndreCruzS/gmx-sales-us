@@ -26,6 +26,8 @@ import {
 import {
   movementLabel,
   periodLabel,
+  periodShort,
+  recurrence,
   SELL_LENSES,
   type BranchRef,
   type PathStep,
@@ -990,6 +992,19 @@ export function ManagerHome({ name }: { name: string }) {
     return { rows, hasPrev };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
 
+  // RECURRENCE — Bianca's other word ("meta e recorrência"). Of the dealers
+  // in the newest file, who was in the one before too, who is new, who fell
+  // out. Only over a single month with both files on hand, and only under
+  // the region lens, narrowed to the region the book has walked into; the
+  // strip is silent rather than wrong everywhere else.
+  const recur = useMemo(
+    () =>
+      salesLens === "region" && !focus && windowInfo.kind === "month"
+        ? recurrence(monthlyRows, latest, previous, buyRegion?.key ?? null)
+        : null,
+    [salesLens, focus, windowInfo.kind, monthlyRows, latest, previous, buyRegion],
+  );
+
   // The register's two chapters, each already ranked biggest loss first:
   // the houses that went silent, and the ones still in the file but buying
   // less. The desk lays them side by side; the phone reads the top ten of
@@ -1457,6 +1472,59 @@ export function ManagerHome({ name }: { name: string }) {
         goalMonth={windowInfo.kind === "month"}
       />
       </div>
+
+      {/* WHO KEPT BUYING — recurrence, the half of "meta e recorrência" the
+          goal line does not answer. Three facts in one strip: bought again,
+          new, dropped, each counted in dealers and weighed in LF. */}
+      {recur && (
+        <section
+          className="adapt card recur"
+          data-desk="recurrence"
+          key={`recur-${buyRegion?.key ?? "all"}`}
+        >
+          <div className="recur-head">
+            <span className="t-title">Who kept buying</span>
+            <span className="t-hint">
+              {periodLabel(recur.latest)} against {periodShort(recur.previous)}
+              {buyRegion ? ` · ${buyRegion.name}` : ""} · {QTY.format(recur.buying)}{" "}
+              {recur.buying === 1 ? "dealer" : "dealers"} bought this month
+            </span>
+          </div>
+          <div className="recur-cells">
+            <div className="recur-cell">
+              <span className="t-meta uppercase tracking-wide">Bought again</span>
+              <span className="fig fig-xl">{QTY.format(recur.again.count)}</span>
+              <span className="t-hint">
+                {QTY.format(Math.round(recur.again.lf))} {recur.unit} this month
+              </span>
+            </div>
+            <div className="recur-cell">
+              <span className="t-meta uppercase tracking-wide">New</span>
+              <span className="fig fig-xl">{QTY.format(recur.fresh.count)}</span>
+              <span className="t-hint">
+                {QTY.format(Math.round(recur.fresh.lf))} {recur.unit} this month
+              </span>
+            </div>
+            <div className="recur-cell" data-dir={recur.dropped.count > 0 ? "down" : undefined}>
+              <span className="t-meta uppercase tracking-wide">Dropped</span>
+              <span className="fig fig-xl">{QTY.format(recur.dropped.count)}</span>
+              <span className="t-hint">
+                {QTY.format(Math.round(recur.dropped.lf))} {recur.unit} went silent
+              </span>
+            </div>
+          </div>
+          {/* the share of this month's dealers that were here last month —
+              one bar, the same reading the words above give, at a glance */}
+          {recur.buying > 0 && (
+            <div className="recur-track" aria-hidden="true">
+              <span
+                className="recur-fill"
+                style={{ width: `${(100 * recur.again.count) / recur.buying}%` }}
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Bianca's tracker, as the journey a branch walks rather than four
           numbers in a box — and ONLY under the Rep lens: the gates are the

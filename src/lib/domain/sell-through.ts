@@ -1115,3 +1115,85 @@ export function goalLabel(now: number, goal: number): string {
 export function goalDir(now: number, goal: number): MoveDir {
   return goal > 0 && now >= goal ? "up" : "none";
 }
+
+// ── Recurrence — Bianca's second word ──────────────────────────────────────
+// "Meta e recorrência, é isso que define que está indo bem." The goal is
+// read everywhere above; this is the other half: of the dealers in the newest
+// file, who was in the file before it too, who is new, and who was in the
+// earlier file and is not in this one. Counted by dealer, weighed in LF —
+// the volume they bought this month, or for the dropped, the volume that
+// went silent. A dealer at zero in a file did not buy: a row is not a purchase.
+
+export interface RecurrenceSide {
+  count: number;
+  lf: number;
+}
+
+export interface Recurrence {
+  latest: string;
+  previous: string;
+  /** In both files — this month's LF. */
+  again: RecurrenceSide;
+  /** In the newest file only — this month's LF. */
+  fresh: RecurrenceSide;
+  /** In the earlier file only — the LF that went silent. */
+  dropped: RecurrenceSide;
+  /** Dealers buying this month: again + fresh. */
+  buying: number;
+  unit: string;
+}
+
+/** The two-month recurrence over the monthly files. `regionId` narrows it to
+ *  the region the book has walked into; null answers for the whole book.
+ *  Null result = no earlier file to read against, which is not "nobody
+ *  came back" and must never be drawn as if it were. */
+export function recurrence(
+  rows: readonly SellThroughRow[],
+  latest: string | null,
+  previous: string | null,
+  regionId: string | null = null,
+): Recurrence | null {
+  if (!latest || !previous) return null;
+  const cur = new Map<string, number>();
+  const prev = new Map<string, number>();
+  let unit = "LF";
+  let sawPrevious = false;
+  for (const r of rows) {
+    if (r.period_kind === "YTD") continue;
+    if (regionId !== null && r.region_id !== regionId) continue;
+    const key = r.dealer_id ?? r.dealer_label;
+    unit = r.unit || unit;
+    const qty = Number(r.quantity);
+    if (r.period === latest) cur.set(key, (cur.get(key) ?? 0) + qty);
+    else if (r.period === previous) {
+      sawPrevious = true;
+      prev.set(key, (prev.get(key) ?? 0) + qty);
+    }
+  }
+  if (!sawPrevious) return null;
+  const again = { count: 0, lf: 0 };
+  const fresh = { count: 0, lf: 0 };
+  const dropped = { count: 0, lf: 0 };
+  for (const [k, c] of cur) {
+    if (c <= 0) continue;
+    const p = prev.get(k) ?? 0;
+    const side = p > 0 ? again : fresh;
+    side.count += 1;
+    side.lf += c;
+  }
+  for (const [k, p] of prev) {
+    if (p <= 0) continue;
+    if ((cur.get(k) ?? 0) > 0) continue;
+    dropped.count += 1;
+    dropped.lf += p;
+  }
+  return {
+    latest,
+    previous,
+    again,
+    fresh,
+    dropped,
+    buying: again.count + fresh.count,
+    unit,
+  };
+}
