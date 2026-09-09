@@ -40,6 +40,7 @@ import {
 } from "@/lib/domain/sell-through";
 import { useTween } from "@/lib/ui/use-tween";
 import { GoalMonths } from "@/components/goal-months";
+import { PagedNames } from "@/components/paged-names";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type {
@@ -1532,28 +1533,10 @@ export function ManagerHome({ name }: { name: string }) {
                 <span className="t-hint">
                   {QTY.format(Math.round(c.side.lf))} {recur.unit} {c.tail}
                 </span>
-                {/* WHO — every name, biggest first, with its LF. The phone
-                    shows the top few and counts the rest; the desk shows
-                    them all (Andre, 2026-09-09: the count alone said
-                    nothing). */}
-                {c.side.dealers.length > 0 && (
-                  <ul className="recur-names">
-                    {c.side.dealers.map((d) => (
-                      <li key={d.key} className="recur-name">
-                        {d.accountId ? (
-                          <Link href={`/accounts/${d.accountId}`} className="recur-name-link">
-                            {d.name}
-                          </Link>
-                        ) : (
-                          <span className="recur-name-text">{d.name}</span>
-                        )}
-                        <span className="fig-sm recur-name-lf">
-                          {QTY.format(Math.round(d.lf))}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {/* WHO — every name, biggest first, with its LF, a page at a
+                    time (Andre, 2026-09-09: the count alone said nothing,
+                    and a scrollbar in a card is coarse). */}
+                <PagedNames dealers={c.side.dealers} />
               </div>
             ))}
           </div>
