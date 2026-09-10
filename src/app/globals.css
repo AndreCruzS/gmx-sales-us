@@ -4464,6 +4464,26 @@ input[type="datetime-local"] {
 .recur-cell .fig-xl {
   line-height: 1.1;
 }
+/* the field that narrows a cell's names: the same search-field as the accounts
+   page, trimmed to sit inside a card rather than above a screen. It keeps the
+   16px input, chunky as that looks here — anything smaller and iOS zooms the
+   whole viewport the moment a thumb lands in it, which loses the reader their
+   place on the page. */
+.recur-search {
+  margin-top: 10px;
+  padding: 7px 10px;
+  gap: 8px;
+  background: var(--surface-sunken);
+}
+.recur-search input {
+  line-height: 1.2;
+}
+/* a search that found nobody, where the list would have been */
+.recur-empty {
+  margin: 10px 0 0;
+  padding: 5px 0;
+  border-top: 1px solid var(--rule);
+}
 /* the names under each cell: biggest first, the LF closing the row; paged,
    three at a time on the phone and eight on the desk */
 .recur-names {

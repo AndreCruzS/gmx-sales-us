@@ -18,6 +18,8 @@ import {
   movementLabel,
   moveDir,
   periodLabel,
+  foldForSearch,
+  searchDealers,
   recurrence,
   monthsOnFile,
   regionsOnFile,
@@ -1062,5 +1064,67 @@ describe("monthsOnFile", () => {
   it("names the regions a country goal adds up", () => {
     expect(regionsOnFile(totals)).toEqual(["socal", "texas"]);
     expect(monthsOnFile([])).toEqual([]);
+  });
+});
+
+describe("searchDealers", () => {
+  // The names below are real ones off the Hardwoods and Boise returns, kept
+  // verbatim because their punctuation IS the test.
+  const dealers = [
+    { name: "84L8820 - 84 LUMBER COMPANY", lf: 23285 },
+    { name: "VAL5800 - VALENCIA LUMBER, INC.", lf: 7130 },
+    { name: "CJR5881 - C. J. REDWOOD, INC.", lf: 802 },
+    { name: "GAN7275 - GANAHL LUMBER COMPANY", lf: 8 },
+    { name: "Ganahl Anaheim", lf: 4000 },
+  ];
+
+  it("returns the list untouched, and by identity, for an empty term", () => {
+    expect(searchDealers(dealers, "")).toBe(dealers);
+    expect(searchDealers(dealers, "   ")).toBe(dealers);
+  });
+
+  it("finds a name through the punctuation the file spells it with", () => {
+    // The dot-and-comma spelling is exactly what defeats a naive includes().
+    expect(searchDealers(dealers, "cj redwood").map((d) => d.name)).toEqual([
+      "CJR5881 - C. J. REDWOOD, INC.",
+    ]);
+    expect(searchDealers(dealers, "C.J. Redwood").map((d) => d.name)).toEqual([
+      "CJR5881 - C. J. REDWOOD, INC.",
+    ]);
+  });
+
+  it("matches the distributor's own code, which is part of the name", () => {
+    expect(searchDealers(dealers, "val5800").map((d) => d.name)).toEqual([
+      "VAL5800 - VALENCIA LUMBER, INC.",
+    ]);
+  });
+
+  it("keeps the legal words a stricter fold would throw away", () => {
+    // normaliseName drops "company"; searching must not.
+    expect(searchDealers(dealers, "lumber company")).toHaveLength(2);
+  });
+
+  it("keeps every match, and keeps them in the order they arrived", () => {
+    // Ganahl reaches us as a raw label AND as one of our accounts. Both are
+    // real rows; the bigger one must stay first because the list is ranked by
+    // LF and a search must not re-score it.
+    expect(searchDealers(dealers, "ganahl").map((d) => d.name)).toEqual([
+      "GAN7275 - GANAHL LUMBER COMPANY",
+      "Ganahl Anaheim",
+    ]);
+  });
+
+  it("is case-blind and matches mid-name, not only from the start", () => {
+    expect(searchDealers(dealers, "VALENCIA")).toHaveLength(1);
+    expect(searchDealers(dealers, "84 lumber")).toHaveLength(1);
+  });
+
+  it("finds nobody rather than everybody when the term matches nothing", () => {
+    expect(searchDealers(dealers, "kebony")).toEqual([]);
+  });
+
+  it("folds a name to letters and digits alone", () => {
+    expect(foldForSearch("  C. J. REDWOOD, INC. ")).toBe("cjredwoodinc");
+    expect(foldForSearch("---")).toBe("");
   });
 });

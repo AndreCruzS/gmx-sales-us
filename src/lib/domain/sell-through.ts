@@ -1306,3 +1306,53 @@ export function regionsOnFile(totals: readonly PeriodTotal[]): string[] {
   }
   return [...s].sort();
 }
+
+// ── Finding one dealer among many ───────────────────────────────────────────
+//
+// The recurrence strip names every dealer that bought, and by August 2026 that
+// is 86 names in a single month — three of them accounts of ours, the other
+// eighty-three still raw labels off the distributors' files. Paging through
+// eleven screens to learn whether one house came back is not reading, it is
+// hunting, so the list takes a search (Andre, 2026-09-10).
+
+/**
+ * A name reduced to its letters and digits — no spaces, no punctuation — for
+ * comparing against what somebody typed.
+ *
+ * Deliberately gentler than the loader's `normaliseName`: that one throws away
+ * "inc", "llc" and store numbers so two spellings of one yard can be matched
+ * to each other. Here they are KEPT, because a person who typed "84 lumber
+ * company" or "val5800" typed those characters on purpose and expects them to
+ * count.
+ *
+ * THE SPACES GO TOO, and that is the whole trick. These names arrive with
+ * their initials split — "CJR5881 - C. J. REDWOOD, INC." — so a reader typing
+ * the obvious "cj redwood" is looking for a string the file does not contain:
+ * fold the punctuation to spaces and it reads "c j redwood", which "cj
+ * redwood" is not inside of. Squashing both sides makes the two meet, and
+ * carries "84 lumber" onto "84L8820 - 84 LUMBER COMPANY" for the same reason.
+ * The cost is that a short term matches across word boundaries; with the list
+ * ranked by LF and paged beneath, that is a cheap price for never having to
+ * guess how a distributor punctuates.
+ */
+export function foldForSearch(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * The dealers whose name contains what was typed, in the order they came.
+ *
+ * Order is never re-scored by how well a name matches. The list arrives sorted
+ * by LF — biggest first — and that ranking is the reader's whole point of
+ * reference; shuffling it under a search term would answer "who matches" while
+ * losing "who matters". An empty term is not a filter and returns the list
+ * untouched, same array, so a component can compare by identity.
+ */
+export function searchDealers<T extends { name: string }>(
+  dealers: readonly T[],
+  query: string,
+): readonly T[] {
+  const needle = foldForSearch(query);
+  if (needle.length === 0) return dealers;
+  return dealers.filter((d) => foldForSearch(d.name).includes(needle));
+}
