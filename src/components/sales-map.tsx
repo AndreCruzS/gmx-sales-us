@@ -48,10 +48,16 @@ const FIPS_POSTAL: Record<string, string> = {
   "54": "WV", "55": "WI", "56": "WY", "72": "PR",
 };
 
-// The branch cities we actually have, by hand — eight addresses do not
-// deserve a geocoder. Anything not listed lands on its state's centre.
+// The branch cities we actually have, by hand — a dozen addresses do not
+// deserve a geocoder. Anything not listed lands on its state's centre,
+// which for California is a pin in the middle of nowhere: every yard the
+// loader creates needs its line here.
 const CITY_COORDS: Record<string, [number, number]> = {
   "riverside|CA": [-117.3962, 33.9533],
+  "perris|CA": [-117.2286, 33.7825],
+  "chatsworth|CA": [-118.6012, 34.2572],
+  "phoenix|AZ": [-112.074, 33.4484],
+  "montgomery|NY": [-74.2371, 41.5276],
   "dallas|TX": [-96.797, 32.7767],
   "houston|TX": [-95.3698, 29.7604],
   "memphis|TN": [-90.049, 35.1495],
