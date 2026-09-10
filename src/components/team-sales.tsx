@@ -63,7 +63,12 @@ import {
   periodLabel,
   rowMatchesPath,
   stepFor,
+  dealerScopeOptions,
+  isScoped,
+  NO_DEALER_SCOPE,
+  scopeDealerRows,
   type BranchRef,
+  type DealerScope,
   type PathStep,
   type SellBand,
   type SellGroup,
@@ -279,8 +284,33 @@ export function TeamSales({
     }
     return { current: c, prior: p };
   }, [rows, latestMonth, previousMonth]);
-  const current = ytdOn && ytd ? ytd.current : monthPair.current;
-  const prior = ytdOn && ytd ? ytd.prior : monthPair.prior;
+  const unscopedCurrent = ytdOn && ytd ? ytd.current : monthPair.current;
+  const unscopedPrior = ytdOn && ytd ? ytd.prior : monthPair.prior;
+
+  // THE DEALER LENS TAKES TWO NARROWINGS OF ITS OWN (João, 2026-09-10). Its
+  // chain is dealer → distributor → branch, with no region in it, so "the
+  // dealers in Southern California" used to mean leaving the lens for the
+  // region one and walking down four links to a list this lens shows at the
+  // top. Same facts, different question — and a question about dealers should
+  // be answerable without changing lens.
+  //
+  // The scope is applied to the ROWS, before the step is built, so it holds at
+  // every depth: a dealer's own distributor bands agree with the filtered
+  // figure the reader tapped to get there.
+  const [dealerScope, setDealerScope] = useState<DealerScope>(NO_DEALER_SCOPE);
+  const scopeOn = lens === "dealer" && isScoped(dealerScope);
+  const current = useMemo(
+    () => (lens === "dealer" ? scopeDealerRows(unscopedCurrent, dealerScope) : unscopedCurrent),
+    [unscopedCurrent, lens, dealerScope],
+  );
+  const prior = useMemo(
+    () => (lens === "dealer" ? scopeDealerRows(unscopedPrior, dealerScope) : unscopedPrior),
+    [unscopedPrior, lens, dealerScope],
+  );
+  const scopeChoices = useMemo(
+    () => dealerScopeOptions(unscopedCurrent, dealerScope),
+    [unscopedCurrent, dealerScope],
+  );
 
   const step = useMemo(
     () => buildStep(current, prior, lens, path, branches),
@@ -370,7 +400,22 @@ export function TeamSales({
     if (seenLensMode.current === lensMode) return;
     seenLensMode.current = lensMode;
     goTo([]);
+    // A narrowing chosen inside the dealer lens has no meaning outside it, and
+    // coming back to the lens later to a filter you set minutes ago is a screen
+    // that lies about how much there is.
+    setDealerScope(NO_DEALER_SCOPE);
   }, [lensMode, goTo]);
+
+  // Changing the scope invalidates where the reader was: the path names a place
+  // inside the unfiltered set, and the dealer they had walked into may not be
+  // in the narrowed one at all.
+  const narrow = useCallback(
+    (next: Partial<DealerScope>) => {
+      setDealerScope((prev) => ({ ...prev, ...next }));
+      goTo([]);
+    },
+    [goTo],
+  );
 
   const toggleQuiet = useCallback((key: string) => {
     setQuietOpen((prev) => {
@@ -639,7 +684,11 @@ export function TeamSales({
   // above still answers for it; this card says why it cannot, by name,
   // instead of drawing zeros. With no name to give — no book at all — the
   // generic first-run message stands.
-  if (!ytdOn && current.length === 0) {
+  // Read against the UNSCOPED month on purpose. "No return on file" is a fact
+  // about the file; a dealer-lens narrowing that happens to match nobody is a
+  // fact about the question, and saying the first when the second is true tells
+  // the reader their data is missing when it is right there.
+  if (!ytdOn && unscopedCurrent.length === 0) {
     const name =
       windowLabel ?? (latestMonth ? periodLabel(latestMonth) : null);
     return (
@@ -704,6 +753,68 @@ export function TeamSales({
       </nav>
       )}
 
+      {/* THE DEALER LENS'S OWN TWO NARROWINGS (João, 2026-09-10). Region and
+          house, side by side, so a question about dealers is answered without
+          leaving the lens that lists them. Each option carries what it is worth,
+          because a choice that empties the screen should say so before it is
+          made — and the lists are counted under each other, so picking a house
+          leaves only the regions that house actually ships to. */}
+      {lens === "dealer" && (
+        <div className="dealer-scope">
+          <label className="dealer-scope-field">
+            <span className="t-hint">Region</span>
+            <select
+              id="dealer-scope-region"
+              value={dealerScope.regionId}
+              onChange={(e) => narrow({ regionId: e.target.value })}
+            >
+              <option value="">Every region</option>
+              {scopeChoices.regions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} · {QTY.format(Math.round(o.lf))} {step.unit}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="dealer-scope-field">
+            <span className="t-hint">Distributor</span>
+            <select
+              id="dealer-scope-distributor"
+              value={dealerScope.distributorId}
+              onChange={(e) => narrow({ distributorId: e.target.value })}
+            >
+              <option value="">Every house</option>
+              {scopeChoices.distributors.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} · {QTY.format(Math.round(o.lf))} {step.unit}
+                </option>
+              ))}
+            </select>
+          </label>
+          {scopeOn && (
+            <button
+              type="button"
+              className="dealer-scope-clear"
+              onClick={() => narrow(NO_DEALER_SCOPE)}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* A narrowing that leaves nothing is said in words. An empty walk under a
+          filled dropdown reads as a broken screen rather than as an answer. */}
+      {scopeOn && current.length === 0 ? (
+        <div className="card card-pad">
+          <p className="t-sub">
+            No dealer bought through that combination in{" "}
+            {windowLabel ?? (latestMonth ? periodLabel(latestMonth) : "this window")}. The two
+            narrowings are counted against each other, so widening one of them will show who did.
+          </p>
+        </div>
+      ) : (
+      <>
       {/* Keyed on the walk, so each level enters rather than swapping in place —
           the same remount trick the page sections use. */}
       {desk && path.length === 0 ? (
@@ -1458,6 +1569,8 @@ export function TeamSales({
           })}
         </div>
       </div>
+      )}
+      </>
       )}
 
       {/* The monthly footnote is gone by request (Andre, 2026-09-01) — the

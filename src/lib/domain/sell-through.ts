@@ -1356,3 +1356,109 @@ export function searchDealers<T extends { name: string }>(
   if (needle.length === 0) return dealers;
   return dealers.filter((d) => foldForSearch(d.name).includes(needle));
 }
+
+// ── Scoping the dealer walk ─────────────────────────────────────────────────
+//
+// The dealer lens walks dealer → distributor → branch, and that chain has no
+// region in it at all. So a reader who wants "the dealers in Southern
+// California" has to leave the lens, go to the region lens, and walk down four
+// links to reach a list the dealer lens shows at the top. João asked for the
+// two narrowings to live INSIDE the lens instead (2026-09-10), knowing it is
+// the same information the other lenses already carry — the point is not new
+// facts, it is not having to change lens to ask a question about dealers.
+//
+// A scope is not a view toggle: it changes WHICH ROWS the whole step is built
+// from, at every depth, so a dealer's own distributor bands agree with the
+// filtered figure the reader clicked. The caller resets the walk when the scope
+// changes, because "where you are" was a place inside the unfiltered set.
+
+/** Rows carry a null region when we hold no region covering that branch's
+ *  state — a real answer, and one a reader must be able to ask for. */
+export const SCOPE_NO_REGION = "__none";
+
+export interface DealerScope {
+  /** A region_id, SCOPE_NO_REGION, or "" for every region. */
+  regionId: string;
+  /** A distributor_id, or "" for every house. */
+  distributorId: string;
+}
+
+export const NO_DEALER_SCOPE: DealerScope = { regionId: "", distributorId: "" };
+
+export function isScoped(scope: DealerScope): boolean {
+  return scope.regionId !== "" || scope.distributorId !== "";
+}
+
+const regionKey = (r: SellThroughRow) => r.region_id ?? SCOPE_NO_REGION;
+
+/** The rows a scope leaves standing. Order is untouched. */
+export function scopeDealerRows(
+  rows: readonly SellThroughRow[],
+  scope: DealerScope,
+): readonly SellThroughRow[] {
+  if (!isScoped(scope)) return rows;
+  return rows.filter(
+    (r) =>
+      (scope.regionId === "" || regionKey(r) === scope.regionId) &&
+      (scope.distributorId === "" || r.distributor_id === scope.distributorId),
+  );
+}
+
+export interface ScopeOption {
+  id: string;
+  name: string;
+  /** What this choice is worth, under the OTHER narrowing. */
+  lf: number;
+}
+
+/**
+ * What the two dropdowns should offer, and what each choice is worth.
+ *
+ * Each list is counted with the OTHER dimension already applied, so picking
+ * Boise leaves only the regions Boise actually ships to, and each option can
+ * say how much volume it stands for — a choice that would empty the screen is
+ * better not offered. The one exception is the currently picked value, which is
+ * always kept in its own list even at zero: an option that vanishes the moment
+ * it is chosen cannot be un-chosen.
+ */
+export function dealerScopeOptions(
+  rows: readonly SellThroughRow[],
+  scope: DealerScope,
+): { regions: ScopeOption[]; distributors: ScopeOption[] } {
+  const gather = (
+    subset: readonly SellThroughRow[],
+    keyOf: (r: SellThroughRow) => string,
+    nameOf: (r: SellThroughRow) => string,
+    keep: string,
+  ) => {
+    const seen = new Map<string, ScopeOption>();
+    for (const r of subset) {
+      const id = keyOf(r);
+      const at = seen.get(id);
+      if (at) at.lf += num(r.quantity);
+      else seen.set(id, { id, name: nameOf(r), lf: num(r.quantity) });
+    }
+    if (keep !== "" && !seen.has(keep)) {
+      const anywhere = rows.find((r) => keyOf(r) === keep);
+      if (anywhere) seen.set(keep, { id: keep, name: nameOf(anywhere), lf: 0 });
+    }
+    return [...seen.values()].sort(
+      (a, b) => b.lf - a.lf || a.name.localeCompare(b.name),
+    );
+  };
+
+  return {
+    regions: gather(
+      scopeDealerRows(rows, { regionId: "", distributorId: scope.distributorId }),
+      regionKey,
+      (r) => r.region_name ?? "No region on the map",
+      scope.regionId,
+    ),
+    distributors: gather(
+      scopeDealerRows(rows, { regionId: scope.regionId, distributorId: "" }),
+      (r) => r.distributor_id,
+      (r) => r.distributor_name,
+      scope.distributorId,
+    ),
+  };
+}

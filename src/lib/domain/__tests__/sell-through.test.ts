@@ -20,6 +20,11 @@ import {
   periodLabel,
   foldForSearch,
   searchDealers,
+  dealerScopeOptions,
+  isScoped,
+  NO_DEALER_SCOPE,
+  SCOPE_NO_REGION,
+  scopeDealerRows,
   recurrence,
   monthsOnFile,
   regionsOnFile,
@@ -1126,5 +1131,64 @@ describe("searchDealers", () => {
   it("folds a name to letters and digits alone", () => {
     expect(foldForSearch("  C. J. REDWOOD, INC. ")).toBe("cjredwoodinc");
     expect(foldForSearch("---")).toBe("");
+  });
+});
+
+describe("scopeDealerRows / dealerScopeOptions", () => {
+  // Two houses, three regions, and one branch in a state the map does not
+  // cover — which is the case the sentinel exists for.
+  const rows = [
+    row({ dealer_label: "A", region_id: "socal", region_name: "Southern California", distributor_id: "boise", distributor_name: "Boise Cascade", quantity: 100 }),
+    row({ dealer_label: "B", region_id: "socal", region_name: "Southern California", distributor_id: "hard", distributor_name: "Hardwoods Inc.", quantity: 50 }),
+    row({ dealer_label: "C", region_id: "texas", region_name: "Texas", distributor_id: "boise", distributor_name: "Boise Cascade", quantity: 300 }),
+    row({ dealer_label: "D", region_id: null, region_name: null, branch_state: "HI", distributor_id: "boise", distributor_name: "Boise Cascade", quantity: 7 }),
+  ];
+
+  it("an empty scope is not a filter, and hands back the same array", () => {
+    expect(isScoped(NO_DEALER_SCOPE)).toBe(false);
+    expect(scopeDealerRows(rows, NO_DEALER_SCOPE)).toBe(rows);
+  });
+
+  it("narrows by region, by house, and by both together", () => {
+    expect(scopeDealerRows(rows, { regionId: "socal", distributorId: "" }).map(r => r.dealer_label))
+      .toEqual(["A", "B"]);
+    expect(scopeDealerRows(rows, { regionId: "", distributorId: "boise" }).map(r => r.dealer_label))
+      .toEqual(["A", "C", "D"]);
+    expect(scopeDealerRows(rows, { regionId: "socal", distributorId: "boise" }).map(r => r.dealer_label))
+      .toEqual(["A"]);
+  });
+
+  it("can ask for the rows whose branch sits off the map", () => {
+    // A null region is a real answer — "we hold no region covering HI" — and a
+    // reader has to be able to select it, not just see it in a list.
+    expect(scopeDealerRows(rows, { regionId: SCOPE_NO_REGION, distributorId: "" }).map(r => r.dealer_label))
+      .toEqual(["D"]);
+  });
+
+  it("counts each list under the OTHER narrowing, biggest first", () => {
+    const open = dealerScopeOptions(rows, NO_DEALER_SCOPE);
+    expect(open.regions.map(o => [o.name, o.lf])).toEqual([
+      ["Texas", 300],
+      ["Southern California", 150],
+      ["No region on the map", 7],
+    ]);
+    expect(open.distributors.map(o => [o.name, o.lf])).toEqual([
+      ["Boise Cascade", 407],
+      ["Hardwoods Inc.", 50],
+    ]);
+
+    // Picking Hardwoods leaves only the regions Hardwoods actually ships to,
+    // and the house list still shows both so the pick can be undone.
+    const hard = dealerScopeOptions(rows, { regionId: "", distributorId: "hard" });
+    expect(hard.regions.map(o => o.name)).toEqual(["Southern California"]);
+    expect(hard.distributors.map(o => o.name)).toEqual(["Boise Cascade", "Hardwoods Inc."]);
+  });
+
+  it("keeps a chosen option in its own list even when it is worth nothing", () => {
+    // Texas + Hardwoods is an empty screen. Both picks must survive in their
+    // dropdowns anyway: an option that vanishes when chosen cannot be un-chosen.
+    const dead = dealerScopeOptions(rows, { regionId: "texas", distributorId: "hard" });
+    expect(dead.regions.find(o => o.id === "texas")).toEqual({ id: "texas", name: "Texas", lf: 0 });
+    expect(dead.distributors.find(o => o.id === "hard")).toEqual({ id: "hard", name: "Hardwoods Inc.", lf: 0 });
   });
 });

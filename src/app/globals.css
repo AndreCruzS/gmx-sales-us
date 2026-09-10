@@ -1660,6 +1660,59 @@ body {
    deep with no page change. The crumbs are not decoration — a bar that opens
    into another bar needs somewhere to say where you are and a way back up, or
    the animation has taken the reader somewhere they cannot leave. */
+/* ── The dealer lens's own two narrowings ───────────────────────────────────
+   Region and house, above the walk. They sit on the sunken ground rather than
+   in a card of their own: they are a setting on the card below, not a second
+   object competing with it. On a phone the two stack full-width, because a
+   dropdown a thumb has to aim at is a dropdown nobody uses. */
+.dealer-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.dealer-scope-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 190px;
+}
+.dealer-scope-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  color: var(--ink-primary);
+  /* 16px, same reason as every other field on this app: anything smaller and
+     iOS zooms the viewport when a thumb lands in it. */
+  font-size: var(--text-lg);
+  line-height: 1.2;
+}
+.dealer-scope-field select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+.dealer-scope-clear {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--surface-sunken);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.dealer-scope-clear:hover {
+  background: var(--fill-ink);
+  border-color: var(--fill-ink);
+  color: var(--on-ink);
+}
+
 .sales-crumbs {
   display: flex;
   flex-wrap: wrap;
