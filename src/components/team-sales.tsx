@@ -44,6 +44,8 @@ import { SalesMap } from "@/components/sales-map";
 import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
+import { ChipSelect } from "@/components/chip-select";
+import { SearchIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
@@ -64,6 +66,7 @@ import {
   rowMatchesPath,
   stepFor,
   dealerScopeOptions,
+  foldForSearch,
   isScoped,
   NO_DEALER_SCOPE,
   scopeDealerRows,
@@ -761,40 +764,32 @@ export function TeamSales({
           leaves only the regions that house actually ships to. */}
       {lens === "dealer" && (
         <div className="dealer-scope">
-          <label className="dealer-scope-field">
-            <span className="t-hint">Region</span>
-            <select
-              id="dealer-scope-region"
-              value={dealerScope.regionId}
-              onChange={(e) => narrow({ regionId: e.target.value })}
-            >
-              <option value="">Every region</option>
-              {scopeChoices.regions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name} · {QTY.format(Math.round(o.lf))} {step.unit}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="dealer-scope-field">
-            <span className="t-hint">Distributor</span>
-            <select
-              id="dealer-scope-distributor"
-              value={dealerScope.distributorId}
-              onChange={(e) => narrow({ distributorId: e.target.value })}
-            >
-              <option value="">Every house</option>
-              {scopeChoices.distributors.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name} · {QTY.format(Math.round(o.lf))} {step.unit}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ChipSelect
+            label="Narrow to one region"
+            allLabel="Every region"
+            value={dealerScope.regionId}
+            options={scopeChoices.regions.map((o) => ({
+              id: o.id,
+              label: o.name,
+              hint: `${QTY.format(Math.round(o.lf))} ${step.unit}`,
+            }))}
+            onChange={(id) => narrow({ regionId: id })}
+          />
+          <ChipSelect
+            label="Narrow to one distributor"
+            allLabel="Every house"
+            value={dealerScope.distributorId}
+            options={scopeChoices.distributors.map((o) => ({
+              id: o.id,
+              label: o.name,
+              hint: `${QTY.format(Math.round(o.lf))} ${step.unit}`,
+            }))}
+            onChange={(id) => narrow({ distributorId: id })}
+          />
           {scopeOn && (
             <button
               type="button"
-              className="dealer-scope-clear"
+              className="chip chip-clear"
               onClick={() => narrow(NO_DEALER_SCOPE)}
             >
               Clear
@@ -1656,6 +1651,34 @@ function SalesBook({
     [current, prior, lens, panePath, branches],
   );
 
+  // THE LEFT COLUMN IS A LIST, NOT A SCROLL (Andre, 2026-09-11: "aquela lista
+  // enorme sem rolagem no lado esquerdo"). Under the region lens it holds seven
+  // markets and nobody ever noticed it had no limit; under the dealer lens it
+  // holds every dealer that bought — 84 of them once California's roster
+  // landed — and ran 5,473px down the page with the rest of the screen dragged
+  // along behind it.
+  //
+  // Searched and paged, the same answer the recurrence names already got, so a
+  // long list of dealers behaves one way on this page and not two. The total
+  // bar above keeps reading the WHOLE month: narrowing the list is a way to
+  // find a row, never a way to change the figure.
+  const [bookQuery, setBookQuery] = useState("");
+  const [bookPage, setBookPage] = useState(0);
+  const BOOK_PAGE = 12;
+  const bookNeedle = foldForSearch(bookQuery);
+  const bookGroups = useMemo(
+    () =>
+      bookNeedle.length === 0
+        ? step.groups
+        : step.groups.filter((g) => foldForSearch(g.title).includes(bookNeedle)),
+    [step.groups, bookNeedle],
+  );
+  const bookPages = Math.max(1, Math.ceil(bookGroups.length / BOOK_PAGE));
+  const bookAt = Math.min(bookPage, bookPages - 1);
+  const bookSlice = bookGroups.slice(bookAt * BOOK_PAGE, bookAt * BOOK_PAGE + BOOK_PAGE);
+  // A list long enough to page is a list worth searching; four rows is not.
+  const bookSearchable = step.groups.length > BOOK_PAGE;
+
   // Report the picked market upward — every route into and out of a pick
   // (map click, list click, back, the keyed remount on a lens flip) settles
   // panePath, so one effect covers them all.
@@ -2373,8 +2396,25 @@ function SalesBook({
                   ? "Distributors"
                   : "Dealers"}
             </p>
+            {bookSearchable && (
+              <label className="search-field bkm-search">
+                <SearchIcon size={16} />
+                <input
+                  type="search"
+                  placeholder="Find in this list"
+                  value={bookQuery}
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  aria-label="Find a row in this list"
+                  onChange={(e) => {
+                    setBookQuery(e.target.value);
+                    setBookPage(0);
+                  }}
+                />
+              </label>
+            )}
             <ul className="list">
-              {step.groups.map((m) => {
+              {bookSlice.map((m) => {
                 const picked = panePath[0]?.key === m.key;
                 const share = step.summary
                   ? (step.summary.bands.find((b) => b.key === m.key)?.share ?? 0)
@@ -2409,6 +2449,42 @@ function SalesBook({
                 );
               })}
             </ul>
+            {bookGroups.length === 0 && (
+              <p className="t-hint bkm-empty" aria-live="polite">
+                Nothing here matches &ldquo;{bookQuery.trim()}&rdquo;
+              </p>
+            )}
+            {(bookPages > 1 || bookNeedle.length > 0) && (
+              <div className="recur-pager bkm-pager">
+                <span className="t-hint" aria-live="polite">
+                  {bookNeedle.length > 0
+                    ? `${QTY.format(bookGroups.length)} of ${QTY.format(step.groups.length)}`
+                    : `${bookAt * BOOK_PAGE + 1}–${Math.min((bookAt + 1) * BOOK_PAGE, bookGroups.length)} of ${bookGroups.length}`}
+                </span>
+                {bookPages > 1 && (
+                  <span className="recur-pager-btns">
+                    <button
+                      type="button"
+                      className="recur-pager-btn"
+                      onClick={() => setBookPage(Math.max(0, bookAt - 1))}
+                      disabled={bookAt === 0}
+                      aria-label="Previous page"
+                    >
+                      &#8249;
+                    </button>
+                    <button
+                      type="button"
+                      className="recur-pager-btn"
+                      onClick={() => setBookPage(Math.min(bookPages - 1, bookAt + 1))}
+                      disabled={bookAt >= bookPages - 1}
+                      aria-label="Next page"
+                    >
+                      &#8250;
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
               {paneView}

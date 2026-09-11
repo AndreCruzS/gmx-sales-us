@@ -1660,57 +1660,105 @@ body {
    deep with no page change. The crumbs are not decoration — a bar that opens
    into another bar needs somewhere to say where you are and a way back up, or
    the animation has taken the reader somewhere they cannot leave. */
+/* the book's left column: a search over a list that used to run the height of
+   the page, and the pager under it */
+.bkm-search {
+  margin: 8px 0 4px;
+  padding: 7px 10px;
+  gap: 8px;
+  background: var(--surface-sunken);
+}
+.bkm-search input {
+  line-height: 1.2;
+}
+.bkm-pager {
+  border-top: 1px solid var(--rule);
+  margin-top: 4px;
+}
+.bkm-empty {
+  padding: 12px 0 4px;
+}
+
 /* ── The dealer lens's own two narrowings ───────────────────────────────────
-   Region and house, above the walk. They sit on the sunken ground rather than
-   in a card of their own: they are a setting on the card below, not a second
-   object competing with it. On a phone the two stack full-width, because a
-   dropdown a thumb has to aim at is a dropdown nobody uses. */
+   Chips, not selects. They sit above the walk and read as a setting on the card
+   below, so they use the same chip the lens row and the period picker use — a
+   native select could never match them, which is why the first cut came back.
+
+   NO overflow on this row. The chips open an absolutely positioned panel, and
+   `overflow-x: auto` computes `overflow-y: auto` with it and clips the panel
+   whole while the a11y tree still happily lists what is buried. */
 .dealer-scope {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  overflow: visible;
 }
-.dealer-scope-field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1 1 190px;
+.chip-clear {
+  color: var(--ink-muted);
 }
-.dealer-scope-field select {
-  width: 100%;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-control);
+
+/* the chip that opens a list — the period picker's shape, a simpler panel */
+.chipsel {
+  position: relative;
+  display: inline-flex;
+}
+.chipsel > .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 60vw;
+}
+.chipsel-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 240px;
+  max-width: min(340px, 84vw);
+  /* Long enough to need a limit — the house list is short, the region list is
+     not — and this one IS a scroll on purpose: it is a menu, not a card. */
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--r-card, 12px);
   background: var(--surface-card);
-  color: var(--ink-primary);
-  /* 16px, same reason as every other field on this app: anything smaller and
-     iOS zooms the viewport when a thumb lands in it. */
-  font-size: var(--text-lg);
-  line-height: 1.2;
-}
-.dealer-scope-field select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-color: var(--accent);
-}
-.dealer-scope-clear {
-  flex: 0 0 auto;
-  padding: 8px 12px;
   border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+}
+.chipsel-opt {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
   border-radius: var(--r-control);
-  background: var(--surface-sunken);
+  background: none;
   color: var(--ink-primary);
   font-size: var(--text-sm);
+  text-align: left;
   cursor: pointer;
 }
-.dealer-scope-clear:hover {
+.chipsel-opt:hover {
+  background: var(--surface-sunken);
+}
+.chipsel-opt[aria-pressed="true"] {
   background: var(--fill-ink);
-  border-color: var(--fill-ink);
   color: var(--on-ink);
+}
+.chipsel-opt-name {
+  min-width: 0;
+}
+.chipsel-opt-hint {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+.chipsel-opt[aria-pressed="true"] .chipsel-opt-hint {
+  color: var(--on-ink);
+  opacity: 0.75;
 }
 
 .sales-crumbs {
@@ -4308,7 +4356,8 @@ input[type="datetime-local"] {
    overflow-x auto computes overflow-y auto with it, and the panel — absolute,
    hanging BELOW the 32px row — gets clipped whole. The a11y tree still lists
    clipped elements, which is how this shipped looking fine. */
-.chip-row:has(> .ppick) {
+.chip-row:has(> .ppick),
+.chip-row:has(> .chipsel) {
   overflow: visible;
 }
 .ppick > .chip {
