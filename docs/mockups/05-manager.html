@@ -1,0 +1,2955 @@
+<title>The book — Bianca, GMX USA</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --concrete:#E3E6E7;
+    --concrete-deep:#D5D9DA;
+    --surface:#FBFCFC;
+    --ink:#1C2530;
+    --slate:#5B6670;
+    --slate-soft:#8A939B;
+    --slate-line:#CCD2D4;
+    --border:#D3D8D9;
+    --amber:#E2952F;
+    --amber-deep:#B9711A;
+    --amber-hover:#CF8526;
+    --amber-text:#96590F;
+    --amber-soft:#FBE9D2;
+    /* a warm card tint — far lighter than amber-soft, enough to separate the
+       chores from the cards around them without reading as a warning */
+    --warm-card:#FDF6EA;
+    --warm-line:#EFE3D0;
+    --teal:#2C6E6B;
+    --teal-soft:#DCEBEA;
+    --clay:#B1502E;
+    --clay-soft:#F4DDD1;
+    --shadow-1:0 1px 2px rgba(20,27,35,.07), 0 6px 16px rgba(20,27,35,.06);
+    --shadow-2:0 2px 4px rgba(20,27,35,.08), 0 10px 24px rgba(20,27,35,.08);
+    --r-s:6px; --r-m:10px; --r-l:16px;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--concrete);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    font-size:15px;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--amber-soft); color:var(--ink);}
+  :focus-visible{outline:2.5px solid var(--amber-deep); outline-offset:2px; border-radius:4px;}
+  button{font-family:inherit; cursor:pointer;}
+  input{font-family:inherit;}
+  svg{display:block;}
+  .icon{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* ---------- App shell ----------
+     Each column scrolls on its own, so reading a long account never scrolls
+     the day out of view, and the topbar stays put. */
+  .app{height:100vh; overflow:hidden; display:flex; flex-direction:column;}
+
+  /* A scrollbar the eye only finds when it looks for it: no track, a thin
+     thumb inset from the edge, and it darkens on hover. */
+  .route-col, .dossier-col, .context-col{
+    overflow-y:auto; overflow-x:hidden; min-height:0;
+    scrollbar-width:thin;
+    scrollbar-color:var(--slate-line) transparent;
+  }
+  .route-col::-webkit-scrollbar,
+  .dossier-col::-webkit-scrollbar,
+  .context-col::-webkit-scrollbar{width:10px;}
+  .route-col::-webkit-scrollbar-track,
+  .dossier-col::-webkit-scrollbar-track,
+  .context-col::-webkit-scrollbar-track{background:transparent;}
+  .route-col::-webkit-scrollbar-thumb,
+  .dossier-col::-webkit-scrollbar-thumb,
+  .context-col::-webkit-scrollbar-thumb{
+    background:var(--slate-line); border-radius:99px;
+    border:3px solid transparent; background-clip:content-box;
+  }
+  .route-col:hover::-webkit-scrollbar-thumb,
+  .dossier-col:hover::-webkit-scrollbar-thumb,
+  .context-col:hover::-webkit-scrollbar-thumb{background:var(--slate-soft); background-clip:content-box;}
+  .route-col::-webkit-scrollbar-thumb:hover,
+  .dossier-col::-webkit-scrollbar-thumb:hover,
+  .context-col::-webkit-scrollbar-thumb:hover{background:var(--slate); background-clip:content-box;}
+
+  /* Identity, search, then state. The day's counters moved down into the day
+     column where they belong; what stays up here is what must be true on every
+     screen: who you are, how to find anything, and whether your work is safe. */
+  .topbar{
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto;
+    align-items:center; gap:28px;
+    padding:14px 40px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+  }
+
+  /* The name goes home; the caret beside it is the account menu. Two jobs, two
+     targets, so neither steals the other's click. */
+  .id-wrap{display:flex; align-items:center; gap:2px; position:relative;}
+  .acct-btn{
+    width:28px; height:28px; border-radius:50%; border:none; background:none;
+    display:flex; align-items:center; justify-content:center; color:var(--slate);
+  }
+  .acct-btn:hover, .acct-btn[aria-expanded="true"]{background:var(--concrete); color:var(--ink);}
+  .acct-btn .icon{width:15px; height:15px;}
+  .menu{
+    display:none; position:absolute; z-index:50; top:52px; left:0; width:270px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-m);
+    box-shadow:var(--shadow-2); overflow:hidden;
+  }
+  .menu[data-open="true"]{display:block;}
+  .menu-head{padding:13px 15px 12px; border-bottom:1px solid var(--border);}
+  .menu-mail{font-size:13px; font-weight:600; letter-spacing:-.005em;}
+  .menu-org{font-family:var(--font-mono); font-size:11px; color:var(--slate); margin-top:3px;}
+  .menu-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+    padding:11px 15px; border:none; background:none; font:inherit; font-size:13.5px;
+    color:var(--ink); text-align:left;
+  }
+  .menu-item:hover{background:var(--concrete);}
+  .menu-item .icon{width:14px; height:14px; stroke:var(--slate-soft);}
+  .menu-sep{height:1px; background:var(--border); margin:4px 0;}
+  .menu-note{
+    display:flex; gap:8px; align-items:flex-start; padding:10px 15px 12px;
+    font-size:11.5px; line-height:1.45; color:var(--slate);
+  }
+  .menu-note .icon{width:13px;height:13px; stroke:var(--teal); margin-top:1px; flex:0 0 auto;}
+  .menu-item.danger{color:var(--clay); font-weight:600;}
+  .menu-item.danger:hover{background:var(--clay-soft);}
+
+  .search-wrap{position:relative; max-width:440px; width:100%; justify-self:center;}
+  .search-wrap > .icon{
+    position:absolute; left:13px; top:50%; transform:translateY(-50%);
+    width:16px; height:16px; stroke:var(--slate-soft); pointer-events:none;
+  }
+  .search{
+    width:100%; height:40px; padding:0 14px 0 38px;
+    background:var(--concrete); color:var(--ink);
+    border:1px solid transparent; border-radius:999px;
+    font-family:inherit; font-size:13.5px;
+  }
+  .search::placeholder{color:var(--slate-soft);}
+  .search:focus{border-color:var(--slate-line); background:var(--surface); outline:none;}
+  .search-results{
+    display:none; position:absolute; z-index:40; top:46px; left:0; right:0;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-m);
+    box-shadow:var(--shadow-2); overflow:hidden; max-height:300px; overflow-y:auto;
+  }
+  .search-results[data-open="true"]{display:block;}
+  .sr-item{
+    display:flex; align-items:baseline; gap:9px; width:100%; padding:10px 14px;
+    background:none; border:none; text-align:left; font:inherit;
+  }
+  .sr-item:hover, .sr-item:focus-visible{background:var(--concrete);}
+  .sr-name{font-size:13.5px; font-weight:600;}
+  .sr-kind{font-family:var(--font-mono); font-size:10.5px; color:var(--slate-soft); text-transform:uppercase;}
+  .sr-empty{padding:12px 14px; font-size:12.5px; color:var(--slate);}
+
+  .bar-right{display:flex; align-items:center; gap:12px; justify-self:end;}
+  .alert-chip{
+    display:inline-flex; align-items:center; gap:7px;
+    padding:7px 13px; border-radius:999px; border:none;
+    background:var(--clay-soft); color:#7a3417;
+    font-family:var(--font-mono); font-size:12px; font-weight:700; white-space:nowrap;
+  }
+  .alert-chip:hover{background:#efd0c1;}
+  .alert-chip .icon{width:13px;height:13px;}
+  /* The offline promise made visible: a rep must always know their work is
+     safe, so this never leaves the bar. */
+  .sync{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:var(--font-mono); font-size:12px; color:var(--slate); white-space:nowrap;
+  }
+  .sync-dot{width:7px; height:7px; border-radius:50%; background:var(--teal); flex:0 0 auto;}
+  /* One line, so it shares a baseline with the chip and the sync state beside
+     it. The year was its own line and told a daily tool nothing. */
+  .bar-date{
+    font-family:var(--font-mono); font-size:12.5px; font-weight:700;
+    color:var(--ink); white-space:nowrap; letter-spacing:.01em;
+  }
+  .bar-date .yr{color:var(--slate-soft); font-weight:400;}
+
+  /* the day's own numbers, now under the day's own title */
+  .col-stats{
+    display:flex; flex-wrap:wrap; gap:4px 10px; margin:-14px 0 20px;
+    font-family:var(--font-mono); font-size:11.5px; color:var(--slate);
+  }
+  .col-stats b{color:var(--ink); font-weight:700;}
+  .col-stats .warn{color:#7a3417; font-weight:700;}
+  /* The rep's own name is the way home, the way a logo usually is. */
+  .rep-id{
+    display:flex; align-items:center; gap:14px;
+    background:none; border:none; padding:4px 8px 4px 4px; margin-left:-4px;
+    border-radius:999px; font:inherit; color:inherit; text-align:left;
+  }
+  .rep-id:hover{background:var(--concrete);}
+  .rep-id:hover .rep-name{text-decoration:underline; text-underline-offset:3px;}
+  .rep-badge{
+    width:44px;height:44px;border-radius:50%;
+    background:var(--ink); color:var(--surface);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700; font-size:17px; letter-spacing:.02em;
+    flex:0 0 auto;
+  }
+  .rep-name{display:block; font-size:19px; font-weight:700; letter-spacing:-0.01em; line-height:1.2;}
+  .rep-sub{display:block; font-size:12.5px; color:var(--slate); font-family:var(--font-mono); letter-spacing:.02em; margin-top:2px;}
+
+  .day-summary{display:flex; align-items:center; gap:28px;}
+  .day-date{text-align:right;}
+  .day-date .d1{font-size:17px; font-weight:700; letter-spacing:-.01em;}
+  .day-date .d2{font-size:12px; color:var(--slate); font-family:var(--font-mono);}
+
+  .stat-row{display:flex; gap:10px;}
+  .stat-chip{
+    display:flex; align-items:center; gap:7px;
+    padding:7px 12px;
+    background:var(--concrete);
+    border:1px solid var(--border);
+    border-radius:999px;
+    font-size:12.5px;
+    color:var(--slate);
+    font-family:var(--font-mono);
+    white-space:nowrap;
+  }
+  .stat-chip strong{color:var(--ink); font-weight:700;}
+  .stat-chip .icon{width:13px;height:13px;}
+  .stat-chip.warn{background:var(--clay-soft); border-color:#e3b8a4; color:#7a3417;}
+  .stat-chip.warn strong{color:#7a3417;}
+  .stat-chip.ok{background:var(--teal-soft); border-color:#b7d6d3; color:#1c4e4b;}
+  .stat-chip.ok strong{color:#1c4e4b;}
+
+  /* ---------- Layout ---------- */
+  .layout{
+    flex:1;
+    min-height:0;            /* lets the columns scroll instead of the page */
+    display:grid;
+    grid-template-columns: minmax(430px, 486px) 1fr;
+    gap:0;
+    max-width:1800px;
+    width:100%;
+    margin:0 auto;
+    align-items:stretch;
+  }
+  /* The third column only appears when there is genuinely room for it; below
+     this the day and the account still get the whole screen. */
+  .context-col{display:none;}
+  @media (min-width: 1500px){
+    .layout{grid-template-columns: minmax(430px, 486px) minmax(0,1fr) 372px;}
+    .context-col{
+      display:block; align-self:stretch;
+      padding:32px 40px 60px 28px;
+      border-left:1px solid var(--border);
+    }
+  }
+  .ctx-eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; margin:0 0 14px;
+  }
+  .funnel{list-style:none; margin:0 0 4px; padding:0;}
+  .funnel li{
+    display:flex; align-items:center; gap:11px; padding:9px 0; border-top:1px solid var(--border);
+  }
+  .funnel li:first-child{border-top:none;}
+  .funnel .fn-bar{
+    flex:1 1 auto; height:7px; border-radius:99px; background:var(--concrete); overflow:hidden;
+  }
+  .funnel .fn-fill{display:block; height:100%; background:var(--slate); border-radius:99px;}
+  .funnel .fn-fill.hot{background:var(--amber);}
+  .funnel .fn-fill.good{background:var(--teal);}
+  .funnel .fn-n{
+    font-family:var(--font-mono); font-size:13px; font-weight:700; width:22px; text-align:right; flex:0 0 auto;
+  }
+  .funnel .fn-k{font-size:12.5px; width:96px; flex:0 0 auto; color:var(--slate);}
+  .funnel li.at .fn-k{color:var(--ink); font-weight:600;}
+
+  /* The chain drawn, not listed. Two-step distribution is a hierarchy with
+     named tiers, so the diagram is a ladder — and where an account has two
+     parents, the crossing lines are the whole point. */
+  .chain{display:block; width:100%; height:auto; margin:2px 0 4px;}
+  .chain .tier-k{
+    font-family:var(--font-mono); font-size:8.5px; letter-spacing:.1em; text-transform:uppercase;
+    fill:var(--slate-soft); font-weight:700;
+  }
+  .chain .edge{stroke:var(--slate-line); stroke-width:1.4; fill:none;}
+  .chain .edge.ref{stroke:var(--amber); stroke-dasharray:3 3;}
+  .chain .box{fill:var(--surface); stroke:var(--border); stroke-width:1;}
+  .chain .box.you{fill:var(--ink); stroke:var(--ink);}
+  .chain .box.us{fill:var(--concrete); stroke:var(--slate-line);}
+  .chain .nm{font-size:10.5px; font-weight:600; fill:var(--ink);}
+  .chain .nm.you{fill:var(--surface);}
+  /* Nobody takes the whole range. A product they do not carry is drawn, not
+     omitted — the gap is the selling opportunity. */
+  .chain .sub{font-family:var(--font-mono); font-size:8.5px; fill:var(--slate); letter-spacing:.02em;}
+  .chain .box.you ~ .sub{fill:var(--slate-line);}
+  .chain .pr{font-family:var(--font-mono); font-size:7.5px; letter-spacing:.06em; font-weight:700;}
+  .chain .pr .has{fill:var(--teal);}
+  .chain .pr .not{fill:var(--slate-line);}
+  .chain .box.you ~ .pr .has, .chain .nm.you + .pr .has{fill:#7fd8ce;}
+  .chain g.node[data-go]{cursor:pointer;}
+  .chain g.node[data-go]:hover .box{stroke:var(--ink); stroke-width:1.6;}
+  .chain g.node[data-go]:hover .nm{text-decoration:underline;}
+  .chain g.node[data-go] .box{transition:stroke .12s;}
+  /* Fullscreen for the network. The diagram is the one thing here that wants
+     the whole screen, so it gets a real button rather than a hidden gesture. */
+  .net-stage{position:relative; background:var(--surface); border-radius:var(--r-m); padding:18px 14px 16px;}
+  .net-fs{
+    position:absolute; top:12px; right:12px; z-index:2;
+    display:inline-flex; align-items:center; gap:7px;
+    height:34px; padding:0 13px; border-radius:999px;
+    background:var(--concrete); color:var(--ink); border:1px solid var(--border);
+    font-size:12.5px; font-weight:600; letter-spacing:-.005em;
+  }
+  .net-fs:hover{background:var(--ink); color:var(--surface); border-color:var(--ink);}
+  .net-fs .icon{width:15px; height:15px;}
+  .net-fs .off{display:none;}
+  .net-stage:fullscreen{
+    background:var(--concrete); padding:56px 48px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .net-stage:fullscreen .chain{width:100%; max-width:none; max-height:82vh;}
+  .net-stage:fullscreen .net-fs{top:24px; right:28px;}
+  .net-stage:fullscreen .net-fs .on{display:none;}
+  .net-stage:fullscreen .net-fs .off{display:inline;}
+  .net-stage:fullscreen .fs-hint{display:block;}
+  .net-stage.faux-fs{
+    position:fixed; inset:0; z-index:70; border-radius:0;
+    background:var(--concrete); padding:56px 48px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .net-stage.faux-fs .chain{width:100%; max-width:none; max-height:82vh;}
+  .net-stage.faux-fs .net-fs{top:24px; right:28px;}
+  .net-stage.faux-fs .net-fs .on{display:none;}
+  .net-stage.faux-fs .net-fs .off{display:inline;}
+  .net-stage.faux-fs .fs-hint{display:block;}
+  .fs-hint{
+    display:none; position:absolute; bottom:22px; left:50%; transform:translateX(-50%);
+    font-family:var(--font-mono); font-size:11.5px; color:var(--slate);
+  }
+
+  .chain-legend i.has{border:none; width:7px; height:7px; border-radius:50%; background:var(--teal);}
+  .chain-legend i.not{border:none; width:7px; height:7px; border-radius:50%; background:var(--slate-line);}
+  .chain-legend{
+    display:flex; gap:12px; flex-wrap:wrap; margin:9px 0 0;
+    font-family:var(--font-mono); font-size:10px; color:var(--slate-soft);
+  }
+  .chain-legend i{display:inline-block; width:14px; height:0; border-top:1.4px solid var(--slate-line); margin-right:5px; vertical-align:middle;}
+  .chain-legend i.ref{border-top-style:dashed; border-color:var(--amber);}
+
+  .net-group{margin-bottom:20px;}
+  .net-k{
+    font-family:var(--font-mono); font-size:10.5px; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; margin:0 0 7px;
+  }
+  .net-item{
+    display:flex; align-items:baseline; gap:8px; padding:6px 0; font-size:13.5px;
+  }
+  .net-item .nm{font-weight:600;}
+  .net-item .rl{font-family:var(--font-mono); font-size:10.5px; color:var(--slate-soft); text-transform:uppercase;}
+  .net-empty{font-size:12.5px; color:var(--slate); margin:0;}
+  /* Every number here opens the list behind it, so each one says so: the label
+     underlines and a chevron slides in before the click, not after. */
+  .ctx-stat{
+    display:flex; align-items:baseline; gap:10px; width:100%;
+    padding:9px 0; border:none; border-top:1px solid var(--border);
+    background:none; font:inherit; font-size:13px; color:inherit; text-align:left;
+  }
+  .ctx-stat:first-of-type{border-top:none;}
+  .ctx-stat .lbl{flex:1 1 auto;}
+  .ctx-stat b{font-family:var(--font-mono); font-size:15px;}
+  .ctx-stat.bad b{color:var(--clay);}
+  .ctx-stat .chev{
+    width:13px; height:13px; flex:0 0 auto; stroke:var(--slate-soft);
+    opacity:0; transform:translateX(-3px); transition:opacity .12s, transform .12s;
+    align-self:center;
+  }
+  .ctx-stat:hover .lbl, .funnel li:hover .fn-k{text-decoration:underline; text-underline-offset:2px;}
+  .ctx-stat:hover .chev, .funnel li:hover .chev{opacity:1; transform:translateX(0);}
+  .funnel li{
+    width:100%; background:none; border:none; border-top:1px solid var(--border);
+    font:inherit; color:inherit; text-align:left;
+  }
+  .funnel li .chev{
+    width:13px; height:13px; flex:0 0 auto; stroke:var(--slate-soft);
+    opacity:0; transform:translateX(-3px); transition:opacity .12s, transform .12s;
+  }
+
+  /* A list opened from one of those numbers. */
+  .listrow{
+    display:grid; grid-template-columns:1.3fr .9fr 1.5fr auto; gap:14px; align-items:center;
+    width:100%; padding:12px 0; border:none; border-top:1px solid var(--border);
+    background:none; font:inherit; color:inherit; text-align:left;
+  }
+  .listrow:first-of-type{border-top:none;}
+  .listrow:hover .lr-n{text-decoration:underline; text-underline-offset:2px;}
+  .lr-n{font-size:14px; font-weight:600; letter-spacing:-.005em;}
+  .lr-m{font-family:var(--font-mono); font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:.04em;}
+  .lr-s{font-size:12.5px; color:var(--slate);}
+  .lr-act{
+    font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.04em;
+    padding:5px 10px; border-radius:999px; white-space:nowrap; text-transform:uppercase;
+    background:var(--concrete); color:var(--slate); border:none;
+  }
+  .lr-act.bad{background:var(--clay-soft); color:#7a3417;}
+  .lr-act.go{background:var(--amber); color:#3a2508;}
+  .lr-act.go:hover{background:var(--amber-hover);}
+  .lr-act.ok{background:var(--teal-soft); color:#1c4e4b;}
+  .ctx-note{font-size:11.5px; color:var(--slate); line-height:1.5; margin:16px 0 0;}
+
+  .route-col{
+    padding:32px 28px 60px 40px;
+    border-right:1px solid var(--border);
+  }
+  .col-eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate); font-weight:600; margin:0 0 4px;
+  }
+  .col-title{font-size:22px; font-weight:700; letter-spacing:-.015em; margin:0 0 22px;}
+  .col-title span{color:var(--slate); font-weight:500;}
+
+  /* ---------- Spine ---------- */
+  .spine{list-style:none; margin:0; padding:0;}
+  .spine-item{display:flex; align-items:stretch;}
+  .spine-item.label-row{min-height:40px;}
+
+  .rail{width:34px; flex:0 0 34px; display:flex; flex-direction:column; align-items:center;}
+  .rail-seg{width:2px; flex:1 1 auto; min-height:14px; background:var(--slate-line);}
+  .rail-seg.off{background:transparent;}
+  .rail-seg.done{background:var(--teal);}
+  .rail-seg.flagged{background:var(--clay);}
+  .rail-seg.future{
+    background-image:linear-gradient(to bottom, var(--slate-line) 0 5px, transparent 5px 11px);
+    background-size:2px 11px; background-repeat:repeat-y; background-color:transparent;
+  }
+  .node{
+    flex:0 0 auto; width:15px; height:15px; border-radius:50%;
+    background:var(--surface); border:2.5px solid var(--slate-line);
+    margin:1px 0;
+  }
+  .node.done{background:var(--teal); border-color:var(--teal);}
+  .node.flagged{background:var(--clay); border-color:var(--clay);}
+  .node.future{background:var(--concrete); border-color:var(--slate-line);}
+
+  .now-ring{
+    flex:0 0 auto; width:20px; height:20px; border-radius:50%;
+    border:3px solid var(--amber); background:var(--surface);
+    position:relative; margin:1px -2.5px;
+    box-shadow:0 0 0 4px var(--amber-soft);
+  }
+  .now-ring::after{
+    content:""; position:absolute; inset:-8px; border-radius:50%;
+    border:1.5px solid var(--amber); opacity:.55;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .now-ring::after{ animation:pulse 2.4s ease-out infinite; }
+  }
+  @keyframes pulse{
+    0%{transform:scale(.6); opacity:.6;}
+    80%{transform:scale(1.55); opacity:0;}
+    100%{transform:scale(1.55); opacity:0;}
+  }
+
+  .stop-card{flex:1; padding:6px 0 22px 16px; min-width:0;}
+  .label-row .stop-card{padding:8px 0 8px 16px;}
+  .coming-up-label{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate-soft); font-weight:700; margin:0;
+  }
+
+  .stop-select{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    width:100%; text-align:left; background:none; border:none; padding:9px 12px;
+    margin:-9px 0 0 -12px; border-radius:var(--r-m);
+    transition:background-color .12s ease;
+  }
+  .stop-select:hover{background:var(--concrete-deep);}
+  .stop-select.is-active{background:var(--surface); box-shadow:var(--shadow-1); border:1px solid var(--border);}
+  .stop-time{font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--slate); font-variant-numeric:tabular-nums; min-width:66px;}
+  .stop-main{font-size:15px; font-weight:600; color:var(--ink); flex:1 1 220px;}
+  .stop-main .acct{font-weight:700;}
+  .stop-obj{
+    display:block; font-size:12.5px; color:var(--slate); font-weight:400; margin-top:1px;
+  }
+  .pill{
+    font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:.03em;
+    padding:3px 9px; border-radius:999px; white-space:nowrap;
+  }
+  .pill-done{background:var(--teal-soft); color:#1c4e4b;}
+  .pill-flagged{background:var(--clay-soft); color:#7a3417;}
+  .pill-planned{background:var(--concrete-deep); color:var(--slate);}
+
+  .stop-log{
+    margin:6px 0 0 12px; padding-left:0; font-size:13px; color:var(--slate); font-style:italic;
+  }
+  .stop-log::before{content:"\201C";}
+  .stop-log::after{content:"\201D";}
+
+  /* NOW marker card */
+  .now-card{padding:2px 0 26px 16px;}
+  .now-head{display:flex; align-items:center; gap:10px; margin:0 0 3px 12px;}
+  .now-head strong{font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--amber-text); letter-spacing:.02em;}
+  .now-sub{margin:0 0 0 12px; font-size:13px; color:var(--slate); max-width:34ch;}
+
+  /* Debrief affordance */
+  .debrief{
+    margin:10px 0 4px 12px; padding:14px 14px 14px;
+    background:var(--surface); border:1px solid #e3b8a4;
+    border-radius:var(--r-m); box-shadow:var(--shadow-1);
+    max-width:420px;
+  }
+  /* Arriving from the top-bar alert: a couple of soft flares so the eye lands
+     on the card rather than hunting for what just scrolled into view. */
+  @keyframes card-flash{
+    0%   {box-shadow:0 0 0 0 rgba(177,80,46,.40);}
+    100% {box-shadow:0 0 0 16px rgba(177,80,46,0);}
+  }
+  .debrief.flash{animation:card-flash 1.15s ease-out 2;}
+  @media (prefers-reduced-motion: reduce){ .debrief.flash{animation:none;} }
+
+  .debrief-prompt{
+    margin:0 0 10px; font-size:13.5px; font-weight:600; color:#7a3417;
+    display:flex; gap:8px; align-items:flex-start;
+  }
+  .debrief-prompt .icon{stroke:#7a3417; margin-top:1px;}
+  .debrief input[type="text"]{
+    width:100%; padding:9px 11px; font-size:13.5px; border:1px solid var(--border);
+    border-radius:var(--r-s); background:var(--concrete); color:var(--ink); margin-bottom:9px;
+  }
+  .debrief input[type="text"]::placeholder{color:var(--slate-soft);}
+  .debrief-chips{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:11px;}
+  .chip{
+    font-size:12px; font-family:var(--font-mono); padding:5px 10px; border-radius:999px;
+    border:1px solid var(--border); background:var(--surface); color:var(--slate); font-weight:600;
+  }
+  .chip[aria-pressed="true"]{background:var(--ink); color:var(--surface); border-color:var(--ink);}
+  .btn-log{
+    background:var(--amber); color:#3a2508; border:none; font-weight:700; font-size:13px;
+    padding:9px 16px; border-radius:var(--r-s); letter-spacing:.01em;
+  }
+  .btn-log:hover{background:var(--amber-hover);}
+
+  /* Three ways in, none of them mandatory: type it, tap a chip, or talk.
+     The mic sits beside the field so choosing voice costs nothing to find. */
+  .debrief-row{display:flex; gap:9px; align-items:stretch; margin-bottom:9px;}
+  .debrief-row input[type="text"]{flex:1 1 auto; margin-bottom:0;}
+  .btn-mic{
+    flex:0 0 auto; width:44px; height:44px; border-radius:50%;
+    background:var(--ink); color:var(--surface); border:none;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:var(--shadow-1);
+  }
+  .btn-mic:hover{background:#2b3846;}
+  .btn-mic .icon{width:19px;height:19px;stroke-width:1.9;}
+
+  /* Same round-icon idiom as the mic, scaled for a card header. */
+  .card-head{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .card-head .card-title{margin-bottom:0;}
+  /* A card glyph means nothing to someone who hasn't seen it before, so this
+     one says what it does. The mic gets away with being bare because it sits
+     against a text field, where "talk instead of typing" is already understood. */
+  .btn-mini{
+    flex:0 0 auto; display:flex; align-items:center; gap:7px;
+    height:34px; padding:0 13px; border-radius:999px;
+    background:var(--concrete); color:var(--ink); border:1px solid var(--border);
+    font-size:12.5px; font-weight:600; letter-spacing:-.005em; white-space:nowrap;
+  }
+  .btn-mini:hover{background:var(--ink); color:var(--surface); border-color:var(--ink);}
+  .btn-mini .icon{width:16px;height:16px;}
+
+  /* Activity timeline — one record of the account, however it arrived:
+     threads pulled from the mailbox, visits logged in the field. */
+  .tl{list-style:none; margin:0; padding:0;}
+  .tl-item{display:flex; gap:12px; padding:12px 0; border-top:1px solid var(--border);}
+  .tl-item:first-child{border-top:none; padding-top:2px;}
+  .tl-mark{
+    flex:0 0 auto; width:28px; height:28px; border-radius:50%;
+    background:var(--concrete); color:var(--slate);
+    display:flex; align-items:center; justify-content:center; margin-top:1px;
+  }
+  .tl-mark.mail{background:#e6eef4; color:#2b556f;}
+  .tl-mark.visit{background:var(--teal-soft); color:#1c4e4b;}
+  .tl-body{flex:1 1 auto; min-width:0;}
+  .tl-top{display:flex; align-items:baseline; justify-content:space-between; gap:12px;}
+  .tl-title{font-size:14px; font-weight:600; letter-spacing:-.005em;}
+  .tl-date{font-family:var(--font-mono); font-size:11.5px; color:var(--slate); white-space:nowrap;}
+  .tl-sub{font-size:13px; color:var(--slate); line-height:1.45; margin-top:2px;}
+  .tl-meta{
+    display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin-top:6px;
+    font-family:var(--font-mono); font-size:11px; color:var(--slate-soft);
+  }
+  .tl-src{
+    background:var(--concrete); border-radius:999px; padding:2px 8px;
+    color:var(--slate); font-weight:600;
+  }
+  .tl-foot{
+    margin:12px 0 0; padding-top:11px; border-top:1px solid var(--border);
+    font-size:12px; color:var(--slate); line-height:1.45;
+  }
+
+  /* Home. The day is the frame; this is what Deon sees before he picks a stop.
+     Counts always arrive attached to the thing they're counting. */
+  .home-hero{margin:0 0 26px;}
+  .home-hero h2{font-size:32px; font-weight:800; letter-spacing:-.02em; margin:0 0 6px; line-height:1.1;}
+  .home-hero p{margin:0; color:var(--slate); font-size:14.5px;}
+  .home-strip{
+    display:flex; flex-wrap:wrap; gap:8px; margin:0 0 22px;
+  }
+  .att-row{
+    display:flex; gap:11px; align-items:flex-start; padding:11px 0; border-top:1px solid var(--border);
+    width:100%; text-align:left; background:none; border-left:none; border-right:none; border-bottom:none;
+    font:inherit; color:inherit;
+  }
+  .att-row:first-of-type{border-top:none; padding-top:2px;}
+  /* Every row on home goes somewhere or does something — nothing here is
+     decoration, so nothing here should look inert. */
+  button.att-row{cursor:pointer;}
+  button.att-row:hover .att-title{text-decoration:underline; text-underline-offset:2px;}
+  button.att-row:hover .att-when{color:var(--ink);}
+  .att-row.cleared{opacity:.5;}
+  .att-row.cleared .att-title{text-decoration:line-through;}
+  /* A slow halo on the ticks that are still open — an invitation to tap, not an
+     alarm. Staggered so they never pulse in unison, stopped on hover because
+     the invitation has landed, and gone entirely once the chore is cleared. */
+  @keyframes tick-invite{
+    0%   {box-shadow:0 0 0 0 rgba(44,110,107,.28);}
+    70%  {box-shadow:0 0 0 7px rgba(44,110,107,0);}
+    100% {box-shadow:0 0 0 0 rgba(44,110,107,0);}
+  }
+  .card.warm .att-row:not(.cleared) .att-tick{
+    animation:tick-invite 3.2s cubic-bezier(.4,0,.2,1) infinite;
+  }
+  .card.warm .att-row:nth-of-type(2):not(.cleared) .att-tick{animation-delay:1.05s;}
+  .card.warm .att-row:nth-of-type(3):not(.cleared) .att-tick{animation-delay:2.1s;}
+  .card.warm:hover .att-tick,
+  .card.warm .att-row.cleared .att-tick{animation:none;}
+  @media (prefers-reduced-motion: reduce){
+    .card.warm .att-row .att-tick{animation:none;}
+  }
+
+  /* Routine is the one card you are meant to empty, so it gets a warm ground.
+     Its dividers and tick outlines warm with it, or the rows look pasted on. */
+  .card.warm{background:var(--warm-card);}
+  .card.warm .att-row{border-top-color:var(--warm-line);}
+  .card.warm .att-tick{border-color:#DCCDB4; background:var(--warm-card);}
+  .card.warm button.att-row:hover .att-tick{border-color:var(--teal); color:var(--teal);}
+  .card.warm .att-row.cleared .att-tick{background:var(--teal); border-color:var(--teal);}
+
+  .att-tick{
+    flex:0 0 auto; width:22px; height:22px; border-radius:50%; margin-top:1px;
+    border:1.5px solid var(--slate-line); background:var(--surface); color:var(--surface);
+    display:flex; align-items:center; justify-content:center;
+  }
+  button.att-row:hover .att-tick{border-color:var(--teal); color:var(--teal);}
+  .att-row.cleared .att-tick{background:var(--teal); border-color:var(--teal); color:#fff;}
+  .att-tick .icon{width:13px;height:13px;stroke-width:2.6;}
+  .att-dot{
+    flex:0 0 auto; width:8px; height:8px; border-radius:50%; margin-top:7px; background:var(--slate-line);
+  }
+  .att-dot.warn{background:var(--clay);}
+  .att-dot.due{background:var(--amber);}
+  /* These are spans so a whole row can be one button — they still need to
+     stack like the block elements they replaced. */
+  .att-body{flex:1 1 auto; min-width:0; display:block;}
+  .att-title{display:block; font-size:14px; font-weight:600; letter-spacing:-.005em;}
+  .att-sub{display:block; font-size:12.5px; color:var(--slate); margin-top:1px;}
+  .att-when{font-family:var(--font-mono); font-size:11.5px; color:var(--slate); white-space:nowrap; margin-top:2px;}
+  .home-quiet{
+    font-size:13px; color:var(--slate); margin:2px 0 0;
+  }
+  .back-today{
+    display:inline-flex; align-items:center; gap:7px; margin-bottom:14px;
+    background:none; border:none; padding:0; color:var(--slate);
+    font-size:12.5px; font-weight:600;
+  }
+  .back-today:hover{color:var(--ink);}
+  .back-today .icon{width:14px;height:14px;}
+  .col-title-btn{
+    background:none; border:none; padding:0; text-align:left; font:inherit; color:inherit;
+    font-size:22px; font-weight:700; letter-spacing:-.015em; margin:0 0 22px; display:block;
+  }
+  .col-title-btn span{color:var(--slate); font-weight:500;}
+  .col-title-btn:hover span{color:var(--ink);}
+
+  /* The four things a rep actually starts from. Each carries a live number so
+     it reads as work waiting, not a menu of features. */
+  .cta-row{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:0 0 26px;}
+  .cta{
+    display:flex; flex-direction:column; gap:9px; align-items:flex-start;
+    padding:15px 15px 14px; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r-m); text-align:left; box-shadow:var(--shadow-1);
+  }
+  .cta:hover{border-color:var(--ink);}
+  .cta-mark{
+    width:34px; height:34px; border-radius:50%; background:var(--concrete);
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+  }
+  .cta:hover .cta-mark{background:var(--ink); color:var(--surface);}
+  .cta-label{font-size:14.5px; font-weight:700; letter-spacing:-.01em;}
+  .cta-sub{font-size:11.5px; font-family:var(--font-mono); color:var(--slate); line-height:1.35;}
+  .cta.hot .cta-mark{background:var(--amber-soft); color:var(--amber-text);}
+  .cta.hot .cta-sub{color:var(--amber-text); font-weight:700;}
+
+  /* Scheduling: pick, don't type. Everything here is one tap. */
+  .sched-group{margin-bottom:17px;}
+  .sched-k{
+    font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; margin:0 0 8px;
+  }
+  .sched-chips{display:flex; flex-wrap:wrap; gap:7px;}
+  .sched-chips .chip{font-size:12.5px; padding:8px 13px; min-height:36px;}
+  /* A dealer list runs to dozens of branches, so it gets a real picker rather
+     than a chip row that could only ever show the first few. */
+  .sched-select{
+    width:100%; min-height:46px; padding:11px 40px 11px 13px;
+    background:var(--concrete); color:var(--ink);
+    border:1px solid var(--border); border-radius:var(--r-s);
+    font-family:inherit; font-size:14.5px; font-weight:600; letter-spacing:-.005em;
+    appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235B6670' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 13px center; background-size:17px;
+  }
+  .sched-select:hover{border-color:var(--slate);}
+  .sched-select optgroup{font-style:normal; font-weight:700;}
+
+  /* A wall is a build with stages, not a yes/no. Their tracker runs each one
+     from render through signage, and three are stuck right now. */
+  .wall-stages{display:flex; flex-wrap:wrap; gap:4px; margin:11px 0 0;}
+  .wstage{
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+    padding:3px 7px; border-radius:4px; background:var(--concrete); color:var(--slate-soft); font-weight:700;
+  }
+  .wstage.done{background:var(--teal-soft); color:#1c4e4b;}
+  .wstage.at{background:var(--ink); color:var(--surface);}
+  .wstage.stuck{background:var(--clay-soft); color:#7a3417;}
+  .wall-meta{
+    margin:10px 0 0; font-size:12px; color:var(--slate); line-height:1.5;
+  }
+  .wall-meta b{color:var(--ink); font-weight:600;}
+  .photo-strip{display:flex; gap:8px; align-items:center; margin:14px 0 4px;}
+  .photo-thumb{
+    width:52px; height:52px; border-radius:var(--r-s); background:var(--concrete);
+    display:flex; align-items:center; justify-content:center; color:var(--slate-soft);
+    border:1px solid var(--border); flex:0 0 auto;
+  }
+  .photo-add{
+    width:52px; height:52px; border-radius:var(--r-s); background:var(--surface);
+    border:1.5px dashed var(--slate-line); color:var(--slate);
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .photo-add:hover{border-color:var(--ink); color:var(--ink);}
+
+  /* Branch roll-up under a banner. Each branch is its own account with its own
+     stocking decisions, and — the part a generic CRM can't hold — its own
+     distributor. Two branches of one banner can be served by different ones. */
+  .branch-row{
+    display:grid; grid-template-columns:1.1fr 1fr 1.4fr auto; gap:14px; align-items:center;
+    padding:11px 0; border-top:1px solid var(--border);
+  }
+  .branch-row:first-of-type{border-top:none;}
+  .branch-name{font-size:14px; font-weight:600; letter-spacing:-.005em;}
+  .branch-dist{
+    font-family:var(--font-mono); font-size:11px; color:var(--slate);
+    text-transform:uppercase; letter-spacing:.04em;
+  }
+  .branch-state{font-size:12.5px; color:var(--slate);}
+  .branch-flag{
+    font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.04em;
+    padding:3px 8px; border-radius:999px; white-space:nowrap; text-transform:uppercase;
+  }
+  .branch-flag.ok{background:var(--teal-soft); color:#1c4e4b;}
+  .branch-flag.work{background:var(--concrete); color:var(--slate);}
+  .branch-flag.bad{background:var(--clay-soft); color:#7a3417;}
+  .dist-row{
+    display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+    padding:10px 0; border-top:1px solid var(--border);
+  }
+  .dist-row:first-of-type{border-top:none;}
+  .dist-name{font-size:14px; font-weight:600;}
+  .dist-count{font-family:var(--font-mono); font-size:12px; color:var(--slate);}
+
+  /* The week is the route zoomed out, so it keeps the spine's vocabulary:
+     teal where a visit is confirmed, clay where one passed unlogged, amber for
+     now, hollow for a plan. Google Calendar is a projection of this, never the
+     other way round. */
+  /* A date range should never wrap — it reads as a broken heading. The header
+     wraps as a whole instead, and the range keeps its own line. */
+  .week-head{display:flex; align-items:flex-end; justify-content:space-between; gap:14px 20px; margin:0 0 6px; flex-wrap:wrap;}
+  .week-head .dossier-title{white-space:nowrap;}
+  .seg{display:flex; gap:4px; background:var(--concrete); padding:3px; border-radius:999px;}
+  .seg button{
+    border:none; background:none; padding:7px 14px; border-radius:999px;
+    font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--slate);
+  }
+  .seg button[aria-pressed="true"]{background:var(--surface); color:var(--ink); box-shadow:var(--shadow-1);}
+
+  /* The grid sits on its own light panel so the days lift off the page grey —
+     weekends used to be the same colour as the background and disappeared. */
+  .weekpanel{
+    background:var(--surface); border-radius:var(--r-m); padding:14px;
+    margin:18px 0 0; box-shadow:var(--shadow-1);
+  }
+  /* A day needs a floor width to stay readable; below that the week scrolls
+     rather than squeezing an account name into three wrapped lines. */
+  .weekpanel{overflow-x:auto;}
+  .weekgrid{display:grid; grid-template-columns:repeat(7, minmax(104px, 1fr)); gap:8px;}
+  .wadd{white-space:nowrap;}
+  .wday{
+    background:#fff; border:1px solid var(--border); border-radius:var(--r-m);
+    padding:10px 9px 12px; min-height:196px; display:flex; flex-direction:column; gap:7px;
+  }
+  .wday.past{background:#fdfdfd; border-style:dashed; border-color:#e3e7e8;}
+  .wday.today{border-color:var(--amber); box-shadow:0 0 0 2px var(--amber-soft);}
+  .wday.weekend{background:#f7f8f8; border-color:#eceff0;}
+
+  /* Picking a day opens it underneath the grid — the cells stay a glanceable
+     overview, and the detail is where you actually act on a stop. */
+  .wday{cursor:pointer;}
+  .wday.picked{border-color:var(--ink); box-shadow:0 0 0 2px rgba(28,37,48,.10);}
+  .wday.picked.today{border-color:var(--amber); box-shadow:0 0 0 2px var(--amber-soft), 0 0 0 4px rgba(28,37,48,.08);}
+  .daypanel{margin:16px 0 0;}
+  .dp-head{display:flex; align-items:baseline; justify-content:space-between; gap:14px; margin:0 0 10px;}
+  .dp-title{font-size:17px; font-weight:800; letter-spacing:-.015em;}
+  .dp-count{font-family:var(--font-mono); font-size:12px; color:var(--slate);}
+  .dp-row{
+    display:grid; grid-template-columns:64px 1fr auto; gap:14px; align-items:center;
+    width:100%; text-align:left; background:none; font:inherit; color:inherit;
+    border:none; border-top:1px solid var(--border); padding:13px 0;
+  }
+  .dp-row:first-of-type{border-top:none;}
+  .dp-row:hover .dp-a{text-decoration:underline; text-underline-offset:2px;}
+  .dp-t{font-family:var(--font-mono); font-size:12.5px; color:var(--slate); font-weight:700;}
+  .dp-a{font-size:14.5px; font-weight:700; letter-spacing:-.01em; display:block;}
+  .dp-o{font-size:12.5px; color:var(--slate); display:block; margin-top:1px;}
+  .dp-s{
+    font-family:var(--font-mono); font-size:10.5px; font-weight:700; letter-spacing:.04em;
+    text-transform:uppercase; padding:4px 10px; border-radius:999px; white-space:nowrap;
+    background:var(--concrete); color:var(--slate);
+  }
+  .dp-s.done{background:var(--teal-soft); color:#1c4e4b;}
+  .dp-s.flag{background:var(--clay-soft); color:#7a3417;}
+  .dp-empty{font-size:13px; color:var(--slate); margin:0 0 12px;}
+
+  /* Week stepper */
+  .wknav{display:flex; align-items:center; gap:6px;}
+  .wkarrow{
+    width:34px; height:34px; border-radius:50%; flex:0 0 auto;
+    background:var(--concrete); border:1px solid var(--border); color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .wkarrow:hover:not(:disabled){background:var(--ink); color:var(--surface); border-color:var(--ink);}
+  .wkarrow:disabled{opacity:.35; cursor:default;}
+  .wkarrow .icon{width:15px;height:15px;}
+  .wk-today{
+    border:none; background:var(--amber-soft); color:var(--amber-text);
+    font-family:var(--font-mono); font-size:11.5px; font-weight:700;
+    padding:8px 13px; border-radius:999px; white-space:nowrap;
+  }
+  .wk-today:hover{background:#f6dcbc;}
+  .wday-head{display:flex; align-items:baseline; justify-content:space-between; gap:6px;}
+  .wday-d{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--slate); font-weight:700;}
+  .wday.today .wday-d{color:var(--amber-text);}
+  .wday-n{font-size:15px; font-weight:800; letter-spacing:-.02em;}
+  .wslot{
+    display:block; width:100%; text-align:left; border:none; border-radius:var(--r-s);
+    padding:7px 8px; background:var(--concrete); font:inherit;
+    border-left:3px solid var(--slate-line);
+  }
+  .wslot:hover{background:var(--concrete-deep);}
+  .wslot.done{border-left-color:var(--teal); background:var(--teal-soft);}
+  .wslot.flag{border-left-color:var(--clay); background:var(--clay-soft);}
+  .wslot.plan{background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--slate-line);}
+  .wslot-t{font-family:var(--font-mono); font-size:10px; color:var(--slate); display:block;}
+  .wslot-a{font-size:11.5px; font-weight:700; letter-spacing:-.01em; display:block; margin-top:1px; line-height:1.25;}
+  .wslot-o{font-size:10.5px; color:var(--slate); display:block; margin-top:1px; line-height:1.25;}
+  .wslot.done .wslot-o, .wslot.done .wslot-t{color:#1c4e4b;}
+  .wslot.flag .wslot-o, .wslot.flag .wslot-t{color:#7a3417;}
+  .wadd{
+    margin-top:auto; border:1px dashed var(--slate-line); background:none; border-radius:var(--r-s);
+    padding:8px 6px; color:var(--slate-soft); font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+  }
+  .wadd:hover{border-color:var(--ink); color:var(--ink);}
+  .week-foot{
+    display:flex; align-items:center; gap:9px; margin:18px 0 0;
+    font-size:12.5px; color:var(--slate);
+  }
+  .week-foot .icon{stroke:var(--slate); width:15px; height:15px;}
+  .deadline{
+    display:flex; align-items:flex-start; gap:9px; margin:16px 0 0; padding:12px 14px;
+    background:var(--amber-soft); border-radius:var(--r-m); font-size:13px; color:#7a3417;
+  }
+  .deadline .icon{stroke:#7a3417; margin-top:1px;}
+  .deadline b{font-weight:700;}
+
+  /* The month is not for reading appointments — it is for seeing rhythm. Each
+     day carries marks rather than text, so coverage and gaps read at a glance. */
+  .monthgrid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin:16px 0 0;}
+  .mhead{
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate-soft); font-weight:700; text-align:center; padding-bottom:2px;
+  }
+  .mday{
+    min-height:62px; border-radius:var(--r-s); padding:6px 7px;
+    background:var(--surface); border:1px solid var(--border);
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .mday.blank{background:none; border-color:transparent;}
+  .mday.weekend{background:var(--concrete); border-color:transparent;}
+  .mday.past{background:transparent; border-style:dashed;}
+  .mday.today{border-color:var(--amber); box-shadow:0 0 0 2px var(--amber-soft);}
+  .mday-n{font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--slate);}
+  .mday.today .mday-n{color:var(--amber-text);}
+  .mday.gap .mday-n{color:var(--slate-soft);}
+  .marks{display:flex; flex-wrap:wrap; gap:3px;}
+  .mark{width:8px; height:8px; border-radius:50%; display:block;}
+  .mark.done{background:var(--teal);}
+  .mark.flag{background:var(--clay);}
+  .mark.plan{background:none; border:1.5px solid var(--slate-line);}
+  /* an unbroken stretch with nothing booked is the thing worth seeing */
+  .gapband{
+    grid-column:1 / -1; margin:2px 0 0; padding:9px 12px;
+    background:var(--amber-soft); border-radius:var(--r-s);
+    font-size:12.5px; color:#7a3417;
+  }
+  .gapband b{font-weight:700;}
+  .month-legend{
+    display:flex; gap:16px; flex-wrap:wrap; margin:14px 0 0;
+    font-family:var(--font-mono); font-size:10.5px; color:var(--slate);
+  }
+  .month-legend span{display:inline-flex; align-items:center; gap:6px;}
+
+  /* ── Phone ──────────────────────────────────────────────────────────────
+     The day comes first, capture lives in the thumb zone, and opening an
+     account takes the whole screen rather than sitting under the route. */
+  .thumbbar{display:none;}
+  .route-toggle{display:none;}
+  .route-summary{display:none;}
+  @media (max-width: 860px){
+    /* The day is long on a phone and buries everything under it, so it folds
+       to its next actionable stop and opens on a tap. */
+    .route-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+    .route-toggle{
+      display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+      width:36px; height:36px; border-radius:50%; margin-top:-4px;
+      background:var(--concrete); border:1px solid var(--border); color:var(--ink);
+    }
+    .route-toggle .icon{width:16px; height:16px; transition:transform .18s ease;}
+    .route-col.collapsed .route-toggle .icon{transform:rotate(-90deg);}
+    /* The manager's column folds the same way the rep's day does — the list
+       here is .teamlist, not .spine, so it needs its own rule. */
+    .route-col.collapsed .spine,
+    .route-col.collapsed .teamlist,
+    .route-col.collapsed .seg.lens,
+    .route-col.collapsed .col-stats,
+    .route-col.collapsed .fri-note,
+    .route-col.collapsed #btn-week{display:none;}
+    .route-col.collapsed .route-summary{display:block;}
+    .route-summary{
+      width:100%; text-align:left; border:none; font:inherit; color:inherit;
+      background:var(--surface); border-radius:var(--r-m); padding:13px 14px;
+      box-shadow:var(--shadow-1); margin-top:4px;
+    }
+    .rs-k{
+      font-family:var(--font-mono); font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+      color:var(--slate); font-weight:700; display:block; margin-bottom:5px;
+    }
+    .rs-main{display:block; font-size:14.5px; font-weight:700; letter-spacing:-.01em;}
+    .rs-sub{display:block; font-size:12.5px; color:var(--slate); margin-top:2px;}
+    .rs-flag{
+      display:inline-flex; align-items:center; gap:6px; margin-top:9px;
+      background:var(--clay-soft); color:#7a3417; border-radius:999px;
+      padding:4px 10px; font-family:var(--font-mono); font-size:10.5px; font-weight:700;
+    }
+    .rs-open{
+      display:block; margin-top:10px; font-size:12.5px; color:var(--slate);
+      text-decoration:underline; text-underline-offset:2px;
+    }
+    .app{height:auto; overflow:visible;}
+    .layout{display:block; max-width:none;}
+    .route-col, .dossier-col, .context-col{
+      overflow:visible; border:none; padding:20px 18px 8px; position:static; height:auto;
+    }
+    .route-col{padding-top:14px;}
+    .dossier-col{padding-top:4px; border-top:1px solid var(--border); margin-top:14px;}
+    .context-col{display:block; border-top:1px solid var(--border); margin-top:8px; padding-bottom:120px;}
+    body{padding-bottom:0;}
+
+    /* opening an account hides the day instead of pushing it down the page */
+    body.viewing .route-col{display:none;}
+    body.viewing .dossier-col{border-top:none; margin-top:0; padding-top:14px;}
+
+    .topbar{
+      position:sticky; top:0; z-index:30;
+      grid-template-columns:1fr auto; gap:10px; padding:10px 16px;
+    }
+    .search-wrap{display:none;}          /* search moves to a row on home */
+    .rep-badge{width:36px;height:36px;font-size:14px;}
+    .rep-name{font-size:16px;}
+    .rep-sub{font-size:10.5px;}
+    .bar-date{display:none;}
+    .bar-right{gap:8px;}
+    .alert-chip{font-size:11px; padding:6px 10px;}
+    .sync{font-size:11px;}
+
+    .col-title-btn{font-size:19px; margin-bottom:14px;}
+    .home-hero h2{font-size:24px;}
+    .home-hero p{font-size:13.5px;}
+    .dossier-title{font-size:24px !important;}
+    .grid-2{grid-template-columns:1fr;}
+    .cta-row{grid-template-columns:1fr 1fr; gap:9px;}
+    .cta{padding:12px;}
+
+    /* the week scrolls sideways rather than squeezing seven columns */
+    /* stack the header on a phone: the range on one line, the stepper under it */
+    .week-head{flex-direction:column; align-items:flex-start; gap:12px;}
+    .week-head .dossier-title{font-size:21px !important;}
+    .wknav{flex-wrap:wrap; width:100%;}
+    .weekpanel{padding:10px; scroll-snap-type:x mandatory;}
+    .weekgrid{grid-template-columns:repeat(7, 72vw); gap:10px; overflow:visible;}
+    .weekgrid .wday{scroll-snap-align:center; min-height:auto;}
+    .monthgrid{gap:4px;}
+    .mday{min-height:48px; padding:4px 5px;}
+    .listrow{grid-template-columns:1fr auto; gap:4px 10px;}
+    .lr-m, .lr-s{grid-column:1 / -1;}
+    .branch-row{grid-template-columns:1fr auto; gap:3px 10px;}
+    .branch-dist, .branch-state{grid-column:1 / -1;}
+    .net-stage{overflow-x:auto;}
+    .net-stage .chain{min-width:640px;}
+    .vsheet{align-items:flex-end; padding:0;}
+    .vsheet-panel{border-radius:var(--r-l) var(--r-l) 0 0; max-height:92vh; width:100%;}
+    .menu{left:auto; right:0;}
+
+    /* Capture in the thumb zone. A rep sitting in a truck reaches the bottom
+       of the screen, never the top. */
+    .thumbbar{
+      display:flex; align-items:center; justify-content:space-around; gap:6px;
+      position:fixed; left:0; right:0; bottom:0; z-index:35;
+      padding:9px 14px calc(9px + env(safe-area-inset-bottom, 0px));
+      background:color-mix(in srgb, var(--surface) 92%, transparent);
+      backdrop-filter:blur(14px); border-top:1px solid var(--border);
+    }
+    .tb{
+      display:flex; flex-direction:column; align-items:center; gap:3px;
+      background:none; border:none; padding:5px 10px; min-width:64px;
+      font-family:var(--font-mono); font-size:10px; font-weight:700; color:var(--slate);
+    }
+    .tb .icon{width:20px;height:20px;}
+    .tb-mic{
+      width:56px; height:56px; border-radius:50%; margin-top:-22px;
+      background:var(--amber); color:#3a2508; box-shadow:var(--shadow-2);
+      justify-content:center; gap:0; min-width:0;
+    }
+    .tb-mic .icon{width:24px;height:24px;}
+    .tb-mic span{display:none;}
+  }
+
+  /* Business-card capture: extracted fields, with the shaky ones marked. */
+  .cardshot{
+    background:var(--concrete); border-radius:var(--r-m); padding:14px;
+    display:flex; align-items:center; justify-content:center; margin-bottom:16px;
+  }
+  .fields{display:grid; gap:9px; margin-bottom:16px;}
+  .fld{
+    display:grid; grid-template-columns:104px 1fr auto; gap:12px; align-items:center;
+    padding:10px 12px; background:var(--concrete); border-radius:var(--r-s);
+  }
+  .fld-k{font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--slate); font-weight:700;}
+  .fld-v{font-size:14.5px; font-weight:600;}
+  .fld-c{font-family:var(--font-mono); font-size:11px; color:var(--slate);}
+  .fld.low{background:var(--amber-soft); outline:1px solid #e8c79a;}
+  .fld.low .fld-c{color:var(--amber-text); font-weight:700;}
+  .fld.match{background:var(--teal-soft);}
+  .fld.match .fld-c{color:#1c4e4b; font-weight:700;}
+
+  /* ---------- the account list ----------
+     Five columns on a desk, two on a phone. The name and when anybody was last
+     there are the two that survive the squeeze. */
+  .hero-act{margin-top:15px;}
+  .card-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:11px;}
+  .ctx-stat.is-active .lbl{font-weight:700; color:var(--ink);}
+  .ctx-stat.is-active b{color:var(--teal);}
+
+  .acct-head, .acct-row{
+    display:grid; gap:12px; align-items:center;
+    grid-template-columns:minmax(0,2.1fr) minmax(0,1.2fr) minmax(0,.7fr) minmax(0,.8fr) minmax(0,1fr);
+  }
+  .acct-head.slim, .acct-row.slim{
+    grid-template-columns:minmax(0,2.1fr) minmax(0,1.2fr) minmax(0,.8fr) minmax(0,1fr);
+  }
+  .acct-head{
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.085em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; padding:0 8px 8px; border-bottom:1px solid var(--border);
+  }
+  .acct-row{
+    width:100%; text-align:left; background:none; border:none; font:inherit; color:inherit;
+    padding:11px 8px; margin:0; border-top:1px solid var(--border); border-radius:var(--r-s);
+  }
+  .acct-row:first-of-type{border-top:none;}
+  .acct-row:hover{background:var(--concrete);}
+  .ar-n{font-size:14px; font-weight:650; letter-spacing:-.01em; min-width:0;}
+  .ar-n small{
+    display:block; font-weight:400; font-size:11.5px; color:var(--slate); letter-spacing:0;
+    margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .ar-co, .ar-rep{
+    font-size:12.5px; color:var(--slate); min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .ar-seen{font-family:var(--font-mono); font-size:12.5px; color:var(--slate); white-space:nowrap;}
+  .ar-seen.bad{color:var(--clay); font-weight:700;}
+  .ar-st{
+    font-family:var(--font-mono); font-size:11px; color:var(--slate); min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  /* Narrow: drop the header strip and the middle columns, keep the name and
+     when anybody was last in. */
+  @media (max-width: 1180px){
+    .acct-head{display:none;}
+    .acct-row, .acct-row.slim{grid-template-columns:minmax(0,1.7fr) minmax(0,.8fr);}
+    .ar-co, .ar-rep, .ar-st{display:none;}
+  }
+
+  /* Add-an-account form. Six fields, and only the name is required. */
+  .fldset{margin-bottom:13px;}
+  .fld-l{
+    display:block; font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--slate); font-weight:700; margin-bottom:6px;
+  }
+  .fld-opt{text-transform:none; letter-spacing:0; font-weight:400;}
+  .fld-in{
+    width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:var(--r-m);
+    background:var(--surface); font:inherit; font-size:14.5px; color:var(--ink);
+  }
+  .fld-in::placeholder{color:var(--slate-soft);}
+  .fld-in:focus{outline:none; border-color:var(--teal);}
+  .fld-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .fld-err{margin:2px 0 0; font-size:12.5px; color:var(--clay); font-weight:600;}
+  @media (max-width: 560px){ .fld-2{grid-template-columns:1fr;} }
+
+  /* Capture overlay — record, then confirm a draft. Never a blank form. */
+  .vsheet{
+    position:fixed; inset:0; z-index:60; display:none;
+    background:rgba(20,27,35,.42); backdrop-filter:blur(2px);
+    align-items:center; justify-content:center; padding:24px;
+  }
+  .vsheet[data-open="true"]{display:flex;}
+  .vsheet-panel{
+    background:var(--surface); border-radius:var(--r-l); box-shadow:var(--shadow-2);
+    width:min(560px,100%); max-height:88vh; overflow-y:auto; padding:26px 28px 24px;
+  }
+  .vsheet h3{margin:0 0 4px; font-size:20px; letter-spacing:-.015em;}
+  .vsheet .ctx{
+    margin:0 0 20px; font-size:12.5px; color:var(--slate); font-family:var(--font-mono);
+  }
+  .vsheet .ctx b{color:var(--ink); font-weight:600;}
+  .rec-live{display:flex; align-items:center; gap:14px; padding:18px 0 22px;}
+  .rec-dot{
+    width:13px;height:13px;border-radius:50%;background:var(--clay);flex:0 0 auto;
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.86);}}
+  .rec-time{font-family:var(--font-mono); font-size:26px; font-weight:700; letter-spacing:-.02em;}
+  .wave{flex:1; height:38px; display:flex; align-items:center; gap:3px; overflow:hidden;}
+  .wave i{
+    flex:1 1 auto; background:var(--slate-line); border-radius:2px; min-height:4px;
+    animation:bob .9s ease-in-out infinite alternate;
+  }
+  @keyframes bob{from{height:12%;}to{height:92%;}}
+  .draft-box{
+    background:var(--concrete); border-radius:var(--r-m); padding:16px 17px; margin-bottom:16px;
+  }
+  .draft-label{
+    font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; margin:0 0 7px;
+  }
+  .draft-box p{margin:0 0 14px; font-size:14.5px; line-height:1.5;}
+  .draft-box p:last-child{margin-bottom:0;}
+  /* The model proposes outcomes; the rep is the one who decides. Toggling one
+     off has to be as cheap as leaving it on, or nobody corrects anything. */
+  .draft-tags{display:flex; flex-wrap:wrap; gap:6px;}
+  .draft-tag{
+    font-size:11.5px; font-family:var(--font-mono); font-weight:600;
+    padding:6px 11px; border-radius:999px; min-height:30px;
+    border:1px solid transparent; background:var(--teal-soft); color:#1c4e4b;
+  }
+  .draft-tag[aria-pressed="false"]{
+    background:transparent; border-color:var(--border); color:var(--slate);
+  }
+  .draft-tag[aria-pressed="false"]:hover{border-color:var(--slate); color:var(--ink);}
+  .draft-tag[aria-pressed="true"]::before{content:"✓ "; font-weight:700;}
+  .draft-next{
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    background:var(--ink); color:var(--surface); border-radius:var(--r-m);
+    padding:13px 15px; margin-bottom:16px;
+  }
+  .draft-next .dn-label{
+    font-family:var(--font-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+    opacity:.72; font-weight:700; display:block; margin-bottom:3px;
+  }
+  .draft-next .dn-act{font-size:14.5px; font-weight:600; letter-spacing:-.01em;}
+  .dn-date{
+    background:var(--amber); color:#3a2508; font-family:var(--font-mono); font-weight:700;
+    font-size:12.5px; padding:6px 11px; border-radius:999px; white-space:nowrap; border:none;
+  }
+  /* Where the draft gets filed. Captured from a stop, these come pre-answered;
+     captured from anywhere else, the model guessed and says what it heard, so
+     the rep is correcting one field rather than filling in a form. */
+  .assign{display:grid; gap:9px; margin-bottom:16px;}
+  .assign-row{
+    display:grid; grid-template-columns:88px 1fr; gap:12px; align-items:center;
+    padding:9px 12px; background:var(--concrete); border-radius:var(--r-s);
+  }
+  .assign-row.check{background:var(--amber-soft); outline:1px solid #e8c79a;}
+  .assign-k{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--slate); font-weight:700;
+  }
+  .assign-row.check .assign-k{color:var(--amber-text);}
+  .assign-sel{
+    width:100%; padding:7px 34px 7px 10px; min-height:38px;
+    background:var(--surface); color:var(--ink);
+    border:1px solid var(--border); border-radius:var(--r-s);
+    font-family:inherit; font-size:14px; font-weight:600; appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235B6670' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 11px center; background-size:15px;
+  }
+  .assign-hint{
+    grid-column:2; font-family:var(--font-mono); font-size:10.5px; color:var(--slate); margin-top:-2px;
+  }
+  .assign-row.check .assign-hint{color:var(--amber-text); font-weight:700;}
+
+  .gate-note{
+    display:flex; gap:8px; align-items:flex-start; margin:0 0 18px;
+    font-size:12.5px; color:var(--slate); line-height:1.45;
+  }
+  .gate-note .icon{stroke:var(--teal); margin-top:1px;}
+  .vsheet-actions{display:flex; gap:10px; align-items:center;}
+  .btn-primary-lg{
+    background:var(--teal); color:#fff; border:none; font-weight:700; font-size:14.5px;
+    padding:12px 20px; border-radius:var(--r-m);
+  }
+  .btn-primary-lg:hover{background:#245957;}
+  .btn-ghost{
+    background:none; border:1px solid var(--border); color:var(--slate);
+    font-weight:600; font-size:13.5px; padding:11px 16px; border-radius:var(--r-m);
+  }
+  .btn-ghost:hover{border-color:var(--slate); color:var(--ink);}
+  .btn-stop{
+    background:var(--ink); color:var(--surface); border:none; font-weight:700; font-size:14px;
+    padding:12px 20px; border-radius:var(--r-m);
+  }
+
+  .debrief-logged{
+    display:flex; gap:8px; align-items:center; margin:10px 0 4px 12px; padding:10px 13px;
+    background:var(--teal-soft); border-radius:var(--r-m); color:#1c4e4b; font-size:13px; max-width:420px;
+  }
+  .debrief-logged .icon{stroke:#1c4e4b;}
+  .debrief-logged strong{font-weight:700;}
+
+  /* ---------- Dossier column ---------- */
+  .dossier-col{padding:32px 48px 60px 40px;}
+  .dossier{max-width:760px;}
+
+  .dossier-eyebrow{
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; margin:0 0 6px;
+  }
+  .dossier-title{font-size:32px; font-weight:800; letter-spacing:-.02em; margin:0 0 6px; line-height:1.1;}
+  .dossier-loc{display:flex; align-items:center; gap:6px; color:var(--slate); font-size:13.5px; margin:0 0 20px;}
+
+  .visit-bar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:14px 18px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-m);
+    box-shadow:var(--shadow-1); margin-bottom:26px;
+  }
+  .visit-bar .objective{font-weight:700; font-size:14.5px;}
+  .visit-bar .when{font-family:var(--font-mono); font-size:13px; color:var(--slate); margin-left:auto;}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r-l);
+    padding:18px 20px; box-shadow:var(--shadow-1);
+  }
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--slate); font-weight:700; margin:0 0 12px;
+  }
+  .card-title .icon{width:14px;height:14px;}
+
+  .person{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .person:last-child{margin-bottom:0;}
+  .person-avatar{
+    width:32px;height:32px;border-radius:50%; background:var(--concrete-deep); color:var(--ink);
+    display:flex;align-items:center;justify-content:center; font-weight:700; font-size:12.5px; flex:0 0 auto;
+  }
+  .person-name{font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px;}
+  .person-role{font-size:12.5px; color:var(--slate);}
+  .champion-star{width:14px;height:14px; stroke:var(--amber-deep); fill:var(--amber-soft);}
+
+  .wall-status{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .wall-dot{width:9px;height:9px;border-radius:50%; flex:0 0 auto;}
+  .wall-dot.fresh{background:var(--teal);}
+  .wall-dot.stale{background:var(--clay);}
+  .wall-dot.na{background:var(--slate-line);}
+  .wall-main{font-size:13.5px; font-weight:600;}
+  .wall-sub{font-size:12px; color:var(--slate); margin:2px 0 0;}
+
+  .pipe-item{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13.5px;}
+  .pipe-item:first-child{border-top:none; padding-top:0;}
+  .pipe-name{font-weight:600;}
+  .pipe-meta{color:var(--slate); font-size:12px; margin-top:2px;}
+  .pipe-amt{font-family:var(--font-mono); font-weight:700; color:var(--teal); white-space:nowrap;}
+
+  .full-width{grid-column:1 / -1;}
+
+  .last-visit-text{font-size:13.5px; color:var(--ink); margin:0 0 6px;}
+  .last-visit-date{font-family:var(--font-mono); font-size:12px; color:var(--slate);}
+
+  .bring-list{margin:0; padding-left:0; list-style:none; font-size:13.5px;}
+  .bring-list li{display:flex; gap:8px; padding:4px 0;}
+  .bring-list .icon{stroke:var(--slate); margin-top:2px;}
+
+  .next-action{
+    background:var(--ink); color:var(--surface); border-radius:var(--r-l);
+    padding:18px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .next-action .card-title{color:#aeb8c2; margin:0;}
+  .next-action-body{flex:1 1 260px;}
+  .next-action-text{font-size:15px; font-weight:700; margin:2px 0 0;}
+  .next-action-date{
+    font-family:var(--font-mono); font-size:13px; font-weight:700; background:var(--amber);
+    color:#3a2508; padding:7px 13px; border-radius:999px; white-space:nowrap;
+  }
+  .next-action.empty{background:var(--concrete-deep); color:var(--ink);}
+  .next-action.empty .card-title{color:var(--slate);}
+  .next-action.empty .next-action-text{font-weight:600; color:var(--slate); font-style:italic;}
+
+  .banner-note{
+    margin-top:22px; font-size:12.5px; color:var(--slate); display:flex; align-items:center; gap:7px;
+  }
+  .banner-note strong{color:var(--ink); font-weight:600;}
+
+  @media (max-width:1150px){
+    .layout{grid-template-columns:1fr;}
+    .route-col{border-right:none; border-bottom:1px solid var(--border);}
+    .grid-2{grid-template-columns:1fr;}
+  }
+
+/* ── Manager view ─────────────────────────────────────────────────────────
+   Same language as the rep's screen. The left column carries people instead
+   of stops; the middle answers the one question a manager actually has. */
+
+.teamlist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
+.teamrow{
+  display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
+  width:100%; text-align:left; font:inherit; color:inherit;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-m);
+  padding:12px 13px;
+}
+.teamrow:hover{border-color:var(--slate);}
+.teamrow.is-active{border-color:var(--ink); box-shadow:0 0 0 2px rgba(28,37,48,.10);}
+.tr-badge{
+  width:38px; height:38px; border-radius:50%; flex:0 0 auto;
+  background:var(--ink); color:var(--surface);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; font-size:13.5px;
+}
+.teamrow.warn .tr-badge{background:var(--clay);}
+.tr-name{font-size:14.5px; font-weight:700; letter-spacing:-.01em; display:block;}
+.tr-where{font-size:12.5px; color:var(--slate); display:block; margin-top:1px;}
+.tr-state{
+  font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase; padding:4px 9px; border-radius:999px; white-space:nowrap;
+  background:var(--concrete); color:var(--slate);
+}
+.tr-state.out{background:var(--teal-soft); color:#1c4e4b;}
+.tr-state.bad{background:var(--clay-soft); color:#7a3417;}
+.fri-note{
+  display:flex; gap:9px; align-items:flex-start; margin:18px 0 0; padding:12px 13px;
+  background:var(--amber-soft); border-radius:var(--r-m); font-size:12.5px; color:#7a3417;
+}
+.fri-note .icon{stroke:#7a3417; margin-top:1px; flex:0 0 auto;}
+.fri-note b{font-weight:700;}
+
+/* Planned versus actual — the manager's real question, drawn once. */
+.pva{margin:0;}
+.pva-row{
+  display:grid; grid-template-columns:104px 1fr 92px; gap:14px; align-items:center;
+  width:100%; text-align:left; font:inherit; color:inherit; background:none;
+  border:none; border-top:1px solid var(--border); padding:13px 0;
+}
+.pva-row:first-of-type{border-top:none;}
+.pva-row:hover .pva-name{text-decoration:underline; text-underline-offset:2px;}
+.pva-name{font-size:14px; font-weight:700; letter-spacing:-.01em;}
+.pva-sub{font-size:11.5px; color:var(--slate); display:block; font-weight:400; margin-top:1px;}
+.pva-track{display:flex; gap:3px; height:22px; align-items:stretch;}
+.pva-seg{border-radius:3px; min-width:10px;}
+.pva-seg.done{background:var(--teal);}
+.pva-seg.owed{background:var(--clay);}
+.pva-seg.left{background:var(--slate-line);}
+.pva-seg.missed{
+  background:repeating-linear-gradient(45deg, #d8a893 0 4px, #f0d6c8 4px 8px);
+}
+.pva-fig{font-family:var(--font-mono); font-size:13px; font-weight:700; text-align:right;}
+.pva-fig small{display:block; font-size:10.5px; font-weight:400; color:var(--slate); letter-spacing:0;}
+.pva-legend{
+  display:flex; gap:15px; flex-wrap:wrap; margin:14px 0 0;
+  font-family:var(--font-mono); font-size:10.5px; color:var(--slate);
+}
+.pva-legend span{display:inline-flex; align-items:center; gap:6px;}
+.pva-legend i{width:11px; height:11px; border-radius:3px; display:inline-block;}
+.pva-legend i.done{background:var(--teal);}
+.pva-legend i.owed{background:var(--clay);}
+.pva-legend i.missed{background:repeating-linear-gradient(45deg, #d8a893 0 3px, #f0d6c8 3px 6px);}
+.pva-legend i.left{background:var(--slate-line);}
+
+/* Slipping — exceptions, grouped, each one a real list */
+.slip{
+  display:grid; grid-template-columns:auto 1fr auto auto; gap:12px; align-items:center;
+  width:100%; text-align:left; font:inherit; color:inherit; background:none;
+  border:none; border-top:1px solid var(--border); padding:11px 0;
+}
+.slip:first-of-type{border-top:none;}
+.slip:hover .slip-t{text-decoration:underline; text-underline-offset:2px;}
+.slip-dot{width:8px; height:8px; border-radius:50%; background:var(--slate-line);}
+.slip-dot.bad{background:var(--clay);}
+.slip-dot.due{background:var(--amber);}
+.slip-t{font-size:13.5px; font-weight:600;}
+.slip-who{font-family:var(--font-mono); font-size:11px; color:var(--slate); white-space:nowrap;}
+.slip-n{font-family:var(--font-mono); font-size:14px; font-weight:700; min-width:22px; text-align:right;}
+
+/* The lens switch sits under the column title, so it has to be quieter and
+   narrower than the week stepper the same .seg class drives elsewhere. */
+.seg.lens{margin:4px 0 0; background:var(--slate-soft-bg, rgba(0,0,0,.045));}
+.seg.lens button{flex:1; padding:6px 8px; font-size:11px; letter-spacing:.02em;}
+/* .col-stats is pulled up under the h1 by design; the lens switch now sits
+   between them, so cancel the pull or the two lines collide. */
+.seg.lens + .col-stats{margin-top:12px;}
+
+/* Locations count, not initials — mono digits read as a quantity. */
+.tr-badge.co{background:var(--concrete); color:var(--ink); font-family:var(--font-mono); font-size:14px;}
+
+/* Overlapping initials: the point of the company lens is seeing at a glance
+   that more than one person is in the account. */
+.repdots{display:inline-flex; padding-left:6px;}
+.repdot{
+  width:21px; height:21px; border-radius:50%; margin-left:-6px;
+  background:var(--ink); color:var(--surface);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-size:9.5px; font-weight:700; letter-spacing:.02em;
+  box-shadow:0 0 0 2px var(--surface);
+}
+.tr-state.bad .repdot{background:var(--clay);}
+.teamrow.is-active .repdot{box-shadow:0 0 0 2px var(--concrete);}
+
+/* One branch per row: where it is, who holds it, what state it is in. */
+.colocation{
+  display:grid; grid-template-columns:minmax(0,1.35fr) auto minmax(0,.8fr) auto;
+  gap:12px; align-items:center; border-top:1px solid var(--border); padding:11px 0;
+}
+.colocation:first-of-type{border-top:none;}
+.cl-n{font-size:13.5px; font-weight:600;}
+.cl-w{
+  font-family:var(--font-mono); font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.04em; color:var(--slate); background:var(--concrete);
+  padding:3px 8px; border-radius:999px; white-space:nowrap;
+}
+.cl-p{font-size:12px; color:var(--slate); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cl-s{
+  font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.03em;
+  padding:4px 9px; border-radius:999px; text-align:center; white-space:nowrap;
+  background:var(--concrete); color:var(--slate);
+}
+.cl-s.ok{background:var(--teal-soft); color:#1c4e4b;}
+.cl-s.work{background:var(--amber-soft); color:#7a3417;}
+.cl-s.bad{background:var(--clay-soft); color:#7a3417;}
+
+@media (max-width: 860px){
+  .colocation{grid-template-columns:1fr auto; row-gap:6px;}
+  .cl-p{grid-column:1; font-size:11.5px;}
+  .cl-s{grid-column:2;}
+}
+
+/* Naming an owner is the admin's move, so it gets the one warm panel on the
+   screen — everything else here is read-only reporting. */
+.owner-card{
+  margin:16px 0 0; padding:16px 18px; border-radius:var(--r-l);
+  background:var(--amber-soft); color:#7a3417;
+}
+.oc-t{margin:0; font-size:15px; font-weight:700; color:var(--ink);}
+.oc-s{margin:5px 0 0; font-size:12.5px; line-height:1.5;}
+.oc-picks{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+.oc-pick{
+  display:inline-flex; align-items:center; gap:9px; padding:6px 15px 6px 6px;
+  border:none; border-radius:999px; background:var(--surface); color:var(--ink);
+  font:inherit; font-size:13.5px; font-weight:600; box-shadow:var(--shadow-1);
+}
+.oc-pick:hover{transform:translateY(-1px);}
+.owner-card.is-set{
+  display:flex; gap:10px; align-items:flex-start;
+  background:var(--teal-soft); color:#1c4e4b; font-size:13px; line-height:1.5;
+}
+.owner-card.is-set b{color:var(--ink);}
+.owner-card.is-set .icon{width:18px; height:18px; flex:0 0 auto; margin-top:1px; stroke-width:2.4;}
+
+/* Rep detail */
+.rep-hero{display:flex; align-items:center; gap:14px; margin:0 0 6px;}
+.rep-hero .tr-badge{width:52px; height:52px; font-size:18px;}
+.rep-hero h2{margin:0; font-size:30px; font-weight:800; letter-spacing:-.02em;}
+.rep-hero p{margin:2px 0 0; font-size:13.5px; color:var(--slate);}
+.kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:18px 0 0;}
+.kpi{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-m); padding:13px 14px;}
+.kpi-n{font-family:var(--font-mono); font-size:24px; font-weight:800; letter-spacing:-.02em;}
+.kpi-n.bad{color:var(--clay);}
+.kpi-n.good{color:var(--teal);}
+.kpi-k{font-size:11.5px; color:var(--slate); margin-top:3px; line-height:1.35;}
+
+@media (max-width: 860px){
+  .kpis{grid-template-columns:1fr 1fr;}
+  .pva-row{grid-template-columns:88px 1fr 74px; gap:10px;}
+  .rep-hero h2{font-size:24px;}
+}
+</style>
+<div class="app">
+  <header class="topbar">
+    <div class="id-wrap">
+      <button type="button" class="rep-id" data-home aria-label="Back to the team">
+        <span class="rep-badge">BW</span>
+        <span>
+          <span class="rep-name">Bianca</span>
+          <span class="rep-sub">GMX USA · ADMIN</span>
+        </span>
+      </button>
+      <button type="button" class="acct-btn" id="acct-btn" aria-expanded="false" aria-haspopup="menu" aria-label="Account and sign out">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="menu" id="acct-menu" role="menu">
+        <div class="menu-head">
+          <div class="menu-mail">bianca@gmxgroup.com</div>
+          <div class="menu-org">GMX USA · the whole book</div>
+        </div>
+        <button type="button" class="menu-item" role="menuitem">Settings</button>
+        <div class="menu-sep"></div>
+        <p class="menu-note">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Admin — every rep, every account, and the companies that span them.</span>
+        </p>
+        <button type="button" class="menu-item danger" role="menuitem" id="signout">Sign out</button>
+      </div>
+    </div>
+
+    <div class="search-wrap">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="search" id="search" type="search" autocomplete="off"
+             placeholder="Search reps, accounts and contacts" aria-label="Search" />
+      <div class="search-results" id="search-results" role="listbox"></div>
+    </div>
+
+    <div class="bar-right">
+      <button type="button" class="alert-chip" id="chip-alert">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+        3 need a word
+      </button>
+      <span class="sync"><span class="sync-dot"></span>All saved</span>
+      <span class="bar-date">Wed 12 Aug <span class="yr">2026</span></span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- The team replaces the route: a manager's day is people, not stops. -->
+    <section class="route-col" aria-label="The team">
+      <p class="col-eyebrow" id="col-eyebrow">Your reps</p>
+      <div class="route-head">
+        <h1><button type="button" class="col-title-btn" id="btn-home">The team <span>&amp; where they are</span></button></h1>
+        <button type="button" class="route-toggle" id="route-toggle" aria-expanded="false" aria-label="Show the team">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="seg lens" role="group" aria-label="Look at the book by">
+        <button type="button" data-lens="rep" aria-pressed="true">By rep</button>
+        <button type="button" data-lens="company" aria-pressed="false">By company</button>
+        <button type="button" data-lens="account" aria-pressed="false">By account</button>
+      </div>
+      <p class="col-stats" id="team-stats"></p>
+
+      <button type="button" class="route-summary" id="route-summary">
+        <span class="rs-k">Needs a word</span>
+        <span class="rs-main">Jason · Inland Empire</span>
+        <span class="rs-sub" id="rs-sub">One visit done of three, next week still empty</span>
+        <span class="rs-open">Show the team</span>
+      </button>
+
+      <ul class="teamlist" id="teamlist"></ul>
+
+      <div class="fri-note">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        <span><b>Two reps have not planned next week.</b> Plans are due Friday.</span>
+      </div>
+    </section>
+
+    <section class="dossier-col" aria-label="Detail" aria-live="polite">
+      <div class="dossier" id="dossier"></div>
+    </section>
+
+    <aside class="context-col" id="context" aria-label="Territory context"></aside>
+  </div>
+</div>
+
+<!-- Adding a door. Short on purpose: a name, where it is, and whose it is.
+     Everything else is learned on the first visit, not typed up front. -->
+<div class="vsheet" id="asheet" role="dialog" aria-modal="true" aria-labelledby="asheet-title">
+  <div class="vsheet-panel">
+    <h3 id="asheet-title">Add an account</h3>
+    <p class="ctx">A name and a patch is enough to start. <b>The rest fills in on the first visit.</b></p>
+    <form id="aform" novalidate>
+      <div class="fldset">
+        <label class="fld-l" for="af-name">Name</label>
+        <input class="fld-in" id="af-name" type="text" required placeholder="Ganahl Fullerton" autocomplete="off">
+      </div>
+      <div class="fld-2">
+        <div class="fldset">
+          <label class="fld-l" for="af-city">Town</label>
+          <input class="fld-in" id="af-city" type="text" placeholder="Fullerton, CA" autocomplete="off">
+        </div>
+        <div class="fldset">
+          <label class="fld-l" for="af-co">Company</label>
+          <input class="fld-in" id="af-co" type="text" placeholder="Ganahl Lumber" autocomplete="off">
+        </div>
+      </div>
+      <div class="fld-2">
+        <div class="fldset">
+          <label class="fld-l" for="af-rep">Whose is it</label>
+          <select class="fld-in" id="af-rep"></select>
+        </div>
+        <div class="fldset">
+          <label class="fld-l" for="af-kind">What is it</label>
+          <select class="fld-in" id="af-kind">
+            <option value="Dealer branch">Dealer branch</option>
+            <option value="Pro yard">Pro yard</option>
+            <option value="Contractor">Contractor</option>
+            <option value="Distributor">Distributor</option>
+            <option value="Corporate">Corporate</option>
+          </select>
+        </div>
+      </div>
+      <div class="fldset">
+        <label class="fld-l" for="af-captain">Captain <span class="fld-opt">— if you already know one</span></label>
+        <input class="fld-in" id="af-captain" type="text" placeholder="Mike Torres" autocomplete="off">
+      </div>
+      <p class="fld-err" id="af-err" hidden>Give it a name first.</p>
+      <div class="vsheet-actions" style="margin-top:18px;">
+        <button type="submit" class="btn-primary-lg">Add it</button>
+        <button type="button" class="btn-ghost" data-aclose>Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Four reps, this week. `planned` is what they committed to; `done` is what
+     they logged; `owed` happened but has no debrief; `missed` is the day passed
+     with nothing at all — that last one is the number a manager cannot get
+     anywhere else, and the reason planned-vs-actual exists. */
+  var REPS = [
+    {id:"deon", init:"DR", name:"Deon", patch:"SoCal", state:"out", stateLabel:"Out",
+     where:"Ganahl Anaheim · 2 stops today", planned:5, done:3, owed:1, missed:0,
+     miles:{planned:24, claimed:26}, nextWeek:1,
+     accounts:12, noCaptain:2, walls:{up:3, bad:2}, pipeline:"$180,000", advanced:1,
+     note:"Owes one debrief from this morning. Next week is thin — one visit booked."},
+    {id:"tj", init:"TJ", name:"TJ", patch:"Buffalo · travel", state:"out", stateLabel:"Travelling",
+     where:"PK class at 84 Lumber", planned:5, done:3, owed:1, missed:1,
+     miles:{planned:180, claimed:214}, nextWeek:4,
+     accounts:16, noCaptain:3, walls:{up:2, bad:0}, pipeline:"$89,000", advanced:2,
+     note:"Ran two PK classes this week. One planned visit did not happen and has no reason logged."},
+    {id:"alejandro", init:"AM", name:"Alejandro", patch:"San Diego", state:"out", stateLabel:"Out",
+     where:"Dixieline El Cajon · 3 stops today", planned:3, done:3, owed:0, missed:0,
+     miles:{planned:38, claimed:36}, nextWeek:4,
+     accounts:14, noCaptain:1, walls:{up:5, bad:1}, pipeline:"$31,000", advanced:1,
+     note:"Everything planned was done and logged. Nothing outstanding."},
+    {id:"jason", init:"JC", name:"Jason", patch:"Inland Empire", state:"bad", stateLabel:"Desk day",
+     where:"Nothing planned today", planned:3, done:1, owed:0, missed:2,
+     miles:{planned:0, claimed:0}, nextWeek:0,
+     accounts:11, noCaptain:2, walls:{up:1, bad:0}, pipeline:"$12,000", advanced:0,
+     note:"Two planned visits passed with nothing logged, and next week is empty. Worth a conversation before Friday."}
+  ];
+
+  var SLIPPING = [
+    {t:"Planned visits that did not happen", who:"TJ, Jason", n:3, tone:"bad"},
+    {t:"Visits waiting on a debrief", who:"Deon, TJ", n:2, tone:"bad"},
+    {t:"Next week not planned", who:"Deon, Jason", n:2, tone:"due"},
+    {t:"Accounts quiet for six weeks", who:"across the chain", n:7, tone:"due"},
+    {t:"Accounts with no captain", who:"across the chain", n:8, tone:"due"},
+    {t:"Display walls stuck", who:"Deon, Alejandro", n:3, tone:"bad"},
+    {t:"Quotes sent with no follow-up", who:"TJ", n:2, tone:""},
+    {t:"Deals with no next action", who:"Jason", n:1, tone:""}
+  ];
+
+  /* A company is not a rep's property. A distributor serves dealers across
+     several patches, and a chain has branches in more than one. Rep-centric
+     reporting cannot see either, which is how a national account ends up with
+     nobody actually holding it. */
+  var COMPANIES = [
+    {id:"boise", name:"Boise Cascade", kind:"Distributor", reps:["DR","AM"], lead:null,
+     places:5, note:"Supplies Ganahl Anaheim in Deon's patch and four Dixieline branches in Alejandro's. Nobody owns the distributor relationship itself.",
+     noteOwned:"Supplies Ganahl Anaheim in Deon's patch and four Dixieline branches in Alejandro's. The distributor relationship now has a name against it.",
+     gapsOwned:"Decking absent from 4 of 5 locations",
+     rows:[
+       {n:"Ganahl Anaheim", who:"Deon", where:"Anaheim", state:"Wall up, both products", tone:"ok"},
+       {n:"Dixieline El Cajon", who:"Alejandro", where:"El Cajon", state:"Wall up, cladding only", tone:"ok"},
+       {n:"Dixieline Escondido", who:"Alejandro", where:"Escondido", state:"Wall up", tone:"ok"},
+       {n:"Dixieline Miramar", who:"Alejandro", where:"Miramar", state:"Wall up", tone:"ok"},
+       {n:"Cherokee", who:"Alejandro", where:"San Diego", state:"Wall in build", tone:"work"}
+     ],
+     pipeline:"$211,000", activated:1, gaps:"No single owner · decking absent from 4 of 5"},
+
+    {id:"84", name:"84 Lumber", kind:"National chain", reps:["TJ"], lead:"TJ",
+     places:4, note:"Four locations across three states, all TJ's. One is selling, one is dead and two have never had a PK class — so the win at corporate has not travelled.",
+     rows:[
+       {n:"84 Lumber (corporate)", who:"TJ", where:"—", state:"Activated · Christine", tone:"ok"},
+       {n:"84 — Middletown", who:"TJ", where:"NY", state:"Not started", tone:"bad"},
+       {n:"84 Lords Valley", who:"TJ", where:"PA", state:"Not started", tone:"bad"},
+       {n:"84 — Pittston", who:"TJ", where:"PA", state:"Dead", tone:"bad"}
+     ],
+     pipeline:"$46,000", activated:1, gaps:"One activated location has not been used to open the other three"},
+
+    {id:"dixieline", name:"Dixieline", kind:"Regional chain", reps:["AM","DR"], lead:null,
+     places:6, note:"Six branches straddling two patches. Alejandro holds San Diego, Deon holds Dana Point — and the two have never compared notes on the same customer.",
+     noteOwned:"Six branches straddling two patches. Alejandro holds San Diego, Deon holds Dana Point, and one of them now owns the chain conversation.",
+     gapsOwned:"Sports Arena wall still waiting on material",
+     rows:[
+       {n:"Dixieline El Cajon", who:"Alejandro", where:"El Cajon", state:"Wall up", tone:"ok"},
+       {n:"Dixieline Escondido", who:"Alejandro", where:"Escondido", state:"Wall up", tone:"ok"},
+       {n:"Dixieline Miramar", who:"Alejandro", where:"Miramar", state:"Wall up", tone:"ok"},
+       {n:"Dixieline La Mesa", who:"Alejandro", where:"La Mesa", state:"Wall up", tone:"ok"},
+       {n:"Dixieline Dana Point", who:"Deon", where:"Dana Point", state:"Wall up", tone:"ok"},
+       {n:"Dixieline Sports Arena", who:"Alejandro", where:"San Diego", state:"Wall stuck — material pending", tone:"bad"}
+     ],
+     pipeline:"$74,500", activated:4, gaps:"Split across two reps with no shared account plan"},
+
+    {id:"ganahl", name:"Ganahl Lumber", kind:"Dealer banner", reps:["DR"], lead:"DR",
+     places:7, note:"Seven branches, all in Deon's patch. The cleanest case in the book — one rep, one banner, one plan.",
+     rows:[
+       {n:"Ganahl Anaheim", who:"Deon", where:"Anaheim", state:"Wall up · both products", tone:"ok"},
+       {n:"Ganahl Torrance", who:"Deon", where:"Torrance", state:"Wall up", tone:"ok"},
+       {n:"Ganahl Los Alamitos", who:"Deon", where:"Los Alamitos", state:"Thin record", tone:"work"},
+       {n:"Ganahl Corona", who:"Deon", where:"Corona", state:"Needs rework", tone:"bad"},
+       {n:"Ganahl Pasadena", who:"Deon", where:"Pasadena", state:"Signage delayed", tone:"bad"},
+       {n:"Ganahl San Juan Capistrano", who:"Deon", where:"San Juan Cap.", state:"In build", tone:"work"},
+       {n:"Ganahl Northridge", who:"Deon", where:"Northridge", state:"Stuck at render", tone:"bad"}
+     ],
+     pipeline:"$180,000", activated:1, gaps:"Decking carried at one branch out of seven"},
+
+    {id:"homedepot", name:"Home Depot", kind:"National chain", reps:["TJ","JC"], lead:null,
+     places:2, note:"Two entries on the tracker, two reps, no shared owner. The follow-up has been overdue since May.",
+     noteOwned:"Two entries on the tracker and two reps, now with one of them answerable. The follow-up has been overdue since May and needs a date this week.",
+     gapsOwned:"Follow-up overdue since 12 May",
+     rows:[
+       {n:"Home Depot", who:"TJ", where:"TX", state:"PK done · follow-up overdue since 12 May", tone:"bad"},
+       {n:"Home Depot — Outside Sales", who:"Jason", where:"TX", state:"Not started", tone:"bad"}
+     ],
+     pipeline:"—", activated:0, gaps:"Overdue since May and nobody is accountable for the chain"},
+
+    {id:"hardwoods", name:"Hardwoods", kind:"Distributor", reps:["DR","AM","TJ"], lead:null,
+     places:29, note:"Twenty-nine display walls run through Hardwoods across three patches. It is the single biggest dependency in the book and it has no owner.",
+     noteOwned:"Twenty-nine display walls run through Hardwoods across three patches. It is the single biggest dependency in the book, and one person is now answerable for it.",
+     gapsOwned:"Three of the stuck walls in the book sit here",
+     rows:[
+       {n:"Ganahl — six branches", who:"Deon", where:"SoCal", state:"5 up · 1 stuck", tone:"work"},
+       {n:"BFS — seven walls", who:"TJ", where:"Multi-state", state:"5 up · 1 in build", tone:"work"},
+       {n:"Dixieline — two walls", who:"Alejandro", where:"San Diego", state:"1 up · 1 stuck", tone:"bad"},
+       {n:"Austin Hardwoods", who:"TJ", where:"TX", state:"In build", tone:"work"},
+       {n:"Learned Lumber", who:"Alejandro", where:"—", state:"Stuck at render", tone:"bad"}
+     ],
+     pipeline:"$302,000", activated:6, gaps:"Three reps, no owner, and three of the stuck walls sit here"}
+  ];
+
+  /* ---------- the account registry ----------
+     Every door in the book, one row each. A rep carries more than dealers —
+     contractor and distributor relationships sit here too — which is why the
+     activation funnel counts dealers only. Every number in the headers below
+     is derived from this list instead of typed a second time, so the list and
+     the chart cannot drift apart. `days` is days since anyone was last there;
+     past six weeks an account counts as quiet. */
+  var ACCOUNTS = [
+    /* Deon · SoCal */
+    {id:"ganahl-anaheim",   name:"Ganahl Anaheim",              co:"Ganahl Lumber", rep:"deon", city:"Anaheim, CA",       kind:"Dealer branch", captain:"Mike Torres",    wall:"up",    stage:"selling", days:0,  pipeline:"$46,000"},
+    {id:"ganahl-torrance",  name:"Ganahl Torrance",             co:"Ganahl Lumber", rep:"deon", city:"Torrance, CA",      kind:"Dealer branch", captain:"Grace Kim",      wall:"up",    stage:"sample",  days:11, pipeline:"$28,000"},
+    {id:"ganahl-losal",     name:"Ganahl Los Alamitos",         co:"Ganahl Lumber", rep:"deon", city:"Los Alamitos, CA",  kind:"Dealer branch", captain:"Victor Salas",   wall:"up",    stage:"pk",      days:18, pipeline:""},
+    {id:"ganahl-northridge",name:"Ganahl Northridge",           co:"Ganahl Lumber", rep:"deon", city:"Northridge, CA",    kind:"Dealer branch", captain:null,             wall:"stuck", stage:"pk",      days:47, pipeline:""},
+    {id:"ganahl-corona",    name:"Ganahl Corona",               co:"Ganahl Lumber", rep:"deon", city:"Corona, CA",        kind:"Dealer branch", captain:"Alicia Reyes",   wall:"stuck", stage:"pk",      days:12, pipeline:""},
+    {id:"ganahl-sjc",       name:"Ganahl San Juan Capistrano",  co:"Ganahl Lumber", rep:"deon", city:"San Juan Cap., CA", kind:"Dealer branch", captain:"Rosa Melgar",    wall:"build", stage:"sample",  days:21, pipeline:"$19,000"},
+    {id:"ganahl-pasadena",  name:"Ganahl Pasadena",             co:"Ganahl Lumber", rep:"deon", city:"Pasadena, CA",      kind:"Dealer branch", captain:"Ruben Diaz",     wall:"none",  stage:"none",    days:15, pipeline:""},
+    {id:"dix-danapoint",    name:"Dixieline Dana Point",        co:"Dixieline",     rep:"deon", city:"Dana Point, CA",    kind:"Dealer branch", captain:null,             wall:"none",  stage:"none",    days:52, pipeline:""},
+    {id:"anaheim-bs",       name:"Anaheim Building Supply",     co:"Independent",   rep:"deon", city:"Anaheim, CA",       kind:"Dealer branch", captain:"Lee Hong",       wall:"none",  stage:"none",    days:33, pipeline:""},
+    {id:"orange-coast",     name:"Orange Coast Lumber",         co:"Independent",   rep:"deon", city:"Costa Mesa, CA",    kind:"Dealer branch", captain:"Nina Patel",     wall:"none",  stage:"none",    days:40, pipeline:""},
+    {id:"abc-construction", name:"ABC Construction",            co:"—",             rep:"deon", city:"Anaheim, CA",       kind:"Contractor",    captain:"Paula Ortiz",    wall:"na",    stage:null,      days:30, pipeline:"$180,000"},
+    {id:"boise-socal",      name:"Boise Cascade — SoCal",       co:"Boise Cascade", rep:"deon", city:"Anaheim, CA",       kind:"Distributor",   captain:"Karl Estes",     wall:"na",    stage:null,      days:8,  pipeline:""},
+
+    /* TJ · Buffalo and travel */
+    {id:"84-corp",          name:"84 Lumber (corporate)",       co:"84 Lumber",     rep:"tj", city:"Eighty Four, PA",     kind:"Corporate",     captain:"Christine Walsh",wall:"na",    stage:null,      days:6,  pipeline:"$34,000"},
+    {id:"84-lordsvalley",   name:"84 Lords Valley",             co:"84 Lumber",     rep:"tj", city:"Lords Valley, PA",    kind:"Dealer branch", captain:null,             wall:"none",  stage:"none",    days:44, pipeline:""},
+    {id:"84-middletown",    name:"84 — Middletown",             co:"84 Lumber",     rep:"tj", city:"Middletown, NY",      kind:"Dealer branch", captain:null,             wall:"none",  stage:"none",    days:58, pipeline:""},
+    {id:"84-pittston",      name:"84 — Pittston",               co:"84 Lumber",     rep:"tj", city:"Pittston, PA",        kind:"Dealer branch", captain:"Dana Roche",     wall:"up",    stage:"sample",  days:4,  pipeline:"$22,000"},
+    {id:"bfs-buffalo",      name:"Builders FirstSource — Buffalo",  co:"Builders FirstSource", rep:"tj", city:"Buffalo, NY",   kind:"Dealer branch", captain:"Ed Sowinski", wall:"up",   stage:"pk",   days:9,  pipeline:""},
+    {id:"bfs-rochester",    name:"Builders FirstSource — Rochester",co:"Builders FirstSource", rep:"tj", city:"Rochester, NY", kind:"Dealer branch", captain:"Marie Toczek",wall:"none", stage:"pk",   days:16, pipeline:""},
+    {id:"hd-buffalo",       name:"Home Depot — Buffalo",        co:"Home Depot",    rep:"tj", city:"Buffalo, NY",         kind:"Dealer branch", captain:null,             wall:"none",  stage:"none",    days:25, pipeline:""},
+    {id:"austin-hardwoods", name:"Austin Hardwoods",            co:"Hardwoods",     rep:"tj", city:"Austin, TX",          kind:"Distributor",   captain:"Ray Gibbons",    wall:"build", stage:null,      days:13, pipeline:""},
+    {id:"hardwoods-ne",     name:"Hardwoods — Northeast",       co:"Hardwoods",     rep:"tj", city:"Syracuse, NY",        kind:"Distributor",   captain:"Paul Vance",     wall:"na",    stage:null,      days:19, pipeline:""},
+    {id:"niagara-lumber",   name:"Niagara Lumber",              co:"Independent",   rep:"tj", city:"Niagara Falls, NY",   kind:"Dealer branch", captain:"Sal Ferro",      wall:"none",  stage:"none",    days:22, pipeline:""},
+    {id:"tonawanda-supply", name:"Tonawanda Supply",            co:"Independent",   rep:"tj", city:"Tonawanda, NY",       kind:"Dealer branch", captain:"Gail Prusak",    wall:"none",  stage:"none",    days:29, pipeline:""},
+    {id:"erie-pro",         name:"Erie Pro Yard",               co:"Independent",   rep:"tj", city:"Erie, PA",            kind:"Pro yard",      captain:"Dan Kubiak",     wall:"na",    stage:null,      days:17, pipeline:""},
+    {id:"keystone-mill",    name:"Keystone Millwork",           co:"Independent",   rep:"tj", city:"Scranton, PA",        kind:"Contractor",    captain:"Josh Reidel",    wall:"na",    stage:null,      days:12, pipeline:"$17,000"},
+    {id:"southtowns-build", name:"Southtowns Builders",         co:"—",             rep:"tj", city:"Hamburg, NY",         kind:"Contractor",    captain:"Amy Lorenz",     wall:"na",    stage:null,      days:20, pipeline:"$9,000"},
+    {id:"lackawanna-dev",   name:"Lackawanna Development",      co:"—",             rep:"tj", city:"Lackawanna, NY",      kind:"Contractor",    captain:"Nate Fiore",     wall:"na",    stage:null,      days:35, pipeline:""},
+    {id:"wny-decks",        name:"WNY Decks & Rail",            co:"—",             rep:"tj", city:"Amherst, NY",         kind:"Contractor",    captain:"Tina Grasso",    wall:"na",    stage:null,      days:27, pipeline:"$12,000"},
+
+    /* Alejandro · San Diego */
+    {id:"dix-elcajon",      name:"Dixieline El Cajon",          co:"Dixieline",     rep:"alejandro", city:"El Cajon, CA",  kind:"Dealer branch", captain:"Hector Ruiz",   wall:"up",    stage:"sample",  days:3,  pipeline:"$24,000"},
+    {id:"dix-escondido",    name:"Dixieline Escondido",         co:"Dixieline",     rep:"alejandro", city:"Escondido, CA", kind:"Dealer branch", captain:"Lupe Aguilar",  wall:"up",    stage:"pk",      days:7,  pipeline:""},
+    {id:"dix-miramar",      name:"Dixieline Miramar",           co:"Dixieline",     rep:"alejandro", city:"Miramar, CA",   kind:"Dealer branch", captain:"Chris Bell",    wall:"up",    stage:"pk",      days:10, pipeline:""},
+    {id:"dix-lamesa",       name:"Dixieline La Mesa",           co:"Dixieline",     rep:"alejandro", city:"La Mesa, CA",   kind:"Dealer branch", captain:"Omar Silva",    wall:"up",    stage:"none",    days:14, pipeline:""},
+    {id:"dix-sportsarena",  name:"Dixieline Sports Arena",      co:"Dixieline",     rep:"alejandro", city:"San Diego, CA", kind:"Dealer branch", captain:"Rita Nunez",    wall:"stuck", stage:"none",    days:20, pipeline:""},
+    {id:"cherokee",         name:"Cherokee",                    co:"Boise Cascade", rep:"alejandro", city:"San Diego, CA", kind:"Dealer branch", captain:"Wes Tanaka",    wall:"build", stage:"none",    days:24, pipeline:""},
+    {id:"learned-lumber",   name:"Learned Lumber",              co:"Hardwoods",     rep:"alejandro", city:"San Diego, CA", kind:"Dealer branch", captain:null,            wall:"none",  stage:"none",    days:45, pipeline:""},
+    {id:"chula-vista-bs",   name:"Chula Vista Building Supply",  co:"Independent",   rep:"alejandro", city:"Chula Vista, CA",kind:"Dealer branch",captain:"Sofia Marin",   wall:"up",    stage:"none",    days:18, pipeline:""},
+    {id:"boise-sd",         name:"Boise Cascade — San Diego",   co:"Boise Cascade", rep:"alejandro", city:"San Diego, CA", kind:"Distributor",   captain:"Karl Estes",    wall:"na",    stage:null,      days:5,  pipeline:""},
+    {id:"hardwoods-sw",     name:"Hardwoods — Southwest",       co:"Hardwoods",     rep:"alejandro", city:"San Diego, CA", kind:"Distributor",   captain:"Gina Ochoa",    wall:"na",    stage:null,      days:11, pipeline:""},
+    {id:"pacific-coast",    name:"Pacific Coast Construction",  co:"—",             rep:"alejandro", city:"San Diego, CA", kind:"Contractor",    captain:"Miguel Bravo",  wall:"na",    stage:null,      days:15, pipeline:"$21,000"},
+    {id:"harbor-view",      name:"Harbor View Homes",           co:"—",             rep:"alejandro", city:"Coronado, CA",  kind:"Contractor",    captain:"Elena Vidal",   wall:"na",    stage:null,      days:22, pipeline:"$10,000"},
+    {id:"sd-outdoor",       name:"SD Outdoor Living",           co:"—",             rep:"alejandro", city:"Poway, CA",     kind:"Contractor",    captain:"Brad Nash",     wall:"na",    stage:null,      days:28, pipeline:""},
+    {id:"mission-pro",      name:"Mission Pro Yard",            co:"Independent",   rep:"alejandro", city:"San Marcos, CA",kind:"Pro yard",      captain:"Luis Serna",    wall:"na",    stage:null,      days:16, pipeline:""},
+
+    /* Jason · Inland Empire */
+    {id:"hd-outside",       name:"Home Depot — Outside Sales",  co:"Home Depot",    rep:"jason", city:"Riverside, CA",       kind:"Corporate",     captain:null,           wall:"na",    stage:null,      days:62, pipeline:""},
+    {id:"riverside-lumber", name:"Riverside Lumber",            co:"Independent",   rep:"jason", city:"Riverside, CA",       kind:"Dealer branch", captain:"Tony Marchetti",wall:"up",    stage:"none",    days:9,  pipeline:""},
+    {id:"moreno-valley-bs", name:"Moreno Valley Building Supply",co:"Independent",  rep:"jason", city:"Moreno Valley, CA",   kind:"Dealer branch", captain:null,           wall:"none",  stage:"none",    days:48, pipeline:""},
+    {id:"ontario-supply",   name:"Ontario Supply Co",           co:"Independent",   rep:"jason", city:"Ontario, CA",         kind:"Dealer branch", captain:"Karen Diaz",   wall:"none",  stage:"none",    days:21, pipeline:""},
+    {id:"rancho-bs",        name:"Rancho Building Supply",      co:"Independent",   rep:"jason", city:"Rancho Cuca., CA",    kind:"Dealer branch", captain:"Phil Sanders", wall:"none",  stage:"none",    days:26, pipeline:""},
+    {id:"ie-hardwoods",     name:"Hardwoods — Inland Empire",   co:"Hardwoods",     rep:"jason", city:"Fontana, CA",         kind:"Distributor",   captain:"Andre Lima",   wall:"na",    stage:null,      days:13, pipeline:""},
+    {id:"sunbelt-const",    name:"Sunbelt Construction",        co:"—",             rep:"jason", city:"Corona, CA",          kind:"Contractor",    captain:"Rick Alvarez", wall:"na",    stage:null,      days:18, pipeline:"$12,000"},
+    {id:"inland-decks",     name:"Inland Decks",                co:"—",             rep:"jason", city:"Redlands, CA",        kind:"Contractor",    captain:"Mona Reyes",   wall:"na",    stage:null,      days:24, pipeline:""},
+    {id:"temecula-homes",   name:"Temecula Homes",              co:"—",             rep:"jason", city:"Temecula, CA",        kind:"Contractor",    captain:"Jared Poole",  wall:"na",    stage:null,      days:30, pipeline:""},
+    {id:"highland-pro",     name:"Highland Pro Yard",           co:"Independent",   rep:"jason", city:"Highland, CA",        kind:"Pro yard",      captain:"Dee Novak",    wall:"na",    stage:null,      days:20, pipeline:""},
+    {id:"fontana-mill",     name:"Fontana Millwork",            co:"Independent",   rep:"jason", city:"Fontana, CA",         kind:"Contractor",    captain:"Sam Okafor",   wall:"na",    stage:null,      days:34, pipeline:""}
+  ];
+
+  var STAGE_LABEL = {none:"Not started", pk:"PK class done", sample:"Sample or quote", selling:"Selling"};
+  var STAGE_ORDER = ["none","pk","sample","selling"];
+  var WALL_LABEL  = {up:"Wall up", stuck:"Wall stuck", build:"Wall in build", none:"No wall yet", na:"No wall"};
+  var QUIET_DAYS  = 42;
+
+  function acctsOf(id){ return ACCOUNTS.filter(function(a){ return a.rep === id; }); }
+  function isDealer(a){ return a.stage !== null; }
+  function isQuiet(a){ return a.days > QUIET_DAYS; }
+  function dealers(){ return ACCOUNTS.filter(isDealer); }
+  function stageCount(s){ return dealers().filter(function(a){ return a.stage === s; }).length; }
+  /* Named repLabel, not repName — the company code already has a repName that
+     resolves initials, and two declarations of one name is a silent bug. */
+  function repLabel(id){ var r = REPS.find(function(x){ return x.id === id; }); return r ? r.name : id; }
+  function lastSeen(a){
+    return a.days === 0 ? "Today" : a.days === 1 ? "Yesterday" : a.days + " days ago";
+  }
+
+  /* The rep cards used to carry these four numbers by hand. Deriving them means
+     an account added during the demo shows up everywhere at once. */
+  function deriveReps(){
+    REPS.forEach(function(r){
+      var mine = acctsOf(r.id);
+      r.accounts  = mine.length;
+      r.noCaptain = mine.filter(function(a){ return !a.captain; }).length;
+      r.walls = {
+        up:  mine.filter(function(a){ return a.wall === "up"; }).length,
+        bad: mine.filter(function(a){ return a.wall === "stuck"; }).length
+      };
+    });
+  }
+  deriveReps();
+
+  var $ = function(id){ return document.getElementById(id); };
+  var selected = null;
+  var lens = "rep";
+
+  /* On a phone, opening a rep or a company replaces the list instead of
+     pushing it down a screen and a half. Desktop keeps both. */
+  function viewing(on){ document.body.classList.toggle("viewing", !!on); }
+
+  /* ---------- left column ---------- */
+  /* One source for the counts — a header that disagrees with the chart is
+     the fastest way to lose a room. */
+  function renderTeamStats(){
+    var p = REPS.reduce(function(a,r){ return a + r.planned; }, 0);
+    var d = REPS.reduce(function(a,r){ return a + r.done; }, 0);
+    var o = REPS.reduce(function(a,r){ return a + r.owed; }, 0);
+    var m = REPS.reduce(function(a,r){ return a + r.missed; }, 0);
+    $("team-stats").innerHTML =
+      '<span><b>' + REPS.length + '</b> reps</span><span>·</span>' +
+      '<span><b>' + d + '</b> of ' + p + ' visits done</span><span>·</span>' +
+      '<span class="warn">' + o + ' owe a debrief</span>' +
+      (m ? '<span>·</span><span class="warn">' + m + ' never happened</span>' : '');
+    var worst = REPS.slice().sort(function(a,b){ return (b.missed - a.missed) || (a.nextWeek - b.nextWeek); })[0];
+    $("chip-alert").lastChild.textContent = ' ' + (o + m) + ' need a word';
+    document.querySelector('.route-summary .rs-k').textContent = 'Needs a word';
+    $("rs-sub").textContent = worst.done + ' of ' + worst.planned + ' visits done, ' +
+      (worst.nextWeek ? worst.nextWeek + ' booked for next week' : 'next week still empty');
+    document.querySelector('.route-summary .rs-main').textContent = worst.name + ' · ' + worst.patch;
+    document.querySelector('.route-summary .rs-open').textContent = 'Show the team';
+  }
+
+  function renderTeam(){
+    renderTeamStats();
+    $("teamlist").innerHTML = REPS.map(function(r){
+      return '<li><button type="button" class="teamrow' + (r.state === "bad" ? " warn" : "") +
+        (selected === r.id ? " is-active" : "") + '" data-rep="' + r.id + '">' +
+        '<span class="tr-badge">' + r.init + '</span>' +
+        '<span><span class="tr-name">' + r.name + '</span>' +
+        '<span class="tr-where">' + r.where + '</span></span>' +
+        '<span class="tr-state ' + (r.state === "bad" ? "bad" : "out") + '">' + r.stateLabel + '</span>' +
+        '</button></li>';
+    }).join("");
+  }
+
+  /* ---------- planned vs actual ---------- */
+  function pvaRow(r){
+    var left = Math.max(0, r.planned - r.done - r.missed);
+    var seg = function(cls, n){
+      return n > 0 ? '<span class="pva-seg ' + cls + '" style="flex:' + n + '"></span>' : "";
+    };
+    return '<button type="button" class="pva-row" data-rep="' + r.id + '">' +
+      '<span><span class="pva-name">' + r.name + '</span>' +
+        '<span class="pva-sub">' + r.patch + '</span></span>' +
+      '<span class="pva-track">' +
+        seg("done", r.done - r.owed) + seg("owed", r.owed) +
+        seg("missed", r.missed) + seg("left", left) +
+      '</span>' +
+      '<span class="pva-fig">' + r.done + '/' + r.planned +
+        '<small>' + (r.missed ? r.missed + " never happened" : (r.owed ? r.owed + " owes a note" : "all logged")) + '</small>' +
+      '</span></button>';
+  }
+
+  function renderOverview(){
+    selected = null;
+    viewing(false);
+    renderTeam();
+    renderTeamStats();
+    var totP = REPS.reduce(function(a,r){ return a + r.planned; }, 0);
+    var totD = REPS.reduce(function(a,r){ return a + r.done; }, 0);
+    var totM = REPS.reduce(function(a,r){ return a + r.missed; }, 0);
+    var totO = REPS.reduce(function(a,r){ return a + r.owed; }, 0);
+
+    $("dossier").innerHTML =
+      '<div class="home-hero">' +
+        '<h2>Good afternoon, Bianca</h2>' +
+        '<p>' + totD + ' of ' + totP + ' planned visits done this week. ' +
+        totM + ' never happened, ' + totO + ' are waiting on a debrief.</p>' +
+      '</div>' +
+
+      '<div class="card card-pad" style="margin-bottom:14px;">' +
+        '<p class="card-title">Did they do what they said</p>' +
+        '<p class="ctx-note" style="margin:0 0 10px;">Every bar is one rep&rsquo;s week. Mileage is reimbursed, so a visit that was planned and never happened is a cost as well as a gap.</p>' +
+        '<div class="pva">' + REPS.map(pvaRow).join("") + '</div>' +
+        '<div class="pva-legend">' +
+          '<span><i class="done"></i>done and logged</span>' +
+          '<span><i class="owed"></i>done, owes a note</span>' +
+          '<span><i class="missed"></i>never happened</span>' +
+          '<span><i class="left"></i>still to come</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="grid-2">' +
+        '<div class="card card-pad">' +
+          '<p class="card-title">What&rsquo;s slipping</p>' +
+          SLIPPING.map(function(s){
+            return '<button type="button" class="slip">' +
+              '<span class="slip-dot ' + s.tone + '"></span>' +
+              '<span class="slip-t">' + s.t + '</span>' +
+              '<span class="slip-who">' + s.who + '</span>' +
+              '<span class="slip-n">' + s.n + '</span></button>';
+          }).join("") +
+        '</div>' +
+        '<div class="card card-pad">' +
+          '<p class="card-title">Getting dealers selling</p>' +
+          funnelHtml() +
+          '<p class="ctx-note">' + stageCount("selling") + ' dealer through the whole funnel this quarter. ' +
+            stageCount("none") + ' have not had a PK class yet — that is the queue.</p>' +
+        '</div>' +
+      '</div>';
+    renderContext(null);
+  }
+
+  /* ---------- the company lens ---------- */
+  /* ---------- the commercial network ----------
+     Same diagram the reps see, drawn for the whole book instead of one patch.
+     A rep's version answers "who do I sell through here"; this one answers
+     "who is answerable for each link", so every node carries a name. */
+  function chainSvg(spec){
+    var W = 980, TH = 128, PAD = 20, BOX_H = 62, GAP = 14, MAXW = 190;
+    var H = spec.tiers.length * TH + 8;
+    var rows = spec.tiers.map(function(t, ti){
+      var count = t.nodes.length;
+      var bw = Math.min(MAXW, (W - PAD*2 - GAP*(count-1)) / count);
+      return t.nodes.map(function(node, ni){
+        var totalW = count*bw + (count-1)*GAP;
+        var x = (W - totalW)/2 + ni*(bw+GAP);
+        return { x:x, w:bw, cx:x+bw/2, y: ti*TH + 34, node:node };
+      });
+    });
+    var edges = "", boxes = "", labels = "";
+    spec.tiers.forEach(function(t, ti){
+      labels += '<text class="tier-k" x="' + PAD + '" y="' + (ti*TH + 20) + '">' + t.k + '</text>';
+      rows[ti].forEach(function(r){
+        if(ti > 0 && r.node.p){
+          r.node.p.forEach(function(link){
+            var pi = (typeof link === "object") ? link.i : link;
+            var isRef = (typeof link === "object") && link.ref;
+            var pr2 = rows[ti-1][pi]; if(!pr2) return;
+            var y1 = pr2.y + BOX_H, y2 = r.y, mid = (y1 + y2)/2;
+            edges += '<path class="edge' + (isRef ? ' ref' : '') + '" d="M' + pr2.cx + ' ' + y1 +
+                     ' C' + pr2.cx + ' ' + mid + ' ' + r.cx + ' ' + mid + ' ' + r.cx + ' ' + y2 + '"/>';
+          });
+        }
+        var cls = r.node.you ? " you" : (r.node.us ? " us" : "");
+        var label = r.node.n.length > 26 ? r.node.n.slice(0, 25) + "…" : r.node.n;
+        var pr = r.node.pr || [];
+        var subLine = r.node.sub
+          ? '<text class="sub" x="' + r.cx + '" y="' + (r.y + 37) + '" text-anchor="middle">' + r.node.sub + '</text>'
+          : '';
+        var prLine = '<text class="pr" x="' + r.cx + '" y="' + (r.y + 51) + '" text-anchor="middle">' +
+          '<tspan class="' + (pr.indexOf("ayous") > -1 ? "has" : "not") + '">AYOUS</tspan>' +
+          '<tspan class="not">  </tspan>' +
+          '<tspan class="' + (pr.indexOf("ash") > -1 ? "has" : "not") + '">ASH</tspan></text>';
+        var nav = r.node.co ? ' data-co="' + r.node.co + '"' : '';
+        boxes += '<g class="node"' + nav + '>' +
+                 '<rect class="box' + cls + '" x="' + r.x + '" y="' + r.y + '" width="' + r.w +
+                 '" height="' + BOX_H + '" rx="7"/>' +
+                 '<text class="nm' + (r.node.you ? " you" : "") + '" x="' + r.cx + '" y="' + (r.y + (r.node.sub ? 22 : 27)) +
+                 '" text-anchor="middle">' + label + '</text>' + subLine + prLine + '</g>';
+      });
+    });
+    return '<svg class="chain" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + spec.title + '">' +
+      edges + boxes + labels + '</svg>';
+  }
+
+  var CHAINS = {
+    book: {
+      title:"The whole book",
+      lede:"Everything GMX sells in the US goes through two distributors. Below them the chains split across reps, which is where ownership disappears.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributors", nodes:[
+          {n:"Hardwoods", sub:"Deon · Alejandro · TJ", p:[0], pr:["ayous","ash"], co:"hardwoods"},
+          {n:"Boise Cascade", sub:"Deon · Alejandro", p:[0], pr:["ayous","ash"], co:"boise"}]},
+        {k:"Chains and banners", nodes:[
+          {n:"Ganahl Lumber", sub:"Deon · 7 branches", p:[0,1], pr:["ayous","ash"], co:"ganahl"},
+          {n:"Dixieline", sub:"Alejandro · Deon", p:[0,1], pr:["ayous"], co:"dixieline"},
+          {n:"84 Lumber", sub:"TJ · 4 locations", p:[0], pr:["ayous"], co:"84"},
+          {n:"Home Depot", sub:"TJ · Jason", p:[0], pr:[], co:"homedepot"}]},
+        {k:"Selling today", nodes:[
+          {n:"Ganahl Anaheim", sub:"wall up · both", p:[0], pr:["ayous","ash"]},
+          {n:"Dixieline El Cajon", sub:"cladding only", p:[1], pr:["ayous"]},
+          {n:"84 corporate", sub:"Christine, captain", p:[2], pr:["ayous"]}]}
+      ],
+      note:"Three locations out of fifty-three are actually selling, and each one hangs off a different chain. Decking reaches one of them."
+    },
+    hardwoods: {
+      title:"Hardwoods",
+      lede:"Twenty-nine walls in three patches, all pulling through one distributor.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributor", nodes:[{n:"Hardwoods", you:true, sub:"no single owner", p:[0], pr:["ayous","ash"]}]},
+        {k:"Who buys through them", nodes:[
+          {n:"Ganahl Lumber", sub:"Deon · 6 walls", p:[0], pr:["ayous","ash"], co:"ganahl"},
+          {n:"BFS", sub:"TJ · 7 walls", p:[0], pr:["ayous"]},
+          {n:"Dixieline", sub:"Alejandro · 2 walls", p:[0], pr:["ayous"], co:"dixieline"},
+          {n:"Austin Hardwoods", sub:"TJ · in build", p:[0], pr:["ayous"]},
+          {n:"Learned Lumber", sub:"Alejandro · stuck", p:[0], pr:[]}]}
+      ],
+      note:"Three reps pull through this one distributor and none of them is answerable for it. The stuck walls are on the two branches nobody checks."
+    },
+    boise: {
+      title:"Boise Cascade",
+      lede:"One distributor, two patches, and the dealers on either side never compare notes.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributor", nodes:[{n:"Boise Cascade", you:true, sub:"no single owner", p:[0], pr:["ayous","ash"]}]},
+        {k:"Deon's side", nodes:[{n:"Ganahl Anaheim", sub:"wall up · both", p:[0], pr:["ayous","ash"], co:"ganahl"}]},
+        {k:"Alejandro's side", nodes:[
+          {n:"Dixieline El Cajon", sub:"cladding only", p:[0], pr:["ayous"], co:"dixieline"},
+          {n:"Dixieline Escondido", sub:"wall up", p:[0], pr:["ayous"], co:"dixieline"},
+          {n:"Dixieline Miramar", sub:"wall up", p:[0], pr:["ayous"], co:"dixieline"},
+          {n:"Cherokee", sub:"wall in build", p:[0], pr:["ayous"]}]}
+      ],
+      note:"Anaheim is the only place carrying decking, and it is the only branch Deon touches. Four locations have never had the conversation."
+    },
+    dixieline: {
+      title:"Dixieline",
+      lede:"Six branches, one customer, two reps who have never shared a plan.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributors", nodes:[
+          {n:"Boise Cascade", sub:"four branches", p:[0], pr:["ayous","ash"], co:"boise"},
+          {n:"Hardwoods", sub:"two branches", p:[0], pr:["ayous","ash"], co:"hardwoods"}]},
+        {k:"Chain", nodes:[{n:"Dixieline", you:true, sub:"no single owner", p:[0,1], pr:["ayous"]}]},
+        {k:"Branches", nodes:[
+          {n:"El Cajon", sub:"Alejandro · wall up", p:[0], pr:["ayous"]},
+          {n:"Escondido", sub:"Alejandro · wall up", p:[0], pr:["ayous"]},
+          {n:"Miramar", sub:"Alejandro · wall up", p:[0], pr:["ayous"]},
+          {n:"La Mesa", sub:"Alejandro · wall up", p:[0], pr:["ayous"]},
+          {n:"Dana Point", sub:"Deon · wall up", p:[0], pr:["ayous"]},
+          {n:"Sports Arena", sub:"Alejandro · stuck", p:[0], pr:[]}]}
+      ],
+      note:"Not one branch carries decking. Six walls up and the second product has never been put in front of them."
+    },
+    ganahl: {
+      title:"Ganahl Lumber",
+      lede:"Seven branches, two distributors, and one rep who can see all of it.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributors", nodes:[
+          {n:"Hardwoods", sub:"six branches", p:[0], pr:["ayous","ash"], co:"hardwoods"},
+          {n:"Boise Cascade", sub:"Anaheim only", p:[0], pr:["ayous","ash"], co:"boise"}]},
+        {k:"Banner", nodes:[{n:"Ganahl Lumber", you:true, sub:"Deon holds it", p:[0,1], pr:["ayous","ash"]}]},
+        {k:"Branches", nodes:[
+          {n:"Anaheim", sub:"wall up · both", p:[0], pr:["ayous","ash"]},
+          {n:"Torrance", sub:"wall up", p:[0], pr:["ayous"]},
+          {n:"Los Alamitos", sub:"thin record", p:[0], pr:["ayous"]},
+          {n:"Corona", sub:"needs rework", p:[0], pr:["ayous"]},
+          {n:"Pasadena", sub:"signage delayed", p:[0], pr:["ayous"]},
+          {n:"San Juan Cap.", sub:"in build", p:[0], pr:["ayous"]},
+          {n:"Northridge", sub:"stuck at render", p:[0], pr:[]}]}
+      ],
+      note:"The contrast case. One owner, so the gap is obvious: decking sits at one branch out of seven and Northridge never started."
+    },
+    "84": {
+      title:"84 Lumber",
+      lede:"A win at corporate that has not reached a single store.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributor", nodes:[{n:"Hardwoods", sub:"TJ", p:[0], pr:["ayous","ash"], co:"hardwoods"}]},
+        {k:"Chain", nodes:[{n:"84 Lumber", you:true, sub:"TJ holds it", p:[0], pr:["ayous"]}]},
+        {k:"Locations", nodes:[
+          {n:"Corporate", sub:"Christine · selling", p:[0], pr:["ayous"]},
+          {n:"Middletown NY", sub:"not started", p:[0], pr:[]},
+          {n:"Lords Valley PA", sub:"not started", p:[0], pr:[]},
+          {n:"Pittston PA", sub:"dead", p:[0], pr:[]}]}
+      ],
+      note:"Corporate is activated and three stores have never had a PK class. The relationship exists; the distribution has not followed."
+    },
+    homedepot: {
+      title:"Home Depot",
+      lede:"Two reps, two records, and a follow-up that has been open since May.",
+      tiers:[
+        {k:"Us", nodes:[{n:"GMX", us:true, sub:"manufacturer", pr:["ayous","ash"]}]},
+        {k:"Distributor", nodes:[{n:"Hardwoods", sub:"proposed route", p:[0], pr:["ayous","ash"], co:"hardwoods"}]},
+        {k:"Chain", nodes:[{n:"Home Depot", you:true, sub:"no single owner", p:[0], pr:[]}]},
+        {k:"Records", nodes:[
+          {n:"Home Depot", sub:"TJ · PK done, overdue", p:[0], pr:[]},
+          {n:"Outside Sales", sub:"Jason · not started", p:[0], pr:[]}]}
+      ],
+      note:"Two entries on the tracker for the same customer. Neither carries a product yet and neither has a date."
+    }
+  };
+
+  function renderNetwork(key){
+    var W = CHAINS[key]; if(!W) return;
+    lens = "company"; setLens("company", true);
+    selected = (key === "book") ? null : key;
+    viewing(true);
+    renderCompanyList();
+    var parent = (key === "book") ? null : COMPANIES.find(function(x){ return x.id === key; });
+    $("dossier").innerHTML =
+      (parent
+        ? '<button type="button" class="back-today" data-co="' + parent.id + '">' +
+            '<svg class="icon" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Back to ' + parent.name + '</button>'
+        : '<button type="button" class="back-today" data-home>' +
+            '<svg class="icon" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Back to the book</button>') +
+      '<p class="dossier-eyebrow">The commercial network</p>' +
+      '<h2 class="dossier-title" style="font-size:30px;">' + W.title + '</h2>' +
+      '<p class="ctx-note" style="margin:0 0 8px; max-width:66ch; font-size:14px;">' + W.lede + '</p>' +
+      '<div class="card full-width net-stage" id="net-stage">' +
+        '<button type="button" class="net-fs" id="net-fs">' +
+          '<svg class="icon on" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round"><path d="M15 3h6v6M21 3l-8 8M9 21H3v-6M3 21l8-8"/></svg>' +
+          '<svg class="icon off" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round"><path d="M21 9h-6V3M15 9l6-6M3 15h6v6M9 15l-6 6"/></svg>' +
+          '<span class="on">Fullscreen</span><span class="off">Exit fullscreen</span>' +
+        '</button>' +
+        chainSvg(W) +
+        '<span class="fs-hint">Esc to come back</span>' +
+      '</div>' +
+      '<div class="chain-legend" style="font-size:11.5px; margin-top:14px;">' +
+        '<span><i></i>buys through</span>' +
+        '<span><i class="has"></i>carries it</span><span><i class="not"></i>doesn&rsquo;t yet</span>' +
+      '</div>' +
+      '<p class="ctx-note" style="margin-top:14px; max-width:66ch;">' + W.note + '</p>';
+    if(key === "book"){ renderCompanyContext(null); }
+    else {
+      var c = COMPANIES.find(function(x){ return x.id === key; });
+      renderCompanyContext(c || null);
+    }
+  }
+
+  function netButton(key, label){
+    return '<button type="button" class="btn-mini" data-net="' + key + '" style="margin:14px 0 0;">' +
+      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M15 3h6v6M21 3l-7 7M9 21H3v-6M3 21l7-7"/></svg>' +
+      label + '</button>';
+  }
+
+  function repName(init){
+    var r = REPS.find(function(x){ return x.init === init; });
+    return r ? r.name : init;
+  }
+
+  function repDots(list){
+    return '<span class="repdots">' + list.map(function(i){
+      return '<span class="repdot">' + i + '</span>'; }).join("") + '</span>';
+  }
+
+  function renderCompanyStats(){
+    var loc = COMPANIES.reduce(function(a,c){ return a + c.places; }, 0);
+    var own = COMPANIES.filter(function(c){ return c.reps.length > 1 && !c.lead; }).length;
+    // folded on a phone, the column still has to say what needs attention
+    var biggest = COMPANIES.filter(function(c){ return c.reps.length > 1 && !c.lead; })
+      .sort(function(a,b){ return b.places - a.places; })[0];
+    document.querySelector(".route-summary .rs-k").textContent = biggest ? "No owner" : "All owned";
+    document.querySelector(".route-summary .rs-main").textContent =
+      biggest ? biggest.name + " · " + biggest.kind : "Every company has a name against it";
+    $("rs-sub").textContent = biggest
+      ? biggest.reps.length + " reps across " + biggest.places + " locations, nobody accountable"
+      : "Nothing is falling between reps this week";
+    document.querySelector(".route-summary .rs-open").textContent = "Show the book";
+    $("team-stats").innerHTML =
+      '<span><b>' + COMPANIES.length + '</b> companies</span><span>·</span>' +
+      '<span><b>' + loc + '</b> locations</span><span>·</span>' +
+      '<span class="warn">' + own + ' with no owner</span>';
+  }
+
+  function renderCompanyList(){
+    renderCompanyStats();
+    $("teamlist").innerHTML = COMPANIES.map(function(c){
+      var shared = c.reps.length > 1;
+      return '<li><button type="button" class="teamrow' + (shared && !c.lead ? " warn" : "") +
+        (selected === c.id ? " is-active" : "") + '" data-co="' + c.id + '">' +
+        '<span class="tr-badge co">' + c.places + '</span>' +
+        '<span><span class="tr-name">' + c.name + '</span>' +
+        '<span class="tr-where">' + c.kind + ' · ' + c.places + ' locations</span></span>' +
+        (shared
+          ? '<span class="tr-state ' + (c.lead ? "" : "bad") + '">' + repDots(c.reps) + '</span>'
+          : '<span class="tr-state out">' + repDots(c.reps) + '</span>') +
+        '</button></li>';
+    }).join("");
+  }
+
+  function renderCompanyOverview(){
+    selected = null;
+    viewing(false);
+    renderCompanyList();
+    var shared = COMPANIES.filter(function(c){ return c.reps.length > 1; });
+    var solo = COMPANIES.filter(function(c){ return c.reps.length === 1; });
+    var ownerless = shared.filter(function(c){ return !c.lead; });
+    $("dossier").innerHTML =
+      '<div class="home-hero">' +
+        '<h2>The book by company</h2>' +
+        '<p>' + shared.length + ' of ' + COMPANIES.length + ' companies are worked by more than one rep' +
+        (ownerless.length === shared.length
+          ? ', and not one of them has a named owner.'
+          : ', and ' + ownerless.length + ' of those have no named owner.') + '</p>' +
+      '</div>' +
+      '<div class="card card-pad" style="margin-bottom:14px;">' +
+        '<p class="card-title">How the book is wired</p>' +
+        '<p class="ctx-note" style="margin:0 0 2px;">Everything GMX sells in the US reaches a dealer through one of two distributors. Draw it once and the ownership question answers itself.</p>' +
+        netButton("book", "Open the whole network") +
+      '</div>' +
+      '<div class="card card-pad" style="margin-bottom:14px;">' +
+        '<p class="card-title">Companies that cross a rep boundary</p>' +
+        '<p class="ctx-note" style="margin:0 0 10px;">A distributor supplies dealers in several patches and a chain has branches in more than one. Rep-by-rep reporting cannot see either, so these are the accounts that fall between people.</p>' +
+        shared.map(function(c){
+          return '<button type="button" class="slip" data-co="' + c.id + '">' +
+            '<span class="slip-dot ' + (c.lead ? "due" : "bad") + '"></span>' +
+            '<span class="slip-t">' + c.name + '<span style="display:block;font-weight:400;font-size:11.5px;color:var(--slate);">' +
+              (c.lead ? "led by " + repName(c.lead) : "no single owner") + '</span></span>' +
+            '<span class="slip-who">' + c.reps.length + ' reps · ' + c.places + ' places</span>' +
+            '<span class="slip-n">' + c.pipeline + '</span></button>';
+        }).join("") +
+      '</div>' +
+      '<div class="card card-pad">' +
+        '<p class="card-title">Held by one rep</p>' +
+        '<p class="ctx-note" style="margin:0 0 10px;">These are the accounts where somebody is answerable. Every branch is on the same plan, and the gaps are visible because one person is looking at all of them.</p>' +
+        solo.map(function(c){
+          return '<button type="button" class="slip" data-co="' + c.id + '">' +
+            '<span class="slip-dot"></span>' +
+            '<span class="slip-t">' + c.name + '<span style="display:block;font-weight:400;font-size:11.5px;color:var(--slate);">led by ' + repName(c.lead) + '</span></span>' +
+            '<span class="slip-who">' + c.kind + '</span>' +
+            '<span class="slip-n">' + c.places + '</span></button>';
+        }).join("") +
+      '</div>';
+    /* solo companies always have a lead — see the data */
+    renderCompanyContext(null);
+  }
+
+  /* The one thing an admin can do about a split account that a rep cannot:
+     name the person who is answerable for it. */
+  function ownerCard(c){
+    if(c.reps.length < 2) return '';
+    if(c.lead){
+      var led = REPS.find(function(x){ return x.init === c.lead; });
+      return '<div class="owner-card is-set">' +
+        '<svg class="icon" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>' +
+        '<span><b>' + (led ? led.name : c.lead) + ' holds this account.</b> ' +
+        'The other reps still work their own branches — the plan is ' + (led ? led.name : c.lead) + '’s.</span></div>';
+    }
+    return '<div class="owner-card">' +
+      '<p class="oc-t">Nobody holds ' + c.name + '.</p>' +
+      '<p class="oc-s">Pick the rep who is answerable for the relationship. Their branches do not change — the account plan and the chain-level conversation become theirs.</p>' +
+      '<div class="oc-picks">' +
+        c.reps.map(function(i){
+          var r = REPS.find(function(x){ return x.init === i; });
+          if(!r) return '';
+          return '<button type="button" class="oc-pick" data-own="' + c.id + '|' + i + '">' +
+            '<span class="tr-badge" style="width:28px;height:28px;font-size:11px;">' + i + '</span>' +
+            r.name + '</button>';
+        }).join("") +
+      '</div></div>';
+  }
+
+  function renderCompany(id){
+    var c = COMPANIES.find(function(x){ return x.id === id; }); if(!c) return;
+    selected = id; lens = "company";
+    setLens("company", true);
+    viewing(true);
+    renderCompanyList();
+    $("dossier").innerHTML =
+      '<button type="button" class="back-today" data-home>' +
+        '<svg class="icon" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Back to the book</button>' +
+      '<p class="dossier-eyebrow">' + c.kind + ' · ' + c.places + ' locations</p>' +
+      '<h2 class="dossier-title" style="font-size:30px;">' + c.name + '</h2>' +
+      '<p class="ctx-note" style="max-width:66ch; margin:6px 0 0;">' +
+        ((c.lead && c.noteOwned) ? c.noteOwned : c.note) + '</p>' +
+
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="kpi-n">' + c.places + '</div><div class="kpi-k">Locations</div></div>' +
+        '<div class="kpi"><div class="kpi-n' + (c.reps.length > 1 && !c.lead ? " bad" : "") + '">' + c.reps.length + '</div>' +
+          '<div class="kpi-k">Reps involved' + (c.lead ? " · led by " + repName(c.lead) : " · no owner") + '</div></div>' +
+        '<div class="kpi"><div class="kpi-n">' + c.pipeline + '</div><div class="kpi-k">Open pipeline</div></div>' +
+        '<div class="kpi"><div class="kpi-n' + (c.activated ? " good" : " bad") + '">' + c.activated + '</div>' +
+          '<div class="kpi-k">' + (c.kind === "Distributor" ? "Walls up through them" : "Locations selling") + '</div></div>' +
+      '</div>' +
+
+      ownerCard(c) +
+
+      '<div class="card card-pad" style="margin-top:14px;">' +
+        '<p class="card-title">Where they are and who holds them</p>' +
+        c.rows.map(function(r){
+          return '<div class="colocation">' +
+            '<span class="cl-n">' + r.n + '</span>' +
+            '<span class="cl-w">' + r.who + '</span>' +
+            '<span class="cl-p">' + r.where + '</span>' +
+            '<span class="cl-s ' + r.tone + '">' + r.state + '</span></div>';
+        }).join("") +
+      '</div>' +
+
+      '<div class="deadline" style="margin-top:16px;">' +
+        '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>' +
+        '<span><b>What is missing:</b> ' +
+          ((c.lead && c.gapsOwned) ? c.gapsOwned : c.gaps) + '</span></div>' +
+      (CHAINS[c.id] ? netButton(c.id, "See " + c.name + " in the chain") : '');
+    renderCompanyContext(c);
+  }
+
+  function renderCompanyContext(c){
+    var el = $("context");
+    if(!c){
+      var multi = COMPANIES.filter(function(x){ return x.reps.length > 1; }).length;
+      el.innerHTML =
+        '<p class="ctx-eyebrow">Across the book</p>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Companies</span><b>' + COMPANIES.length + '</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Worked by 2+ reps</span><b style="color:var(--clay);">' + multi + '</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Locations in total</span><b>' +
+          COMPANIES.reduce(function(a,x){ return a + x.places; }, 0) + '</b></div>' +
+        '<p class="ctx-note">Distributors are the extreme case: Hardwoods alone reaches twenty-nine walls across three patches, and no one person is answerable for it.</p>' +
+        '<p class="ctx-eyebrow" style="margin-top:26px;">Why this matters</p>' +
+        '<p class="ctx-note" style="margin:0;">A rep can only see their own slice. A chain notices when its branches get four different conversations — so the account plan has to live above the territory.</p>';
+      return;
+    }
+    el.innerHTML =
+      '<p class="ctx-eyebrow">' + c.name + '</p>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Type</span><b style="font-size:12px;">' + c.kind + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Locations</span><b>' + c.places + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Reps involved</span><b>' + c.reps.length + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Selling</span><b>' + c.activated + '</b></div>' +
+      '<p class="ctx-eyebrow" style="margin-top:26px;">Who is on it</p>' +
+      c.reps.map(function(i){
+        var r = REPS.find(function(x){ return x.init === i; });
+        if(!r) return '';
+        return '<button type="button" class="ctx-stat" data-rep="' + r.id + '">' +
+          '<span class="lbl">' + r.name + '</span>' +
+          '<b style="font-size:12px;">' + r.patch + '</b></button>';
+      }).join("") +
+      (c.lead ? '' : '<p class="ctx-note" style="color:var(--clay);">Nobody is named as lead on this account.</p>');
+  }
+
+  /* ---------- by account ----------
+     A rep view answers "is my team working". A company view answers "who holds
+     this chain". Neither one answers "when was anybody last at this door", and
+     that is the question the account list exists for. */
+  var acctFilter = "all";
+  var FILTER_LABEL = {
+    all:"Every account", quiet:"Quiet six weeks or more",
+    nocaptain:"Nobody named on it", stuck:"Display wall stuck"
+  };
+
+  function acctMatch(a){
+    return acctFilter === "quiet"     ? isQuiet(a)
+         : acctFilter === "nocaptain" ? !a.captain
+         : acctFilter === "stuck"     ? a.wall === "stuck"
+         : true;
+  }
+  function filteredAccounts(){
+    return ACCOUNTS.filter(acctMatch).slice().sort(function(x,y){ return y.days - x.days; });
+  }
+
+  function renderAccountStats(){
+    var quiet = ACCOUNTS.filter(isQuiet).length;
+    var noCap = ACCOUNTS.filter(function(a){ return !a.captain; }).length;
+    $("team-stats").innerHTML =
+      '<span><b>' + ACCOUNTS.length + '</b> accounts</span><span>·</span>' +
+      '<span><b>' + dealers().length + '</b> dealers</span>' +
+      (quiet ? '<span>·</span><span class="warn">' + quiet + ' quiet six weeks</span>' : '') +
+      (noCap ? '<span>·</span><span class="warn">' + noCap + ' with no captain</span>' : '');
+    var worst = ACCOUNTS.slice().sort(function(x,y){ return y.days - x.days; })[0];
+    document.querySelector(".route-summary .rs-k").textContent = "Longest unvisited";
+    document.querySelector(".route-summary .rs-main").textContent = worst.name + " · " + repLabel(worst.rep);
+    $("rs-sub").textContent = lastSeen(worst) + (worst.captain ? "" : ", and nobody named on it");
+    document.querySelector(".route-summary .rs-open").textContent = "Show the accounts";
+  }
+
+  function renderAccountList(){
+    renderAccountStats();
+    var rows = filteredAccounts();
+    $("teamlist").innerHTML = rows.length
+      ? rows.map(function(a){
+          var quiet = isQuiet(a);
+          return '<li><button type="button" class="teamrow' + (quiet ? " warn" : "") +
+            (selected === a.id ? " is-active" : "") + '" data-acct="' + a.id + '">' +
+            '<span class="tr-badge co">' + initials(a.name) + '</span>' +
+            '<span><span class="tr-name">' + a.name + '</span>' +
+            '<span class="tr-where">' + repLabel(a.rep) + ' · ' + a.city + '</span></span>' +
+            '<span class="tr-state ' + (quiet ? "bad" : "out") + '">' + lastSeen(a) + '</span>' +
+            '</button></li>';
+        }).join("")
+      : '<li><p class="ctx-note" style="padding:6px 2px;">Nothing matches that filter.</p></li>';
+  }
+
+  function initials(name){
+    var w = name.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/);
+    return ((w[0] || "?").charAt(0) + (w[1] ? w[1].charAt(0) : "")).toUpperCase();
+  }
+
+  function acctRow(a){
+    return '<button type="button" class="acct-row" data-acct="' + a.id + '">' +
+      '<span class="ar-n">' + a.name + '<small>' + a.kind + ' · ' + a.city + '</small></span>' +
+      '<span class="ar-co">' + a.co + '</span>' +
+      '<span class="ar-rep">' + repLabel(a.rep) + '</span>' +
+      '<span class="ar-seen' + (isQuiet(a) ? " bad" : "") + '">' + lastSeen(a) + '</span>' +
+      '<span class="ar-st">' + (a.stage ? STAGE_LABEL[a.stage] : WALL_LABEL[a.wall]) + '</span>' +
+      '</button>';
+  }
+
+  /* One funnel, drawn from the registry, used on the team home and the account
+     list both. Bars are scaled against the biggest rung, not the total, which
+     is how the original read. */
+  function funnelHtml(){
+    var counts = STAGE_ORDER.map(stageCount);
+    var max = Math.max.apply(null, counts) || 1;
+    return '<ul class="funnel">' +
+      STAGE_ORDER.slice().reverse().map(function(s){
+        var n = stageCount(s);
+        return rung(STAGE_LABEL[s], n, Math.round(n / max * 100),
+          s === "selling" ? "good" : s === "none" ? "hot" : "", s === "none");
+      }).join("") +
+      '</ul>';
+  }
+
+  /* Same row without the rep column — inside one rep's card it is redundant. */
+  function acctRowSlim(a){
+    return '<button type="button" class="acct-row slim" data-acct="' + a.id + '">' +
+      '<span class="ar-n">' + a.name + '<small>' + a.kind + ' · ' + a.city + '</small></span>' +
+      '<span class="ar-co">' + a.co + '</span>' +
+      '<span class="ar-seen' + (isQuiet(a) ? " bad" : "") + '">' + lastSeen(a) + '</span>' +
+      '<span class="ar-st">' + (a.stage ? STAGE_LABEL[a.stage] : WALL_LABEL[a.wall]) + '</span>' +
+      '</button>';
+  }
+
+  function filterBtn(key, n, bad){
+    return '<button type="button" class="ctx-stat' + (bad ? " bad" : "") +
+      (acctFilter === key ? " is-active" : "") + '" data-afilter="' + key + '">' +
+      '<span class="lbl">' + FILTER_LABEL[key] + '</span><b>' + n + '</b></button>';
+  }
+
+  function renderAccountOverview(){
+    selected = null;
+    viewing(false);
+    renderAccountList();
+    var quiet = ACCOUNTS.filter(isQuiet).length;
+    var noCap = ACCOUNTS.filter(function(a){ return !a.captain; }).length;
+    var stuck = ACCOUNTS.filter(function(a){ return a.wall === "stuck"; }).length;
+    var d = dealers().length;
+    var rows = filteredAccounts();
+
+    $("dossier").innerHTML =
+      '<div class="home-hero">' +
+        '<h2>Every account</h2>' +
+        '<p>' + ACCOUNTS.length + ' accounts across four patches. ' + quiet +
+          ' have not seen anyone in six weeks, and ' + noCap + ' have nobody named on them.</p>' +
+        '<div class="hero-act">' +
+          '<button type="button" class="btn-primary-lg" data-addacct>Add an account</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="card card-pad" style="margin-bottom:14px;">' +
+        '<p class="card-title">What needs a visit</p>' +
+        filterBtn("all", ACCOUNTS.length) +
+        filterBtn("quiet", quiet, quiet > 0) +
+        filterBtn("nocaptain", noCap, noCap > 0) +
+        filterBtn("stuck", stuck, stuck > 0) +
+        '<p class="ctx-note" style="margin:10px 0 0;">Filtering here also filters the list on the left.</p>' +
+      '</div>' +
+
+      '<div class="card card-pad" style="margin-bottom:14px;">' +
+        '<p class="card-title">Getting dealers selling</p>' +
+        funnelHtml() +
+        '<p class="ctx-note">' + d + ' of the ' + ACCOUNTS.length + ' accounts are dealers who could carry a wall. ' +
+          'The rest are contractors and distributor branches, which is why the funnel is shorter than the book.</p>' +
+      '</div>' +
+
+      '<div class="card card-pad">' +
+        '<p class="card-title">' + FILTER_LABEL[acctFilter] + ' · ' + rows.length + '</p>' +
+        '<div class="acct-head">' +
+          '<span>Account</span><span>Company</span><span>Rep</span><span>Last in</span><span>State</span>' +
+        '</div>' +
+        (rows.length ? rows.map(acctRow).join("")
+                     : '<p class="ctx-note">Nothing matches that filter.</p>') +
+      '</div>';
+    renderAccountContext(null);
+  }
+
+  function renderAccount(id){
+    var a = ACCOUNTS.find(function(x){ return x.id === id; });
+    if(!a) return;
+    selected = id; lens = "account";
+    setLens("account", true);
+    viewing(true);
+    renderAccountList();
+    var quietNote = isQuiet(a)
+      ? 'Nobody has been through this door in ' + a.days + ' days. It is on the quiet list.'
+      : 'Last visit was ' + lastSeen(a).toLowerCase() + '.';
+
+    $("dossier").innerHTML =
+      '<button type="button" class="back-today" data-home>' +
+        '<svg class="icon" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Back to every account</button>' +
+      '<div class="rep-hero">' +
+        '<span class="tr-badge co">' + initials(a.name) + '</span>' +
+        '<span><h2>' + a.name + '</h2><p>' + a.kind + ' · ' + a.city + '</p></span>' +
+      '</div>' +
+      '<p class="ctx-note" style="max-width:64ch; margin:8px 0 0;">' + quietNote +
+        (a.captain ? ' ' + a.captain + ' is the name on it.'
+                   : ' No captain has been named, so there is nobody to call.') + '</p>' +
+
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="kpi-n' + (isQuiet(a) ? " bad" : " good") + '">' + a.days + '</div>' +
+          '<div class="kpi-k">Days since last visit</div></div>' +
+        '<div class="kpi"><div class="kpi-n' + (a.captain ? "" : " bad") + '" style="font-size:20px;">' +
+          (a.captain || "None") + '</div><div class="kpi-k">Captain</div></div>' +
+        '<div class="kpi"><div class="kpi-n' + (a.wall === "stuck" ? " bad" : "") + '" style="font-size:20px;">' +
+          WALL_LABEL[a.wall] + '</div><div class="kpi-k">Display wall</div></div>' +
+        '<div class="kpi"><div class="kpi-n" style="font-size:20px;">' +
+          (a.stage ? STAGE_LABEL[a.stage] : "Not a dealer") + '</div><div class="kpi-k">Activation</div></div>' +
+      '</div>' +
+
+      '<div class="grid-2" style="margin-top:14px;">' +
+        '<div class="card card-pad"><p class="card-title">Who holds it</p>' +
+          '<button type="button" class="ctx-stat" data-rep="' + a.rep + '">' +
+            '<span class="lbl">Rep</span><b>' + repLabel(a.rep) + '</b></button>' +
+          stat("Company", a.co) +
+          stat("Kind", a.kind) +
+        '</div>' +
+        '<div class="card card-pad"><p class="card-title">Commercially</p>' +
+          stat("Open pipeline", a.pipeline || "—") +
+          stat("Display wall", WALL_LABEL[a.wall], a.wall === "stuck") +
+          stat("Activation", a.stage ? STAGE_LABEL[a.stage] : "—") +
+        '</div>' +
+      '</div>';
+    renderAccountContext(a);
+  }
+
+  /* Right column: on the list, the shape of the book; on one account, the
+     others in the same patch, because that is how a visit gets planned. */
+  function renderAccountContext(a){
+    var el = $("context");
+    if(!a){
+      var byRep = REPS.map(function(r){
+        var mine = acctsOf(r.id);
+        return '<button type="button" class="ctx-stat" data-rep="' + r.id + '">' +
+          '<span class="lbl">' + r.name + '</span><b>' + mine.length + '</b></button>';
+      }).join("");
+      el.innerHTML =
+        '<p class="ctx-eyebrow">Accounts per rep</p>' + byRep +
+        '<p class="ctx-eyebrow" style="margin-top:26px;">Longest unvisited</p>' +
+        ACCOUNTS.slice().sort(function(x,y){ return y.days - x.days; }).slice(0,5).map(function(x){
+          return '<button type="button" class="ctx-stat' + (isQuiet(x) ? " bad" : "") +
+            '" data-acct="' + x.id + '"><span class="lbl">' + x.name + '</span><b>' + x.days + 'd</b></button>';
+        }).join("") +
+        '<p class="ctx-note">Six weeks is the line. Past it, a dealer stops recognising the rep.</p>';
+      return;
+    }
+    var siblings = acctsOf(a.rep).filter(function(x){ return x.id !== a.id; })
+      .sort(function(x,y){ return y.days - x.days; }).slice(0,6);
+    el.innerHTML =
+      '<p class="ctx-eyebrow">Also ' + repLabel(a.rep) + '&rsquo;s</p>' +
+      siblings.map(function(x){
+        return '<button type="button" class="ctx-stat' + (isQuiet(x) ? " bad" : "") +
+          '" data-acct="' + x.id + '"><span class="lbl">' + x.name + '</span><b>' + x.days + 'd</b></button>';
+      }).join("") +
+      '<p class="ctx-note">Planning a visit to one of these is how the quiet ones get picked up — same drive, another door.</p>';
+  }
+
+  /* ---------- adding an account ----------
+     A new door starts empty on purpose: no wall, nobody named, never visited.
+     That is the honest state, and it puts the account straight onto the two
+     lists a manager acts on. */
+  function slug(s){
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "account";
+  }
+  function uniqueId(base){
+    var id = base, n = 2;
+    while(ACCOUNTS.some(function(a){ return a.id === id; })){ id = base + "-" + n; n++; }
+    return id;
+  }
+
+  function openAddAccount(repId){
+    var sel = $("af-rep");
+    sel.innerHTML = REPS.map(function(r){
+      return '<option value="' + r.id + '">' + r.name + ' · ' + r.patch + '</option>';
+    }).join("");
+    if(repId) sel.value = repId;
+    ["af-name","af-city","af-co","af-captain"].forEach(function(id){ $(id).value = ""; });
+    $("af-kind").value = "Dealer branch";
+    $("af-err").hidden = true;
+    $("asheet").setAttribute("data-open", "true");
+    $("af-name").focus();
+  }
+  function closeAddAccount(){ $("asheet").removeAttribute("data-open"); }
+
+  function addAccount(){
+    var name = $("af-name").value.trim();
+    if(!name){ $("af-err").hidden = false; $("af-name").focus(); return; }
+    var kind = $("af-kind").value;
+    var isDealerKind = kind === "Dealer branch";
+    var a = {
+      id: uniqueId(slug(name)),
+      name: name,
+      co: $("af-co").value.trim() || "Independent",
+      rep: $("af-rep").value,
+      city: $("af-city").value.trim() || "—",
+      kind: kind,
+      captain: $("af-captain").value.trim() || null,
+      wall: isDealerKind ? "none" : "na",
+      stage: isDealerKind ? "none" : null,
+      days: 0,
+      pipeline: ""
+    };
+    ACCOUNTS.push(a);
+    SEARCHABLE.push({n:a.name, k:a.kind + " · " + repLabel(a.rep), acct:a.id});
+    deriveReps();
+    closeAddAccount();
+    acctFilter = "all";
+    setLens("account", true);
+    renderAccount(a.id);
+    toTop();
+  }
+
+  function setLens(which, quiet){
+    lens = which;
+    document.querySelectorAll("[data-lens]").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-lens") === which));
+    });
+    document.querySelector("#btn-home").innerHTML =
+      which === "rep"     ? 'The team <span>&amp; where they are</span>' :
+      which === "account" ? 'Every account <span>&amp; when we were last in</span>' :
+                            'The book <span>&amp; who holds it</span>';
+    $("col-eyebrow").textContent =
+      which === "rep" ? "Your reps" : which === "account" ? "Every account" : "Every company";
+    if(quiet) return;
+    selected = null;
+    if(which === "rep"){ renderOverview(); }
+    else if(which === "account"){ renderAccountOverview(); }
+    else { renderCompanyOverview(); }
+  }
+
+  function rung(label, n, pct, tone, at){
+    return '<li class="' + (at ? "at" : "") + '" style="display:flex;align-items:center;gap:11px;">' +
+      '<span class="fn-k">' + label + '</span>' +
+      '<span class="fn-bar"><span class="fn-fill ' + tone + '" style="width:' + pct + '%"></span></span>' +
+      '<span class="fn-n">' + n + '</span></li>';
+  }
+
+  /* ---------- one rep ---------- */
+  function renderRep(id){
+    var r = REPS.find(function(x){ return x.id === id; }); if(!r) return;
+    selected = id;
+    viewing(true);
+    renderTeam();
+    var left = Math.max(0, r.planned - r.done - r.missed);
+    $("dossier").innerHTML =
+      '<button type="button" class="back-today" data-home>' +
+        '<svg class="icon" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Back to the team</button>' +
+      '<div class="rep-hero">' +
+        '<span class="tr-badge">' + r.init + '</span>' +
+        '<span><h2>' + r.name + '</h2><p>' + r.patch + ' · ' + r.accounts + ' accounts</p></span>' +
+      '</div>' +
+      '<p class="ctx-note" style="max-width:64ch; margin:8px 0 0;">' + r.note + '</p>' +
+
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="kpi-n' + (r.missed ? " bad" : " good") + '">' + r.done + '/' + r.planned + '</div>' +
+          '<div class="kpi-k">Visits done this week</div></div>' +
+        '<div class="kpi"><div class="kpi-n' + (r.missed ? " bad" : "") + '">' + r.missed + '</div>' +
+          '<div class="kpi-k">Planned, never happened</div></div>' +
+        '<div class="kpi"><div class="kpi-n">' + r.miles.claimed + '</div>' +
+          '<div class="kpi-k">Miles claimed · ' + r.miles.planned + ' planned</div></div>' +
+        '<div class="kpi"><div class="kpi-n' + (r.nextWeek ? "" : " bad") + '">' + r.nextWeek + '</div>' +
+          '<div class="kpi-k">Booked for next week</div></div>' +
+      '</div>' +
+
+      '<div class="card card-pad" style="margin-top:14px;">' +
+        '<p class="card-title">This week, day by day</p>' +
+        '<div class="pva"><button type="button" class="pva-row" style="cursor:default;">' +
+          '<span><span class="pva-name">' + r.name + '</span><span class="pva-sub">' + r.patch + '</span></span>' +
+          '<span class="pva-track">' +
+            (r.done - r.owed > 0 ? '<span class="pva-seg done" style="flex:' + (r.done - r.owed) + '"></span>' : "") +
+            (r.owed > 0 ? '<span class="pva-seg owed" style="flex:' + r.owed + '"></span>' : "") +
+            (r.missed > 0 ? '<span class="pva-seg missed" style="flex:' + r.missed + '"></span>' : "") +
+            (left > 0 ? '<span class="pva-seg left" style="flex:' + left + '"></span>' : "") +
+          '</span>' +
+          '<span class="pva-fig">' + r.done + '/' + r.planned + '</span>' +
+        '</button></div>' +
+      '</div>' +
+
+      '<div class="grid-2" style="margin-top:14px;">' +
+        '<div class="card card-pad"><p class="card-title">Their patch</p>' +
+          stat("Accounts", r.accounts) +
+          stat("With no captain", r.noCaptain, r.noCaptain > 0) +
+          stat("Display walls up", r.walls.up) +
+          stat("Walls in trouble", r.walls.bad, r.walls.bad > 0) +
+        '</div>' +
+        '<div class="card card-pad"><p class="card-title">Commercially</p>' +
+          stat("Open pipeline", r.pipeline) +
+          stat("Deals advanced this week", r.advanced, false, r.advanced === 0) +
+          stat("Booked for next week", r.nextWeek, r.nextWeek === 0) +
+        '</div>' +
+      '</div>' +
+
+      /* The counts above are the summary; a manager still has to be able to see
+         the doors themselves, longest-unvisited first. */
+      '<div class="card card-pad" style="margin-top:14px;">' +
+        '<div class="card-head">' +
+          '<p class="card-title" style="margin:0;">Their accounts · ' + r.accounts + '</p>' +
+          '<button type="button" class="btn-mini" data-addacct="' + r.id + '">Add an account</button>' +
+        '</div>' +
+        '<div class="acct-head slim">' +
+          '<span>Account</span><span>Company</span><span>Last in</span><span>State</span>' +
+        '</div>' +
+        acctsOf(r.id).slice().sort(function(x,y){ return y.days - x.days; })
+          .map(acctRowSlim).join("") +
+        '<p class="ctx-note" style="margin:12px 0 0;">' +
+          acctsOf(r.id).filter(isQuiet).length + ' of these have gone six weeks without a visit.</p>' +
+      '</div>';
+    renderContext(r);
+  }
+
+  function stat(label, val, bad){
+    return '<div class="ctx-stat" style="cursor:default;"><span class="lbl">' + label + '</span>' +
+      '<b' + (bad ? ' style="color:var(--clay);"' : '') + '>' + val + '</b></div>';
+  }
+
+  /* ---------- right column ---------- */
+  function renderContext(rep){
+    var el = $("context");
+    if(!rep){
+      el.innerHTML =
+        '<p class="ctx-eyebrow">This week across the chain</p>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Visits logged</span><b>11</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">PK classes run</span><b>2</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">New contacts met</span><b>6</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Deals advanced</span><b>4</b></div>' +
+        '<p class="ctx-eyebrow" style="margin-top:26px;">Coverage</p>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Seen in the last 30 days</span><b>29</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">30 to 60 days</span><b>11</b></div>' +
+        '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Not seen in 60+</span><b style="color:var(--clay);">13</b></div>' +
+        '<p class="ctx-note">Thirteen accounts nobody has been to in two months. That is the quiet number behind a flat month.</p>' +
+        '<p class="ctx-eyebrow" style="margin-top:26px;">The commercial network</p>' +
+        '<p class="ctx-note" style="margin:0;">Two distributors carry the whole book. Everything else hangs off them.</p>' +
+        netButton("book", "Open the whole network") +
+        '<p class="ctx-eyebrow" style="margin-top:26px;">Mirrored to HubSpot</p>' +
+        '<p class="ctx-note" style="margin:0;">Every deal, company and contact on this screen is the same record management reads in HubSpot. Last pass 8:42 AM.</p>';
+      return;
+    }
+    el.innerHTML =
+      '<p class="ctx-eyebrow">' + rep.name + ' this week</p>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Planned</span><b>' + rep.planned + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Done and logged</span><b>' + (rep.done - rep.owed) + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Owes a debrief</span><b' + (rep.owed ? ' style="color:var(--clay);"' : '') + '>' + rep.owed + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Never happened</span><b' + (rep.missed ? ' style="color:var(--clay);"' : '') + '>' + rep.missed + '</b></div>' +
+      '<p class="ctx-eyebrow" style="margin-top:26px;">Cost</p>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Miles planned</span><b>' + rep.miles.planned + '</b></div>' +
+      '<div class="ctx-stat" style="cursor:default;"><span class="lbl">Miles claimed</span><b>' + rep.miles.claimed + '</b></div>' +
+      '<p class="ctx-note">Mileage is reimbursed against the plan, so the two numbers should track each other.</p>';
+  }
+
+  /* ---------- wiring ---------- */
+  function goHome(){
+    if(lens === "company"){ renderCompanyOverview(); }
+    else if(lens === "account"){ renderAccountOverview(); }
+    else { renderOverview(); }
+  }
+  function toTop(){ document.querySelector(".dossier-col").scrollTo({top:0, behavior:"smooth"}); }
+
+  document.addEventListener("click", function(e){
+    var net = e.target.closest("[data-net]");
+    if(net){ renderNetwork(net.getAttribute("data-net")); toTop(); return; }
+    /* Real fullscreen, with a fallback overlay when the browser refuses.
+       Check the fallback FIRST — otherwise, once it is showing, the button
+       tries to enter fullscreen again instead of leaving. */
+    if(e.target.closest("#net-fs")){
+      var stage = $("net-stage");
+      if(stage.classList.contains("faux-fs")){ stage.classList.remove("faux-fs"); return; }
+      if(document.fullscreenElement){ document.exitFullscreen(); return; }
+      if(stage.requestFullscreen){
+        stage.requestFullscreen().catch(function(){ stage.classList.add("faux-fs"); });
+      } else {
+        stage.classList.add("faux-fs");
+      }
+      return;
+    }
+    var own = e.target.closest("[data-own]");
+    if(own){
+      var parts = own.getAttribute("data-own").split("|");
+      var target = COMPANIES.find(function(x){ return x.id === parts[0]; });
+      if(target){ target.lead = parts[1]; renderCompany(target.id); }
+      return;
+    }
+    var add = e.target.closest("[data-addacct]");
+    if(add){ openAddAccount(add.getAttribute("data-addacct") || null); return; }
+    var af = e.target.closest("[data-afilter]");
+    if(af){
+      acctFilter = af.getAttribute("data-afilter");
+      if(lens !== "account") setLens("account", true);
+      renderAccountOverview();
+      return;
+    }
+    var acct = e.target.closest("[data-acct]");
+    if(acct){
+      if(lens !== "account") setLens("account", true);
+      renderAccount(acct.getAttribute("data-acct"));
+      toTop();
+      return;
+    }
+    var seg = e.target.closest("[data-lens]");
+    if(seg){ setLens(seg.getAttribute("data-lens")); toTop(); return; }
+    if(e.target.closest("[data-home]")){ goHome(); return; }
+    var co = e.target.closest("[data-co]");
+    if(co){ renderCompany(co.getAttribute("data-co")); toTop(); return; }
+    var rep = e.target.closest("[data-rep]");
+    if(rep){
+      if(lens !== "rep") setLens("rep", true);
+      renderRep(rep.getAttribute("data-rep"));
+      toTop();
+      return;
+    }
+  });
+
+  $("btn-home").addEventListener("click", goHome);
+  $("chip-alert").addEventListener("click", function(){ setLens("rep", true); renderRep("jason"); });
+
+  $("aform").addEventListener("submit", function(e){ e.preventDefault(); addAccount(); });
+  document.addEventListener("click", function(e){
+    if(e.target.closest("[data-aclose]")) { closeAddAccount(); return; }
+    if(e.target === $("asheet")) closeAddAccount();   // click the scrim to leave
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && $("asheet").getAttribute("data-open")) closeAddAccount();
+  });
+
+  // fold the team away on a phone, same as the rep's day
+  var routeCol = document.querySelector(".route-col");
+  var routeToggle = $("route-toggle");
+  function setFolded(f){
+    routeCol.classList.toggle("collapsed", f);
+    routeToggle.setAttribute("aria-expanded", String(!f));
+  }
+  routeCol.classList.add("has-summary");
+  if(window.matchMedia("(max-width: 860px)").matches) setFolded(true);
+  routeToggle.addEventListener("click", function(){ setFolded(!routeCol.classList.contains("collapsed")); });
+  $("route-summary").addEventListener("click", function(){ setFolded(false); });
+
+  // account menu
+  var acctBtn = $("acct-btn"), acctMenu = $("acct-menu");
+  acctBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    var open = acctMenu.getAttribute("data-open") === "true";
+    if(open){ acctMenu.removeAttribute("data-open"); acctBtn.setAttribute("aria-expanded","false"); }
+    else { acctMenu.setAttribute("data-open","true"); acctBtn.setAttribute("aria-expanded","true"); }
+  });
+  document.addEventListener("click", function(e){
+    if(!e.target.closest("#acct-menu") && !e.target.closest("#acct-btn")){
+      acctMenu.removeAttribute("data-open"); acctBtn.setAttribute("aria-expanded","false");
+    }
+  });
+
+  // search
+  /* Search reaches reps, companies and now every account, so the header is a
+     way into the book and not just a way to find a person. */
+  var SEARCHABLE = REPS.map(function(r){ return {n:r.name, k:r.patch + " · rep", rep:r.id}; })
+    .concat(COMPANIES.map(function(c){ return {n:c.name, k:c.kind + " · " + c.places + " locations", co:c.id}; }))
+    .concat(ACCOUNTS.map(function(a){
+      return {n:a.name, k:a.kind + " · " + repLabel(a.rep), acct:a.id};
+    }))
+    .concat(ACCOUNTS.filter(function(a){ return a.captain; }).map(function(a){
+      return {n:a.captain, k:"Captain · " + a.name, acct:a.id};
+    }));
+  var searchEl = $("search"), resultsEl = $("search-results");
+  searchEl.addEventListener("input", function(){
+    var q = searchEl.value.trim().toLowerCase();
+    if(!q){ resultsEl.removeAttribute("data-open"); return; }
+    var hits = SEARCHABLE.filter(function(x){ return x.n.toLowerCase().indexOf(q) !== -1; });
+    resultsEl.innerHTML = hits.length
+      ? hits.slice(0, 12).map(function(h){
+          var nav = h.rep ? ' data-rep="' + h.rep + '"'
+                  : h.co  ? ' data-co="' + h.co + '"'
+                  : h.acct ? ' data-acct="' + h.acct + '"' : '';
+          return '<button type="button" class="sr-item"' + nav + '>' +
+            '<span class="sr-name">' + h.n + '</span><span class="sr-kind">' + h.k + '</span></button>';
+        }).join("")
+      : '<p class="sr-empty">Nothing matches &ldquo;' + searchEl.value + '&rdquo;.</p>';
+    resultsEl.setAttribute("data-open","true");
+  });
+  document.addEventListener("click", function(e){
+    if(!e.target.closest(".search-wrap")) resultsEl.removeAttribute("data-open");
+    if(e.target.closest(".sr-item")){ searchEl.value = ""; resultsEl.removeAttribute("data-open"); }
+  });
+
+  // Escape leaves the fallback overlay too, so both routes out behave the same
+  document.addEventListener("keydown", function(e){
+    if(e.key !== "Escape") return;
+    var stage = $("net-stage");
+    if(stage && stage.classList.contains("faux-fs")) stage.classList.remove("faux-fs");
+  });
+
+  renderOverview();
+})();
+
+</script>
