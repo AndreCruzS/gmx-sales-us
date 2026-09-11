@@ -61,6 +61,7 @@ const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
 import { teamNarrative } from "@/lib/domain/team";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchAllPages } from "@/lib/supabase/page";
 
 interface ScorecardRow {
   membership_id: string;
@@ -304,22 +305,36 @@ export function ManagerHome({ name }: { name: string }) {
       // The distributors' own report: exactly the month being read and the
       // one before it. `period_kind is null` rides along for rows loaded
       // before the kind existed — they were always monthly.
+      //
+      // PAGED, NOT LIMITED. `.limit(10000)` asked for ten thousand and the
+      // server answered with its own cap of a thousand, no error and no sign —
+      // so the month simply stopped adding up once the book crossed it. Ordered
+      // by row_id because range paging over an unordered result may repeat one
+      // row and skip another.
       wantedMonths.length > 0
-        ? supabase
-            .from("sell_through_rows")
-            .select(SELL_COLS)
-            .in("period", wantedMonths)
-            .or("period_kind.eq.MONTH,period_kind.is.null")
-            .limit(10000)
+        ? fetchAllPages<SellThroughRow>((from, to) =>
+            supabase
+              .from("sell_through_rows")
+              .select(SELL_COLS)
+              .in("period", wantedMonths)
+              .or("period_kind.eq.MONTH,period_kind.is.null")
+              .order("row_id")
+              .range(from, to),
+          ).then((data) => ({ data, error: null }))
         : none,
-      // And the year-so-far aggregate, its latest file only.
+      // And the year-so-far aggregate, its latest file only. This is the one
+      // that grows every time the house re-issues it: January-to-June already
+      // carries 639 rows.
       ytdPeriod
-        ? supabase
-            .from("sell_through_rows")
-            .select(SELL_COLS)
-            .eq("period_kind", "YTD")
-            .eq("period", ytdPeriod)
-            .limit(10000)
+        ? fetchAllPages<SellThroughRow>((from, to) =>
+            supabase
+              .from("sell_through_rows")
+              .select(SELL_COLS)
+              .eq("period_kind", "YTD")
+              .eq("period", ytdPeriod)
+              .order("row_id")
+              .range(from, to),
+          ).then((data) => ({ data, error: null }))
         : none,
       // Including the branches that bought nothing — the gaps are the point of
       // a coverage map, and sell_through_rows only carries branches with sales.

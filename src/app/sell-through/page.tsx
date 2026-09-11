@@ -44,6 +44,7 @@ import {
   type ReadSheet,
 } from "@/lib/sheet/read-spreadsheet";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchAllPages } from "@/lib/supabase/page";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
@@ -462,13 +463,27 @@ export default function SellThroughPage() {
       if (delErr) throw new Error(delErr.message);
 
       // Which of this house's yards are now empty across EVERY month.
-      const { data: left } = await supabase
-        .from("sell_through")
-        .select("branch_id")
-        .limit(5000);
-      const stillUsed = new Set(
-        ((left as { branch_id: string }[]) ?? []).map((r) => r.branch_id),
-      );
+      //
+      // PAGED, AND SCOPED TO THIS HOUSE. This read decides which branches the
+      // button below offers to DELETE, and deleting a branch cascades onto its
+      // sell-through rows. `.limit(5000)` looked generous and was not: the
+      // server caps every request at a thousand without saying so, and the book
+      // passed a thousand rows in September 2026 — so a yard whose rows sat
+      // past the cap read as empty, and one click would have taken its sales
+      // history with it. Asking only about this house's own branches keeps the
+      // walk short as well as correct.
+      const mineIds = mineBranches.map((b) => b.id);
+      const left = mineIds.length
+        ? await fetchAllPages<{ branch_id: string }>((from, to) =>
+            supabase
+              .from("sell_through")
+              .select("branch_id")
+              .in("branch_id", mineIds)
+              .order("id")
+              .range(from, to),
+          )
+        : [];
+      const stillUsed = new Set(left.map((r) => r.branch_id));
       setOrphans(
         mineBranches
           .filter((b) => !stillUsed.has(b.id))
