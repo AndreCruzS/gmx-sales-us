@@ -41,7 +41,7 @@ export function ChipSelect({
   /** "" means nothing is narrowed. */
   value: string;
   options: readonly ChipOption[];
-  /** What "no narrowing" is called — "Every region", "Every house". */
+  /** What "no narrowing" is called — "All regions", "All distributors". */
   allLabel: string;
   onChange: (id: string) => void;
 }) {

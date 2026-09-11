@@ -766,7 +766,7 @@ export function TeamSales({
         <div className="dealer-scope">
           <ChipSelect
             label="Narrow to one region"
-            allLabel="Every region"
+            allLabel="All regions"
             value={dealerScope.regionId}
             options={scopeChoices.regions.map((o) => ({
               id: o.id,
@@ -777,7 +777,7 @@ export function TeamSales({
           />
           <ChipSelect
             label="Narrow to one distributor"
-            allLabel="Every house"
+            allLabel="All distributors"
             value={dealerScope.distributorId}
             options={scopeChoices.distributors.map((o) => ({
               id: o.id,
