@@ -29,7 +29,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { SearchIcon } from "@/components/icons";
 import { foldForSearch, searchDealers } from "@/lib/domain/sell-through";
 import type { RecurrenceDealer } from "@/lib/domain/sell-through";
 
@@ -71,7 +70,6 @@ export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }
     <>
       {searchable && (
         <label className="search-field recur-search">
-          <SearchIcon size={16} />
           <input
             type="search"
             placeholder="Find a dealer"

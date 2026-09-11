@@ -45,7 +45,6 @@ import Link from "next/link";
 import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
 import { ChipSelect } from "@/components/chip-select";
-import { SearchIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
@@ -2398,7 +2397,6 @@ function SalesBook({
             </p>
             {bookSearchable && (
               <label className="search-field bkm-search">
-                <SearchIcon size={16} />
                 <input
                   type="search"
                   placeholder="Find in this list"
