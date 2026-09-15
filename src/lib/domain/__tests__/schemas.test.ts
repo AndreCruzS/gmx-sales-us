@@ -70,6 +70,41 @@ const accountFixture = {
   owner_id: OWNER,
 };
 
+describe("accountCreateSchema — placement", () => {
+  // Bianca, 2026-09-15: an admin creating a dealer got "territory_id: expected
+  // string, received null". Admins have no territory; the account must save.
+  it("accepts an account with no territory yet", () => {
+    expect(() =>
+      accountCreateSchema.parse({
+        ...accountFixture,
+        territory_id: null,
+        lead_source: "JOBSITE",
+      }),
+    ).not.toThrow();
+  });
+
+  it("accepts the state and ZIP the address resolved to", () => {
+    expect(() =>
+      accountCreateSchema.parse({
+        ...accountFixture,
+        state: "CA",
+        postal_code: "91406",
+        lead_source: "JOBSITE",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects a ZIP that is not five digits", () => {
+    expect(() =>
+      accountCreateSchema.parse({
+        ...accountFixture,
+        postal_code: "9140",
+        lead_source: "JOBSITE",
+      }),
+    ).toThrow();
+  });
+});
+
 describe("accountCreateSchema — D7/D8 lead-source rules", () => {
   it("accepts a non-referral, non-OTHER source with no extra fields", () => {
     expect(() =>

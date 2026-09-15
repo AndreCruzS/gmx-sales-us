@@ -197,7 +197,17 @@ export const accountCreateSchema = z
     name: z.string().min(1),
     account_type: z.enum(ACCOUNT_TYPES),
     city: z.string().nullish(),
-    territory_id: uuid,
+    // Two-letter state and the ZIP it was found from (2026-09-15). The ZIP is
+    // what the person typed; city and state are what it resolved to.
+    state: z.string().length(2).nullish(),
+    postal_code: z.string().regex(/^\d{5}$/).nullish(),
+    // NULLABLE, and it should have been since 2026-09-04. That day admins were
+    // allowed to create accounts — an admin has no territory of their own, so
+    // the account lands unplaced until an address places it — and the form was
+    // changed to send null. This schema was not, so every account an admin
+    // created failed at the outbox with "expected string, received null".
+    // The column itself has always been nullable.
+    territory_id: uuid.nullish(),
     owner_id: uuid,
     lead_source: z.enum(LEAD_SOURCES_ALL),
     source_detail: z.string().nullish(),
