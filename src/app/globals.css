@@ -1670,21 +1670,50 @@ body {
    edge. No box and no icon: an underlined line whose text starts exactly where
    "DEALERS" and every dealer name starts, and whose rule echoes the separators
    already in the list. */
+/* A SEARCH FIELD THAT READS AS ONE, AND STILL SITS ON THE COLUMN'S EDGE
+   (Andre, 2026-09-15: "bem estranho"). The bare underlined line fixed the
+   alignment and broke the reading: a 16px grey placeholder with a hairline
+   under it, beside 12.5px names separated by the same hairline, looked like a
+   heading or one more row — not something to type into.
+
+   So it is a field again, but a quiet one: a sunken rounded box that bleeds
+   outward by exactly the rows' own bleed, so its TEXT still starts on the same
+   edge as the eyebrow and the names; the magnifier sits at the END, where it
+   cannot push that text off the edge; and on a desk the type drops to the
+   names' size. Touch screens keep 16px, because anything smaller makes iOS zoom
+   the page the moment a thumb lands in the field. */
+.search-field.bkm-search,
+.search-field.recur-search {
+  gap: 8px;
+  padding: 6px 10px;
+  margin-inline: -10px;
+  width: calc(100% + 20px);
+  background: var(--surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  color: var(--ink-muted);
+}
 .search-field.bkm-search {
-  margin: 6px 0 0;
-  padding: 6px 0;
-  gap: 0;
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--rule);
-  border-radius: 0;
+  margin-block: 6px 2px;
 }
-.search-field.bkm-search input {
-  line-height: 1.2;
+.search-field.recur-search {
+  margin-block: 10px 0;
 }
-.search-field.bkm-search:focus-within {
+.search-field.bkm-search input,
+.search-field.recur-search input {
+  line-height: 1.25;
+}
+.search-field.bkm-search:focus-within,
+.search-field.recur-search:focus-within {
   outline: none;
-  border-bottom-color: var(--accent);
+  border-color: var(--accent);
+  background: var(--surface-card);
+}
+@media (hover: hover) and (pointer: fine) {
+  .search-field.bkm-search input,
+  .search-field.recur-search input {
+    font-size: var(--text-sm);
+  }
 }
 .bkm-pager {
   border-top: 1px solid var(--rule);
@@ -4588,22 +4617,6 @@ input[type="datetime-local"] {
    place on the page. */
 /* Same treatment as the book's column, for the same reason: the names under it
    start at the content edge, so the field has to as well. */
-.search-field.recur-search {
-  margin-top: 8px;
-  padding: 6px 0;
-  gap: 0;
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--rule);
-  border-radius: 0;
-}
-.search-field.recur-search input {
-  line-height: 1.2;
-}
-.search-field.recur-search:focus-within {
-  outline: none;
-  border-bottom-color: var(--accent);
-}
 /* a search that found nobody, where the list would have been */
 .recur-empty {
   margin: 10px 0 0;
@@ -4612,10 +4625,6 @@ input[type="datetime-local"] {
 }
 /* the names under each cell: biggest first, the LF closing the row; paged,
    three at a time on the phone and eight on the desk */
-.search-field.recur-search + .recur-names {
-  margin-top: 0;
-  border-top: 0;
-}
 .recur-names {
   list-style: none;
   margin: 10px 0 0;

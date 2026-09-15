@@ -28,6 +28,7 @@
 // over four names is furniture.
 
 import Link from "next/link";
+import { SearchIcon } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 import { foldForSearch, searchDealers } from "@/lib/domain/sell-through";
 import type { RecurrenceDealer } from "@/lib/domain/sell-through";
@@ -84,6 +85,7 @@ export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }
               setPage(0);
             }}
           />
+          <SearchIcon size={14} aria-hidden="true" />
         </label>
       )}
 

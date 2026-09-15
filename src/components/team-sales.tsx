@@ -42,6 +42,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SalesMap } from "@/components/sales-map";
 import Link from "next/link";
+import { SearchIcon } from "@/components/icons";
 import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
 import { ChipSelect } from "@/components/chip-select";
@@ -2409,6 +2410,7 @@ function SalesBook({
                     setBookPage(0);
                   }}
                 />
+                <SearchIcon size={14} aria-hidden="true" />
               </label>
             )}
             <ul className="list">
