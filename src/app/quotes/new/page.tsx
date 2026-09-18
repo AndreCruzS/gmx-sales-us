@@ -12,10 +12,16 @@
 // in the patch. The dealers wait folded underneath, one tap to open; typing in
 // the search flattens everything, because a person typing a name has already
 // chosen it.
+//
+// AND A COMPANY THAT IS NOT THERE YET IS BORN HERE (João, 2026-09-16): the
+// last row of every search offers it as a new company, the short form opens in
+// place, and the quote carries on with the account it just made — one step,
+// not "go create the dealer, then come back and quote it".
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchIcon } from "@/components/icons";
+import { NewCompanyInline } from "@/components/new-company-inline";
 import { humanize } from "@/lib/domain/enums";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
@@ -24,6 +30,8 @@ export default function NewQuotePage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [query, setQuery] = useState("");
+  // The name the new-company form opened with; null while it is closed.
+  const [creating, setCreating] = useState<string | null>(null);
 
   useEffect(() => {
     void getOfflineLayer().local.getAccounts().then(setAccounts);
@@ -81,6 +89,19 @@ export default function NewQuotePage() {
     </li>
   );
 
+  // Offered under every search, not only an empty one: "Wellborn" can match a
+  // different Wellborn and still not be the company in front of the rep.
+  const newCompanyRow = (
+    <button
+      type="button"
+      className="newco-offer"
+      onClick={() => setCreating(query.trim())}
+    >
+      <span aria-hidden="true">+</span> New company
+      {query.trim() ? <>: &ldquo;{query.trim()}&rdquo;</> : null}
+    </button>
+  );
+
   return (
     <div className="stack pt-2">
       <section className="flex flex-col gap-3">
@@ -99,14 +120,27 @@ export default function NewQuotePage() {
           />
         </label>
 
-        {accounts.length === 0 ? (
-          <p className="t-sub px-1">No accounts on this device yet.</p>
+        {creating !== null ? (
+          <NewCompanyInline
+            initialName={creating}
+            submitLabel="Continue to the quote"
+            onCancel={() => setCreating(null)}
+            onCreated={(a) => router.push(`/accounts/${a.id}/new-deal?stage=QUOTE`)}
+          />
+        ) : accounts.length === 0 ? (
+          <>
+            <p className="t-sub px-1">No accounts on this device yet.</p>
+            {newCompanyRow}
+          </>
         ) : q ? (
-          searched.length === 0 ? (
-            <p className="t-sub px-1">No account matches that.</p>
-          ) : (
-            <ul className="list">{searched.map(row)}</ul>
-          )
+          <>
+            {searched.length === 0 ? (
+              <p className="t-sub px-1">No account matches that.</p>
+            ) : (
+              <ul className="list">{searched.map(row)}</ul>
+            )}
+            {newCompanyRow}
+          </>
         ) : (
           <>
             {groups.distributors.length > 0 && (
@@ -133,6 +167,7 @@ export default function NewQuotePage() {
                 <ul className="list">{groups.rest.map(row)}</ul>
               </details>
             )}
+            {newCompanyRow}
           </>
         )}
       </section>

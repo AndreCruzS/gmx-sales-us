@@ -16,6 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CheckIcon, FileIcon, MicrophoneIcon } from "@/components/icons";
+import { NewCompanyInline } from "@/components/new-company-inline";
 import {
   ACTIVITY_OUTCOMES,
   ACTIVITY_TYPES,
@@ -72,6 +73,8 @@ function RecordPageInner() {
     () => searchParams.get("account"),
   );
   const [pickingAccount, setPickingAccount] = useState(false);
+  // The new-company form, open with the name typed so far; null when closed.
+  const [creatingAccount, setCreatingAccount] = useState<string | null>(null);
   const [linkPlanned, setLinkPlanned] = useState(true);
   const [note, setNote] = useState("");
   const [followUp, setFollowUp] = useState(false);
@@ -471,6 +474,21 @@ function RecordPageInner() {
               Change
             </button>
           </div>
+        ) : creatingAccount !== null ? (
+          // A dealer met for the first time is logged in the same breath it
+          // is created (João, 2026-09-16) — the visit carries on with it.
+          <NewCompanyInline
+            initialName={creatingAccount}
+            submitLabel="Attach to this visit"
+            onCancel={() => setCreatingAccount(null)}
+            onCreated={(a) => {
+              setAccounts((list) => [a, ...list]);
+              setAccountId(a.id);
+              setCreatingAccount(null);
+              setPickingAccount(false);
+              setAccountQuery("");
+            }}
+          />
         ) : pickingAccount ? (
           <div className="card overflow-hidden">
             <input
@@ -501,11 +519,22 @@ function RecordPageInner() {
               ))}
               {filtered.length === 0 && (
                 <p className="t-sub px-4 py-3">
-                  No saved accounts match — leave it off and the system will
-                  figure out the account from your note.
+                  No saved accounts match — add it as a new company, or leave
+                  it off and the system will figure out the account from your
+                  note.
                 </p>
               )}
             </ul>
+            <div className="px-3 pb-3">
+              <button
+                type="button"
+                className="newco-offer"
+                onClick={() => setCreatingAccount(accountQuery.trim())}
+              >
+                <span aria-hidden="true">+</span> New company
+                {accountQuery.trim() ? <>: &ldquo;{accountQuery.trim()}&rdquo;</> : null}
+              </button>
+            </div>
           </div>
         ) : (
           <button

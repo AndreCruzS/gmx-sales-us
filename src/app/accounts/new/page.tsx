@@ -11,7 +11,7 @@
 // allowed here, and write the account_relationships row (D4/D7) — "that flow
 // belongs on the account screen, not a card sheet" per that file's comment.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useOffline } from "@/components/offline-provider";
 import {
@@ -23,6 +23,7 @@ import {
   type LeadSource,
 } from "@/lib/domain/enums";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
+import { useZipLookup, zipLookupNote } from "@/lib/ui/use-zip-lookup";
 
 export default function NewAccountPage() {
   const { profile } = useOffline();
@@ -31,19 +32,9 @@ export default function NewAccountPage() {
   const [accounts, setAccounts] = useState<CachedAccount[]>([]);
   const [name, setName] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("DEALER");
-  const [city, setCity] = useState("");
-  // THE ADDRESS STARTS AT THE ZIP (2026-09-15). Five digits resolve the town,
-  // the state and the region the account lands in, so it is created placed
-  // instead of arriving unplaced for somebody to fix later. City and state stay
-  // editable: the lookup is a convenience, and offline it simply does nothing.
-  const [zip, setZip] = useState("");
-  const [state, setState] = useState("");
-  const [zipLookup, setZipLookup] = useState<
-    | { status: "idle" }
-    | { status: "looking" }
-    | { status: "found"; territoryId: string | null; territoryName: string | null; how: string }
-    | { status: "failed"; message: string }
-  >({ status: "idle" });
+  const { zip, changeZip, city, setCity, state, setState, lookup: zipLookup, territoryId: placedTerritoryId } =
+    useZipLookup(profile?.territoryId ?? null);
+  const zipNote = zipLookupNote(zipLookup);
   const [leadSource, setLeadSource] = useState<LeadSource | "">("");
   const [sourceDetail, setSourceDetail] = useState("");
   const [referringAccountId, setReferringAccountId] = useState("");
@@ -60,52 +51,6 @@ export default function NewAccountPage() {
     void getOfflineLayer().local.getAccounts().then(setAccounts);
   }, []);
 
-  // Look the ZIP up the moment it is whole — from the keystroke that completes
-  // it, not an effect watching it. Each lookup carries a sequence number so a
-  // slow answer for an earlier ZIP can never overwrite the one now typed.
-  const lookupSeq = useRef(0);
-  function changeZip(raw: string) {
-    const next = raw.replace(/\D/g, "").slice(0, 5);
-    setZip(next);
-    const seq = ++lookupSeq.current;
-    if (next.length !== 5) {
-      setZipLookup({ status: "idle" });
-      return;
-    }
-    setZipLookup({ status: "looking" });
-    fetch(`/api/zip/${next}`)
-      .then(async (res) => {
-        const body = await res.json();
-        if (seq !== lookupSeq.current) return;
-        if (!res.ok) {
-          setZipLookup({ status: "failed", message: body.error ?? "Could not look that ZIP up." });
-          return;
-        }
-        setCity(body.city ?? "");
-        setState(body.state ?? "");
-        setZipLookup({
-          status: "found",
-          territoryId: body.territoryId ?? null,
-          territoryName: body.territoryName ?? null,
-          how: body.how,
-        });
-      })
-      .catch(() => {
-        if (seq === lookupSeq.current)
-          setZipLookup({
-            status: "failed",
-            message: "No connection for the ZIP lookup. Type the city and state by hand.",
-          });
-      });
-  }
-
-  // Where the account lands: the address's own region when the lookup placed
-  // it; otherwise the creator's territory (a rep adding a door in their own
-  // patch); otherwise nowhere yet — an admin has no patch of their own.
-  const placedTerritoryId =
-    zipLookup.status === "found" && zipLookup.territoryId
-      ? zipLookup.territoryId
-      : (profile?.territoryId ?? null);
 
   const isReferral = leadSource
     ? (REFERRAL_LEAD_SOURCES as readonly string[]).includes(leadSource)
@@ -307,21 +252,9 @@ export default function NewAccountPage() {
               autoComplete="postal-code"
             />
           </label>
-          {zipLookup.status === "looking" && (
-            <span className="t-hint">Looking that ZIP up…</span>
-          )}
-          {zipLookup.status === "failed" && (
-            <span className="t-hint" style={{ color: "var(--danger)" }}>
-              {zipLookup.message}
-            </span>
-          )}
-          {zipLookup.status === "found" && (
-            <span className="t-hint">
-              {zipLookup.territoryName
-                ? `Lands in ${zipLookup.territoryName}.`
-                : zipLookup.how === "city-not-on-map"
-                  ? "California is placed city by city, and this city is not on the map yet — the account saves unplaced."
-                  : "No region covers this state yet — the account saves unplaced."}
+          {zipNote && (
+            <span className="t-hint" style={zipNote.bad ? { color: "var(--danger)" } : undefined}>
+              {zipNote.text}
             </span>
           )}
         </div>
@@ -331,10 +264,7 @@ export default function NewAccountPage() {
             <span className="t-hint">City</span>
             <input
               value={city}
-              onChange={(e) => {
-                setCity(e.target.value);
-                if (zipLookup.status === "found") setZipLookup({ status: "idle" });
-              }}
+              onChange={(e) => setCity(e.target.value)}
               className="field"
               placeholder="City"
               autoComplete="address-level2"
@@ -344,10 +274,7 @@ export default function NewAccountPage() {
             <span className="t-hint">State</span>
             <input
               value={state}
-              onChange={(e) => {
-                setState(e.target.value.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase());
-                if (zipLookup.status === "found") setZipLookup({ status: "idle" });
-              }}
+              onChange={(e) => setState(e.target.value)}
               className="field"
               placeholder="CA"
               autoComplete="address-level1"

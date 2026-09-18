@@ -2474,6 +2474,54 @@ body {
 .acct-visit-choice > .btn-secondary {
   background: var(--surface-sunken);
 }
+/* A new company born inside a quote or a visit (see new-company-inline.tsx).
+   Types wrap rather than scroll — six of them, all worth seeing. */
+/* A short form, read as one: it never stretches into banners on the desk. */
+.newco {
+  max-width: 560px;
+}
+/* Nested inside the visit plan's card, it drops its own padding so the
+   ZIP · City · State row keeps a readable city at 390px. */
+.card .newco.card-pad {
+  padding: 4px 0 0;
+  border: 0;
+  box-shadow: none;
+  background: none;
+}
+.newco-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.newco-offer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: var(--r-control);
+  border: 1.5px dashed var(--rule);
+  background: none;
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+}
+.newco-offer > span {
+  font-size: var(--text-lg);
+  line-height: 1;
+  color: var(--ink-secondary);
+}
+.newco-actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+.newco-actions > .btn-primary {
+  max-width: none;
+}
 .btn-quiet {
   min-height: 36px;
   padding: 8px 12px;

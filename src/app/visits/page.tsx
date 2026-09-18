@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { AgendaCalendar } from "@/components/agenda-calendar";
+import { NewCompanyInline } from "@/components/new-company-inline";
 import { manages } from "@/lib/domain/roles";
 import {
   AlertIcon,
@@ -145,6 +146,9 @@ function VisitsPageInner() {
     return plan && plan !== "new" ? plan : "";
   });
   const [planAction, setPlanAction] = useState("");
+  // A visit to a company not on the books yet: the short form opens inside
+  // the plan and the plan carries on with it (João, 2026-09-16).
+  const [planCreating, setPlanCreating] = useState(false);
   const [planDate, setPlanDate] = useState(isoDate(new Date()));
   const [planObjective, setPlanObjective] = useState<VisitObjective | "">(
     () => {
@@ -424,19 +428,43 @@ function VisitsPageInner() {
             onSubmit={planVisit}
             className="card card-pad mt-3 flex flex-col gap-2"
           >
-            <select
-              value={planAccount}
-              onChange={(e) => setPlanAccount(e.target.value)}
-              className="field"
-              style={{ background: "var(--surface-page)" }}
-            >
-              <option value="">Which account?</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            {planCreating ? (
+              <NewCompanyInline
+                initialName=""
+                submitLabel="Plan the visit here"
+                onCancel={() => setPlanCreating(false)}
+                onCreated={(a) => {
+                  setAccounts((list) => [a, ...list]);
+                  setPlanAccount(a.id);
+                  setPlanCreating(false);
+                }}
+              />
+            ) : (
+              <>
+                <select
+                  value={planAccount}
+                  onChange={(e) => setPlanAccount(e.target.value)}
+                  className="field"
+                  style={{ background: "var(--surface-page)" }}
+                >
+                  <option value="">Which account?</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                {!planAccount && (
+                  <button
+                    type="button"
+                    className="newco-offer"
+                    onClick={() => setPlanCreating(true)}
+                  >
+                    <span aria-hidden="true">+</span> Not on the list — new company
+                  </button>
+                )}
+              </>
+            )}
             <input
               placeholder="What will you do there?"
               value={planAction}
