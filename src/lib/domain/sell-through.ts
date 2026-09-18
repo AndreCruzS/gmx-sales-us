@@ -438,6 +438,120 @@ const BAND_COLOURS = [
 export const REST_COLOUR = "var(--cat-rest)";
 
 /**
+ * A HOUSE WEARS ITS OWN COLOUR, wherever it is drawn (Bianca, 2026-09-16:
+ * "a Hardwoods deveria ser azul, a Boise deveria ser verde"). Ranked colour
+ * made Boise blue on the Texas chart — it was the only house there, so every
+ * column came out the same blue and read as a bug. Named houses are pinned;
+ * a house nobody has named yet takes the next free step of the ramp, in the
+ * order it is first asked for, never one of the pinned four.
+ */
+const HOUSE_COLOURS: readonly [RegExp, string][] = [
+  [/hardwoods/i, "var(--cat-1)"],
+  [/boise/i, "var(--cat-3)"],
+  [/russin/i, "var(--cat-2)"],
+  [/capital/i, "var(--cat-4)"],
+];
+const FREE_HOUSE_COLOURS = BAND_COLOURS.filter(
+  (c) => !HOUSE_COLOURS.some(([, pinned]) => pinned === c),
+);
+
+export function distributorColour(name: string, unnamedRank = 0): string {
+  return pinnedHouseColour(name) ?? FREE_HOUSE_COLOURS[unnamedRank] ?? REST_COLOUR;
+}
+
+function pinnedHouseColour(name: string): string | null {
+  for (const [pattern, colour] of HOUSE_COLOURS) {
+    if (pattern.test(name)) return colour;
+  }
+  return null;
+}
+
+/** Every house on the month, coloured: pinned ones by name, the rest by
+ *  volume into the free steps — decided once, so it holds across the book. */
+export function houseColourMap(
+  rows: readonly SellThroughRow[],
+): Map<string, string> {
+  const totals = new Map<string, { name: string; qty: number }>();
+  for (const r of rows) {
+    const seen = totals.get(r.distributor_id);
+    if (seen) seen.qty += num(r.quantity);
+    else totals.set(r.distributor_id, { name: r.distributor_name, qty: num(r.quantity) });
+  }
+  const map = new Map<string, string>();
+  let unnamed = 0;
+  for (const [key, d] of [...totals.entries()].sort(
+    (a, b) => b[1].qty - a[1].qty || a[1].name.localeCompare(b[1].name),
+  )) {
+    map.set(key, pinnedHouseColour(d.name) ?? distributorColour(d.name, unnamed++));
+  }
+  return map;
+}
+
+/** The key of the gathered column. Not a real entity, so it cannot collide. */
+export const OTHERS_COLUMN = "__others__";
+
+/** One column of the chart: a row of the step, or everything past the cap. */
+export interface SellColumn {
+  key: string;
+  title: string;
+  total: number;
+  /** Stacked parts — the row's own bands, or, for the gathered column, the
+   *  same bands added up across every row it holds. */
+  parts: readonly { key: string; name: string; qty: number }[];
+  /** How many rows the column stands for: 1, or the size of the tail. */
+  count: number;
+}
+
+/**
+ * THE CHART KEEPS ITS SHAPE, however long the list (Bianca, 2026-09-16: "eu
+ * gosto mais desse formato"). It used to give up past eight rows and fall back
+ * to a flat share bar — the dealer lens, the one with the long list, never got
+ * the chart at all. Now the biggest `max - 1` rows are columns of their own and
+ * the rest stand together as one "Others" column, still stacked by house, so
+ * the tail is visible as a size without eighty names crowding the axis.
+ */
+export function chartColumns(
+  groups: readonly SellGroup[],
+  max = 10,
+): SellColumn[] {
+  const own = (g: SellGroup): SellColumn => ({
+    key: g.key,
+    title: g.title,
+    total: g.total,
+    parts: g.bands.map((b) => ({ key: b.entity.key, name: b.name, qty: b.qty })),
+    count: 1,
+  });
+  // One straggler stays itself — gathering a single row hides a name to save
+  // nothing, the same rule the bars follow.
+  // A dealer on file at exactly 0 LF is a row in the list, not a column: a
+  // 4px stub reads as a sale. A NEGATIVE total (a return) stays — it is
+  // volume, and dropping it made the columns out-add the headline by 772 LF.
+  groups = groups.filter((g) => g.total !== 0);
+  if (groups.length <= max) return groups.map(own);
+
+  const head = groups.slice(0, max - 1);
+  const tail = groups.slice(max - 1);
+  const acc = new Map<string, { key: string; name: string; qty: number }>();
+  for (const g of tail) {
+    for (const b of g.bands) {
+      const seen = acc.get(b.entity.key);
+      if (seen) seen.qty += b.qty;
+      else acc.set(b.entity.key, { key: b.entity.key, name: b.name, qty: b.qty });
+    }
+  }
+  return [
+    ...head.map(own),
+    {
+      key: OTHERS_COLUMN,
+      title: "Others",
+      total: tail.reduce((n, g) => n + g.total, 0),
+      parts: [...acc.values()].sort((a, b) => b.qty - a.qty),
+      count: tail.length,
+    },
+  ];
+}
+
+/**
  * A row's bands as shades of the row's own colour.
  *
  * The rule Andre picked, and it is a rule about what a colour is FOR. A row now

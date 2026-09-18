@@ -50,6 +50,11 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
   buildStep,
+  chartColumns,
+  houseColourMap,
+  OTHERS_COLUMN,
+  SELL_CHAIN,
+  type SellColumn,
   compositionRail,
   housesMissing,
   ALL_ROWS,
@@ -1636,8 +1641,27 @@ function SalesBook({
   onTarget?: (territoryId: string, monthlyLf: number | null) => void;
   goalMonth?: boolean;
 }) {
+  // A HOUSE IS ONE COLOUR on the whole book — the chart's stacks, its legend,
+  // and the house's band inside a dealer's pane (Bianca, 2026-09-16:
+  // Hardwoods blue, Boise green). Decided once over the month, so a house
+  // nobody has pinned yet keeps its step whatever the pane is open on.
+  const houseColours = useMemo(() => houseColourMap(current), [current]);
+  const houseColour = (key: string) => houseColours.get(key) ?? "var(--cat-rest)";
+  /** A band's colour in the pane: its house's own when it IS a house. */
+  const bandHue = (b: SellBand) =>
+    b.entity.dim === "distributor" ? houseColour(b.entity.key) : b.colour;
+
+  // A row's colour on the book. Houses wear their own; dealers wear none —
+  // once orange MEANS Russin on the chart above, an orange dealer in the list
+  // reads as a Russin dealer (verified 2026-09-18: every Texas dealer buys
+  // from Boise and the list painted them five colours).
   const colourOf = (key: string) =>
-    step.summary?.bands.find((b) => b.key === key)?.colour ?? "var(--ink-muted)";
+    lens === "distribution"
+      ? houseColour(key)
+      : lens === "dealer"
+        ? "var(--cat-rest)"
+        : (step.summary?.bands.find((b) => b.key === key)?.colour ?? "var(--ink-muted)");
+
 
   // The pane's own walk, born on the biggest row — the book opens on the
   // page most worth reading, and picking never narrows the page around it.
@@ -1646,6 +1670,21 @@ function SalesBook({
       ? [stepFor(step.groups[0].entity, colourOf(step.groups[0].key))]
       : [],
   );
+  // A narrowing (region, house) can take the pane's row out of the list;
+  // the pane then follows the list to its new top row instead of reading
+  // "Nothing sold here" about a dealer no longer on screen. Adjusted while
+  // rendering, React's own pattern for state that follows a prop.
+  if (
+    lens !== "region" &&
+    panePath.length > 0 &&
+    !step.groups.some((x) => x.key === panePath[0].key)
+  ) {
+    setPanePath(
+      step.groups[0]
+        ? [stepFor(step.groups[0].entity, colourOf(step.groups[0].key))]
+        : [],
+    );
+  }
   const paneStep = useMemo(
     () => buildStep(current, prior, lens, panePath, branches),
     [current, prior, lens, panePath, branches],
@@ -1762,6 +1801,66 @@ function SalesBook({
     }
     return map;
   }, [current, lens]);
+
+  // WHAT they are buying, as shares — the product mix of whatever the pane
+  // is open on, so it follows the walk: a region's mix, then one
+  // distributor's, then one branch's, then one dealer's. Products are not a
+  // link of the chain, so the walk alone can never answer "how much of this
+  // is decking" — this can. Under the other lenses it waits for the walk
+  // to reach the end of the chain: Bianca only wants the list once she has
+  // asked for it ("eu só quero ver essa informação se eu abrir ela").
+  const productMix = useMemo(() => {
+    if (panePath.length === 0) return [];
+    const byProduct = new Map<string, number>();
+    let total = 0;
+    for (const r of current) {
+      if (!rowMatchesPath(r, panePath)) continue;
+      const q = Number(r.quantity) || 0;
+      const name = r.product?.trim() || "unspecified";
+      byProduct.set(name, (byProduct.get(name) ?? 0) + q);
+      total += q;
+    }
+    if (total <= 0) return [];
+    return [...byProduct.entries()]
+      .map(([name, qty]) => ({ name, qty, share: (100 * qty) / total }))
+      .sort((a, b) => b.qty - a.qty);
+  }, [panePath, current]);
+
+  // The product list — the region view's, and now the end of every other
+  // walk too, in the same format so a list of products reads one way.
+  const productList = (colour: string) =>
+    productMix.length === 0 ? null : (
+      <div className="pmix">
+        <p className="sales-eyebrow">
+          What they&rsquo;re buying
+          {panePath.length > 1 ? ` — ${panePath[panePath.length - 1].name}` : ""}
+        </p>
+        {/* every product, in a window that scrolls — a "+ 41 more" is a
+            door; a scroll is the room */}
+        <ul className="pmix-list pmix-scroll">
+          {productMix.map((prod) => (
+            <li key={prod.name} className="pmix-row">
+              <span className="pmix-name">{prod.name}</span>
+              <span className="fig-sm pmix-share">
+                {prod.share >= 1 ? Math.round(prod.share) : "<1"}%
+              </span>
+              <span className="fig-sm pmix-qty">
+                {QTY.format(prod.qty)} {step.unit}
+              </span>
+              <span className="sales-market-track" aria-hidden="true">
+                <span
+                  className="sales-market-fill"
+                  style={{
+                    width: `${Math.max(prod.share, 1)}%`,
+                    background: colour,
+                  }}
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
 
   // ONE PANE, TWO LAYOUTS: the book's right page and the region view's
   // unfold beneath the cards are the same reader.
@@ -1901,7 +2000,7 @@ function SalesBook({
                         style={{
                           flexGrow: 0,
                           flexBasis: `${seg.share}%`,
-                          background: seg.colour,
+                          background: seg.band ? bandHue(seg.band) : seg.colour,
                         }}
                       />
                     ))}
@@ -1911,6 +2010,13 @@ function SalesBook({
                 <ul className="sales-list">
                   {g.bands.map((b) => {
                     const bandMoved = movementLabel(b.qty, b.prevQty, previous, mv);
+                    // THE LAST LINK OPENS TOO (Bianca, 2026-09-16: "abriu
+                    // Boise, abriu Dallas Branch, só que não abriu 10
+                    // produtos"). The chain ends at the branch under the
+                    // dealer lens, so its rows were dead ends; opening one
+                    // now lands on what that branch sold this dealer, below.
+                    const opens =
+                      b.drillable || panePath.length < SELL_CHAIN[lens].length;
                     const inner = (
                       <span className="sales-item-main">
                         <span className="sales-item-line">
@@ -1959,7 +2065,7 @@ function SalesBook({
                             )}
                           </span>
                           <span className="sales-item-go" aria-hidden="true">
-                            {b.drillable ? "›" : ""}
+                            {opens ? "›" : ""}
                           </span>
                         </span>
                         {g.bands.length > 1 && (
@@ -1971,7 +2077,7 @@ function SalesBook({
                               className="sales-market-fill"
                               style={{
                                 width: `${b.share}%`,
-                                background: b.colour,
+                                background: bandHue(b),
                               }}
                             />
                           </span>
@@ -1980,14 +2086,14 @@ function SalesBook({
                     );
                     return (
                       <li key={b.key}>
-                        {b.drillable ? (
+                        {opens ? (
                           <button
                             type="button"
                             className="sales-item"
                             onClick={() =>
                               setPanePath([
                                 ...panePath,
-                                stepFor(b.entity, b.colour),
+                                stepFor(b.entity, bandHue(b)),
                               ])
                             }
                           >
@@ -2000,33 +2106,17 @@ function SalesBook({
                     );
                   })}
                 </ul>
+                {/* The end of the walk, outside the region view (which
+                    keeps its own list beside the map): the products this
+                    branch sold this dealer. */}
+                {lens !== "region" &&
+                  panePath.length >= SELL_CHAIN[lens].length &&
+                  productList(panePath[panePath.length - 1].colour ?? "var(--cat-rest)")}
               </>
             )}
           </div>
     </>
   );
-
-  // WHAT they are buying, as shares — the product mix of whatever the pane
-  // is open on, so it follows the walk: a region's mix, then one
-  // distributor's, then one branch's, then one dealer's. Products are not a
-  // link of the chain, so the walk alone can never answer "how much of this
-  // is decking" — this can.
-  const productMix = useMemo(() => {
-    if (lens !== "region" || panePath.length === 0) return [];
-    const byProduct = new Map<string, number>();
-    let total = 0;
-    for (const r of current) {
-      if (!rowMatchesPath(r, panePath)) continue;
-      const q = Number(r.quantity) || 0;
-      const name = r.product?.trim() || "unspecified";
-      byProduct.set(name, (byProduct.get(name) ?? 0) + q);
-      total += q;
-    }
-    if (total <= 0) return [];
-    return [...byProduct.entries()]
-      .map(([name, qty]) => ({ name, qty, share: (100 * qty) / total }))
-      .sort((a, b) => b.qty - a.qty);
-  }, [lens, panePath, current]);
 
   // The region view's one selection: nothing at first — the country —
   // then whatever ground was clicked, on the map, the bar's key, or a card.
@@ -2167,46 +2257,7 @@ function SalesBook({
                     ‹ USA Nationwide
                   </button>
                   {paneView}
-                  {productMix.length > 0 && (
-                    <div className="pmix">
-                      <p className="sales-eyebrow">
-                        What they&rsquo;re buying
-                        {panePath.length > 1
-                          ? ` — ${panePath[panePath.length - 1].name}`
-                          : ""}
-                      </p>
-                      {/* every product, in a window that scrolls — a
-                          "+ 41 more" is a door; a scroll is the room */}
-                      <ul className="pmix-list pmix-scroll">
-                        {productMix.map((prod) => (
-                          <li key={prod.name} className="pmix-row">
-                            <span className="pmix-name">{prod.name}</span>
-                            <span className="fig-sm pmix-share">
-                              {prod.share >= 1
-                                ? Math.round(prod.share)
-                                : "<1"}
-                              %
-                            </span>
-                            <span className="fig-sm pmix-qty">
-                              {QTY.format(prod.qty)} {step.unit}
-                            </span>
-                            <span
-                              className="sales-market-track"
-                              aria-hidden="true"
-                            >
-                              <span
-                                className="sales-market-fill"
-                                style={{
-                                  width: `${Math.max(prod.share, 1)}%`,
-                                  background: colourOf(picked ?? ""),
-                                }}
-                              />
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {productList(colourOf(picked ?? ""))}
                 </div>
               ) : (
                 /* AT REST the right page is the markets themselves — name,
@@ -2357,28 +2408,21 @@ function SalesBook({
         ) : (
           <>
         {/* The chart: all markets, all distributors, one glance — and a
-            click on any column turns the book. Columns only work for a
-            handful of categories; a long roster (the dealer lens) falls
-            back to the flat share bar. */}
-        {step.groups.length > 8 && step.summary && (
-          <div className="sales-track sales-track-total" aria-hidden="true">
-            {step.summary.segments.map((seg) => (
-              <span
-                key={seg.key}
-                className="sales-seg"
-                style={{
-                  flexGrow: 0,
-                  flexBasis: `${seg.share}%`,
-                  background: seg.colour,
-                }}
-              />
-            ))}
-          </div>
-        )}
-        {step.groups.length > 0 && step.groups.length <= 8 && (
+            click on any column turns the book. Always columns, however long
+            the roster: past the cap the tail stands together as "Others"
+            (Bianca, 2026-09-16, preferring this shape to the flat bar the
+            dealer lens used to fall back to). */}
+        {step.groups.length > 0 && (
           <SalesColumns
-            groups={step.groups}
+            columns={chartColumns(step.groups)}
             unit={step.unit}
+            partColour={
+              step.bandDim === "distributor" ? houseColour : undefined
+            }
+            columnHue={lens === "distribution" ? houseColour : undefined}
+            label={`Volume by ${
+              lens === "rep" ? "rep" : lens === "distribution" ? "distributor" : "dealer"
+            }, stacked by ${step.bandDim === "branch" ? "branch" : "distributor"}`}
             onPick={(key) => {
               const m = step.groups.find((x) => x.key === key);
               if (m) setPanePath([stepFor(m.entity, colourOf(m.key))]);
@@ -2507,32 +2551,45 @@ function SalesBook({
 // low-contrast steps are covered the way the palette validator demands:
 // totals labelled in ink, a legend, and a per-segment tooltip.
 function SalesColumns({
-  groups,
+  columns,
   unit,
+  partColour,
+  columnHue,
+  label,
   onPick,
 }: {
-  groups: ReturnType<typeof buildStep>["groups"];
+  columns: readonly SellColumn[];
   unit: string;
+  /** When the COLUMNS are houses (the distribution lens), the parts are its
+   *  branches and wear shades of the house's own colour — a branch ramp in
+   *  the same hues as the houses gave Russin the Hardwoods blue. */
+  columnHue?: (key: string) => string;
+  label: string;
+  /** When the parts ARE houses, each wears its own fixed colour (Hardwoods
+   *  blue, Boise green) instead of a rank on this chart. */
+  partColour?: (key: string) => string;
   /** Clicking a column turns the book to that market. */
   onPick: (key: string) => void;
 }) {
+  // The column under the pointer, and the part of it, if any: hovering the
+  // name or the empty air above a stack still says whose column it is
+  // (Bianca, 2026-09-16 — the names truncate once there are ten of them).
   const [hover, setHover] = useState<{
-    market: string;
-    band: string;
-    qty: number;
-    share: number;
+    col: SellColumn;
+    part: SellColumn["parts"][number] | null;
     x: number;
     y: number;
   } | null>(null);
 
-  // The distributor palette: fixed order by total across ALL markets — a
-  // filter or a re-pick must never repaint the survivors.
-  const byDist = new Map<string, { name: string; total: number }>();
-  for (const g of groups) {
-    for (const b of g.bands) {
-      const seen = byDist.get(b.entity.key);
-      if (seen) seen.total += b.qty;
-      else byDist.set(b.entity.key, { name: b.name, total: b.qty });
+  // The palette: fixed order by total across ALL columns — a filter or a
+  // re-pick must never repaint the survivors. Houses skip this and wear
+  // their own colour.
+  const byPart = new Map<string, { name: string; total: number }>();
+  for (const c of columns) {
+    for (const p of c.parts) {
+      const seen = byPart.get(p.key);
+      if (seen) seen.total += p.qty;
+      else byPart.set(p.key, { name: p.name, total: p.qty });
     }
   }
   const ramp = [
@@ -2545,91 +2602,128 @@ function SalesColumns({
     "var(--cat-7)",
     "var(--cat-8)",
   ];
-  const distOrder = [...byDist.entries()].sort((a, b) => b[1].total - a[1].total);
-  const distColour = new Map<string, string>();
-  distOrder.forEach(([key], i) => {
-    distColour.set(key, i < ramp.length ? ramp[i] : "var(--cat-rest)");
+  const partOrder = [...byPart.entries()].sort((a, b) => b[1].total - a[1].total);
+  const colourOfPart = new Map<string, string>();
+  partOrder.forEach(([key], i) => {
+    colourOfPart.set(
+      key,
+      partColour ? partColour(key) : i < ramp.length ? ramp[i] : "var(--cat-rest)",
+    );
   });
+  const rankOf = (key: string) => partOrder.findIndex(([k]) => k === key);
 
-  const maxTotal = Math.max(...groups.map((g) => g.total), 1);
+  const maxTotal = Math.max(...columns.map((c) => c.total), 1);
+
+  const track = (
+    e: React.MouseEvent<HTMLElement>,
+    col: SellColumn,
+    part: SellColumn["parts"][number] | null,
+  ) => {
+    const rect = (e.currentTarget.closest(".cols-wrap") as HTMLElement).getBoundingClientRect();
+    // Kept inside the card: the tip is centred on the pointer, so near either
+    // edge half of it used to hang past the chart.
+    const half = 120;
+    const x = Math.min(Math.max(e.clientX - rect.left, half), rect.width - half);
+    setHover({ col, part, x, y: e.clientY - rect.top });
+  };
 
   return (
     <div className="cols-wrap">
-      <div className="cols" role="img" aria-label="Volume by market, stacked by distributor">
-        {groups.map((g) => (
-          <button
-            key={g.key}
-            type="button"
-            className="col"
-            onClick={() => onPick(g.key)}
-            aria-label={`${g.title}: ${QTY.format(g.total)} ${unit}. Open in the book.`}
-          >
-            <span className="fig-sm col-total">
-              {QTY.format(g.total)}
-            </span>
-            <span
-              className="col-stack"
-              style={{ height: `${Math.max((180 * g.total) / maxTotal, 4)}px` }}
+      <div className="cols" role="img" aria-label={label}>
+        {columns.map((c) => {
+          const others = c.key === OTHERS_COLUMN;
+          const stack = (
+            <>
+              <span className="fig-sm col-total">{QTY.format(c.total)}</span>
+              <span
+                className="col-stack"
+                style={{ height: `${Math.max((180 * c.total) / maxTotal, 4)}px` }}
+              >
+                {[...c.parts]
+                  .sort((a, b) =>
+                    columnHue ? b.qty - a.qty : rankOf(a.key) - rankOf(b.key),
+                  )
+                  .map((p, i) => (
+                    <span
+                      key={p.key}
+                      className="col-seg"
+                      style={{
+                        flexGrow: p.qty,
+                        background: columnHue
+                          ? `color-mix(in srgb, ${columnHue(c.key)} ${[100, 80, 64, 51, 41, 33][i] ?? 24}%, var(--surface-card))`
+                          : colourOfPart.get(p.key),
+                      }}
+                      onMouseMove={(e) => {
+                        e.stopPropagation();
+                        track(e, c, p);
+                      }}
+                    />
+                  ))}
+              </span>
+              <span className="col-name">
+                {others ? `Others (${c.count})` : c.title}
+              </span>
+            </>
+          );
+          // The gathered column is not a door — there is no one market to
+          // turn the book to. The list beside it names every one of them.
+          return others ? (
+            <div
+              key={c.key}
+              className="col col-others"
+              onMouseMove={(e) => track(e, c, null)}
+              onMouseLeave={() => setHover(null)}
             >
-              {[...g.bands]
-                .slice()
-                .sort(
-                  (a, b) =>
-                    (distOrder.findIndex(([k]) => k === a.entity.key)) -
-                    (distOrder.findIndex(([k]) => k === b.entity.key)),
-                )
-                .map((b) => (
-                  <span
-                    key={b.key}
-                    className="col-seg"
-                    style={{
-                      flexGrow: b.qty,
-                      background: distColour.get(b.entity.key),
-                    }}
-                    onMouseEnter={(e) => {
-                      const rect = (e.currentTarget.closest(".cols-wrap") as HTMLElement).getBoundingClientRect();
-                      setHover({
-                        market: g.title,
-                        band: b.name,
-                        qty: b.qty,
-                        share: g.total > 0 ? (100 * b.qty) / g.total : 0,
-                        x: e.clientX - rect.left,
-                        y: e.clientY - rect.top,
-                      });
-                    }}
-                    onMouseLeave={() => setHover(null)}
-                  />
-                ))}
-            </span>
-            <span className="col-name">{g.title}</span>
-          </button>
-        ))}
+              {stack}
+            </div>
+          ) : (
+            <button
+              key={c.key}
+              type="button"
+              className="col"
+              onClick={() => onPick(c.key)}
+              onMouseMove={(e) => track(e, c, null)}
+              onMouseLeave={() => setHover(null)}
+              aria-label={`${c.title}: ${QTY.format(c.total)} ${unit}. Open in the book.`}
+            >
+              {stack}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Identity is never colour alone: the legend names every distributor
-          in the same fixed order the columns stack. A single distributor
-          needs no legend — the pane already names it. */}
-      {distOrder.length >= 2 && (
-      <p className="cols-legend">
-        {distOrder.map(([key, d]) => (
-          <span key={key}>
-            <i style={{ background: distColour.get(key) }} aria-hidden="true" />
-            {d.name}
-          </span>
-        ))}
-      </p>
+      {/* Identity is never colour alone: the legend names every part in the
+          same fixed order the columns stack. Houses are always named, even
+          alone — a chart all one colour with no key read as a fault. */}
+      {!columnHue && (partColour ? partOrder.length >= 1 : partOrder.length >= 2) && (
+        <p className="cols-legend">
+          {partOrder.map(([key, d]) => (
+            <span key={key}>
+              <i style={{ background: colourOfPart.get(key) }} aria-hidden="true" />
+              {d.name}
+            </span>
+          ))}
+        </p>
       )}
 
       {hover && (
-        <div
-          className="cols-tip"
-          style={{ left: hover.x, top: hover.y }}
-          role="status"
-        >
-          <span className="cols-tip-name">{hover.band}</span>
+        <div className="cols-tip" style={{ left: hover.x, top: hover.y }} role="status">
+          <span className="cols-tip-name">
+            {hover.col.key === OTHERS_COLUMN
+              ? `Others — ${hover.col.count} more`
+              : hover.col.title}
+          </span>
           <span className="cols-tip-sub">
-            {hover.market} · <b>{QTY.format(hover.qty)} {unit}</b> ·{" "}
-            {Math.round(hover.share)}%
+            {hover.part ? (
+              <>
+                {hover.part.name} · <b>{QTY.format(hover.part.qty)} {unit}</b> ·{" "}
+                {Math.round(hover.col.total > 0 ? (100 * hover.part.qty) / hover.col.total : 0)}%
+              </>
+            ) : (
+              <b>
+                {QTY.format(hover.col.total)} {unit}
+              </b>
+            )}
           </span>
         </div>
       )}

@@ -3719,6 +3719,14 @@ input[type="datetime-local"] {
   padding: 0;
   cursor: pointer;
 }
+/* The gathered tail: a size to read, not a door to open. */
+.col-others {
+  cursor: default;
+}
+.col-others .col-name {
+  color: var(--ink-secondary);
+  font-weight: 500;
+}
 .col:focus-visible {
   outline: 2px solid var(--ink-primary);
   outline-offset: 2px;

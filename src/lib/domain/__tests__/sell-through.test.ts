@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   backFrom,
   buildStep,
+  chartColumns,
+  distributorColour,
+  houseColourMap,
+  OTHERS_COLUMN,
   compositionRail,
   entityAt,
   focusAccount,
@@ -1190,5 +1194,82 @@ describe("scopeDealerRows / dealerScopeOptions", () => {
     const dead = dealerScopeOptions(rows, { regionId: "texas", distributorId: "hard" });
     expect(dead.regions.find(o => o.id === "texas")).toEqual({ id: "texas", name: "Texas", lf: 0 });
     expect(dead.distributors.find(o => o.id === "hard")).toEqual({ id: "hard", name: "Hardwoods Inc.", lf: 0 });
+  });
+});
+
+describe("distributorColour", () => {
+  it("pins the named houses, whatever order they arrive in", () => {
+    expect(distributorColour("Hardwoods Specialty")).toBe("var(--cat-1)");
+    expect(distributorColour("HARDWOODS USLP")).toBe("var(--cat-1)");
+    expect(distributorColour("Boise Cascade")).toBe("var(--cat-3)");
+  });
+
+  it("gives an unnamed house a free step, never a pinned one", () => {
+    const pinned = ["Hardwoods", "Boise", "Russin", "Capital Lumber"].map((n) =>
+      distributorColour(n),
+    );
+    const fresh = distributorColour("Some New House", 0);
+    expect(pinned).not.toContain(fresh);
+    expect(distributorColour("Another", 99)).toBe("var(--cat-rest)");
+  });
+});
+
+describe("chartColumns", () => {
+  const step = buildStep(JULY, JUNE, "dealer", []);
+
+  it("keeps every row as its own column under the cap", () => {
+    const cols = chartColumns(step.groups, 10);
+    expect(cols.map((c) => c.key)).toEqual(step.groups.map((g) => g.key));
+    // Corona is stacked by both houses it buys from
+    const corona = cols.find((c) => c.key === "corona")!;
+    expect(corona.parts.map((p) => p.key).sort()).toEqual(["boise", "hardwoods"]);
+  });
+
+  it("draws no column for a row at 0 LF", () => {
+    const zero = { ...step.groups[0], key: "zero", title: "Nothing", total: 0, bands: [] };
+    expect(chartColumns([...step.groups, zero]).map((c) => c.key)).not.toContain("zero");
+  });
+
+  it("keeps a return (negative total) so the columns add up to the month", () => {
+    const back = { ...step.groups[0], key: "back", title: "Return", total: -300, bands: [] };
+    const cols = chartColumns([...step.groups, back], 2);
+    const month = step.groups.reduce((n, g) => n + g.total, 0) - 300;
+    expect(cols.reduce((n, c) => n + c.total, 0)).toBe(month);
+  });
+
+  it("gathers the tail into one Others column that adds up", () => {
+    const cols = chartColumns(step.groups, 2);
+    expect(cols).toHaveLength(2);
+    const others = cols[1];
+    expect(others.key).toBe(OTHERS_COLUMN);
+    expect(others.count).toBe(step.groups.length - 1);
+    const tailTotal = step.groups.slice(1).reduce((n, g) => n + g.total, 0);
+    expect(others.total).toBe(tailTotal);
+    expect(others.parts.reduce((n, p) => n + p.qty, 0)).toBe(tailTotal);
+  });
+});
+
+describe("the book opens a branch to its products", () => {
+  it("a walk to the end of the dealer chain still finds its rows", () => {
+    const path: PathStep[] = [
+      { dim: "dealer", key: "corona", name: "Ganahl Corona" },
+      { dim: "distributor", key: "boise", name: "Boise Cascade" },
+      { dim: "branch", key: "riverside", name: "Riverside" },
+    ];
+    const s = buildStep(JULY, JUNE, "dealer", path);
+    expect(s.groups).toHaveLength(1);
+    expect(s.groups[0].total).toBe(6100);
+    expect(s.groups[0].bands).toHaveLength(0);
+    expect(JULY.filter((r) => rowMatchesPath(r, path)).map((r) => r.product)).toEqual([
+      "Thermo-Ash Decking",
+    ]);
+  });
+});
+
+describe("houseColourMap", () => {
+  it("colours every house on the month, pinned ones by name", () => {
+    const map = houseColourMap(JULY);
+    expect(map.get("boise")).toBe("var(--cat-3)");
+    expect(map.get("hardwoods")).toBe("var(--cat-1)");
   });
 });
