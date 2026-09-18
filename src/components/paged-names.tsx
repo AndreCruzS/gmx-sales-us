@@ -32,10 +32,18 @@ import { SearchIcon } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 import { foldForSearch, searchDealers } from "@/lib/domain/sell-through";
 import type { RecurrenceDealer } from "@/lib/domain/sell-through";
+import { WhereTags } from "@/components/where-tags";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
-export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }) {
+export function PagedNames({
+  dealers,
+  hideRegion = false,
+}: {
+  dealers: readonly RecurrenceDealer[];
+  /** The list is already narrowed to one region — its label would repeat it. */
+  hideRegion?: boolean;
+}) {
   const [desk, setDesk] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
@@ -99,13 +107,16 @@ export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }
         <ul className="recur-names">
           {slice.map((d) => (
             <li key={d.key} className="recur-name">
-              {d.accountId ? (
-                <Link href={`/accounts/${d.accountId}`} className="recur-name-link">
-                  {d.name}
-                </Link>
-              ) : (
-                <span className="recur-name-text">{d.name}</span>
-              )}
+              <span className="recur-name-body">
+                {d.accountId ? (
+                  <Link href={`/accounts/${d.accountId}`} className="recur-name-link">
+                    {d.name}
+                  </Link>
+                ) : (
+                  <span className="recur-name-text">{d.name}</span>
+                )}
+                <WhereTags regions={d.regions} houses={d.houses} hideRegion={hideRegion} />
+              </span>
               <span className="fig-sm recur-name-lf">{QTY.format(Math.round(d.lf))}</span>
             </li>
           ))}

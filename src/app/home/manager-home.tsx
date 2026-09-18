@@ -29,6 +29,7 @@ import {
   movementLabel,
   periodLabel,
   periodShort,
+  dealerWhere,
   recurrence,
   regionCoverage,
   regionsOnFile,
@@ -42,6 +43,7 @@ import {
 import { useTween } from "@/lib/ui/use-tween";
 import { GoalMonths } from "@/components/goal-months";
 import { PagedNames } from "@/components/paged-names";
+import { WhereTags } from "@/components/where-tags";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type {
@@ -910,6 +912,9 @@ export function ManagerHome({ name }: { name: string }) {
         when: string | null;
         /** 0/1 = silent (year-long, then mid-year); 2 = fading. */
         chapter: 0 | 1 | 2;
+        /** Where they buy and from whom — so the name can be acted on. */
+        regions: string[];
+        houses: string[];
       }[],
       hasPrev: false,
     };
@@ -950,6 +955,7 @@ export function ManagerHome({ name }: { name: string }) {
     // The later file is only proof of silence when somebody is IN it.
     const laterFileExists = later.size > 0;
     const keys = new Set([...cur.keys(), ...prev.keys()]);
+    const where = dealerWhere(base);
     const rows: (typeof empty)["rows"] = [];
     const grouped: {
       group: number;
@@ -964,6 +970,8 @@ export function ManagerHome({ name }: { name: string }) {
         accountId: ids.get(k) ?? null,
         name: names.get(k) ?? k,
         unit,
+        regions: where.get(k)?.regions ?? [],
+        houses: where.get(k)?.houses ?? [],
       };
       if (hasPrev && p > 0 && c === 0) {
         // Silent for the whole window — unless a later monthly file already
@@ -1565,7 +1573,7 @@ export function ManagerHome({ name }: { name: string }) {
                 {/* WHO — every name, biggest first, with its LF, a page at a
                     time (Andre, 2026-09-09: the count alone said nothing,
                     and a scrollbar in a card is coarse). */}
-                <PagedNames dealers={c.side.dealers} />
+                <PagedNames dealers={c.side.dealers} hideRegion={Boolean(buyRegion)} />
               </div>
             ))}
           </div>
@@ -1727,6 +1735,9 @@ export function ManagerHome({ name }: { name: string }) {
                               {r.when && (
                                 <span className="t-hint quiet-since">{r.when}</span>
                               )}
+                              {/* where and through whom — the whole book is
+                                  listed here, so both labels always show */}
+                              <WhereTags regions={r.regions} houses={r.houses} />
                             </span>
                             <span className="quiet-fig">
                               <span className="fig fig-md">

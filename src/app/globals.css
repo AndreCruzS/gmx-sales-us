@@ -781,6 +781,19 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
+/* The sentence above the Sales card: what is being read, where, through
+   whom, when. Plain words in the page's ink, the WHAT a step heavier —
+   it is read before the figure, so it sits before it. */
+.sales-context {
+  margin: 0 2px 10px;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+.sales-context-what {
+  font-weight: 600;
+  color: var(--ink-primary);
+}
 .sales-market-head {
   display: flex;
   align-items: center;
@@ -4761,6 +4774,39 @@ input[type="datetime-local"] {
   min-width: 0;
 }
 /* a name cut short names nobody: it wraps to a second line instead */
+.recur-name-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+/* A dealer's region and house, under its name — small, quiet pills. */
+.where-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.where-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.where-tag i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.quiet-row .where-tags {
+  margin-top: 4px;
+}
 .recur-name-link,
 .recur-name-text {
   min-width: 0;

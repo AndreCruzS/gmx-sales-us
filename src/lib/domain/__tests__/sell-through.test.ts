@@ -5,6 +5,8 @@ import {
   chartColumns,
   distributorColour,
   houseColourMap,
+  dealerWhere,
+  viewSentence,
   regionCoverage,
   OTHERS_COLUMN,
   compositionRail,
@@ -995,7 +997,15 @@ describe("recurrence", () => {
   it("names every dealer on each side, biggest LF first — a count with no names is a question", () => {
     const r = recurrence(two, JUL, JUN)!;
     expect(r.again.dealers).toEqual([
-      { key: "anaheim", name: "Ganahl Anaheim", accountId: "anaheim", lf: 900 },
+      {
+        key: "anaheim",
+        name: "Ganahl Anaheim",
+        accountId: "anaheim",
+        lf: 900,
+        // where, and through whom — the two labels a name needs
+        regions: ["Southern California"],
+        houses: ["Boise Cascade"],
+      },
     ]);
     expect(r.dropped.dealers.map((d) => [d.name, d.lf])).toEqual([["CORONA", 500]]);
     const many = [
@@ -1290,5 +1300,42 @@ describe("regionCoverage", () => {
     );
     expect(map.get("sw")).toBe("AZ, NM, NV");
     expect(map.get("socal")).toBe("Part of CA");
+  });
+});
+
+describe("dealerWhere", () => {
+  it("names every region and house a dealer buys through", () => {
+    const where = dealerWhere(JULY);
+    // Corona buys off Boise and Hardwoods, both in Southern California
+    expect(where.get("corona")).toEqual({
+      regions: ["Southern California"],
+      houses: ["Boise Cascade", "Hardwoods Specialty"],
+    });
+    expect(where.get("buffalo")?.regions).toEqual(["Northeast"]);
+  });
+});
+
+describe("viewSentence", () => {
+  it("says every open filter out loud", () => {
+    expect(viewSentence({ lens: "dealer", when: "August 2026" })).toEqual([
+      "Dealers ranked by what they bought",
+      "all regions",
+      "all distributors",
+      "August 2026",
+    ]);
+  });
+
+  it("names the narrowings and the walk", () => {
+    expect(
+      viewSentence({
+        lens: "dealer",
+        when: "August 2026",
+        scopeRegion: "Northeast",
+        scopeHouse: "Hardwoods Inc.",
+      }),
+    ).toEqual(["Dealers ranked by what they bought", "Northeast", "Hardwoods Inc.", "August 2026"]);
+    expect(
+      viewSentence({ lens: "region", when: "Year to date", region: "Texas", within: ["Boise Cascade"] }),
+    ).toEqual(["Sales by market", "Texas", "Boise Cascade", "Year to date"]);
   });
 });

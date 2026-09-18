@@ -54,6 +54,7 @@ import {
   houseColourMap,
   OTHERS_COLUMN,
   SELL_CHAIN,
+  viewSentence,
   type SellColumn,
   compositionRail,
   housesMissing,
@@ -309,6 +310,17 @@ export function TeamSales({
   // every depth: a dealer's own distributor bands agree with the filtered
   // figure the reader tapped to get there.
   const [dealerScope, setDealerScope] = useState<DealerScope>(NO_DEALER_SCOPE);
+  // The desk book's map pick, for the sentence at the top of the card. The
+  // book keeps its own walk; it reports the region, and this keeps a copy
+  // while passing it on.
+  const [bookRegion, setBookRegion] = useState<string | null>(null);
+  const reportRegion = useCallback(
+    (r: { key: string; name: string } | null) => {
+      setBookRegion(r?.name ?? null);
+      onRegion?.(r);
+    },
+    [onRegion],
+  );
   const scopeOn = lens === "dealer" && isScoped(dealerScope);
   const current = useMemo(
     () => (lens === "dealer" ? scopeDealerRows(unscopedCurrent, dealerScope) : unscopedCurrent),
@@ -633,6 +645,47 @@ export function TeamSales({
 
   const month =
     windowLabel ?? (ytdOn ? `${latest?.slice(0, 4)} so far` : periodLabel(latest));
+
+  // The sentence at the top of the card — see viewSentence. The region comes
+  // from wherever it was picked: the phone's walk, or the desk book's map
+  // (reported up through onRegion, and kept here too).
+  // On the phone a market is picked two ways: walked into (path) or tapped
+  // on the markets list, which isolates its stripe without walking.
+  const phoneRegion =
+    lens !== "region" || desk
+      ? null
+      : path[0]?.dim === "region"
+        ? { key: path[0].key, name: path[0].name }
+        : path.length === 0 && chosenBand?.entity.dim === "region"
+          ? { key: chosenBand.entity.key, name: chosenBand.entity.name }
+          : null;
+  const walkedRegion = phoneRegion?.name ?? (path[0]?.dim === "region" ? path[0].name : null);
+  // The phone reports its pick the way the desk book does, so the rest of the
+  // page (who kept buying, month against goal) narrows with it.
+  const phoneRegionKey = phoneRegion?.key ?? null;
+  const phoneRegionName = phoneRegion?.name ?? null;
+  useEffect(() => {
+    if (desk) return;
+    onRegion?.(
+      phoneRegionKey && phoneRegionName ? { key: phoneRegionKey, name: phoneRegionName } : null,
+    );
+  }, [desk, onRegion, phoneRegionKey, phoneRegionName]);
+  const scopeRegionName =
+    lens === "dealer" && dealerScope.regionId !== ""
+      ? (scopeChoices.regions.find((o) => o.id === dealerScope.regionId)?.name ?? null)
+      : null;
+  const scopeHouseName =
+    lens === "dealer" && dealerScope.distributorId !== ""
+      ? (scopeChoices.distributors.find((o) => o.id === dealerScope.distributorId)?.name ?? null)
+      : null;
+  const sentence = viewSentence({
+    lens,
+    when: month,
+    region: walkedRegion ?? (desk && path.length === 0 ? bookRegion : null),
+    scopeRegion: scopeRegionName,
+    scopeHouse: scopeHouseName,
+    within: path.filter((s) => s.dim !== "region").map((s) => s.name),
+  });
   const waiting = housesMissing(ytdOn ? (ytdRows ?? []) : rows, latest);
 
   // The movement beside the counter follows whatever the counter is showing. A
@@ -732,6 +785,18 @@ export function TeamSales({
       {/* Only once there is somewhere to come back FROM. At the top of the walk
           the trail is one inert button naming the level the card already names —
           "USA Nationwide" printed twice a centimetre apart (Andre, 2026-08-28). */}
+      {/* WHAT YOU ARE LOOKING AT, said once in words above everything
+          (Bianca, 2026-09-18) — the chips hold the same facts as controls,
+          this holds them as a sentence anyone can read. */}
+      <p className="sales-context" aria-live="polite">
+        {sentence.map((part, i) => (
+          <span key={i} className={i === 0 ? "sales-context-what" : undefined}>
+            {i > 0 ? " · " : ""}
+            {part}
+          </span>
+        ))}
+      </p>
+
       {path.length > 0 && (
       <nav className="sales-crumbs" aria-label="Where you are">
         {backPath !== null && (
@@ -832,7 +897,7 @@ export function TeamSales({
           mv={mv}
           month={month}
           windowNote={windowNote}
-          onRegion={onRegion}
+          onRegion={reportRegion}
           targets={targets}
           coverage={coverage}
           onTarget={onTarget}

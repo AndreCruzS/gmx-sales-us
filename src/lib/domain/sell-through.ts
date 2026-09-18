@@ -1244,6 +1244,36 @@ export interface RecurrenceDealer {
   accountId: string | null;
   /** This month's LF, or for the dropped, the LF that went silent. */
   lf: number;
+  /** Where they buy and from whom — the two labels a name needs to be acted
+   *  on (Bianca, 2026-09-18: "e quem que é o distribuidor aí?"). */
+  regions: string[];
+  houses: string[];
+}
+
+/**
+ * Each dealer's regions and houses, as the rows say — keyed the way every
+ * list keys a dealer (the account when matched, the label when not).
+ *
+ * A name in a list of who bought again or who went quiet is not something a
+ * person can act on until it says WHERE and THROUGH WHOM: the call goes to the
+ * rep of that region, or to the distributor that supplies it.
+ */
+export function dealerWhere(
+  rows: readonly SellThroughRow[],
+): Map<string, { regions: string[]; houses: string[] }> {
+  const acc = new Map<string, { regions: Set<string>; houses: Set<string> }>();
+  for (const r of rows) {
+    const key = r.dealer_id ?? r.dealer_label;
+    const at = acc.get(key) ?? { regions: new Set<string>(), houses: new Set<string>() };
+    if (r.region_name) at.regions.add(r.region_name);
+    at.houses.add(r.distributor_name);
+    acc.set(key, at);
+  }
+  const out = new Map<string, { regions: string[]; houses: string[] }>();
+  for (const [k, v] of acc) {
+    out.set(k, { regions: [...v.regions].sort(), houses: [...v.houses].sort() });
+  }
+  return out;
 }
 
 export interface RecurrenceSide {
@@ -1327,6 +1357,16 @@ export function recurrence(
   const again = side();
   const fresh = side();
   const dropped = side();
+  // Where each one buys, read only from the months being compared and the
+  // region being read — a dealer's other ground is not this list's business.
+  const where = dealerWhere(
+    rows.filter(
+      (r) =>
+        r.period_kind !== "YTD" &&
+        (r.period === latest || r.period === previous) &&
+        (regionId === null || r.region_id === regionId),
+    ),
+  );
   const put = (s: RecurrenceSide, key: string, lf: number) => {
     s.count += 1;
     s.lf += lf;
@@ -1335,6 +1375,8 @@ export function recurrence(
       name: names.get(key) ?? key,
       accountId: ids.get(key) ?? null,
       lf,
+      regions: where.get(key)?.regions ?? [],
+      houses: where.get(key)?.houses ?? [],
     });
   };
   for (const [k, c] of cur) {
@@ -1606,4 +1648,42 @@ export function regionCoverage(
   for (const [id, set] of own) out.set(id, [...set].sort().join(", "));
   for (const [id, set] of part) out.set(id, `Part of ${[...set].sort().join(", ")}`);
   return out;
+}
+
+/**
+ * WHAT THE READER IS LOOKING AT, in one sentence (Bianca, 2026-09-18: "toda
+ * vez que você clica num desses filtros, aqui em cima ele te explica o que
+ * você está vendo… à prova de quem não montou o sistema"). The chips above
+ * the card already hold the same facts, but as controls — a person who did
+ * not build the screen has to decode four of them to know what the figure is.
+ *
+ * Four parts, always in the same order: what is being ranked, where, through
+ * whom, and when. An open filter is said out loud ("all regions") rather than
+ * left out, because what is NOT narrowed is half of what the reader is seeing.
+ */
+export function viewSentence(o: {
+  lens: SellLens;
+  /** "August 2026", "Jul – Aug 2026", "Year to date". */
+  when: string;
+  /** The region picked on the map or walked into, if any. */
+  region?: string | null;
+  /** The dealer lens's own narrowings, by name. */
+  scopeRegion?: string | null;
+  scopeHouse?: string | null;
+  /** The links walked below the top, beyond a region already named. */
+  within?: readonly string[];
+}): string[] {
+  const what: Record<SellLens, string> = {
+    region: "Sales by market",
+    rep: "Sales by rep",
+    distribution: "Sales by distributor",
+    dealer: "Dealers ranked by what they bought",
+  };
+  const parts = [what[o.lens]];
+  const region = o.region ?? o.scopeRegion ?? null;
+  parts.push(region ?? "all regions");
+  if (o.lens === "dealer") parts.push(o.scopeHouse ?? "all distributors");
+  for (const w of o.within ?? []) parts.push(w);
+  parts.push(o.when);
+  return parts;
 }
