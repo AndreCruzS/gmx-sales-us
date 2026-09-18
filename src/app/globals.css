@@ -2446,6 +2446,34 @@ body {
   font-size: var(--text-sm);
   font-weight: 600;
 }
+/* An account's two doors, side by side and the same height: a visit or a
+   quote. The quote is outlined so the pair reads as two choices, not one
+   button and a caption. */
+.acct-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.acct-actions > .btn-primary,
+.acct-actions > .btn-secondary {
+  /* the desk caps a lone .btn-primary at 340px; in the pair it fills its half */
+  max-width: none;
+  min-height: 52px;
+  font-size: var(--text-base);
+}
+.acct-actions > .btn-secondary {
+  border-radius: var(--r-cta);
+  box-shadow: inset 0 0 0 1.5px var(--rule);
+}
+.acct-visit-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.acct-visit-choice > .btn-secondary {
+  background: var(--surface-sunken);
+}
 .btn-quiet {
   min-height: 36px;
   padding: 8px 12px;

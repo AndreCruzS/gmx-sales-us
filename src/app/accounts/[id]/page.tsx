@@ -109,6 +109,7 @@ export default function AccountPage() {
   const { id } = useParams<{ id: string }>();
   const { profile } = useOffline();
   const [account, setAccount] = useState<Account | null>(null);
+  const [visitChoice, setVisitChoice] = useState(false);
   const [parentName, setParentName] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -568,9 +569,36 @@ export default function AccountPage() {
           </p>
         )}
 
-        <Link href={`/record?account=${id}`} className="btn-primary mt-4">
-          Log a visit here
-        </Link>
+        {/* EVERYTHING THIS ACCOUNT CAN HAVE DONE TO IT, at the top (Bianca
+            and João, 2026-09-16): a visit or a quote. "Add a visit" and not
+            "Log" — a visit is either one that happened or one being
+            planned, so the button asks which before it goes anywhere. */}
+        <div className="acct-actions mt-4">
+          <button
+            type="button"
+            className="btn-primary"
+            aria-expanded={visitChoice}
+            onClick={() => setVisitChoice((v) => !v)}
+          >
+            Add a visit
+          </button>
+          <Link
+            href={`/accounts/${id}/new-deal?stage=QUOTE`}
+            className="btn-secondary"
+          >
+            Create a quote
+          </Link>
+        </div>
+        {visitChoice && (
+          <div className="acct-visit-choice">
+            <Link href={`/record?account=${id}`} className="btn-secondary">
+              It happened — log it
+            </Link>
+            <Link href={`/visits?plan=${id}`} className="btn-secondary">
+              Plan it
+            </Link>
+          </div>
+        )}
       </section>
 
       {/* Champion first — the elected internal advocate (D50) */}
