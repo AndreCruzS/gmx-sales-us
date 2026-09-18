@@ -32,6 +32,21 @@ export interface KnownDealer {
   name: string;
 }
 
+/** A person's word that a label means an account (dealer_aliases). */
+export interface KnownAlias {
+  label: string;
+  dealer_id: string;
+}
+
+/**
+ * The fold dealer_aliases keys on — case and spacing, nothing else. It MUST
+ * agree with the table's generated label_key, because the database applies
+ * the same alias on insert and this only predicts what it will do.
+ */
+export function aliasKey(label: string): string {
+  return label.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 export type ImportField =
   | "branch"
   | "branch_code"
@@ -474,8 +489,16 @@ export interface ImportPlan {
 export function buildImport(
   sheet: Sheet,
   mapping: Mapping,
-  known: { branches: readonly KnownBranch[]; dealers: readonly KnownDealer[] },
+  known: {
+    branches: readonly KnownBranch[];
+    dealers: readonly KnownDealer[];
+    /** Labels a person has already said mean an account. They win over the
+     *  word match, because they are an answer and the match is a guess. */
+    aliases?: readonly KnownAlias[];
+  },
 ): ImportPlan {
+  const byAlias = new Map<string, string>();
+  for (const a of known.aliases ?? []) byAlias.set(aliasKey(a.label), a.dealer_id);
   const byCode = new Map<string, string>();
   const byBranchName = new Map<string, string>();
   for (const b of known.branches) {
@@ -562,7 +585,8 @@ export function buildImport(
       }
     }
 
-    const dealerId = matchDealer(dealerLabel, dealerIndex);
+    const dealerId =
+      byAlias.get(aliasKey(dealerLabel)) ?? matchDealer(dealerLabel, dealerIndex);
 
     // Into linear feet, which is the only unit anything downstream understands.
     // A zero needs no conversion — asking would let a zero row die on a product

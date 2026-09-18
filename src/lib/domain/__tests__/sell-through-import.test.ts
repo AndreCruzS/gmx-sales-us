@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  aliasKey,
   branchState,
   buildImport,
   EMPTY_MAPPING,
@@ -529,5 +530,34 @@ describe("periodOf", () => {
   it("is always the first of the month", () => {
     expect(periodOf(2026, 7)).toBe("2026-07-01");
     expect(periodOf(2026, 12)).toBe("2026-12-01");
+  });
+});
+
+describe("dealer aliases", () => {
+  const sheet = parseSheet(
+    [
+      "Branch\tCode\tCustomer\tItem\tQty",
+      "Riverside\tBC-RIV\tORCO BLOCK & HARDSCAPE\tThermo-Ayous\t2,400",
+      "Riverside\tBC-RIV\tGANAHL LUMBER - CORONA\tThermo-Ayous\t100",
+    ].join("\n"),
+  );
+  const map = mapping({ branch: 0, branch_code: 1, dealer: 2, product: 3, quantity: 4 });
+
+  it("folds case and spacing only, the same as the table's label_key", () => {
+    expect(aliasKey("  DGLUGCH -  DG LUMBER GROUP INC ")).toBe("dglugch - dg lumber group inc");
+  });
+
+  it("links a label the word match cannot, and wins over a guess", () => {
+    const plan = buildImport(sheet, map, {
+      branches: BRANCHES,
+      dealers: DEALERS,
+      aliases: [
+        { label: "orco block & hardscape", dealer_id: "anaheim" },
+        { label: "GANAHL LUMBER - CORONA", dealer_id: "anaheim" },
+      ],
+    });
+    expect(plan.rows[0].dealerId).toBe("anaheim");
+    expect(plan.rows[1].dealerId).toBe("anaheim");
+    expect(plan.unmatched).toHaveLength(0);
   });
 });

@@ -35,6 +35,7 @@ import {
   periodOf,
   type ImportField,
   type KnownBranch,
+  type KnownAlias,
   type KnownDealer,
   type Mapping,
 } from "@/lib/domain/sell-through-import";
@@ -95,6 +96,10 @@ export default function SellThroughPage() {
   const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [branches, setBranches] = useState<KnownBranch[]>([]);
   const [dealers, setDealers] = useState<KnownDealer[]>([]);
+  // Labels a person has already tied to an account (dealer_aliases). The
+  // database applies them on insert anyway; they are read here so the preview
+  // counts those rows as matched instead of promising an unmatched pile.
+  const [aliases, setAliases] = useState<KnownAlias[]>([]);
 
   const [distributorId, setDistributorId] = useState("");
   const [when, setWhen] = useState<{ year: number; month: number } | null>(null);
@@ -164,7 +169,7 @@ export default function SellThroughPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ds, us, br, ts, tr] = await Promise.all([
+    const [ds, us, br, ts, tr, al] = await Promise.all([
       supabase
         .from("accounts")
         .select("id, name, account_type")
@@ -183,7 +188,9 @@ export default function SellThroughPage() {
       // cheap, and neither depends on PostgREST guessing the relationship.
       supabase.from("territory_states").select("state, territory_id").limit(200),
       supabase.from("territories").select("id, name").limit(200),
+      supabase.from("dealer_aliases").select("label, dealer_id").limit(1000),
     ]);
+    setAliases(al.error ? [] : ((al.data as KnownAlias[]) ?? []));
     const accounts = ds.error
       ? []
       : ((ds.data as (DistributorRow & { account_type: string })[]) ?? []);
@@ -253,8 +260,8 @@ export default function SellThroughPage() {
     () =>
       sheet.rows.length === 0
         ? null
-        : buildImport(sheet, mapping, { branches: mineBranches, dealers }),
-    [sheet, mapping, mineBranches, dealers],
+        : buildImport(sheet, mapping, { branches: mineBranches, dealers, aliases }),
+    [sheet, mapping, mineBranches, dealers, aliases],
   );
 
   /** What the file said this yard's state was, or what an admin typed instead. */
