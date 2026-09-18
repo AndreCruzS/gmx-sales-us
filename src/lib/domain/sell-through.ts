@@ -1576,3 +1576,34 @@ export function dealerScopeOptions(
     ),
   };
 }
+
+/**
+ * WHAT EACH MARKET COVERS, in words (Bianca and João, 2026-09-18: "o que é
+ * Southwest?"). Read from the Master Territory Map as the database holds it,
+ * never typed into the screen, so the legend cannot drift from the map.
+ *
+ * A market placed city by city (California's two) has no states of its own —
+ * one state, two markets — so it says it covers PART of that state.
+ */
+export function regionCoverage(
+  states: readonly { state: string; territory_id: string }[],
+  cities: readonly { state: string; territory_id: string }[],
+): Map<string, string> {
+  const own = new Map<string, Set<string>>();
+  for (const r of states) {
+    const set = own.get(r.territory_id) ?? new Set<string>();
+    set.add(r.state.toUpperCase());
+    own.set(r.territory_id, set);
+  }
+  const part = new Map<string, Set<string>>();
+  for (const r of cities) {
+    if (own.has(r.territory_id)) continue;
+    const set = part.get(r.territory_id) ?? new Set<string>();
+    set.add(r.state.toUpperCase());
+    part.set(r.territory_id, set);
+  }
+  const out = new Map<string, string>();
+  for (const [id, set] of own) out.set(id, [...set].sort().join(", "));
+  for (const [id, set] of part) out.set(id, `Part of ${[...set].sort().join(", ")}`);
+  return out;
+}

@@ -30,6 +30,7 @@ import {
   periodLabel,
   periodShort,
   recurrence,
+  regionCoverage,
   regionsOnFile,
   SELL_LENSES,
   type PeriodTotal,
@@ -789,6 +790,12 @@ export function ManagerHome({ name }: { name: string }) {
     [attempt],
   );
 
+  // What each market covers, for the region lens's grey legend.
+  const coverage = useMemo(
+    () => regionCoverage(territoryStates, territoryCities),
+    [territoryStates, territoryCities],
+  );
+
   const targetMap = useMemo(
     () => new Map(targets.map((t) => [t.territory_id, Number(t.monthly_lf)])),
     [targets],
@@ -1511,6 +1518,7 @@ export function ManagerHome({ name }: { name: string }) {
         lens={salesLens}
         mode={salesMode}
         targets={targetMap}
+        coverage={coverage}
         onTarget={profile?.role === "admin" ? setTarget : undefined}
         goalMonth={windowInfo.kind === "month"}
       />

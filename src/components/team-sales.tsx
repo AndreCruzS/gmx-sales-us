@@ -167,6 +167,7 @@ export function TeamSales({
   windowLabel,
   windowNote,
   targets,
+  coverage,
   onTarget,
   goalMonth,
 }: {
@@ -194,6 +195,8 @@ export function TeamSales({
   /** Monthly LF goal per region (Bianca, 2026-09-08): the number the book is
    *  read against — "625% pra cima de nada" deceives, a goal does not. */
   targets?: ReadonlyMap<string, number>;
+  /** Each market's states, from the Master Territory Map — the grey legend. */
+  coverage?: ReadonlyMap<string, string>;
   /** Present only for admins: sets (or clears, with null) a region's goal. */
   onTarget?: (territoryId: string, monthlyLf: number | null) => void;
   /** Goals speak only over a single month — a range or the YTD has no
@@ -831,6 +834,7 @@ export function TeamSales({
           windowNote={windowNote}
           onRegion={onRegion}
           targets={targets}
+          coverage={coverage}
           onTarget={onTarget}
           goalMonth={goalMonth}
         />
@@ -1071,6 +1075,9 @@ export function TeamSales({
                   >
                     <span className="sales-market-head">
                       <span className="sales-head-name">{g.title}</span>
+                      {lens === "region" && coverage?.get(g.key) && (
+                        <span className="sales-head-states">{coverage.get(g.key)}</span>
+                      )}
                     </span>
                     {/* The figure rides in front of the bar in a fixed mono
                         column, so every track still starts at the same x and
@@ -1117,6 +1124,11 @@ export function TeamSales({
                       )}
                       <span className="sales-head-body">
                         <span className="sales-head-name">{g.title}</span>
+                        {/* What the market covers, in grey (Bianca, 2026-09-18:
+                            "o que é Southwest?") — only on the markets list. */}
+                        {lens === "region" && step.depth === 0 && coverage?.get(g.key) && (
+                          <span className="sales-head-states">{coverage.get(g.key)}</span>
+                        )}
                         {/* Under the Region lens this second line is the Market
                             Owner — the one place on the screen where "Texas ·
                             no Market Owner yet" can be read, which is the whole
@@ -1622,6 +1634,7 @@ function SalesBook({
   windowNote,
   onRegion,
   targets,
+  coverage,
   onTarget,
   goalMonth,
 }: {
@@ -1638,6 +1651,8 @@ function SalesBook({
    *  follow a region pick, so the picked market is reported upward. */
   onRegion?: (r: { key: string; name: string } | null) => void;
   targets?: ReadonlyMap<string, number>;
+  /** Each market's states, from the Master Territory Map — the grey legend. */
+  coverage?: ReadonlyMap<string, string>;
   onTarget?: (territoryId: string, monthlyLf: number | null) => void;
   goalMonth?: boolean;
 }) {
@@ -2289,6 +2304,11 @@ function SalesBook({
                                   : ""}
                               </span>
                             </span>
+                            {/* its states on their own line, so the
+                                twelve of the Midwest never get cut off */}
+                            {coverage?.get(m.key) && (
+                              <span className="bkm-states">{coverage.get(m.key)}</span>
+                            )}
                             <span
                               className="sales-market-track"
                               aria-hidden="true"
@@ -2342,6 +2362,9 @@ function SalesBook({
                     onClick={() => pickRegion(m.key)}
                   >
                     <span className="rcard-name">{m.title}</span>
+                    {coverage && (
+                      <span className="rcard-states">{coverage.get(m.key) ?? ""}</span>
+                    )}
                     {/* the movement gets its own line — sharing the name's
                         line truncated both, and the name loses that fight */}
                     {moved && (

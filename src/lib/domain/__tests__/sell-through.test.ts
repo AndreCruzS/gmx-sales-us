@@ -5,6 +5,7 @@ import {
   chartColumns,
   distributorColour,
   houseColourMap,
+  regionCoverage,
   OTHERS_COLUMN,
   compositionRail,
   entityAt,
@@ -1271,5 +1272,23 @@ describe("houseColourMap", () => {
     const map = houseColourMap(JULY);
     expect(map.get("boise")).toBe("var(--cat-3)");
     expect(map.get("hardwoods")).toBe("var(--cat-1)");
+  });
+});
+
+describe("regionCoverage", () => {
+  it("lists a market's states, and a city-placed market as part of its state", () => {
+    const map = regionCoverage(
+      [
+        { state: "NV", territory_id: "sw" },
+        { state: "AZ", territory_id: "sw" },
+        { state: "NM", territory_id: "sw" },
+      ],
+      [
+        { state: "CA", territory_id: "socal" },
+        { state: "CA", territory_id: "socal" },
+      ],
+    );
+    expect(map.get("sw")).toBe("AZ, NM, NV");
+    expect(map.get("socal")).toBe("Part of CA");
   });
 });

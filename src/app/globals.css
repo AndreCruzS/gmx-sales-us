@@ -787,6 +787,15 @@ body {
   justify-content: space-between;
   gap: 12px;
 }
+/* A market's states take their own line under the name, never the space
+   beside it — a wrapped Midwest beside the name squeezed it. */
+.sales-market-head {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.sales-market-head > .sales-head-states {
+  flex-basis: 100%;
+}
 /* The isolated row's doorway to the market's own level. A real button with a
    thumb-height target — the chevron is small but the tap must not be. */
 .sales-head-gorow {
@@ -1370,6 +1379,15 @@ body {
   font-size: var(--text-sm);
   line-height: 16px;
   color: var(--ink-secondary);
+}
+/* A market's states, from the Master Territory Map — grey, small, and
+   allowed to wrap: the Midwest alone is twelve of them. */
+.sales-head-states {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  line-height: 15px;
+  color: var(--ink-muted);
 }
 .sales-head-fig {
   flex-shrink: 0;
@@ -3521,6 +3539,13 @@ input[type="datetime-local"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.bkm-states {
+  display: block;
+  margin-top: -2px;
+  font-size: var(--text-xs);
+  line-height: 15px;
+  color: var(--ink-muted);
+}
 .bkm-qty {
   color: var(--ink-secondary);
   flex-shrink: 0;
@@ -4043,6 +4068,15 @@ input[type="datetime-local"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rcard-states {
+  /* two lines reserved on every card, so the figures below still line up
+     across the row whether a market has one state or twelve */
+  min-height: 28px;
+  margin-top: -4px;
+  font-size: var(--text-2xs, 11px);
+  line-height: 14px;
+  color: var(--ink-muted);
 }
 .rcard-move {
   align-self: flex-start;
