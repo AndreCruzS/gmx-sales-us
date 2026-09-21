@@ -16,8 +16,8 @@
 // screen either.
 //
 // Attention comes from the `exceptions` view rather than being recomputed here:
-// the rules for quiet, no captain and an unverified wall are defined once in
-// SQL and tested there. This screen only decides how to show them.
+// the rules for quiet and no captain are defined once in SQL and tested there.
+// This screen only decides how to show them.
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -25,7 +25,6 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { ACCOUNT_TYPES, humanize, type AccountType } from "@/lib/domain/enums";
-import { groupByCompany } from "@/lib/domain/companies";
 import {
   ACCOUNT_EXCEPTION_TYPES,
   exceptionShort,
@@ -48,18 +47,14 @@ const FILTERS = [
   { key: "all", label: "All", type: null },
   { key: "quiet", label: exceptionShort("STRATEGIC_ACCOUNT_QUIET"), type: "STRATEGIC_ACCOUNT_QUIET" },
   { key: "captain", label: exceptionShort("NO_CHAMPION"), type: "NO_CHAMPION" },
-  { key: "wall", label: exceptionShort("DISPLAY_NOT_VERIFIED"), type: "DISPLAY_NOT_VERIFIED" },
+  // No wall filter: display walls are tracked on Ana's platform (Bianca,
+  // 2026-09-18), so an unverified wall is not this list's question.
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]["key"];
 
-// owner_id rides along so the company lens can say who works a banner. It is
-// not part of CachedAccount because the device cache is one rep's own working
-// set, where the answer is always "me".
 const COLUMNS =
-  "id, name, account_type, city, territory_id, has_display_wall, display_last_verified_at, parent_account_id, updated_at, owner_id";
-
-type AccountRow = CachedAccount & { owner_id?: string | null };
+  "id, name, account_type, city, territory_id, has_display_wall, display_last_verified_at, parent_account_id, updated_at";
 
 export default function AccountsPage() {
   // useSearchParams needs a boundary; the list is the fallback-free part.
@@ -90,7 +85,6 @@ function AccountsView() {
   }>({ fresh: false, rows: [] });
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [lens, setLens] = useState<"account" | "company">("account");
   const [flags, setFlags] = useState<Map<string, AccountFlag[]>>(new Map());
   const [ownerName, setOwnerName] = useState<{ id: string; name: string } | null>(
     null,
@@ -150,6 +144,8 @@ function AccountsView() {
         for (const row of data) {
           if (!row.subject_id || !row.exception_type) continue;
           if (!ACCOUNT_FLAGS.has(row.exception_type)) continue;
+          // walls are Ana's platform's question now (Bianca, 2026-09-18)
+          if (row.exception_type === "DISPLAY_NOT_VERIFIED") continue;
           const list = next.get(row.subject_id) ?? [];
           list.push({
             type: row.exception_type,
@@ -290,22 +286,35 @@ function AccountsView() {
     [rows, flags],
   );
 
-  // A company is not a rep's property: a banner has branches in more than one
-  // patch, and rep-centric lists cannot see that. Grouping by the parent
-  // account is what makes "nobody actually holds this one" visible.
-  const companies = useMemo(() => {
-    if (lens !== "company") return [];
-    return groupByCompany(rows as AccountRow[], displayAccountName).map((g) => ({
-      ...g,
-      flagged: g.branches.filter((b) => (flags.get(b.id) ?? []).length > 0)
-        .length,
-    }));
-  }, [rows, lens, flags]);
+  // TWO STEPS OF DISTRIBUTION, SEEN AS TWO (Bianca, 2026-09-18: "separa
+  // para mim visualmente, porque senão parece que o sistema está errado").
+  // GMX sells to the distributor; the distributor sells to the dealer. One
+  // alphabetical list put Boise beside a dealer as if they were the same kind
+  // of door, so the list is read in its steps: houses, then dealers, then
+  // everyone else. The "Companies" lens this replaces is gone too — to find a
+  // banner, type it (her words: "eu dito Builder").
+  const parentName = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const a of [...cached, ...territory.rows]) byId.set(a.id, a.name);
+    return (a: CachedAccount) =>
+      a.parent_account_id && byId.has(a.parent_account_id)
+        ? displayAccountName(byId.get(a.parent_account_id)!)
+        : null;
+  }, [cached, territory.rows]);
 
-  const sharedCount = useMemo(
-    () => companies.filter((c) => c.shared).length,
-    [companies],
-  );
+  const sections = useMemo(() => {
+    const steps: { key: string; title: string; rows: CachedAccount[] }[] = [
+      { key: "DISTRIBUTOR", title: "Distributors", rows: [] },
+      { key: "DEALER", title: "Dealers", rows: [] },
+      { key: "OTHER", title: "Everyone else", rows: [] },
+    ];
+    for (const a of rows) {
+      const at =
+        a.account_type === "DISTRIBUTOR" ? 0 : a.account_type === "DEALER" ? 1 : 2;
+      steps[at].rows.push(a);
+    }
+    return steps.filter((s) => s.rows.length > 0);
+  }, [rows]);
 
   return (
     <div className="stack pt-2">
@@ -351,23 +360,6 @@ function AccountsView() {
         </p>
       )}
 
-      {/* Two ways to read the same territory. "By company" answers the question
-          a rep-shaped list cannot: which banners are worked by more than one
-          person with nobody holding the relationship itself. */}
-      <div className="chip-row" role="group" aria-label="Group accounts by">
-        {(["account", "company"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            className="chip"
-            aria-pressed={lens === k}
-            onClick={() => setLens(k)}
-          >
-            {k === "account" ? "Accounts" : "Companies"}
-          </button>
-        ))}
-      </div>
-
       {/* Filters only appear once there is something to filter to. */}
       {flags.size > 0 && (
         <div className="chip-row" role="group" aria-label="Filter accounts">
@@ -389,79 +381,7 @@ function AccountsView() {
         </div>
       )}
 
-      {lens === "company" ? (
-        <section>
-          <div className="section-head">
-            <h2 className="t-section">By company</h2>
-            <span className="t-meta">{companies.length}</span>
-          </div>
-          {sharedCount > 0 && (
-            <p className="t-sub px-1">
-              {sharedCount} worked by more than one rep — that is where a
-              relationship falls between people.
-            </p>
-          )}
-          {companies.length === 0 ? (
-            <p className="t-sub px-1">Nothing to group yet.</p>
-          ) : (
-            <ul className="stack-sm">
-              {companies.map((c) => (
-                <li key={c.id ?? c.name}>
-                  <div className="flex items-baseline justify-between gap-3 pt-2">
-                    {c.id ? (
-                      <Link href={`/accounts/${c.id}`} className="t-title">
-                        {c.name}
-                      </Link>
-                    ) : (
-                      <span className="t-title">{c.name}</span>
-                    )}
-                    <span className="t-meta tabular-nums">
-                      {c.branches.length}
-                      {c.branches.length === 1 ? " location" : " locations"}
-                      {c.shared ? ` · ${c.owners.length} reps` : ""}
-                    </span>
-                  </div>
-                  {(c.shared || c.flagged > 0) && (
-                    <p className="t-sub px-1">
-                      {c.shared ? "No single owner" : ""}
-                      {c.shared && c.flagged > 0 ? " · " : ""}
-                      {c.flagged > 0
-                        ? `${c.flagged} ${c.flagged === 1 ? "needs" : "need"} a visit`
-                        : ""}
-                    </p>
-                  )}
-                  <ul className="list">
-                    {c.branches.map((b) => {
-                      const fs = flags.get(b.id) ?? [];
-                      return (
-                        <li key={b.id}>
-                          <Link href={`/accounts/${b.id}`} className="row">
-                            <span className="row-body">
-                              <span className="t-title block truncate">
-                                {displayAccountName(b.name)}
-                              </span>
-                              <span className="t-sub block truncate">
-                                {fs.length > 0
-                                  ? fs.map((f) => exceptionShort(f.type)).join(" · ")
-                                  : `${humanize(b.account_type)}${b.city ? ` · ${b.city}` : ""}`}
-                              </span>
-                            </span>
-                            <ChevronRightIcon
-                              size={14}
-                              style={{ color: "var(--ink-muted)" }}
-                            />
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : (
-        <section>
+      <section>
         <div className="section-head">
           <h2 className="t-section">
             {query.trim()
@@ -476,8 +396,8 @@ function AccountsView() {
         {rows.length > 0 && filter === "all" && flaggedTotal > 0 && (
           <p className="t-sub px-1">
             {flaggedTotal === 1
-              ? "1 needs a visit — it is at the top."
-              : `${flaggedTotal} need a visit — they are at the top.`}
+              ? "1 needs a visit — it is at the top of its list."
+              : `${flaggedTotal} need a visit — they are at the top of their lists.`}
           </p>
         )}
 
@@ -492,48 +412,60 @@ function AccountsView() {
                   : "No accounts yet. They appear here as soon as your territory syncs."}
           </p>
         ) : (
-          <ul className="list">
-            {rows.map((a) => {
-              const fs = flags.get(a.id) ?? [];
-              return (
-                <li key={a.id}>
-                  <Link href={`/accounts/${a.id}`} className="row">
-                    {/* initials differentiate rows the way one repeated glyph
-                        can't — the lead slot has to earn its 56px */}
-                    <span className="row-lead">
-                      {displayAccountName(a.name)
-                        .split(" ")
-                        .slice(0, 2)
-                        .map((w) => w[0])
-                        .join("")
-                        .toUpperCase()}
-                    </span>
-                    <span className="row-body">
-                      <span className="t-title block truncate">
-                        {displayAccountName(a.name)}
-                      </span>
-                      <span className="t-sub block truncate">
-                        {fs.length > 0
-                          ? fs
-                              .map((f) => exceptionShort(f.type))
-                              .join(" · ")
-                          : `${humanize(a.account_type)}${a.city ? ` · ${a.city}` : ""}${
-                              a.has_display_wall ? " · display wall" : ""
-                            }`}
-                      </span>
-                    </span>
-                    <ChevronRightIcon
-                      size={14}
-                      style={{ color: "var(--ink-muted)" }}
-                    />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="acct-steps">
+            {sections.map((sec) => (
+              <div key={sec.key} className="acct-step" data-step={sec.key}>
+                <p className="acct-step-head">
+                  {sec.title}
+                  <span className="chip-count">{sec.rows.length}</span>
+                </p>
+              <ul className="list">
+                {sec.rows.map((a) => {
+                  const fs = flags.get(a.id) ?? [];
+                  return (
+                    <li key={a.id}>
+                      <Link href={`/accounts/${a.id}`} className="row">
+                        {/* initials differentiate rows the way one repeated glyph
+                            can't — the lead slot has to earn its 56px */}
+                        <span className="row-lead">
+                          {displayAccountName(a.name)
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join("")
+                            .toUpperCase()}
+                        </span>
+                        <span className="row-body">
+                          <span className="t-title block truncate">
+                            {displayAccountName(a.name)}
+                          </span>
+                          <span className="t-sub block truncate">
+                            {/* what it is and where first — a yard names its
+                                banner — then whatever needs attention */}
+                            {[
+                              sec.key === "OTHER" ? humanize(a.account_type) : null,
+                              a.city,
+                              parentName(a),
+                              ...fs.map((f) => exceptionShort(f.type)),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || humanize(a.account_type)}
+                          </span>
+                        </span>
+                        <ChevronRightIcon
+                          size={14}
+                          style={{ color: "var(--ink-muted)" }}
+                        />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              </div>
+            ))}
+          </div>
         )}
-        </section>
-      )}
+      </section>
     </div>
   );
 }

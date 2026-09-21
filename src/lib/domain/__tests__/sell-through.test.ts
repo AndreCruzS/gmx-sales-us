@@ -7,6 +7,7 @@ import {
   houseColourMap,
   dealerWhere,
   viewSentence,
+  yearSoFar,
   regionCoverage,
   OTHERS_COLUMN,
   compositionRail,
@@ -1337,5 +1338,44 @@ describe("viewSentence", () => {
     expect(
       viewSentence({ lens: "region", when: "Year to date", region: "Texas", within: ["Boise Cascade"] }),
     ).toEqual(["Sales by market", "Texas", "Boise Cascade", "Year to date"]);
+  });
+});
+
+describe("yearSoFar", () => {
+  const YTD = "2026-06-01";
+  const ytd = [
+    row({ period: YTD, period_kind: "YTD", quantity: 9000, ly_quantity: 4000 }),
+  ];
+  const monthly = [
+    row({ period: "2026-05-01", quantity: 999 }), // inside the file's window
+    row({ period: "2026-07-01", quantity: 1000, ly_quantity: 800 }),
+    row({
+      period: "2026-08-01",
+      distributor_id: "hardwoods",
+      distributor_name: "Hardwoods Specialty",
+      quantity: 500,
+    }),
+  ];
+
+  it("adds every month after the year file's cut, from every house", () => {
+    const y = yearSoFar(ytd, monthly)!;
+    expect(y.current.reduce((n, r) => n + Number(r.quantity), 0)).toBe(10500);
+    expect(y.months).toEqual(["2026-07-01", "2026-08-01"]);
+    expect(y.latest).toBe("2026-08-01");
+  });
+
+  it("never counts a month the year file already holds", () => {
+    const y = yearSoFar(ytd, monthly)!;
+    expect(y.current.some((r) => Number(r.quantity) === 999)).toBe(false);
+  });
+
+  it("compares against each row's own last-year figure", () => {
+    const y = yearSoFar(ytd, monthly)!;
+    expect(y.prior.reduce((n, r) => n + Number(r.quantity), 0)).toBe(4800);
+    expect(y.previous).toBe("last-year");
+  });
+
+  it("answers null with no year file", () => {
+    expect(yearSoFar([], monthly)).toBeNull();
   });
 });

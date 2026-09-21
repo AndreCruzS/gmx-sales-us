@@ -318,6 +318,17 @@ export const opportunityUpdateSchema = z.object({
 });
 export type OpportunityUpdate = z.infer<typeof opportunityUpdateSchema>;
 
+// A note on an account's history (account_notes) — what someone learned or
+// decided, kept apart from activities so it never counts as a visit.
+export const accountNoteCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  account_id: uuid,
+  author_id: uuid,
+  body: z.string().trim().min(1),
+});
+export type AccountNoteCreate = z.infer<typeof accountNoteCreateSchema>;
+
 export const ENTITY_TABLES = {
   activity: "activities",
   next_action: "next_actions",
@@ -328,6 +339,7 @@ export const ENTITY_TABLES = {
   contact: "contacts",
   account: "accounts",
   account_relationship: "account_relationships",
+  account_note: "account_notes",
   opportunity: "opportunities",
 } as const;
 export type EntityType = keyof typeof ENTITY_TABLES;
@@ -346,6 +358,7 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "account:create": accountCreateSchema,
   "account:update": accountUpdateSchema,
   "account_relationship:create": accountRelationshipCreateSchema,
+  "account_note:create": accountNoteCreateSchema,
   "opportunity:create": opportunityCreateSchema,
   "opportunity:update": opportunityUpdateSchema,
 };

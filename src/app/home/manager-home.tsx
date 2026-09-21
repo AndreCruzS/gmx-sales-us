@@ -1112,6 +1112,9 @@ export function ManagerHome({ name }: { name: string }) {
       // sales fact — it joined the unplanned week on the Agenda (Andre,
       // 2026-09-09, after Bianca: the sales page is about sales).
       if (e.exception_type === "OVERDUE_FOLLOW_UP") continue;
+      // Display walls are tracked on Ana's platform, not here (Bianca,
+      // 2026-09-18: "esse display wall not verified, podemos tirar?").
+      if (e.exception_type === "DISPLAY_NOT_VERIFIED") continue;
       if (focus && e.subject_id !== focus.accountId) continue;
       const g = map.get(e.exception_type) ?? { count: 0, names: [] };
       g.count += 1;

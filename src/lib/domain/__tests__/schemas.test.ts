@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accountCreateSchema,
+  accountNoteCreateSchema,
   accountRelationshipCreateSchema,
   activityUpdateSchema,
   outboxPayloadSchemas,
@@ -231,5 +232,27 @@ describe("activityUpdateSchema", () => {
 
   it("is registered on the outbox boundary as activity:update", () => {
     expect(outboxPayloadSchemas["activity:update"]).toBe(activityUpdateSchema);
+  });
+});
+
+describe("accountNoteCreateSchema", () => {
+  const note = {
+    id: crypto.randomUUID(),
+    org_id: crypto.randomUUID(),
+    account_id: crypto.randomUUID(),
+    author_id: crypto.randomUUID(),
+    body: "Talked to Michelle — we need to buy their vendor package.",
+  };
+
+  it("takes a note with its author", () => {
+    expect(accountNoteCreateSchema.parse(note).body).toContain("Michelle");
+  });
+
+  it("refuses an empty note — a blank line is not history", () => {
+    expect(() => accountNoteCreateSchema.parse({ ...note, body: "   " })).toThrow();
+  });
+
+  it("is registered on the outbox boundary as account_note:create", () => {
+    expect(outboxPayloadSchemas["account_note:create"]).toBe(accountNoteCreateSchema);
   });
 });

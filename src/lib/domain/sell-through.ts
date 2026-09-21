@@ -1687,3 +1687,59 @@ export function viewSentence(o: {
   parts.push(o.when);
   return parts;
 }
+
+/**
+ * THE YEAR SO FAR, FROM EVERY FILE ON HAND (João, 2026-09-18: "isso daqui é o
+ * overview do mês, mas eu quero ver o overview do ano, para saber até hoje quem
+ * foi o dealer que mais comprou").
+ *
+ * The year reading used to be the distributors' year-to-date file alone —
+ * Boise's January–June — while it was labelled "so far": July, August and every
+ * house without a year file were left out of a figure that claimed the year.
+ *
+ * Now it is that file PLUS every monthly file after its cut, from every house,
+ * in the same year. Nothing is counted twice: a month inside the file's window
+ * is already inside the file. The comparison is each row's own last-year
+ * figure where the file carries one — the same window a year back, never
+ * another month.
+ *
+ * `parts` says what went in, so the screen can say it: an aggregate and a run
+ * of months are not the same kind of reading, and the reader cannot guess.
+ */
+export function yearSoFar(
+  ytdRows: readonly SellThroughRow[],
+  monthlyRows: readonly SellThroughRow[],
+  lastYearKey = "last-year",
+): {
+  current: SellThroughRow[];
+  prior: SellThroughRow[];
+  latest: string;
+  previous: string | null;
+  cut: string;
+  months: string[];
+} | null {
+  const cuts = [...new Set(ytdRows.map((r) => r.period))].sort().reverse();
+  const cut = cuts[0];
+  if (!cut) return null;
+  const year = cut.slice(0, 4);
+  const file = ytdRows.filter((r) => r.period === cut);
+  const after = monthlyRows.filter(
+    (r) => r.period_kind !== "YTD" && r.period > cut && r.period.slice(0, 4) === year,
+  );
+  const months = [...new Set(after.map((r) => r.period))].sort();
+  const latest = months[months.length - 1] ?? cut;
+  // One period for the whole reading, the way a range folds its months: the
+  // card is built for one window, and this is one.
+  const current = [...file, ...after].map((r) => ({ ...r, period: latest }));
+  const prior = current
+    .filter((r) => Number(r.ly_quantity ?? 0) > 0)
+    .map((r) => ({ ...r, period: lastYearKey, quantity: Number(r.ly_quantity) }));
+  return {
+    current,
+    prior,
+    latest,
+    previous: prior.length > 0 ? lastYearKey : null,
+    cut,
+    months,
+  };
+}

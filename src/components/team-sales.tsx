@@ -55,6 +55,7 @@ import {
   OTHERS_COLUMN,
   SELL_CHAIN,
   viewSentence,
+  yearSoFar,
   type SellColumn,
   compositionRail,
   housesMissing,
@@ -263,22 +264,11 @@ export function TeamSales({
   // and the counter all work untouched. A pseudo period key, never a date —
   // nothing formats it, the labels are overridden wherever it would show.
   const LY_PERIOD = "last-year";
-  const ytd = useMemo(() => {
-    if (!ytdRows || ytdRows.length === 0) return null;
-    const seen = [...new Set(ytdRows.map((r) => r.period))].sort().reverse();
-    const yLatest = seen[0] ?? null;
-    if (!yLatest) return null;
-    const cur = ytdRows.filter((r) => r.period === yLatest);
-    const prior = cur
-      .filter((r) => Number(r.ly_quantity ?? 0) > 0)
-      .map((r) => ({ ...r, period: LY_PERIOD, quantity: Number(r.ly_quantity) }));
-    return {
-      current: cur,
-      prior,
-      latest: yLatest,
-      previous: prior.length > 0 ? LY_PERIOD : null,
-    };
-  }, [ytdRows]);
+  // The year file PLUS every monthly file after its cut — see yearSoFar.
+  const ytd = useMemo(
+    () => (ytdRows && ytdRows.length > 0 ? yearSoFar(ytdRows, rows, LY_PERIOD) : null),
+    [ytdRows, rows],
+  );
   const ytdOn = mode === "ytd" && ytd !== null;
 
   const latest = ytdOn ? ytd!.latest : latestMonth;
@@ -686,7 +676,9 @@ export function TeamSales({
     scopeHouse: scopeHouseName,
     within: path.filter((s) => s.dim !== "region").map((s) => s.name),
   });
-  const waiting = housesMissing(ytdOn ? (ytdRows ?? []) : rows, latest);
+  // Over the year, "missing" is about the newest month in it, read off the
+  // monthly files — the year file is one aggregate with nothing to be late for.
+  const waiting = housesMissing(rows, latest);
 
   // The movement beside the counter follows whatever the counter is showing. A
   // figure that has travelled to one band's total with the whole step's movement
@@ -1656,9 +1648,14 @@ export function TeamSales({
           reader cannot guess. */}
       {ytdOn && (
         <p className="t-sub px-1">
-          The distributors&rsquo; own year-to-date report, January through{" "}
-          {periodLabel(latest)} — one aggregate, so the months inside it
-          cannot be told apart. Movement is against the same window last year.
+          January through {periodLabel(ytd!.cut)}{" "}from the distributors&rsquo;
+          year-to-date report — one aggregate, so those months cannot be told
+          apart
+          {ytd!.months.length > 0
+            ? `, then ${ytd!.months.map((m) => periodLabel(m)).join(" and ")} from every house's monthly file`
+            : ""}
+          . Movement is against the same window last year, where the file
+          carries it.
         </p>
       )}
 

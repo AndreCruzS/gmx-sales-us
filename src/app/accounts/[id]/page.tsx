@@ -117,6 +117,14 @@ export default function AccountPage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [threads, setThreads] = useState<EmailThread[]>([]);
+  // Notes on the history (account_notes) — what someone learned or decided,
+  // read beside the activities but never counted as one.
+  const [notes, setNotes] = useState<
+    { id: string; body: string; created_at: string; author: string | null }[]
+  >([]);
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [stageSheetOpp, setStageSheetOpp] = useState<Opportunity | null>(
@@ -325,19 +333,126 @@ export default function AccountPage() {
         .order("last_message_at", { ascending: false })
         .limit(10);
       setThreads((th.data as EmailThread[]) ?? []);
+
+      const nt = await supabase
+        .from("account_notes")
+        .select("id, body, created_at, author_id")
+        .eq("account_id", id)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      const noteRows =
+        (nt.data as
+          | { id: string; body: string; created_at: string; author_id: string | null }[]
+          | null) ?? [];
+      // Who wrote each — best effort: a rep may not be able to read every
+      // colleague's membership, and a note without a name still reads.
+      const authorIds = [
+        ...new Set(noteRows.map((r) => r.author_id).filter((x): x is string => !!x)),
+      ];
+      const names = new Map<string, string>();
+      if (authorIds.length > 0) {
+        const who = await supabase
+          .from("memberships")
+          .select("id, users(full_name)")
+          .in("id", authorIds);
+        for (const m of (who.data as unknown as
+          | { id: string; users: { full_name: string | null } | null }[]
+          | null) ?? []) {
+          if (m.users?.full_name) names.set(m.id, m.users.full_name);
+        }
+      }
+      setNotes(
+        noteRows.map((r) => ({
+          id: r.id,
+          body: r.body,
+          created_at: r.created_at,
+          author:
+            r.author_id === profile?.membershipId
+              ? "You"
+              : r.author_id
+                ? (names.get(r.author_id) ?? null)
+                : null,
+        })),
+      );
     } catch {
       await loadFromCache();
     } finally {
       // always resolve the loading state, or the screen stays blank forever
       setLoaded(true);
     }
-  }, [id, loadFromCache]);
+  }, [id, loadFromCache, profile?.membershipId]);
 
   useEffect(() => {
     if (!profile) return;
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
   }, [profile, load]);
+
+  const history = useMemo(
+    () =>
+      [
+        ...activities.map((a) => ({
+          kind: "activity" as const,
+          id: a.id,
+          at: a.occurred_at,
+          activityType: a.activity_type,
+          text: a.what_happened,
+          keyInfo: a.key_information,
+          author: null as string | null,
+        })),
+        ...notes.map((n) => ({
+          kind: "note" as const,
+          id: n.id,
+          at: n.created_at,
+          activityType: "",
+          text: n.body as string | null,
+          keyInfo: null as string | null,
+          author: n.author,
+        })),
+      ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)),
+    [activities, notes],
+  );
+
+  // A note goes through the outbox like everything else written here, so it
+  // survives no signal; it shows at once and syncs behind.
+  async function saveNote() {
+    if (!profile || noteDraft === null) return;
+    const body = noteDraft.trim();
+    if (!body) {
+      setNoteError("Write something first — a blank line is not history.");
+      return;
+    }
+    setNoteBusy(true);
+    setNoteError(null);
+    try {
+      const layer = getOfflineLayer();
+      const noteId = crypto.randomUUID();
+      await layer.sync.enqueue({
+        clientId: noteId,
+        entityType: "account_note",
+        op: "create",
+        payload: {
+          id: noteId,
+          org_id: profile.orgId,
+          account_id: id,
+          author_id: profile.membershipId,
+          body,
+        },
+        baseVersion: null,
+        blobRef: null,
+      });
+      setNotes((list) => [
+        { id: noteId, body, created_at: new Date().toISOString(), author: "You" },
+        ...list,
+      ]);
+      setNoteDraft(null);
+      void layer.sync.drain();
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setNoteBusy(false);
+    }
+  }
 
   // Collapse the relationship rows into one entry per counterpart, phrased in
   // the direction it is stored — inverting "purchases from" into "supplies to"
@@ -974,42 +1089,97 @@ export default function AccountPage() {
           ))}
       </section>
 
-      {/* Account history — built from activities, never separately maintained */}
+      {/* Account history — the activities as they happened, and the notes
+          people added beside them (Bianca, 2026-09-18: "add note para ir
+          atualizando o que está acontecendo"). One timeline, newest first. */}
       <section>
         <div className="section-head">
           <h2 className="t-section">History</h2>
-          <span className="t-meta">{activities.length}</span>
+          {noteDraft === null ? (
+            <button
+              type="button"
+              className="t-action"
+              onClick={() => {
+                setNoteDraft("");
+                setNoteError(null);
+              }}
+            >
+              Add note
+            </button>
+          ) : (
+            <span className="t-meta">{history.length}</span>
+          )}
         </div>
-        {activities.length === 0 ? (
+        {noteDraft !== null && (
+          <div className="card card-pad note-compose">
+            <textarea
+              className="field"
+              rows={3}
+              autoFocus
+              placeholder="What happened, or what was decided — e.g. talked to Michelle, we need to buy their vendor package."
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              aria-label="Note"
+            />
+            {noteError && (
+              <p className="t-sub" style={{ color: "var(--danger)" }}>
+                {noteError}
+              </p>
+            )}
+            <div className="note-compose-actions">
+              <button
+                type="button"
+                className="btn-quiet"
+                onClick={() => setNoteDraft(null)}
+                disabled={noteBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void saveNote()}
+                disabled={noteBusy}
+              >
+                Save note
+              </button>
+            </div>
+          </div>
+        )}
+        {history.length === 0 ? (
           <p className="t-sub px-1">
-            Nothing recorded here yet. The first visit you log starts this
-            account&apos;s history.
+            Nothing recorded here yet. The first visit you log, or a note you
+            add, starts this account&apos;s history.
           </p>
         ) : (
           <ul className="list">
-            {activities.map((a) => (
-              <li key={a.id} className="row">
+            {history.map((h) => (
+              <li key={`${h.kind}-${h.id}`} className="row">
                 <span className="row-lead flex-col leading-none">
                   <span className="text-[15px] font-bold">
-                    {new Date(a.occurred_at).getDate()}
+                    {new Date(h.at).getDate()}
                   </span>
                   <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">
-                    {new Date(a.occurred_at).toLocaleString("en-US", {
+                    {new Date(h.at).toLocaleString("en-US", {
                       month: "short",
                     })}
                   </span>
                 </span>
                 <span className="row-body">
                   <span className="t-title block">
-                    {humanize(a.activity_type)}
+                    {h.kind === "note"
+                      ? `Note${h.author ? ` · ${h.author}` : ""}`
+                      : humanize(h.activityType)}
                   </span>
-                  {a.what_happened && (
-                    <span className="t-sub block">{a.what_happened}</span>
+                  {h.text && (
+                    <span className="t-sub block" style={{ whiteSpace: "pre-line" }}>
+                      {h.text}
+                    </span>
                   )}
-                  {a.key_information && (
+                  {h.keyInfo && (
                     <span className="t-hint mt-1 flex items-start gap-1.5">
                       <CheckIcon size={12} style={{ marginTop: 2 }} />
-                      {a.key_information}
+                      {h.keyInfo}
                     </span>
                   )}
                 </span>
