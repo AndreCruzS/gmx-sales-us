@@ -1579,7 +1579,7 @@ export function ManagerHome({ name }: { name: string }) {
                 {/* WHO — every name, biggest first, with its LF, a page at a
                     time (Andre, 2026-09-09: the count alone said nothing,
                     and a scrollbar in a card is coarse). */}
-                <PagedNames dealers={c.side.dealers} hideRegion={Boolean(buyRegion)} />
+                <PagedNames dealers={c.side.dealers} />
               </div>
             ))}
           </div>
@@ -1741,9 +1741,8 @@ export function ManagerHome({ name }: { name: string }) {
                               {r.when && (
                                 <span className="t-hint quiet-since">{r.when}</span>
                               )}
-                              {/* where and through whom — the whole book is
-                                  listed here, so both labels always show */}
-                              <WhereTags regions={r.regions} houses={r.houses} />
+                              {/* through whom — the house to call */}
+                              <WhereTags houses={r.houses} />
                             </span>
                             <span className="quiet-fig">
                               <span className="fig fig-md">

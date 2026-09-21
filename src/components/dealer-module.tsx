@@ -525,7 +525,7 @@ function DealerModule({
               : `“${facts.labels[0]}”, as ${facts.houses[0] ?? "the file"} writes it`}
           </p>
           <div className="dmod-tags">
-            <WhereTags regions={facts.regions} houses={facts.houses} />
+            <WhereTags houses={facts.houses} />
             {rel?.strategic && <span className="dmod-tag dmod-tag-ink">Strategic</span>}
             {!accountId && <span className="dmod-tag dmod-tag-warn">No account yet</span>}
             {noRep && <span className="dmod-tag dmod-tag-warn">No rep for this region</span>}

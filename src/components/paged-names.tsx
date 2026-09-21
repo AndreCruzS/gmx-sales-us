@@ -36,14 +36,7 @@ import { DealerName } from "@/components/dealer-module";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
-export function PagedNames({
-  dealers,
-  hideRegion = false,
-}: {
-  dealers: readonly RecurrenceDealer[];
-  /** The list is already narrowed to one region — its label would repeat it. */
-  hideRegion?: boolean;
-}) {
+export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }) {
   const [desk, setDesk] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
@@ -112,7 +105,7 @@ export function PagedNames({
                 <DealerName dealerKey={d.key} className="recur-name-link">
                   {d.name}
                 </DealerName>
-                <WhereTags regions={d.regions} houses={d.houses} hideRegion={hideRegion} />
+                <WhereTags houses={d.houses} />
               </span>
               <span className="fig-sm recur-name-lf">{QTY.format(Math.round(d.lf))}</span>
             </li>
