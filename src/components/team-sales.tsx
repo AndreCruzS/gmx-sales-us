@@ -46,6 +46,7 @@ import { SearchIcon } from "@/components/icons";
 import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
 import { ChipSelect } from "@/components/chip-select";
+import { DealerName } from "@/components/dealer-module";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
@@ -81,6 +82,7 @@ import {
   type DealerScope,
   type PathStep,
   type SellBand,
+  type SellEntity,
   type SellGroup,
   type SellLens,
   type SellThroughRow,
@@ -153,6 +155,10 @@ interface Selection {
 }
 
 const keyOf = (path: readonly PathStep[]) => path.map((s) => s.key).join(">");
+
+/** What the dealer module keys a dealer by — the same key every list uses:
+ *  its account, or the label off the file (the walk prefixes unmatched ones). */
+const profileKey = (e: SellEntity) => e.accountId ?? e.key.replace(/^unmatched:/, "");
 
 export function TeamSales({
   rows,
@@ -897,6 +903,23 @@ export function TeamSales({
         />
       ) : (
       <div className="sales-step" key={`${lens}-${mode}-${pathKey}`}>
+        {/* Walked into one dealer: its module is one tap away. Outside the
+            row, because the row is a button of its own. */}
+        {(() => {
+          // Anywhere below a dealer on the walk — the phone jumps straight
+          // from the dealer list to dealer › house, so "one dealer on the
+          // step" alone never happened.
+          const d = path.find((s) => s.dim === "dealer");
+          if (!d) return null;
+          return (
+            <DealerName
+              dealerKey={d.accountId ?? d.key.replace(/^unmatched:/, "")}
+              className="sales-profile-link"
+            >
+              Open {d.name}&rsquo;s dealer profile ›
+            </DealerName>
+          );
+        })()}
         <div className="card card-pad">
           {/* THE FIRST BAR IS THE TOTAL.
               A grand total with no bar, sitting above a column of bars, reads as
@@ -1968,6 +1991,11 @@ function SalesBook({
                 <div className="bkp-head">
                   <span className="min-w-0">
                     <span className="sales-head-name">{g.title}</span>
+                    {g.entity.dim === "dealer" && (
+                      <DealerName dealerKey={profileKey(g.entity)} className="bkp-profile">
+                        Dealer profile ›
+                      </DealerName>
+                    )}
                     {(g.sub || g.value !== null) && (
                       <span className="sales-head-sub">
                         {g.sub}

@@ -27,12 +27,12 @@
 // The field only appears once the list runs past a single page. A search box
 // over four names is furniture.
 
-import Link from "next/link";
 import { SearchIcon } from "@/components/icons";
 import { useEffect, useMemo, useState } from "react";
 import { foldForSearch, searchDealers } from "@/lib/domain/sell-through";
 import type { RecurrenceDealer } from "@/lib/domain/sell-through";
 import { WhereTags } from "@/components/where-tags";
+import { DealerName } from "@/components/dealer-module";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
@@ -108,13 +108,10 @@ export function PagedNames({
           {slice.map((d) => (
             <li key={d.key} className="recur-name">
               <span className="recur-name-body">
-                {d.accountId ? (
-                  <Link href={`/accounts/${d.accountId}`} className="recur-name-link">
-                    {d.name}
-                  </Link>
-                ) : (
-                  <span className="recur-name-text">{d.name}</span>
-                )}
+                {/* every name opens the dealer module, account or not */}
+                <DealerName dealerKey={d.key} className="recur-name-link">
+                  {d.name}
+                </DealerName>
                 <WhereTags regions={d.regions} houses={d.houses} hideRegion={hideRegion} />
               </span>
               <span className="fig-sm recur-name-lf">{QTY.format(Math.round(d.lf))}</span>

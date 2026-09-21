@@ -44,6 +44,7 @@ import { useTween } from "@/lib/ui/use-tween";
 import { GoalMonths } from "@/components/goal-months";
 import { PagedNames } from "@/components/paged-names";
 import { WhereTags } from "@/components/where-tags";
+import { DealerModuleProvider, DealerName } from "@/components/dealer-module";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import type {
@@ -1346,6 +1347,8 @@ export function ManagerHome({ name }: { name: string }) {
     // desk (>=1280px) can place these same children on a two-column grid
     // without touching the mobile DOM or its order. Mobile is mandatory-as-is
     // (Andre, 2026-08-31); the desk is a second reading of the same page.
+    // Every dealer name on this page opens its module (DealerName reads this).
+    <DealerModuleProvider rows={sellRows}>
     <div className="stack pt-2 mgr-home">
       <section data-desk="hero">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
@@ -1754,16 +1757,11 @@ export function ManagerHome({ name }: { name: string }) {
                         );
                         return (
                           <li key={r.key}>
-                            {r.accountId ? (
-                              <Link
-                                href={`/accounts/${r.accountId}`}
-                                className="row quiet-row"
-                              >
-                                {body}
-                              </Link>
-                            ) : (
-                              <div className="row quiet-row">{body}</div>
-                            )}
+                            {/* the name opens the dealer module — every
+                                dealer has one, account or not (2026-09-21) */}
+                            <DealerName dealerKey={r.key} className="row quiet-row w-full">
+                              {body}
+                            </DealerName>
                           </li>
                         );
                       })}
@@ -1821,5 +1819,6 @@ export function ManagerHome({ name }: { name: string }) {
       )}
 
     </div>
+    </DealerModuleProvider>
   );
 }
