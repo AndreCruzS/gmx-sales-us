@@ -46,7 +46,7 @@ import { SearchIcon } from "@/components/icons";
 import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
 import { ChipSelect } from "@/components/chip-select";
-import { DealerName } from "@/components/dealer-module";
+import { DealerName, useDealerModule } from "@/components/dealer-module";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
@@ -306,6 +306,11 @@ export function TeamSales({
   // every depth: a dealer's own distributor bands agree with the filtered
   // figure the reader tapped to get there.
   const [dealerScope, setDealerScope] = useState<DealerScope>(NO_DEALER_SCOPE);
+  // A DEALER AT THE END OF THE CHAIN OPENS ITS MODULE (2026-09-24). On the
+  // phone the region walk ends on a list of dealers that could only be
+  // highlighted — there was no way through to the dealer itself, where the
+  // desk has the pane's "Dealer profile". Now the row IS the way in.
+  const dealerModule = useDealerModule();
   // The desk book's map pick, for the sentence at the top of the card. The
   // book keeps its own walk; it reports the region, and this keeps a copy
   // while passing it on.
@@ -1428,7 +1433,13 @@ export function TeamSales({
                               : "sales-item"
                           }
                           aria-pressed={open?.key === b.key}
-                          onClick={() => tap(g, b)}
+                          onClick={() => {
+                            if (dealerModule && b.entity.dim === "dealer" && !b.drillable) {
+                              dealerModule.open(profileKey(b.entity));
+                              return;
+                            }
+                            tap(g, b);
+                          }}
                         >
                           {/* The rail only where the meter is not there to
                               carry the colour — same rule as depth 0: a clean
@@ -1483,7 +1494,10 @@ export function TeamSales({
                                 </span>
                               </span>
                               <span className="sales-item-go" aria-hidden="true">
-                                {b.drillable ? "›" : ""}
+                                {b.drillable ||
+                                (dealerModule && b.entity.dim === "dealer")
+                                  ? "›"
+                                  : ""}
                               </span>
                             </span>
                             {g.bands.length > 1 && (
