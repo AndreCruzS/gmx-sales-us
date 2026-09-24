@@ -762,8 +762,34 @@ function DealerModule({
               <span className="t-hint">drafted by AI from the facts</span>
             </div>
             {insights.state === "loading" && (
-              <section className="dmod-card dmod-insight" aria-busy="true">
-                <span className="t-hint">Reading this dealer’s files…</span>
+              /* THE WAIT IS WORTH ANNOUNCING (Andre, 2026-09-24): the reading
+                 takes a few seconds and it is the most valuable thing on the
+                 screen, so the section says what is happening instead of a
+                 quiet line somebody scrolls past. What it names is true —
+                 the files, products and yards it is actually being given. */
+              <section className="dmod-card dmod-loading" aria-busy="true" aria-live="polite">
+                <span className="dmod-loading-head">
+                  <span className="dmod-spinner" aria-hidden="true" />
+                  Analyzing all data, please wait…
+                </span>
+                <span className="t-hint">
+                  {[
+                    `${facts.filesOnHand.length} ${facts.filesOnHand.length === 1 ? "file" : "files"} on hand`,
+                    `${facts.products.length} ${facts.products.length === 1 ? "product" : "products"}`,
+                    facts.houses.length > 0
+                      ? `${facts.houses.length} ${facts.houses.length === 1 ? "house" : "houses"}`
+                      : null,
+                    rel?.yards.length ? `${rel.yards.length} yards` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className="dmod-skel" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="t-hint">Usually about fifteen seconds.</span>
               </section>
             )}
             {insights.state === "failed" && (

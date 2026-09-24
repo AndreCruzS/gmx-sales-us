@@ -5484,3 +5484,72 @@ input[type="datetime-local"] {
   color: var(--accent-ink);
 }
 
+/* The dealer module's reading, while it is being made. It takes a few seconds
+   and it is the most valuable thing on the card, so the wait is announced and
+   given a shape — never a bare spinner, and never a fake progress bar. */
+.dmod-loading {
+  gap: 10px;
+}
+.dmod-loading-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.dmod-spinner {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--surface-sunken);
+  border-top-color: var(--accent);
+  animation: dmod-spin 0.9s linear infinite;
+}
+@keyframes dmod-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.dmod-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.dmod-skel i {
+  display: block;
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    color-mix(in srgb, var(--surface-sunken) 55%, var(--surface-card)) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: dmod-shimmer 1.4s ease-in-out infinite;
+}
+.dmod-skel i:nth-child(2) {
+  width: 88%;
+  animation-delay: 0.15s;
+}
+.dmod-skel i:nth-child(3) {
+  width: 62%;
+  animation-delay: 0.3s;
+}
+@keyframes dmod-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+/* Motion is decoration here: the words carry the message on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .dmod-spinner,
+  .dmod-skel i {
+    animation: none;
+  }
+}
