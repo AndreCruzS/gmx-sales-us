@@ -57,6 +57,9 @@ import {
   SELL_CHAIN,
   viewSentence,
   yearSoFar,
+  PRODUCT_LINES,
+  PRODUCT_LINE_LABEL,
+  type ProductLine,
   type SellColumn,
   compositionRail,
   housesMissing,
@@ -176,6 +179,8 @@ export function TeamSales({
   windowNote,
   targets,
   coverage,
+  line,
+  onLine,
   onTarget,
   goalMonth,
 }: {
@@ -205,6 +210,9 @@ export function TeamSales({
   targets?: ReadonlyMap<string, number>;
   /** Each market's states, from the Master Territory Map — the grey legend. */
   coverage?: ReadonlyMap<string, string>;
+  /** Which product line the page is reading, and how to change it. */
+  line: ProductLine;
+  onLine: (next: ProductLine) => void;
   /** Present only for admins: sets (or clears, with null) a region's goal. */
   onTarget?: (territoryId: string, monthlyLf: number | null) => void;
   /** Goals speak only over a single month — a range or the YTD has no
@@ -331,10 +339,27 @@ export function TeamSales({
     () => (lens === "dealer" ? scopeDealerRows(unscopedPrior, dealerScope) : unscopedPrior),
     [unscopedPrior, lens, dealerScope],
   );
-  const scopeChoices = useMemo(
-    () => dealerScopeOptions(unscopedCurrent, dealerScope),
-    [unscopedCurrent, dealerScope],
-  );
+  // THE NAME OF A NARROWING OUTLIVES ITS ROWS (2026-09-24). The option lists
+  // are counted on the rows in view, so picking Northeast and then a product
+  // line Northeast never bought left the chip with nothing to read its own
+  // name from — it fell back to "All regions" while the narrowing was still
+  // in force and the card was explaining that nothing matched. The name is
+  // remembered when it is chosen, and shown at zero.
+  const [scopeNames, setScopeNames] = useState<Record<string, string>>({});
+  const scopeChoices = useMemo(() => {
+    const opts = dealerScopeOptions(unscopedCurrent, dealerScope);
+    const keep = (
+      list: typeof opts.regions,
+      id: string,
+    ): typeof opts.regions =>
+      id === "" || list.some((o) => o.id === id)
+        ? list
+        : [...list, { id, name: scopeNames[id] ?? "Chosen", lf: 0 }];
+    return {
+      regions: keep(opts.regions, dealerScope.regionId),
+      distributors: keep(opts.distributors, dealerScope.distributorId),
+    };
+  }, [unscopedCurrent, dealerScope, scopeNames]);
 
   const step = useMemo(
     () => buildStep(current, prior, lens, path, branches),
@@ -681,6 +706,7 @@ export function TeamSales({
       : null;
   const sentence = viewSentence({
     lens,
+    line: line === "ALL" ? "all products" : PRODUCT_LINE_LABEL[line],
     when: month,
     region: walkedRegion ?? (desk && path.length === 0 ? bookRegion : null),
     scopeRegion: scopeRegionName,
@@ -838,8 +864,14 @@ export function TeamSales({
           because a choice that empties the screen should say so before it is
           made — and the lists are counted under each other, so picking a house
           leaves only the regions that house actually ships to. */}
-      {lens === "dealer" && (
-        <div className="dealer-scope">
+      {/* THE NARROWINGS ROW. The dealer lens keeps its two chips; the product
+          line sits beside them behind a divider, and stands alone in every
+          other lens — it is the one filter that applies to them all (João,
+          2026-09-24). Radio, not a dropdown: three lines and one of them is
+          always on, so the choice belongs in the open. */}
+      <div className="dealer-scope">
+        {lens === "dealer" && (
+          <>
           <ChipSelect
             label="Narrow to one region"
             allLabel="All regions"
@@ -849,7 +881,11 @@ export function TeamSales({
               label: o.name,
               hint: `${QTY.format(Math.round(o.lf))} ${step.unit}`,
             }))}
-            onChange={(id) => narrow({ regionId: id })}
+            onChange={(id) => {
+              const name = scopeChoices.regions.find((o) => o.id === id)?.name;
+              if (name) setScopeNames((prev) => ({ ...prev, [id]: name }));
+              narrow({ regionId: id });
+            }}
           />
           <ChipSelect
             label="Narrow to one distributor"
@@ -860,19 +896,40 @@ export function TeamSales({
               label: o.name,
               hint: `${QTY.format(Math.round(o.lf))} ${step.unit}`,
             }))}
-            onChange={(id) => narrow({ distributorId: id })}
+            onChange={(id) => {
+              const name = scopeChoices.distributors.find((o) => o.id === id)?.name;
+              if (name) setScopeNames((prev) => ({ ...prev, [id]: name }));
+              narrow({ distributorId: id });
+            }}
           />
-          {scopeOn && (
+            {scopeOn && (
+              <button
+                type="button"
+                className="chip chip-clear"
+                onClick={() => narrow(NO_DEALER_SCOPE)}
+              >
+                Clear
+              </button>
+            )}
+            <span className="scope-divider" aria-hidden="true" />
+          </>
+        )}
+        <span className="prodline" role="radiogroup" aria-label="Product line">
+          <span className="prodline-title">Products</span>
+          {PRODUCT_LINES.map((l) => (
             <button
+              key={l}
               type="button"
-              className="chip chip-clear"
-              onClick={() => narrow(NO_DEALER_SCOPE)}
+              role="radio"
+              aria-checked={line === l}
+              className="chip prodline-chip"
+              onClick={() => onLine(l)}
             >
-              Clear
+              {PRODUCT_LINE_LABEL[l]}
             </button>
-          )}
-        </div>
-      )}
+          ))}
+        </span>
+      </div>
 
       {/* A narrowing that leaves nothing is said in words. An empty walk under a
           filled dropdown reads as a broken screen rather than as an answer. */}

@@ -1412,6 +1412,9 @@ export interface PeriodTotal {
   period_kind: "MONTH" | "YTD" | null;
   region_id: string | null;
   quantity: number | string;
+  /** Which of the three lines this total is for (sell_through_periods groups
+   *  by it since 2026-09-24), so the trend reads the line being shown. */
+  product_line?: string | null;
 }
 
 export interface GoalMonth {
@@ -1424,11 +1427,13 @@ export interface GoalMonth {
 export function monthsOnFile(
   totals: readonly PeriodTotal[],
   regionId: string | null = null,
+  line: ProductLine = "ALL",
 ): GoalMonth[] {
   const byMonth = new Map<string, number>();
   for (const t of totals) {
     if (t.period_kind === "YTD") continue;
     if (regionId !== null && t.region_id !== regionId) continue;
+    if (line !== "ALL" && t.product_line !== line) continue;
     const key = `${t.period.slice(0, 7)}-01`;
     byMonth.set(key, (byMonth.get(key) ?? 0) + Number(t.quantity));
   }
@@ -1663,6 +1668,8 @@ export function regionCoverage(
  */
 export function viewSentence(o: {
   lens: SellLens;
+  /** The product line the page is reading — "Thermo", "all products". */
+  line?: string;
   /** "August 2026", "Jul – Aug 2026", "Year to date". */
   when: string;
   /** The region picked on the map or walked into, if any. */
@@ -1680,6 +1687,7 @@ export function viewSentence(o: {
     dealer: "Dealers ranked by what they bought",
   };
   const parts = [what[o.lens]];
+  if (o.line) parts.push(o.line);
   const region = o.region ?? o.scopeRegion ?? null;
   parts.push(region ?? "all regions");
   if (o.lens === "dealer") parts.push(o.scopeHouse ?? "all distributors");
@@ -1742,4 +1750,55 @@ export function yearSoFar(
     cut,
     months,
   };
+}
+
+// ── The product line: what was sold, not who sold it ─────────────────────────
+//
+// GMX sells three lines and the screens read one at a time (João, 2026-09-24).
+// The files name a product, not a line, so the line is read out of the name:
+//
+//   ACCOYA     — acetylated wood, always named
+//   THERMO     — thermally modified: "THERMOWOOD", "Maximo Thermo", "Thermally
+//                Modified", and the trade's "TM" in a code-heavy description
+//   HARDWOODS  — the natural species: Ipe, Garapa, Cumaru and their kin
+//
+// Everything that is neither Accoya nor thermally modified is a hardwood: the
+// species are many and the list would rot, while the two treatments are
+// spelled out every time. Andre confirmed the TM case (a Radiata Pine T&G
+// carrying 11,562 LF) on 2026-09-24.
+//
+// THERMO IS THE DEFAULT VIEW, not "All": it is the business, and a screen that
+// opens on everything makes the reader narrow before reading.
+
+export const PRODUCT_LINES = ["ALL", "THERMO", "ACCOYA", "HARDWOODS"] as const;
+export type ProductLine = (typeof PRODUCT_LINES)[number];
+
+/** What the filter opens on. */
+export const DEFAULT_PRODUCT_LINE: ProductLine = "THERMO";
+
+export const PRODUCT_LINE_LABEL: Record<ProductLine, string> = {
+  ALL: "All",
+  THERMO: "Thermo",
+  ACCOYA: "Accoya",
+  HARDWOODS: "Hardwoods",
+};
+
+/** The line a product name belongs to; null when there is no name to read. */
+export function productLine(product: string | null | undefined): ProductLine | null {
+  if (!product || product.trim().length === 0) return null;
+  if (/accoya/i.test(product)) return "ACCOYA";
+  // "TM" only as its own word: "TM Saicos Finish" is thermally modified, while
+  // a code like MLTAGRP422301 must not make every row thermo.
+  if (/thermo|thermowood|therm\s*mod|thermally\s+modified|(^|\s)TM(\s|$)/i.test(product))
+    return "THERMO";
+  return "HARDWOODS";
+}
+
+/** The rows one line leaves standing. ALL keeps everything, order untouched. */
+export function scopeProductLine(
+  rows: readonly SellThroughRow[],
+  line: ProductLine,
+): readonly SellThroughRow[] {
+  if (line === "ALL") return rows;
+  return rows.filter((r) => productLine(r.product) === line);
 }

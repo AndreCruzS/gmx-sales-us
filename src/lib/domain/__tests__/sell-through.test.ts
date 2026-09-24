@@ -8,6 +8,9 @@ import {
   dealerWhere,
   viewSentence,
   yearSoFar,
+  productLine,
+  scopeProductLine,
+  DEFAULT_PRODUCT_LINE,
   regionCoverage,
   OTHERS_COLUMN,
   compositionRail,
@@ -1377,5 +1380,48 @@ describe("yearSoFar", () => {
 
   it("answers null with no year file", () => {
     expect(yearSoFar([], monthly)).toBeNull();
+  });
+});
+
+describe("productLine", () => {
+  it("reads the three lines out of the product name", () => {
+    expect(productLine('083003213 1X6-154" THERMOWOOD CLAD V-GRV/NCKL GAP AYOUS')).toBe("THERMO");
+    expect(productLine("16MTAYVJNG 1X6 MAXIMO THERMO AYOUS V-JOINT/NICKEL GAP")).toBe("THERMO");
+    expect(productLine("MLTAGAY422059_Ayous T&G Reversible Thermally Modified_1 X 6 X RL")).toBe("THERMO");
+    expect(productLine("MLEDMAY422096_FSC Accoya Grey Radiata Pine Decking E4E_1\" X 5-3/4\" X RL")).toBe("ACCOYA");
+    expect(productLine("MLDECIP550001_Ipe Decking_1 X 6 X RL")).toBe("HARDWOODS");
+    expect(productLine("MLS4SGP452725_Garapa S4S E4E_1 X 6 X RL")).toBe("HARDWOODS");
+  });
+
+  it('takes "TM" as thermally modified, but only as its own word', () => {
+    expect(productLine('MLTAGRP422301_Radiata Pine T&G N-GAP TM Saicos Finish_1" X 6" X RL')).toBe(
+      "THERMO",
+    );
+    // a code that merely contains the letters is not a treatment
+    expect(productLine("MLDECTMX999_Ipe Decking_1 X 6 X RL")).toBe("HARDWOODS");
+  });
+
+  it("has no line for a row the file left unnamed", () => {
+    expect(productLine(null)).toBeNull();
+    expect(productLine("   ")).toBeNull();
+  });
+
+  it("opens on Thermo, never on everything", () => {
+    expect(DEFAULT_PRODUCT_LINE).toBe("THERMO");
+  });
+});
+
+describe("scopeProductLine", () => {
+  const rows = [
+    row({ product: '083003213 1X6-154" THERMOWOOD CLAD AYOUS', quantity: 100 }),
+    row({ product: "MLDECIP550001_Ipe Decking_1 X 6 X RL", quantity: 50 }),
+    row({ product: "FSC Accoya Grey Radiata Pine Decking", quantity: 25 }),
+  ];
+
+  it("keeps one line, and every row under ALL", () => {
+    expect(scopeProductLine(rows, "THERMO")).toHaveLength(1);
+    expect(scopeProductLine(rows, "HARDWOODS")[0].quantity).toBe(50);
+    expect(scopeProductLine(rows, "ACCOYA")[0].quantity).toBe(25);
+    expect(scopeProductLine(rows, "ALL")).toBe(rows);
   });
 });

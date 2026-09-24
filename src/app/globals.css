@@ -1773,6 +1773,59 @@ body {
 .chip-clear {
   color: var(--ink-muted);
 }
+/* The product line, beside the dealer's own narrowings and alone in every
+   other lens: a title and three-or-four chips acting as radios. A divider
+   keeps "which dealers" and "which product" from reading as one row of
+   filters. */
+.scope-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 24px;
+  margin: 0 2px;
+  background: var(--rule);
+}
+/* ON THE PHONE THE GROUP TAKES ITS OWN ROW (Andre, 2026-09-24): the title on
+   one line, the four chips under it, so the product line never wraps into the
+   dealer's chips and reads as one row of filters. The divider only separates
+   things that are side by side, so it goes. */
+.prodline {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.prodline-title {
+  flex-basis: 100%;
+}
+.scope-divider {
+  display: none;
+}
+@media (min-width: 768px) {
+  .prodline {
+    display: inline-flex;
+    flex-basis: auto;
+  }
+  .prodline-title {
+    flex-basis: auto;
+  }
+  .scope-divider {
+    display: block;
+  }
+}
+.prodline-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+/* pressed reads as the one in force, not as one of several toggles */
+.prodline-chip[aria-checked="true"] {
+  background: var(--fill-ink);
+  color: var(--on-ink);
+  box-shadow: none;
+}
 
 /* the chip that opens a list — the period picker's shape, a simpler panel */
 .chipsel {
@@ -5122,6 +5175,10 @@ input[type="datetime-local"] {
   background: var(--fill-ink);
   color: var(--on-ink);
 }
+.dmod-tag-line {
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+}
 .dmod-tag-warn {
   background: var(--warn-tint);
   color: var(--warn-ink);
@@ -5426,3 +5483,4 @@ input[type="datetime-local"] {
   font-weight: 600;
   color: var(--accent-ink);
 }
+

@@ -34,7 +34,12 @@ const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 // ── Opening it from anywhere ────────────────────────────────────────────────
 
-const DealerModuleContext = createContext<{ open: (key: string) => void } | null>(null);
+const DealerModuleContext = createContext<{
+  open: (key: string) => void;
+  /** The product line the page is filtered to, when it is not all of them —
+   *  the module's figures are that line's, and must say so. */
+  lineLabel?: string;
+} | null>(null);
 
 /** Null outside a provider, so a list can offer the module only where it exists. */
 export function useDealerModule() {
@@ -43,19 +48,28 @@ export function useDealerModule() {
 
 export function DealerModuleProvider({
   rows,
+  lineLabel,
   children,
 }: {
-  /** Every sell-through row on hand, year file and months alike. */
+  /** Every sell-through row on hand, year file and months alike — already
+   *  narrowed to the product line the page is reading. */
   rows: readonly SellThroughRow[];
+  lineLabel?: string;
   children: React.ReactNode;
 }) {
   const [key, setKey] = useState<string | null>(null);
-  const value = useMemo(() => ({ open: (k: string) => setKey(k) }), []);
+  const value = useMemo(() => ({ open: (k: string) => setKey(k), lineLabel }), [lineLabel]);
   return (
     <DealerModuleContext.Provider value={value}>
       {children}
       {key !== null && (
-        <DealerModule key={key} dealerKey={key} rows={rows} onClose={() => setKey(null)} />
+        <DealerModule
+          key={key}
+          dealerKey={key}
+          rows={rows}
+          lineLabel={lineLabel}
+          onClose={() => setKey(null)}
+        />
       )}
     </DealerModuleContext.Provider>
   );
@@ -207,10 +221,12 @@ function overviewSentence(f: DealerFacts): string {
 function DealerModule({
   dealerKey,
   rows,
+  lineLabel,
   onClose,
 }: {
   dealerKey: string;
   rows: readonly SellThroughRow[];
+  lineLabel?: string;
   onClose: () => void;
 }) {
   const { profile } = useOffline();
@@ -257,7 +273,9 @@ function DealerModule({
 
   // The insights: asked once per dealer and per newest file, kept for the
   // session so opening the same name twice does not ask twice.
-  const cacheKey = facts ? `dealer-insights:${dealerKey}:${facts.filesOnHand.at(-1) ?? ""}` : null;
+  const cacheKey = facts
+    ? `dealer-insights:${dealerKey}:${lineLabel ?? "all"}:${facts.filesOnHand.at(-1) ?? ""}`
+    : null;
   const [insights, setInsights] = useState<
     { state: "loading" } | { state: "ready"; data: DealerInsights } | { state: "failed"; message: string }
   >(() => {
@@ -275,6 +293,7 @@ function DealerModule({
     if (!facts || !cacheKey || !relReady || askedOnce) return;
     let stale = false;
     const body = {
+      productLineShown: lineLabel ?? "every line",
       dealer: {
         name: facts.name,
         labelsInFiles: facts.labels,
@@ -332,7 +351,7 @@ function DealerModule({
     return () => {
       stale = true;
     };
-  }, [facts, cacheKey, relReady, rel, askedOnce]);
+  }, [facts, cacheKey, relReady, rel, askedOnce, lineLabel]);
 
   // Escape closes, like every sheet in the app.
   useEffect(() => {
@@ -526,6 +545,8 @@ function DealerModule({
           </p>
           <div className="dmod-tags">
             <WhereTags houses={facts.houses} />
+            {/* every figure below is this line's, so the header says which */}
+            {lineLabel && <span className="dmod-tag dmod-tag-line">{lineLabel} only</span>}
             {rel?.strategic && <span className="dmod-tag dmod-tag-ink">Strategic</span>}
             {!accountId && <span className="dmod-tag dmod-tag-warn">No account yet</span>}
             {noRep && <span className="dmod-tag dmod-tag-warn">No rep for this region</span>}

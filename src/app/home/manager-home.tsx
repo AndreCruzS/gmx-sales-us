@@ -32,6 +32,10 @@ import {
   dealerWhere,
   recurrence,
   regionCoverage,
+  scopeProductLine,
+  DEFAULT_PRODUCT_LINE,
+  PRODUCT_LINE_LABEL,
+  type ProductLine,
   regionsOnFile,
   SELL_LENSES,
   type PeriodTotal,
@@ -178,7 +182,12 @@ export function ManagerHome({ name }: { name: string }) {
   const [slipping, setSlipping] = useState<ExceptionRow[]>([]);
   const [wonMonths, setWonMonths] = useState<WonMonthRow[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
-  const [sellRows, setSellRows] = useState<SellThroughRow[]>([]);
+  const [sellRows, setAllSellRows] = useState<SellThroughRow[]>([]);
+  // WHICH LINE THE WHOLE PAGE IS READING (João, 2026-09-24). Thermo, Accoya or
+  // Hardwoods — applied to the rows themselves, before anything is built from
+  // them, so the chart, the lists, the recurrence strip, the gone-quiet
+  // register and every dealer module agree on what they are counting.
+  const [line, setLine] = useState<ProductLine>(DEFAULT_PRODUCT_LINE);
   // Every month the book holds a return for, newest first.
   const [months, setMonths] = useState<string[]>([]);
   // THE WINDOW, as the booking-style picker speaks it (Andre, 2026-09-04):
@@ -235,7 +244,7 @@ export function ManagerHome({ name }: { name: string }) {
     // row fetches below then name their periods exactly.
     const pv = await supabase
       .from("sell_through_periods")
-      .select("period, period_kind, region_id, quantity")
+      .select("period, period_kind, region_id, quantity, product_line")
       .limit(2000);
     const periodRows = (pv.data as PeriodTotal[] | null) ?? [];
     setSellPeriods(periodRows);
@@ -393,7 +402,7 @@ export function ManagerHome({ name }: { name: string }) {
     setSlipping(ex.error ? [] : ((ex.data as ExceptionRow[]) ?? []));
     setWonMonths(wm.error ? [] : ((wm.data as WonMonthRow[]) ?? []));
     setPipeline(pl.error ? [] : ((pl.data as PipelineRow[]) ?? []));
-    setSellRows([
+    setAllSellRows([
       ...(st.error ? [] : ((st.data as SellThroughRow[]) ?? [])),
       ...(sy.error ? [] : ((sy.data as SellThroughRow[]) ?? [])),
     ]);
@@ -478,13 +487,14 @@ export function ManagerHome({ name }: { name: string }) {
   // nothing.
   // The two windows never mix: a YTD aggregate inside the monthly pair would
   // double the book, and a month inside the YTD reading would understate it.
+  const linedRows = useMemo(() => scopeProductLine(sellRows, line), [sellRows, line]);
   const monthlyRows = useMemo(
-    () => sellRows.filter((r) => r.period_kind !== "YTD"),
-    [sellRows],
+    () => linedRows.filter((r) => r.period_kind !== "YTD"),
+    [linedRows],
   );
   const ytdSellRows = useMemo(
-    () => sellRows.filter((r) => r.period_kind === "YTD"),
-    [sellRows],
+    () => linedRows.filter((r) => r.period_kind === "YTD"),
+    [linedRows],
   );
   // The picker's dots: which months have their return on file.
   const monthsWithReturn = useMemo(
@@ -1044,13 +1054,25 @@ export function ManagerHome({ name }: { name: string }) {
     [salesLens, focus, windowInfo.kind, monthlyRows, latest, previous, buyRegion],
   );
 
+  // A LINE WITH ONE MONTH CANNOT SAY WHO CAME BACK (2026-09-24). Accoya and
+  // Hardwoods appear in a single monthly file so far, so recurrence and the
+  // quiet register have nothing to compare and answer null — and a card that
+  // simply vanishes reads as a fault. Said in one line instead.
+  const lineHasOneMonth = useMemo(() => {
+    if (line === "ALL") return null;
+    const months = new Set(
+      monthlyRows.filter((r) => r.period_kind !== "YTD").map((r) => r.period),
+    );
+    return months.size < 2 ? [...months][0] ?? null : null;
+  }, [line, monthlyRows]);
+
   // MONTH AGAINST GOAL — the goal line across every month on file. The
   // country reads against the goals of the regions in the book added up;
   // a picked region against its own. Region lens only, like the strip.
   const goalMonths = useMemo(() => {
     if (salesLens !== "region" || focus) return null;
     const regionId = buyRegion?.key ?? null;
-    const months = monthsOnFile(sellPeriods, regionId);
+    const months = monthsOnFile(sellPeriods, regionId, line);
     if (months.length === 0) return null;
     const goal = regionId
       ? goalFor(targetMap, regionId)
@@ -1062,7 +1084,7 @@ export function ManagerHome({ name }: { name: string }) {
           { lf: 0, own: true },
         );
     return { months, goal: goal.lf, goalIsDefault: !goal.own };
-  }, [salesLens, focus, buyRegion, sellPeriods, targetMap]);
+  }, [salesLens, focus, buyRegion, sellPeriods, targetMap, line]);
 
   // The register's two chapters, each already ranked biggest loss first:
   // the houses that went silent, and the ones still in the file but buying
@@ -1348,7 +1370,10 @@ export function ManagerHome({ name }: { name: string }) {
     // without touching the mobile DOM or its order. Mobile is mandatory-as-is
     // (Andre, 2026-08-31); the desk is a second reading of the same page.
     // Every dealer name on this page opens its module (DealerName reads this).
-    <DealerModuleProvider rows={sellRows}>
+    <DealerModuleProvider
+      rows={linedRows}
+      lineLabel={line === "ALL" ? undefined : PRODUCT_LINE_LABEL[line]}
+    >
     <div className="stack pt-2 mgr-home">
       <section data-desk="hero">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
@@ -1533,6 +1558,8 @@ export function ManagerHome({ name }: { name: string }) {
         mode={salesMode}
         targets={targetMap}
         coverage={coverage}
+        line={line}
+        onLine={setLine}
         onTarget={profile?.role === "admin" ? setTarget : undefined}
         goalMonth={windowInfo.kind === "month"}
       />
@@ -1543,6 +1570,15 @@ export function ManagerHome({ name }: { name: string }) {
           new, each counted in dealers and weighed in LF. The dropped are
           NOT here (Andre, 2026-09-09): the gone-quiet register below already
           names them, and the same ten houses twice on one page is noise. */}
+      {!recur && lineHasOneMonth !== null && salesLens === "region" && !focus && (
+        <p className="t-sub px-1">
+          {PRODUCT_LINE_LABEL[line]} is on one monthly file so far
+          {lineHasOneMonth ? ` (${periodLabel(lineHasOneMonth)})` : ""}, so who
+          kept buying and who went quiet cannot be read for it yet — both need
+          two months to compare.
+        </p>
+      )}
+
       {recur && (
         <section
           className="adapt card recur"
