@@ -11,7 +11,7 @@
 // Pure: rows in, facts out. The relationship half (contacts, visits, notes,
 // quotes, rollout) is ours, not the files', and is read separately.
 
-import { displayAccountName } from "@/lib/format";
+import { displayDealerLabel } from "@/lib/format";
 import type { SellThroughRow } from "@/lib/domain/sell-through";
 
 export interface DealerPeriod {
@@ -98,8 +98,7 @@ export function dealerFacts(
   // A label off the file leads with the distributor's customer code
   // ("THRBUSCO - MAXIMUS BUILDING SUPPLY"); the name a person says is after it.
   const name =
-    mine.find((r) => r.dealer_name)?.dealer_name ??
-    displayAccountName(first.dealer_label.replace(/^[A-Z0-9]+\s+-\s+/, ""));
+    mine.find((r) => r.dealer_name)?.dealer_name ?? displayDealerLabel(first.dealer_label);
 
   const uniq = (xs: (string | null | undefined)[]) =>
     [...new Set(xs.filter((x): x is string => !!x))].sort();

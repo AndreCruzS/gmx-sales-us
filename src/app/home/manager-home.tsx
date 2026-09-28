@@ -57,7 +57,7 @@ import type {
   PkAccount,
   RolloutCounts,
 } from "@/lib/domain/rollout";
-import { formatMoney } from "@/lib/format";
+import { displayDealerLabel, formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
   orderVolume,
@@ -948,7 +948,7 @@ export function ManagerHome({ name }: { name: string }) {
     let unit = "LF";
     for (const r of base) {
       const key = r.dealer_id ?? r.dealer_label;
-      names.set(key, r.dealer_name ?? r.dealer_label);
+      names.set(key, r.dealer_name ?? displayDealerLabel(r.dealer_label));
       ids.set(key, r.dealer_id);
       unit = r.unit || unit;
       if (r.period === pLatest) {

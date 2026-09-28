@@ -1011,7 +1011,8 @@ describe("recurrence", () => {
         houses: ["Boise Cascade"],
       },
     ]);
-    expect(r.dropped.dealers.map((d) => [d.name, d.lf])).toEqual([["CORONA", 500]]);
+    // the name reads plainly now — the file SHOUTS, the screen does not
+    expect(r.dropped.dealers.map((d) => [d.name, d.lf])).toEqual([["Corona", 500]]);
     const many = [
       ...two,
       row({ period: JUL, dealer_id: "big", dealer_label: "BIG", quantity: 5000 }),

@@ -88,6 +88,83 @@ export function displayAccountName(name: string): string {
 }
 
 /**
+ * A DEALER'S NAME AS A PERSON SAYS IT (Bianca, matching sheet 2026-09-28: the
+ * names should read plainly and the codes belong to the machine).
+ *
+ * A distributor's file writes its own customer number into the name —
+ * "LEEROJDA - LEE ROY JORDAN REDWOOD LUMBER", "CASJOLLO - CASSITY JONES LBR &
+ * BLDG MTLS" — and shouts the rest in capitals with the trade's abbreviations.
+ * On screen that is noise: nobody calls a yard by the distributor's code for
+ * it. So the code comes off, the abbreviations are spelled out, and the name is
+ * cased like a name.
+ *
+ * The raw label is NOT thrown away: it stays on the row, it is what an alias
+ * matches on, and it is shown where it is the point — the dealer module's "as
+ * Boise writes it" line and the upload screen.
+ *
+ * Only a leading CODE followed by " - " is removed. "INTERSTATE & LAKELAND
+ * LUMBER - NEWTOWN" keeps its yard, because that part is the name.
+ */
+const TRADE_WORDS: Record<string, string> = {
+  lbr: "Lumber",
+  lmbr: "Lumber",
+  bldg: "Building",
+  bldgs: "Buildings",
+  mtls: "Materials",
+  mtl: "Material",
+  hdw: "Hardware",
+  hdwe: "Hardware",
+  sply: "Supply",
+  sup: "Supply",
+  mfg: "Manufacturing",
+  bldrs: "Builders",
+  whse: "Warehouse",
+  dist: "Distribution",
+  prods: "Products",
+  prod: "Products",
+};
+/** Words that are said as letters, so they stay in capitals. */
+const SPOKEN_AS_LETTERS = new Set(["llc", "lp", "usa", "us", "inc", "co", "ltd"]);
+
+export function displayDealerLabel(label: string): string {
+  // A CODE, not a name: Boise and Hardwoods write their customer number first
+  // ("LUMMEWA - LUMBERMENS MERCHANDISING", "DGL8844 - DG LUMBER GROUP"), while
+  // Russin writes "COMPANY - YARD" ("TAGUE - PHILADELPHIA", "LIBERTY CEDAR -
+  // W. KINGSTON"). So a first token is only a code when it carries a digit, or
+  // when what follows is a name of two words or more — otherwise "Tague" would
+  // be thrown away and the yard left standing alone.
+  const parts = label.match(/^\s*([A-Z0-9][A-Z0-9.]*)\s+-\s+(.+)$/);
+  const looksLikeCode =
+    parts !== null &&
+    (/\d/.test(parts[1]) || parts[2].trim().split(/\s+/).length >= 2);
+  const withoutCode = (looksLikeCode ? parts![2] : label).trim();
+  // A file that SHOUTS gets cased like a name; one that does not is left as it
+  // is — somebody wrote it that way on purpose.
+  const shouting = withoutCode === withoutCode.toUpperCase();
+  const words = withoutCode.split(/\s+/).map((raw) => {
+    const bare = raw.replace(/[^a-zA-Z]/g, "").toLowerCase();
+    const tail = raw.replace(/[a-zA-Z]/g, "");
+    if (TRADE_WORDS[bare]) return TRADE_WORDS[bare] + tail;
+    if (SPOKEN_AS_LETTERS.has(bare)) {
+      // "Inc", "Co" and "Ltd" read as words; "LLC", "LP" and "USA" do not.
+      const asWord = bare === "inc" || bare === "co" || bare === "ltd";
+      return (asWord ? bare[0].toUpperCase() + bare.slice(1) : bare.toUpperCase()) + tail;
+    }
+    if (!shouting || bare.length === 0) return raw;
+    // A short word with no vowel is an initialism ("LKL", "CJ", "BMC"), and
+    // lower-casing it would read as a typo.
+    if (bare.length <= 4 && !/[aeiouy]/.test(bare)) return raw.toUpperCase();
+    // Each side of a hyphen is its own name: "OWEN-ADAMS" is Owen-Adams.
+    return raw
+      .toLowerCase()
+      .split("-")
+      .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+      .join("-");
+  });
+  return words.join(" ");
+}
+
+/**
  * The single letter that stands for a person in their own avatar.
  *
  * It used to take the first two CHARACTERS of the name, which is not the same

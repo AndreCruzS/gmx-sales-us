@@ -25,7 +25,7 @@
 // chain[d]. Depth 0 is the only step with many rows, because nothing has been
 // chosen to narrow it yet.
 
-import { displayAccountName } from "@/lib/format";
+import { displayDealerLabel } from "@/lib/format";
 
 export interface SellThroughRow {
   period: string;
@@ -226,9 +226,10 @@ export function entityAt(row: SellThroughRow, dim: SellDim): SellEntity {
             // spelling the same yard two ways stay two rows until somebody maps
             // them, which is the truth rather than a guess.
             key: `${UNMATCHED_PREFIX}${row.dealer_label}`,
-            // A distributor's system shouts; the label is kept verbatim in the
-            // database and only softened for reading.
-            name: displayAccountName(row.dealer_label),
+            // A distributor's system shouts and writes its own customer code
+            // into the name; the label is kept verbatim in the database and
+            // only read plainly here (Bianca, 2026-09-28).
+            name: displayDealerLabel(row.dealer_label),
             dim,
             accountId: null,
             kind: null,
@@ -1336,7 +1337,7 @@ export function recurrence(
     if (regionId !== null && r.region_id !== regionId) continue;
     if (!housesLatest.has(r.distributor_id) || !housesPrevious.has(r.distributor_id)) continue;
     const key = r.dealer_id ?? r.dealer_label;
-    names.set(key, r.dealer_name ?? r.dealer_label);
+    names.set(key, r.dealer_name ?? displayDealerLabel(r.dealer_label));
     ids.set(key, r.dealer_id);
     unit = r.unit || unit;
     const qty = Number(r.quantity);
