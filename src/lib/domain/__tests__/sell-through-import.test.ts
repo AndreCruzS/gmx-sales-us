@@ -561,3 +561,62 @@ describe("dealer aliases", () => {
     expect(plan.unmatched).toHaveLength(0);
   });
 });
+
+// THE NAMES ON SCREEN CHANGED; THE FILES DID NOT (Andre, 2026-09-29).
+//
+// We renamed what a dealer is called so a person can read it — "Cassity Jones
+// Lumber & Building Materials" where the file shouts "CASJOLLO - CASSITY JONES
+// LBR & BLDG MTLS". Boise, Hardwoods and Russin keep sending the old string
+// forever. So the thing that must not break is the other direction: next
+// month's identical row lands on the SAME dealer and does not arrive as a name
+// nobody has seen.
+//
+// Both cases below are real, taken off production.
+describe("next month's file lands where this month's did", () => {
+  const map = mapping({ branch: 0, branch_code: 1, dealer: 2, product: 3, quantity: 4 });
+  const row = (label: string) =>
+    parseSheet(
+      ["Branch\tCode\tCustomer\tItem\tQty", `Riverside\tBC-RIV\t${label}\tThermo-Ayous\t100`].join(
+        "\n",
+      ),
+    );
+
+  it("holds a label whose spelling the word match cannot bridge", () => {
+    // Hardwoods writes "FIRST SOURCE" in two words; we hold one, "FirstSource".
+    // No word match exists in either direction, and for months this label was
+    // only matched because somebody had fixed the stored rows by hand — which
+    // says nothing about the next file. The alias is what carries it.
+    const dealers: KnownDealer[] = [{ id: "bfs", name: "Builders FirstSource" }];
+    const label = "BUIL4061 - BUILDERS FIRST SOURCE";
+    expect(matchDealer(label, [{ id: "bfs", norm: "builders firstsource", tokens: ["builders", "firstsource"] }])).toBeNull();
+
+    const guessed = buildImport(row(label), map, { branches: BRANCHES, dealers });
+    expect(guessed.rows[0].dealerId).toBeNull();
+
+    const answered = buildImport(row(label), map, {
+      branches: BRANCHES,
+      dealers,
+      aliases: [{ label, dealer_id: "bfs" }],
+    });
+    expect(answered.rows[0].dealerId).toBe("bfs");
+    expect(answered.unmatched).toHaveLength(0);
+  });
+
+  it("does not let a new banner take a yard's volume", () => {
+    // Bianca's answer created "84 Lumber" as a banner over codes whose yard we
+    // do not know yet. Russin names its yards, and those rows must stay on the
+    // yard: the banner fits the same words, and the longer name has to win.
+    const dealers: KnownDealer[] = [
+      { id: "banner", name: "84 Lumber" },
+      { id: "mifflin", name: "84 Lumber West Mifflin" },
+      { id: "patchogue", name: "84 Lumber Patchogue" },
+    ];
+    expect(buildImport(row("84 LUMBER CO - WEST MIFFLIN"), map, { branches: BRANCHES, dealers })
+      .rows[0].dealerId).toBe("mifflin");
+    expect(buildImport(row("84 LUMBER CO - PATCHOGUE"), map, { branches: BRANCHES, dealers })
+      .rows[0].dealerId).toBe("patchogue");
+    // And the banner still takes the code that names no yard at all.
+    expect(buildImport(row("84L8820 - 84 LUMBER COMPANY"), map, { branches: BRANCHES, dealers })
+      .rows[0].dealerId).toBe("banner");
+  });
+});

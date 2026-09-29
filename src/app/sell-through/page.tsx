@@ -169,12 +169,20 @@ export default function SellThroughPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [ds, us, br, ts, tr, al] = await Promise.all([
-      supabase
-        .from("accounts")
-        .select("id, name, account_type")
-        .order("name")
-        .limit(500),
+    // THE TWO LISTS THAT DECIDE WHERE A ROW LANDS ARE PAGED, NOT LIMITED.
+    // The server caps any query at 1,000 rows and .limit() does not lift it, so
+    // a roster or an answer list that grows past it would come back short with
+    // no error — and a missing alias does not fail, it silently sends a dealer's
+    // volume back to nobody. 107 answers today, a few more every month.
+    const [accountRows, aliasRows] = await Promise.all([
+      fetchAllPages<DistributorRow & { account_type: string }>((from, to) =>
+        supabase.from("accounts").select("id, name, account_type").order("name").range(from, to),
+      ),
+      fetchAllPages<KnownAlias>((from, to) =>
+        supabase.from("dealer_aliases").select("label, dealer_id").order("label").range(from, to),
+      ),
+    ]);
+    const [us, br, ts, tr] = await Promise.all([
       supabase
         .from("sell_through_uploads")
         .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at")
@@ -188,12 +196,9 @@ export default function SellThroughPage() {
       // cheap, and neither depends on PostgREST guessing the relationship.
       supabase.from("territory_states").select("state, territory_id").limit(200),
       supabase.from("territories").select("id, name").limit(200),
-      supabase.from("dealer_aliases").select("label, dealer_id").limit(1000),
     ]);
-    setAliases(al.error ? [] : ((al.data as KnownAlias[]) ?? []));
-    const accounts = ds.error
-      ? []
-      : ((ds.data as (DistributorRow & { account_type: string })[]) ?? []);
+    setAliases(aliasRows);
+    const accounts = accountRows;
     setDistributors(accounts.filter((a) => a.account_type === "DISTRIBUTOR"));
     // Every account that is not a house is a candidate for a dealer name in the
     // file — a contractor buying off a branch is unusual but it is not an error,
