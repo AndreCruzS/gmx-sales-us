@@ -86,4 +86,36 @@ describe("displayDealerLabel", () => {
   it("leaves a name somebody already cased alone", () => {
     expect(displayDealerLabel("Ganahl Lumber")).toBe("Ganahl Lumber");
   });
+
+  // The four the round-2 sheet caught, read back off Bianca's own list.
+  it("capitalises both sides of a slash", () => {
+    expect(displayDealerLabel("CONCORD/LITTLETON - LITTLETON")).toBe(
+      "Concord/Littleton - Littleton",
+    );
+  });
+
+  it("keeps a person's initials in capitals", () => {
+    expect(displayDealerLabel("C.A. NIECE CO INC - LAMBERTVILLE")).toBe(
+      "C.A. Niece Co Inc - Lambertville",
+    );
+  });
+
+  it("keeps a company said as letters in capitals", () => {
+    expect(displayDealerLabel("ABCSUBE - ABC SUPPLY COMPANY INC")).toBe(
+      "ABC Supply Company Inc",
+    );
+    expect(displayDealerLabel("PAC3201 - JBI LLC")).toBe("JBI LLC");
+  });
+
+  it("does not shout a joining word", () => {
+    expect(displayDealerLabel("INTE8391 - INTEGRO WINDOWS AND DOORS LLC")).toBe(
+      "Integro Windows and Doors LLC",
+    );
+  });
+
+  it("drops the conjunction a truncated column left hanging", () => {
+    expect(displayDealerLabel("CAS3100 - CASTLE ROCK DOORS MOULDINGS &")).toBe(
+      "Castle Rock Doors Mouldings",
+    );
+  });
 });

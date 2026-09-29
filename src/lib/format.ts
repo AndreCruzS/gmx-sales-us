@@ -123,8 +123,25 @@ const TRADE_WORDS: Record<string, string> = {
   prods: "Products",
   prod: "Products",
 };
-/** Words that are said as letters, so they stay in capitals. */
-const SPOKEN_AS_LETTERS = new Set(["llc", "lp", "usa", "us", "inc", "co", "ltd"]);
+/**
+ * Words that are said as letters, so they stay in capitals. The company ones
+ * are here because the vowel test below cannot reach them: "ABC" and "JBI"
+ * carry a vowel and would come back as "Abc Supply" and "Jbi LLC", which is
+ * how nobody says either.
+ */
+const SPOKEN_AS_LETTERS = new Set([
+  "llc",
+  "lp",
+  "usa",
+  "us",
+  "inc",
+  "co",
+  "ltd",
+  "abc",
+  "jbi",
+]);
+/** Small words a name does not shout: "Integro Windows and Doors". */
+const JOINERS = new Set(["and", "of", "the", "for"]);
 
 export function displayDealerLabel(label: string): string {
   // A CODE, not a name: Boise and Hardwoods write their customer number first
@@ -137,11 +154,14 @@ export function displayDealerLabel(label: string): string {
   const looksLikeCode =
     parts !== null &&
     (/\d/.test(parts[1]) || parts[2].trim().split(/\s+/).length >= 2);
-  const withoutCode = (looksLikeCode ? parts![2] : label).trim();
+  // A column that ran out of room leaves the name hanging on its conjunction:
+  // "CAS3100 - CASTLE ROCK DOORS MOULDINGS &". The tail is the file's problem,
+  // not a part of the name.
+  const withoutCode = (looksLikeCode ? parts![2] : label).trim().replace(/[\s,&-]+$/, "");
   // A file that SHOUTS gets cased like a name; one that does not is left as it
   // is — somebody wrote it that way on purpose.
   const shouting = withoutCode === withoutCode.toUpperCase();
-  const words = withoutCode.split(/\s+/).map((raw) => {
+  const words = withoutCode.split(/\s+/).map((raw, i) => {
     const bare = raw.replace(/[^a-zA-Z]/g, "").toLowerCase();
     const tail = raw.replace(/[a-zA-Z]/g, "");
     if (TRADE_WORDS[bare]) return TRADE_WORDS[bare] + tail;
@@ -151,15 +171,23 @@ export function displayDealerLabel(label: string): string {
       return (asWord ? bare[0].toUpperCase() + bare.slice(1) : bare.toUpperCase()) + tail;
     }
     if (!shouting || bare.length === 0) return raw;
+    // Initials, each with its own dot: "C.A. NIECE CO INC" is C.A. Niece, not
+    // "C.a.". The letters are the name.
+    if (/^([A-Za-z]\.)+$/.test(raw)) return raw.toUpperCase();
     // A short word with no vowel is an initialism ("LKL", "CJ", "BMC"), and
     // lower-casing it would read as a typo.
     if (bare.length <= 4 && !/[aeiouy]/.test(bare)) return raw.toUpperCase();
-    // Each side of a hyphen is its own name: "OWEN-ADAMS" is Owen-Adams.
+    // A joining word stays small — but not when it opens the name.
+    if (i > 0 && JOINERS.has(bare)) return bare + tail;
+    // Each side of a hyphen or a slash is its own name: "OWEN-ADAMS" is
+    // Owen-Adams, "CONCORD/LITTLETON" is Concord/Littleton.
     return raw
       .toLowerCase()
-      .split("-")
-      .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
-      .join("-");
+      .split(/([-/])/)
+      .map((part) =>
+        /^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part,
+      )
+      .join("");
   });
   return words.join(" ");
 }
