@@ -1342,6 +1342,59 @@ export function ManagerHome({ name }: { name: string }) {
   const slipRail =
     (returnChasers.length > 0 ? 1 : 0) + (slipGroupsShown.length > 0 ? 1 : 0);
 
+
+  // ── HOW THE DESK PACKS ITSELF (Andre, 2026-10-02) ──────────────────────────
+  //
+  // Every block used to be nailed to a column in the CSS: the recurrence card
+  // on the left, the goal chart on the right. That reads well only while both
+  // of them exist. Choose Year to date and "Who kept buying" cannot be drawn —
+  // it needs two months to compare — so the goal chart sat alone in the right
+  // column with 826 pixels of empty page beside it. The page could not close
+  // its own hole because nothing in it knew what else was on screen.
+  //
+  // So a block no longer names a column; it names the width it NEEDS, and the
+  // page packs them in reading order:
+  //   wide (8/12) + narrow (4/12) = a full line,
+  //   narrow + narrow = a full line, split evenly — six and six, because two
+  //     cards of the same weight should not be read as one and its appendix,
+  //   anything left alone on its line grows to the full width.
+  // Two wides never pair: squeezed to six each they would both be worse off
+  // than stacked.
+  //
+  // The widths themselves are what the content is: the book and the gates own
+  // the line, the register of quiet accounts is wide WHEN it carries the
+  // two-chapter ranking and narrow when it is a couple of one-line cards.
+  const deskSpans = useMemo(() => {
+    type W = "full" | "wide" | "narrow";
+    const want: { k: string; w: W }[] = [{ k: "sales", w: "full" }];
+    if (recur) want.push({ k: "recurrence", w: "wide" });
+    if (goalMonths) want.push({ k: "goalmonths", w: "narrow" });
+    if (salesLens === "rep") want.push({ k: "gates", w: "full" });
+    if (monthRows.length > 0) want.push({ k: "months", w: "narrow" });
+    if (slipRail > 0 || quietAsRanking)
+      want.push({ k: "slipping", w: quietAsRanking ? "wide" : "narrow" });
+
+    const out = new Map<string, string>();
+    for (let i = 0; i < want.length; ) {
+      const a = want[i];
+      const b = want[i + 1];
+      const pairs =
+        a.w !== "full" && b && b.w !== "full" && !(a.w === "wide" && b.w === "wide");
+      if (!pairs) {
+        // Alone on its line — whatever it asked for, it takes the width.
+        out.set(a.k, "full");
+        i += 1;
+        continue;
+      }
+      const even = a.w === "narrow" && b.w === "narrow";
+      out.set(a.k, even ? "half" : a.w);
+      out.set(b.k, even ? "half" : b.w);
+      i += 2;
+    }
+    return out;
+  }, [recur, goalMonths, salesLens, monthRows.length, slipRail, quietAsRanking]);
+  const span = (k: string) => deskSpans.get(k) ?? "full";
+
   // The figures travel to their new value rather than jumping, so a number
   // that changed because someone asked a different question looks like it.
   const openTween = useTween(totals.open);
@@ -1561,7 +1614,7 @@ export function ManagerHome({ name }: { name: string }) {
       {/* Sales first: the distributors' sell-through, banded by whoever is not
           the row, walking rep → distributor → branch → dealer in place rather
           than sending anyone to another screen. */}
-      <div data-desk="sales">
+      <div data-desk="sales" data-span={span("sales")}>
       <TeamSales
         rows={cardRows}
         windowLabel={
@@ -1609,6 +1662,7 @@ export function ManagerHome({ name }: { name: string }) {
         <section
           className="adapt card recur"
           data-desk="recurrence"
+          data-span={span("recurrence")}
           key={`recur-${buyRegion?.key ?? "all"}`}
         >
           <div className="recur-head">
@@ -1654,6 +1708,7 @@ export function ManagerHome({ name }: { name: string }) {
         <section
           className="adapt card gmcard"
           data-desk="goalmonths"
+          data-span={span("goalmonths")}
           key={`gm-${buyRegion?.key ?? "all"}`}
         >
           <div className="recur-head">
@@ -1681,7 +1736,12 @@ export function ManagerHome({ name }: { name: string }) {
       {/* The rollout answers for one branch when one is chosen, and steps
           aside for a distributor — a house does not have a display wall. */}
       {salesLens === "rep" && (
-        <div className="adapt" data-desk="gates" key={`gates-${focus?.id ?? "all"}`}>
+        <div
+          className="adapt"
+          data-desk="gates"
+          data-span={span("gates")}
+          key={`gates-${focus?.id ?? "all"}`}
+        >
           {focus ? (
             focusedGates ? (
               <RolloutTimeline
@@ -1711,14 +1771,25 @@ export function ManagerHome({ name }: { name: string }) {
         </div>
       )}
 
-      <div className="adapt" data-desk="months" key={`months-${focus?.id ?? "all"}`}>
-        <MonthByMonth rows={monthRows} nowMs={loadedAt} />
-      </div>
+      {/* An empty block still holds a cell in the grid: MonthByMonth draws
+          nothing until a deal is won, and the ghost it left behind was taking
+          a place in the packing above. */}
+      {monthRows.length > 0 && (
+        <div
+          className="adapt"
+          data-desk="months"
+          data-span={span("months")}
+          key={`months-${focus?.id ?? "all"}`}
+        >
+          <MonthByMonth rows={monthRows} nowMs={loadedAt} />
+        </div>
+      )}
 
       {(slipRail > 0 || quietAsRanking) && (
         <section
           className="adapt"
           data-desk="slipping"
+          data-span={span("slipping")}
           data-rail={slipRail >= 2 ? "yes" : "no"}
           key={`slip-${focus?.id ?? "all"}`}
         >
