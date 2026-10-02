@@ -1138,6 +1138,14 @@ export function ManagerHome({ name }: { name: string }) {
       // Display walls are tracked on Ana's platform, not here (Bianca,
       // 2026-09-18: "esse display wall not verified, podemos tirar?").
       if (e.exception_type === "DISPLAY_NOT_VERIFIED") continue;
+      // "New account, nothing booked" left too (Andre, 2026-10-02). It was the
+      // biggest number on the page and said the least: answering Bianca's
+      // matching sheet created 78 dealer accounts in one afternoon, and every
+      // one of them arrived with nothing booked — 131 flags, most of them for
+      // a banner or a buying group nobody is ever going to visit. A count that
+      // grows when the data gets BETTER is not a problem list. The flag still
+      // lives where the work is: the Accounts filter and the account's page.
+      if (e.exception_type === "NEW_ACCOUNT_NO_FOLLOW_UP") continue;
       if (focus && e.subject_id !== focus.accountId) continue;
       const g = map.get(e.exception_type) ?? { count: 0, names: [] };
       g.count += 1;
@@ -1315,6 +1323,27 @@ export function ManagerHome({ name }: { name: string }) {
       .sort((a, b) => b.lf - a.lf);
     return focus ? list.filter((h) => h.id === focus.accountId) : list;
   }, [sellOut, orderLinks, houseReturns, focus]);
+
+  // WHAT THE RIGHT RAIL ACTUALLY HOLDS.
+  //
+  // On the desk this section was built as a register on the left and a narrow
+  // rail on the right — the chasers above, the exception counts below (Andre,
+  // 2026-09-08: the counts belong BESIDE the register, not floating under it).
+  // That holds while there are two things to stack there. With "new account,
+  // nothing booked" taken out the rail is usually one small card against a
+  // register five hundred pixels tall, and the column beside it reads as a hole.
+  //
+  // So the rail earns its column: two blocks keep the side-by-side, one block
+  // or none goes back to a single column and the register IS the section.
+  const slipGroupsShown = useMemo(
+    () =>
+      slippingGroups.filter(
+        (g) => !(quietAsRanking && g.type === "STRATEGIC_ACCOUNT_QUIET"),
+      ),
+    [slippingGroups, quietAsRanking],
+  );
+  const slipRail =
+    (returnChasers.length > 0 ? 1 : 0) + (slipGroupsShown.length > 0 ? 1 : 0);
 
   // The figures travel to their new value rather than jumping, so a number
   // that changed because someone asked a different question looks like it.
@@ -1689,8 +1718,13 @@ export function ManagerHome({ name }: { name: string }) {
         <MonthByMonth rows={monthRows} nowMs={loadedAt} />
       </div>
 
-      {(slippingGroups.length > 0 || quietAsRanking || returnChasers.length > 0) && (
-        <section className="adapt" data-desk="slipping" key={`slip-${focus?.id ?? "all"}`}>
+      {(slipRail > 0 || quietAsRanking) && (
+        <section
+          className="adapt"
+          data-desk="slipping"
+          data-rail={slipRail >= 2 ? "yes" : "no"}
+          key={`slip-${focus?.id ?? "all"}`}
+        >
           <div className="section-head">
             <h2 className="t-section">What&rsquo;s slipping</h2>
             <Link href="/dashboard" className="t-action">
@@ -1815,9 +1849,9 @@ export function ManagerHome({ name }: { name: string }) {
             </div>
           )}
 
+          {slipGroupsShown.length > 0 && (
           <ul className="list">
-            {slippingGroups
-              .filter((g) => !(quietAsRanking && g.type === "STRATEGIC_ACCOUNT_QUIET"))
+            {slipGroupsShown
               .map((g) => (
                 <li key={g.type}>
                   <Link href="/accounts" className="row slip-group">
@@ -1850,6 +1884,7 @@ export function ManagerHome({ name }: { name: string }) {
                 </li>
               ))}
           </ul>
+          )}
         </section>
       )}
 

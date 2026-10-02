@@ -983,6 +983,13 @@ body {
 .slip-names {
   display: none;
 }
+/* The last block of the section carries no bottom margin. Each block wears
+   mb-3 on the assumption that something follows it; with "new account,
+   nothing booked" taken out (Andre, 2026-10-02) the register is usually the
+   last thing on the page, and its margin read as dead air at the foot. */
+[data-desk="slipping"] > :last-child {
+  margin-bottom: 0;
+}
 
 /* FINISH YOUR SETUP — the rep's un-dismissable second handshake. Amber,
    full-width, first thing on every screen until the connection stands. */
@@ -3721,6 +3728,23 @@ input[type="datetime-local"] {
     grid-column: 1;
     grid-row: 2 / span 2;
     margin-bottom: 0;
+  }
+  /* THE RAIL EARNS ITS COLUMN (Andre, 2026-10-02). It held two blocks — the
+     chasers and the exception counts — which is what made a column worth
+     giving it. With "new account, nothing booked" gone there is usually one
+     small card there, and four columns of white ran down beside a register
+     five hundred pixels tall. One block or none: single column, and the
+     register is the section. */
+  .mgr-home > [data-desk="slipping"][data-rail="no"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mgr-home > [data-desk="slipping"][data-rail="no"] > .card {
+    grid-row: auto;
+  }
+  /* the one block there is runs the width too — left in column 2 it would
+     keep the second column alive and the hole with it */
+  .mgr-home > [data-desk="slipping"][data-rail="no"] > .list {
+    grid-column: 1;
   }
 
   /* Getting dealers selling earns the whole line too (Andre, 2026-09-04):
