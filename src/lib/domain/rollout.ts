@@ -123,11 +123,29 @@ export interface GateRow {
   pk_count: number;
 }
 
+/**
+ * HAS THIS DEALER HAD THE CLASS — one test, used by everything.
+ *
+ * The book used to count `pk_state = 'OK'` while the list of names folded
+ * underneath it counted `pk_count > 0`, and on 2026-10-02 they parted company:
+ * "21 of 136" over a list of twenty. A number a reader cannot follow to a name
+ * is worse than a smaller number.
+ *
+ * The COUNT is the fact — how many times that counter has actually been taught
+ * — and the state is derived from it (migration 20261002140000 makes the
+ * database agree, on every write rather than only when pk_count is touched).
+ * Reading the count here means no row the database could ever hold can put two
+ * numbers for one thing on the screen.
+ */
+export function pkDone(b: GateRow): boolean {
+  return b.pk_count > 0;
+}
+
 /** How many of the THREE visible gates this dealer has cleared. The
  *  merchandiser stays in the data and out of every reading (2026-08-28). */
 export function gatesCleared(b: GateRow): number {
   const on = (v: string) => (v === "OK" ? 1 : 0);
-  return on(b.pk_state) + on(b.material_state) + on(b.display_wall_state);
+  return (pkDone(b) ? 1 : 0) + on(b.material_state) + on(b.display_wall_state);
 }
 
 /**
@@ -142,13 +160,17 @@ export function countGates(rows: readonly GateRow[]): RolloutCounts | null {
   const sum = (f: (b: GateRow) => number) => rows.reduce((n, b) => n + f(b), 0);
   return {
     branches: rows.length,
-    pk_done: sum((b) => on(b.pk_state)),
+    // The same test the unfold's list uses — see pkDone.
+    pk_done: rows.filter(pkDone).length,
     merchandiser_done: sum((b) => on(b.merchandiser_state)),
     display_wall_done: sum((b) => on(b.display_wall_state)),
     material_done: sum((b) => on(b.material_state)),
     fully_through: rows.filter((b) => gatesCleared(b) === GATE_COUNT).length,
     not_started: rows.filter((b) => gatesCleared(b) === 0).length,
-    pk_pending: sum((b) => pend(b.pk_state)),
+    // A class on the calendar, and only while it is still just that: a row
+    // left reading PENDING with the class already taught must not be counted
+    // twice, once as done and once as coming.
+    pk_pending: rows.filter((b) => !pkDone(b) && b.pk_state === "PENDING").length,
     merchandiser_pending: 0,
     display_wall_pending: sum((b) => pend(b.display_wall_state)),
     material_pending: sum((b) => pend(b.material_state)),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countGates,
+  pkDone,
   displayRoster,
   gatesCleared,
   latestMaterialEvidence,
@@ -30,6 +31,7 @@ describe("gatesCleared", () => {
       account_id: "a",
       name: "A",
       pk_state: "OK",
+      pk_count: 1,
       material_state: "OK",
       display_wall_state: "OK",
       merchandiser_state: "NO",
@@ -44,6 +46,35 @@ describe("gatesCleared", () => {
     expect(
       gatesCleared(row({ account_id: "a", name: "A", display_wall_state: "PENDING" })),
     ).toBe(0);
+  });
+
+  // THE BOOK AND ITS OWN LIST OF NAMES (Andre, 2026-10-02: "make them agree").
+  // The headline read pk_state, the unfold read pk_count, and one row carrying
+  // OK with a count of zero made the gate claim a class no name could show.
+  it("takes the COUNT as the fact, so a bare OK is not a class", () => {
+    const stray = row({ account_id: "a", name: "A", pk_state: "OK", pk_count: 0 });
+    expect(pkDone(stray)).toBe(false);
+    expect(gatesCleared(stray)).toBe(0);
+  });
+
+  it("counts a class that was taught whatever the state says", () => {
+    const b = row({ account_id: "a", name: "A", pk_state: "NO", pk_count: 2 });
+    expect(pkDone(b)).toBe(true);
+    expect(gatesCleared(b)).toBe(1);
+  });
+
+  it("the headline can never exceed the names behind it", () => {
+    // The exact shape that broke: the database held one bare OK among twenty
+    // real ones and the gate read 21 of 136 over a list of 20.
+    const rows = [
+      row({ account_id: "a", name: "A", pk_state: "OK", pk_count: 1 }),
+      row({ account_id: "b", name: "B", pk_state: "OK", pk_count: 0 }),
+      row({ account_id: "c", name: "C", pk_count: 0 }),
+    ];
+    const headline = countGates(rows)!.pk_done;
+    const named = pkRoster(rows).filter((a) => a.pk_count > 0).length;
+    expect(headline).toBe(named);
+    expect(headline).toBe(1);
   });
 });
 
@@ -85,6 +116,17 @@ describe("countGates", () => {
     expect(c.display_wall_pending).toBe(1);
     expect(c.material_pending).toBe(1);
     expect(c.not_started).toBe(2);
+  });
+
+  it("a class already taught is not also a class coming", () => {
+    // A row left reading PENDING after the class happened would otherwise be
+    // counted twice — once in the bar, once in the amber beside it.
+    const c = countGates([
+      row({ account_id: "a", name: "A", pk_state: "PENDING", pk_count: 1 }),
+      row({ account_id: "b", name: "B", pk_state: "PENDING", pk_count: 0 }),
+    ])!;
+    expect(c.pk_done).toBe(1);
+    expect(c.pk_pending).toBe(1);
   });
 
   it("totals the classes taught, which can exceed the dealers taught", () => {
