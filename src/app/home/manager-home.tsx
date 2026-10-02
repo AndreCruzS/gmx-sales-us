@@ -13,6 +13,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pager, usePaged, usePageSize } from "@/components/pager";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
 import { ManagerHomeSkeleton } from "./home-skeleton";
@@ -1098,10 +1099,6 @@ export function ManagerHome({ name }: { name: string }) {
       { label: "still buying, but fading", rows: fading },
     ].filter((c) => c.rows.length > 0);
   }, [quietRanking]);
-  const quietHidden = quietChapters.reduce(
-    (n, c) => n + Math.max(0, c.rows.length - 10),
-    0,
-  );
 
   // The ranking answers for the whole book under the region lens; a chosen
   // customer narrows the section to themselves like everything else does.
@@ -1790,62 +1787,17 @@ export function ManagerHome({ name }: { name: string }) {
               </div>
               {/* TWO CHAPTERS, TWO COLUMNS on the desk (Andre, 2026-09-09):
                   the silent on the left, the fading on the right, each
-                  ranked by its own loss. The phone stacks them, top ten of
-                  each, as it always read. */}
-              <div className="quiet-scroll quiet-cols">
+                  ranked by its own loss. The phone stacks them.
+                  Each chapter is PAGED, with its arrows on the floor of the
+                  card — the same pattern as "Who kept buying" and the rule for
+                  every list that follows (Andre, 2026-10-02). It replaces a
+                  scrolling box that hid how long the ranking was and a phone
+                  that simply stopped at ten. */}
+              <div className="quiet-cols">
                 {quietChapters.map((c) => (
-                  <div key={c.label} className="quiet-col">
-                    <p className="quiet-chapter">
-                      {c.label}
-                      <span className="quiet-chapter-n">{c.rows.length}</span>
-                    </p>
-                    <ul className="list">
-                      {c.rows.map((r) => {
-                        const body = (
-                          <>
-                            <span className="row-body">
-                              <span className="quiet-name">{r.name}</span>
-                              {/* WHEN they were last heard — under the name;
-                                  the figure column keeps the verdict and the
-                                  volume that went silent. */}
-                              {r.when && (
-                                <span className="t-hint quiet-since">{r.when}</span>
-                              )}
-                              {/* through whom — the house to call */}
-                              <WhereTags houses={r.houses} />
-                            </span>
-                            <span className="quiet-fig">
-                              <span className="fig fig-md">
-                                {QTY.format(r.stake)} {r.unit}
-                              </span>
-                              <span className="sales-move" data-dir="down">
-                                {r.verdict}
-                              </span>
-                            </span>
-                          </>
-                        );
-                        return (
-                          <li key={r.key}>
-                            {/* the name opens the dealer module — every
-                                dealer has one, account or not (2026-09-21) */}
-                            <DealerName dealerKey={r.key} className="row quiet-row w-full">
-                              {body}
-                            </DealerName>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
+                  <QuietChapter key={c.label} chapter={c} />
                 ))}
               </div>
-              {quietHidden > 0 && (
-                <p className="t-hint quiet-more">
-                  and {quietHidden} more —{" "}
-                  <Link href="/accounts" className="underline underline-offset-2">
-                    all accounts
-                  </Link>
-                </p>
-              )}
             </div>
           )}
 
@@ -1890,5 +1842,81 @@ export function ManagerHome({ name }: { name: string }) {
 
     </div>
     </DealerModuleProvider>
+  );
+}
+
+// ── One chapter of the gone-quiet register, read a page at a time ───────────
+//
+// It used to be a scrolling box on the desk that stopped at ten on the phone:
+// a reader could not tell whether the ranking had twelve names or ninety, and
+// the two chapters scrolled independently of each other. Now each chapter pages
+// like every other list in a card, and — the part that was wrong everywhere —
+// its arrows sit on the FLOOR of the card rather than riding up and down with
+// the number of rows, so the two chapters' arrows line up (Andre, 2026-10-02).
+function QuietChapter({
+  chapter,
+}: {
+  chapter: {
+    label: string;
+    rows: readonly {
+      key: string;
+      name: string;
+      stake: number;
+      unit: string;
+      verdict: string;
+      when: string | null;
+      houses: string[];
+    }[];
+  };
+}) {
+  // Five on the phone, eight on the desk: these rows carry a name, a date and
+  // the houses under it, so they stand three lines tall where a dealer's name
+  // in "Who kept buying" stands one.
+  const size = usePageSize(8, 5);
+  const { slice, page, pages, from, setPage } = usePaged(chapter.rows, size);
+
+  return (
+    <div className="quiet-col">
+      <p className="quiet-chapter">
+        {chapter.label}
+        <span className="quiet-chapter-n">{chapter.rows.length}</span>
+      </p>
+      <ul className="list">
+        {slice.map((r) => (
+          <li key={r.key}>
+            {/* the name opens the dealer module — every dealer has one,
+                account or not (2026-09-21) */}
+            <DealerName dealerKey={r.key} className="row quiet-row w-full">
+              <span className="row-body">
+                <span className="quiet-name">{r.name}</span>
+                {/* WHEN they were last heard — under the name; the figure
+                    column keeps the verdict and the volume that went silent. */}
+                {r.when && <span className="t-hint quiet-since">{r.when}</span>}
+                {/* through whom — the house to call */}
+                <WhereTags houses={r.houses} />
+              </span>
+              <span className="quiet-fig">
+                <span className="fig fig-md">
+                  {QTY.format(r.stake)} {r.unit}
+                </span>
+                <span className="sales-move" data-dir="down">
+                  {r.verdict}
+                </span>
+              </span>
+            </DealerName>
+          </li>
+        ))}
+      </ul>
+      {pages > 1 && (
+        <Pager
+          page={page}
+          pages={pages}
+          from={from}
+          shown={slice.length}
+          total={chapter.rows.length}
+          onPage={setPage}
+        />
+      )}
+    </div>
   );
 }

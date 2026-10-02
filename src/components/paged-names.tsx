@@ -28,7 +28,8 @@
 // over four names is furniture.
 
 import { SearchIcon } from "@/components/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Pager, usePaged, usePageSize } from "@/components/pager";
 import { foldForSearch, searchDealers } from "@/lib/domain/sell-through";
 import type { RecurrenceDealer } from "@/lib/domain/sell-through";
 import { WhereTags } from "@/components/where-tags";
@@ -37,30 +38,14 @@ import { DealerName } from "@/components/dealer-module";
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }) {
-  const [desk, setDesk] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1280px)");
-    const on = () => setDesk(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  const size = desk ? 8 : 3;
-
+  const size = usePageSize(8, 3);
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
 
   const needle = foldForSearch(query);
   // searchDealers hands back the SAME array for an empty term, so this settles
   // to the untouched list without a copy while nobody is typing.
   const shown = useMemo(() => searchDealers(dealers, query), [dealers, query]);
-
-  const pages = Math.max(1, Math.ceil(shown.length / size));
-  // A list that shrank under the reader — the region pick changed, or they
-  // typed another letter — must not leave the page pointing past its end.
-  const at = Math.min(page, pages - 1);
-  const from = at * size;
-  const slice = shown.slice(from, from + size);
+  const { slice, page, pages, from, setPage } = usePaged(shown, size);
 
   // Nothing to show and nothing to search: the cell says its count and stops.
   if (dealers.length === 0) return null;
@@ -114,37 +99,21 @@ export function PagedNames({ dealers }: { dealers: readonly RecurrenceDealer[] }
       )}
 
       {(pages > 1 || needle.length > 0) && (
-        <div className="recur-pager">
-          {/* While searching, the count is the answer — "3 of 86 names" —
-              rather than a position in a list nobody is walking through. */}
-          <span className="t-hint" aria-live="polite">
-            {needle.length > 0
+        <Pager
+          page={page}
+          pages={pages}
+          from={from}
+          shown={slice.length}
+          total={shown.length}
+          /* While searching, the count is the answer — "3 of 86 names" —
+             rather than a position in a list nobody is walking through. */
+          status={
+            needle.length > 0
               ? `${QTY.format(shown.length)} of ${QTY.format(dealers.length)}`
-              : `${from + 1}–${Math.min(from + size, shown.length)} of ${shown.length}`}
-          </span>
-          {pages > 1 && (
-            <span className="recur-pager-btns">
-              <button
-                type="button"
-                className="recur-pager-btn"
-                onClick={() => setPage(Math.max(0, at - 1))}
-                disabled={at === 0}
-                aria-label="Previous page"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                className="recur-pager-btn"
-                onClick={() => setPage(Math.min(pages - 1, at + 1))}
-                disabled={at >= pages - 1}
-                aria-label="Next page"
-              >
-                ›
-              </button>
-            </span>
-          )}
-        </div>
+              : undefined
+          }
+          onPage={setPage}
+        />
       )}
     </>
   );

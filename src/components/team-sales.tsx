@@ -47,6 +47,7 @@ import { formatMoney } from "@/lib/format";
 import { useTween } from "@/lib/ui/use-tween";
 import { ChipSelect } from "@/components/chip-select";
 import { DealerName, useDealerModule } from "@/components/dealer-module";
+import { Pager } from "@/components/pager";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backFrom,
@@ -2683,35 +2684,20 @@ function SalesBook({
               </p>
             )}
             {(bookPages > 1 || bookNeedle.length > 0) && (
-              <div className="recur-pager bkm-pager">
-                <span className="t-hint" aria-live="polite">
-                  {bookNeedle.length > 0
+              <Pager
+                page={bookAt}
+                pages={bookPages}
+                from={bookAt * BOOK_PAGE}
+                shown={Math.min(BOOK_PAGE, bookGroups.length - bookAt * BOOK_PAGE)}
+                total={bookGroups.length}
+                className="bkm-pager"
+                status={
+                  bookNeedle.length > 0
                     ? `${QTY.format(bookGroups.length)} of ${QTY.format(step.groups.length)}`
-                    : `${bookAt * BOOK_PAGE + 1}–${Math.min((bookAt + 1) * BOOK_PAGE, bookGroups.length)} of ${bookGroups.length}`}
-                </span>
-                {bookPages > 1 && (
-                  <span className="recur-pager-btns">
-                    <button
-                      type="button"
-                      className="recur-pager-btn"
-                      onClick={() => setBookPage(Math.max(0, bookAt - 1))}
-                      disabled={bookAt === 0}
-                      aria-label="Previous page"
-                    >
-                      &#8249;
-                    </button>
-                    <button
-                      type="button"
-                      className="recur-pager-btn"
-                      onClick={() => setBookPage(Math.min(bookPages - 1, bookAt + 1))}
-                      disabled={bookAt >= bookPages - 1}
-                      aria-label="Next page"
-                    >
-                      &#8250;
-                    </button>
-                  </span>
-                )}
-              </div>
+                    : undefined
+                }
+                onPage={setBookPage}
+              />
             )}
           </div>
 

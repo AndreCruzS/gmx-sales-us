@@ -1084,13 +1084,12 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
+/* a flex column so the chapter's pager can sit on its floor; the two chapters
+   stretch to a common height, which is what puts their arrows on one line */
 .quiet-col {
   min-width: 0;
-}
-/* The phone reads the top ten of each chapter, as it always did — the rest
-   of the ranking exists for the desk and stays hidden here. */
-.quiet-scroll .list > li:nth-child(n + 11) {
-  display: none;
+  display: flex;
+  flex-direction: column;
 }
 .quiet-since {
   display: block;
@@ -1753,7 +1752,9 @@ body {
     font-size: var(--text-sm);
   }
 }
-.bkm-pager {
+/* the book's own pager keeps its rule and sits right under the list — it is
+   the last thing in its card, not a cell sharing a floor with a neighbour */
+.pager.bkm-pager {
   border-top: 1px solid var(--rule);
   margin-top: 4px;
 }
@@ -3595,11 +3596,12 @@ input[type="datetime-local"] {
     align-items: baseline;
     gap: 12px;
   }
-  .mgr-home > [data-desk="recurrence"] .recur-head {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 12px;
-  }
+  /* "Who kept buying" keeps its head STACKED on the desk too (Andre,
+     2026-10-02: "uma divisão bem estranha no topo"). Its sub is a full
+     sentence — the month against the one before it, the dealers counted, and
+     which house sent only one of the two months — and set beside the title it
+     became a second column of prose where a card wanted a heading. The goal
+     card's head stays on one line below: its sub is four words. */
   /* the three cells sit together on the left — spread over the whole
      line they read as three unrelated numbers; the bar keeps the width */
   .mgr-home > [data-desk="recurrence"] .recur-cells {
@@ -3799,17 +3801,12 @@ input[type="datetime-local"] {
   .mgr-home > [data-desk="slipping"] .card .list {
     padding-inline: 16px;
   }
-  .mgr-home > [data-desk="slipping"] .quiet-scroll .list > li:nth-child(n + 11) {
-    display: list-item;
-  }
-  .mgr-home > [data-desk="slipping"] .quiet-scroll {
-    max-height: 432px;
-    overflow-y: auto;
-  }
   .mgr-home > [data-desk="slipping"] .quiet-cols {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0 24px;
-    align-items: start;
+    /* stretch, not start: both chapters run to the same floor so their
+       pagers line up even when one is a row shorter */
+    align-items: stretch;
   }
   .mgr-home > [data-desk="slipping"] .quiet-col .quiet-chapter {
     margin-inline: 16px;
@@ -4950,19 +4947,23 @@ input[type="datetime-local"] {
   flex-shrink: 0;
   color: var(--ink-primary);
 }
-/* the pager under a list: where you are, and the two arrows */
-.recur-pager {
+/* THE PAGER UNDER A LIST: where you are, and the two arrows.
+   margin-top:auto is the point — the arrows sit on the FLOOR of the cell
+   rather than riding up and down with the number of rows, so two lists side
+   by side keep their arrows on one line (Andre, 2026-10-02). */
+.pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding-top: 8px;
+  margin-top: auto;
 }
-.recur-pager-btns {
+.pager-btns {
   display: inline-flex;
   gap: 4px;
 }
-.recur-pager-btn {
+.pager-btn {
   width: 28px;
   height: 28px;
   border-radius: 999px;
@@ -4973,12 +4974,12 @@ input[type="datetime-local"] {
   line-height: 1;
   cursor: pointer;
 }
-.recur-pager-btn:hover:not(:disabled) {
+.pager-btn:hover:not(:disabled) {
   background: var(--fill-ink);
   border-color: var(--fill-ink);
   color: var(--on-ink);
 }
-.recur-pager-btn:disabled {
+.pager-btn:disabled {
   opacity: 0.35;
   cursor: default;
 }
