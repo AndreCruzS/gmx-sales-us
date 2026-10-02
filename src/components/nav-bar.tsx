@@ -21,6 +21,7 @@ import { useReviewCount } from "@/lib/review/count";
 const TITLES: Record<string, string> = {
   "/": "Home",
   "/visits": "Agenda",
+  "/reps": "Reps",
   "/routine": "Routine",
   "/accounts": "Accounts",
   "/accounts/new": "New account",
@@ -39,7 +40,7 @@ const TITLES: Record<string, string> = {
 // Kept in step with TABS in tab-bar.tsx: /record, /review and /dashboard are
 // reached from somewhere now rather than tapped into, so they need the way
 // back that a root does not.
-const ROOTS = new Set(["/", "/visits", "/accounts", "/quotes", "/contacts"]);
+const ROOTS = new Set(["/", "/visits", "/reps", "/accounts", "/quotes", "/contacts"]);
 
 /** "deon@gmxgroup.com" → "Deon". The cache never holds a display name. */
 function nameFromEmail(email: string): string {

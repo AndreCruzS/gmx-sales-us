@@ -5624,3 +5624,207 @@ input[type="datetime-local"] {
     animation: none;
   }
 }
+
+/* ── THE REPS BOARD (Andre, meeting of 2026-10-02) ──────────────────────────
+   The second of the four boards: SALES · REPS · ACCOUNTS · CONTACTS. It reuses
+   the Sales board's grid wholesale — `.mgr-home` is the desk packing, not a
+   name for one page — so everything below is only what is new here: the roster
+   that doubles as the page's filter, and a follow-up row with its two buttons.
+
+   Phone first, as always. The roster is one card per line under 640px, two
+   across above it, and the desk lets it breathe to four. */
+.reps-roster {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+@media (min-width: 560px) {
+  .reps-roster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A rep is a BUTTON, not a link: picking one narrows the board in place
+   rather than navigating, which is the whole reason this page exists
+   ("pra não se perder"). */
+.rep-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+.rep-card:hover {
+  border-color: var(--accent-strong);
+}
+/* The pick is a border and a tint, never a colour swap: the figures inside
+   must read the same whether or not their card is the chosen one. */
+.rep-card[data-on="true"] {
+  border-color: var(--accent-strong);
+  background: var(--surface-accent);
+}
+.rep-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.rep-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.rep-card[data-on="true"] .rep-mark {
+  background: var(--accent-strong);
+  color: var(--surface-card);
+}
+.rep-who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rep-who .t-title,
+.rep-who .t-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Three figures on one line, equal columns — none of them is the headline,
+   because which one matters depends on the week. */
+.rep-figs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: auto;
+}
+.rep-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rep-fig .t-meta {
+  line-height: 1.25;
+}
+
+/* ── A promise, and the two buttons that can end it ───────────────────────
+   Not a checkbox: "done is earned, not ticked" (D45). Log it opens /record
+   carrying the item id so the recording closes THIS promise; Re-book moves
+   the date rather than letting it rot into an exception. */
+.fu-row {
+  align-items: flex-start;
+  gap: 12px;
+}
+.fu-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fu-name:hover {
+  color: var(--accent-ink);
+}
+.fu-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.fu-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fu-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fu-act:hover {
+  border-color: var(--accent-strong);
+  color: var(--accent-ink);
+}
+/* The card's own padding carries the empty state and the pager; the list
+   brings its own. */
+.reps-board .quiet-col > .t-sub {
+  padding: 2px 16px 14px;
+  max-width: 58ch;
+}
+.reps-board .quiet-col > .list {
+  padding: 0 12px 12px;
+}
+
+@media (min-width: 1024px) {
+  .reps-roster {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  /* GETTING DEALERS SELLING, same three columns it had on Sales. The rules
+     there were written against `.mgr-home > [data-desk="gates"]`, and the
+     board carries that class, so the gates needed nothing — these are only
+     the reps board's own blocks. */
+  .reps-board > [data-desk="roster"],
+  .reps-board > [data-desk="hero"] {
+    grid-column: 1 / -1;
+  }
+  /* Inside the card the rows flatten to ruled lines: a list of cards inside
+     a card is the thing this app spent September removing. */
+  .reps-board [data-desk="followups"] > .list {
+    gap: 0;
+    padding: 0 16px 4px;
+  }
+  .reps-board [data-desk="followups"] .fu-row {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 11px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .reps-board [data-desk="followups"] > .list > li:first-child .fu-row {
+    border-top: 0;
+  }
+  /* The arrows sit on the floor of the widget — the pager rule, which is why
+     the card is a flex column (Andre, 2026-10-02). */
+  .reps-board [data-desk="followups"] {
+    display: flex;
+    flex-direction: column;
+  }
+}
+/* The pager brings no side padding of its own — it is a widget's floor, and
+   the widget decides where its edges are. */
+.reps-board .fu-pager {
+  padding: 8px 16px 12px;
+}

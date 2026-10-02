@@ -47,18 +47,12 @@ import {
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
 import { useTween } from "@/lib/ui/use-tween";
+import { packDesk, spanner, type DeskWidth } from "@/lib/desk-pack";
 import { GoalMonths } from "@/components/goal-months";
 import { PagedNames } from "@/components/paged-names";
 import { WhereTags } from "@/components/where-tags";
 import { DealerModuleProvider, DealerName } from "@/components/dealer-module";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
-import { RolloutTimeline } from "@/components/rollout-timeline";
-import type {
-  DisplayAccount,
-  MaterialAccount,
-  PkAccount,
-  RolloutCounts,
-} from "@/lib/domain/rollout";
 import { displayDealerLabel, formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
@@ -90,21 +84,6 @@ interface PipelineRow {
   opportunity_count: number;
   total_value: number;
 }
-// One branch's own gates, for when the screen is answering for one customer
-// rather than for the book — and, since the PK unfold, for the book itself:
-// the general counts are summed from these rows so the three-gate reading and
-// the class counts come from one query instead of two answers that can drift.
-interface BranchRow {
-  account_id: string;
-  org_id: string;
-  name: string;
-  pk_state: string;
-  merchandiser_state: string;
-  display_wall_state: string;
-  material_state: string;
-  pk_count: number;
-}
-
 // Our sell-out. The item lists ride along since 2026-09-04 — the card
 // speaks LF as well as dollars, and LF is proven line by line.
 interface SellOutOrder {
@@ -150,21 +129,6 @@ interface HouseReturnRow {
   period: string;
   period_kind: "MONTH" | "YTD" | null;
 }
-// A monthly return that shows a branch account selling — proof material was
-// there that month, cited beside the Material gate's yes/no.
-interface MaterialEvidenceRow {
-  account_id: string;
-  period: string;
-  lf: number | string;
-}
-// The wall itself lives on the account: up + verified = OK, up alone =
-// going up. The date is the Display gate's citation.
-interface DisplayWallRow {
-  id: string;
-  has_display_wall: boolean | null;
-  display_last_verified_at: string | null;
-}
-
 // THE LAW (Andre, 2026-09-03): only an invoiced order is a sale. Everything
 // else is material in motion — visible, never revenue.
 const INVOICED_STATUSES = new Set(["Invoice_Sent", "Completed"]);
@@ -197,7 +161,6 @@ export function ManagerHome({ name }: { name: string }) {
   // era before adoption. null = the newest month with a return on file.
   const [period, setPeriod] = useState<SalesPeriod | null>(null);
   const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
-  const [branches, setBranches] = useState<BranchRow[]>([]);
   const [effort, setEffort] = useState<{ account_id: string | null; happened_at: string | null }[]>([]);
   // The synced order book, read light, plus who each customer is and which
   // houses have ever sent their return — the sell-out tiles and the
@@ -205,8 +168,6 @@ export function ManagerHome({ name }: { name: string }) {
   const [sellOut, setSellOut] = useState<SellOutOrder[]>([]);
   const [orderLinks, setOrderLinks] = useState<OrderLinkRow[]>([]);
   const [houseReturns, setHouseReturns] = useState<HouseReturnRow[]>([]);
-  const [materialEvidence, setMaterialEvidence] = useState<MaterialEvidenceRow[]>([]);
-  const [displayWalls, setDisplayWalls] = useState<DisplayWallRow[]>([]);
   const [territoryStates, setTerritoryStates] = useState<TerritoryStateRow[]>([]);
   const [territoryCities, setTerritoryCities] = useState<TerritoryCityRow[]>([]);
   const [targets, setTargets] = useState<TerritoryTargetRow[]>([]);
@@ -219,9 +180,10 @@ export function ManagerHome({ name }: { name: string }) {
   // The walk down the chain lives here, not in the section: "Show all" has to
   // undo where you are as well as what the page is answering for.
   const [path, setPath] = useState<PathStep[]>([]);
-  // Which lens the sales card is being read through. Lifted for one reason:
-  // the rollout book answers for REPS — under Region or Distribution it is a
-  // list about people nobody on the screen is asking about (João, 2026-08-28).
+  // Which lens the sales card is being read through. Lifted when the rollout
+  // book lived here and answered only for REPS; the book moved to /reps on
+  // 2026-10-02, but the lens stays lifted — the top tiles are per-lens now
+  // (Andre, same meeting), so the page above the card has to know it too.
   const [salesLens, setSalesLens] = useState<SellLens>("region");
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   // Set when the load did not come back at all. Distinct from "every query
@@ -294,7 +256,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc, tt, ef] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, so, ol, hr, ts, tc, tt, ef] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -358,12 +320,6 @@ export function ManagerHome({ name }: { name: string }) {
         .from("distributor_branches")
         .select("id, distributor_id, name, city, state")
         .limit(500),
-      supabase
-        .from("account_rollout_status")
-        .select(
-          "account_id, org_id, name, pk_state, merchandiser_state, display_wall_state, material_state, pk_count",
-        )
-        .limit(500),
       // Our sell-out, items included: the card proves its LF line by line.
       supabase
         .from("orders_mirror")
@@ -378,20 +334,6 @@ export function ManagerHome({ name }: { name: string }) {
         .from("sell_through_house_periods")
         .select("distributor_id, period, period_kind")
         .limit(2000),
-      // Every month a return shows a branch account selling — the Material
-      // gate's citations. All months on purpose, not the picked window: the
-      // proof does not blink when the picker moves.
-      supabase
-        .from("account_material_evidence")
-        .select("account_id, period, lf")
-        .limit(1000),
-      // The walls, straight from the accounts: the Display gate's yes/no
-      // writes here, and the verified date is its citation.
-      supabase
-        .from("accounts")
-        .select("id, has_display_wall, display_last_verified_at")
-        .eq("account_type", "DEALER")
-        .limit(500),
       // The Master Territory Map, state by state — how a PO's ship-to state
       // finds its region, so the buy-in can answer the region lens.
       supabase.from("territory_states").select("state, territory_id").limit(200),
@@ -416,7 +358,6 @@ export function ManagerHome({ name }: { name: string }) {
     ]);
     setMonths(monthsAvail);
     setSellBranches(sb.error ? [] : ((sb.data as BranchRef[]) ?? []));
-    setBranches(br.error ? [] : ((br.data as BranchRow[]) ?? []));
     setEffort(
       ef.error
         ? []
@@ -426,12 +367,6 @@ export function ManagerHome({ name }: { name: string }) {
     setOrderLinks(ol.error ? [] : ((ol.data as unknown as OrderLinkRow[]) ?? []));
     setHouseReturns(
       hr.error ? [] : ((hr.data as unknown as HouseReturnRow[]) ?? []),
-    );
-    setMaterialEvidence(
-      me.error ? [] : ((me.data as unknown as MaterialEvidenceRow[]) ?? []),
-    );
-    setDisplayWalls(
-      dw.error ? [] : ((dw.data as unknown as DisplayWallRow[]) ?? []),
     );
     setTerritoryStates(
       ts.error ? [] : ((ts.data as unknown as TerritoryStateRow[]) ?? []),
@@ -653,169 +588,6 @@ export function ManagerHome({ name }: { name: string }) {
     [wonMonths, focus],
   );
 
-  // Three visible gates since the 2026-08-28 review — the merchandiser stays
-  // in the row but out of every reading, and "through" means through the three
-  // that are on the screen.
-  const gatesOn = (b: BranchRow) => {
-    const on = (v: string) => (v === "OK" ? 1 : 0);
-    return on(b.pk_state) + on(b.material_state) + on(b.display_wall_state);
-  };
-
-  // Summed from the same rows the unfold lists, so the book's counts and the
-  // names behind them cannot disagree. dashboard_rollout still exists for the
-  // desktop stopgap; this screen stopped asking two sources one question.
-  const rollout = useMemo<RolloutCounts | null>(() => {
-    if (branches.length === 0) return null;
-    const on = (v: string) => (v === "OK" ? 1 : 0);
-    const pend = (v: string) => (v === "PENDING" ? 1 : 0);
-    const sum = (f: (b: BranchRow) => number) => branches.reduce((n, b) => n + f(b), 0);
-    return {
-      branches: branches.length,
-      pk_done: sum((b) => on(b.pk_state)),
-      merchandiser_done: sum((b) => on(b.merchandiser_state)),
-      display_wall_done: sum((b) => on(b.display_wall_state)),
-      material_done: sum((b) => on(b.material_state)),
-      fully_through: branches.filter((b) => gatesOn(b) === 3).length,
-      not_started: branches.filter((b) => gatesOn(b) === 0).length,
-      pk_pending: sum((b) => pend(b.pk_state)),
-      merchandiser_pending: 0,
-      display_wall_pending: sum((b) => pend(b.display_wall_state)),
-      material_pending: sum((b) => pend(b.material_state)),
-      pk_total: sum((b) => b.pk_count),
-    };
-  }, [branches]);
-
-  const pkAccounts = useMemo<PkAccount[]>(
-    () =>
-      branches
-        .map((b) => ({ account_id: b.account_id, name: b.name, pk_count: b.pk_count }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [branches],
-  );
-
-  // The checkbox and its "again": one writer, the count — the trigger keeps
-  // pk_state agreeing on the server. Optimistic, then the truth reloaded only
-  // on failure, because the row being ticked is already on the screen.
-  const setPkCount = useCallback(
-    async (accountId: string, next: number) => {
-      const row = branches.find((b) => b.account_id === accountId);
-      if (!row || next < 0) return;
-      setBranches((prev) =>
-        prev.map((b) =>
-          b.account_id === accountId
-            ? {
-                ...b,
-                pk_count: next,
-                pk_state: next > 0 ? "OK" : b.pk_state === "OK" ? "NO" : b.pk_state,
-              }
-            : b,
-        ),
-      );
-      const { error } = await getSupabaseBrowserClient()
-        .from("account_rollout")
-        .upsert(
-          { account_id: accountId, org_id: row.org_id, pk_count: next },
-          { onConflict: "account_id" },
-        );
-      if (error) void attempt();
-    },
-    [branches, attempt],
-  );
-
-  // The latest month each branch account is seen selling in — the Material
-  // gate's citation. Latest, not a list: one month of proof reads; three
-  // read as a spreadsheet.
-  const latestEvidence = useMemo(() => {
-    const m = new Map<string, { period: string; lf: number }>();
-    for (const r of materialEvidence) {
-      const cur = m.get(r.account_id);
-      if (!cur || r.period > cur.period)
-        m.set(r.account_id, { period: r.period, lf: Number(r.lf) });
-    }
-    return m;
-  }, [materialEvidence]);
-
-  const materialAccounts = useMemo<MaterialAccount[]>(
-    () =>
-      branches.map((b) => ({
-        account_id: b.account_id,
-        name: b.name,
-        on: b.material_state === "OK",
-        pending: b.material_state === "PENDING",
-        evidence: latestEvidence.get(b.account_id),
-      })),
-    [branches, latestEvidence],
-  );
-
-  // The manual yes/no, for now (Andre, 2026-09-04): the box is the word of
-  // whoever last stood in the store — the evidence beside it never ticks it.
-  const setMaterial = useCallback(
-    async (accountId: string, next: boolean) => {
-      const row = branches.find((b) => b.account_id === accountId);
-      if (!row) return;
-      setBranches((prev) =>
-        prev.map((b) =>
-          b.account_id === accountId
-            ? { ...b, material_state: next ? "OK" : "NO" }
-            : b,
-        ),
-      );
-      const { error } = await getSupabaseBrowserClient()
-        .from("account_rollout")
-        .upsert(
-          { account_id: accountId, org_id: row.org_id, material_state: next ? "OK" : "NO" },
-          { onConflict: "account_id" },
-        );
-      if (error) void attempt();
-    },
-    [branches, attempt],
-  );
-
-  const displayAccounts = useMemo<DisplayAccount[]>(() => {
-    const walls = new Map(displayWalls.map((w) => [w.id, w]));
-    return branches.map((b) => ({
-      account_id: b.account_id,
-      name: b.name,
-      on: b.display_wall_state === "OK",
-      pending: b.display_wall_state === "PENDING",
-      verifiedAt: walls.get(b.account_id)?.display_last_verified_at ?? null,
-    }));
-  }, [branches, displayWalls]);
-
-  // The wall's yes/no writes to the ACCOUNT: checking says "it is up, I saw
-  // it" — so it stamps the verification too. Unchecking takes both back.
-  const setDisplay = useCallback(
-    async (accountId: string, next: boolean) => {
-      const stamp = new Date().toISOString();
-      setBranches((prev) =>
-        prev.map((b) =>
-          b.account_id === accountId
-            ? { ...b, display_wall_state: next ? "OK" : "NO" }
-            : b,
-        ),
-      );
-      setDisplayWalls((prev) => {
-        const row = {
-          id: accountId,
-          has_display_wall: next,
-          display_last_verified_at: next ? stamp : null,
-        };
-        return prev.some((w) => w.id === accountId)
-          ? prev.map((w) => (w.id === accountId ? row : w))
-          : [...prev, row];
-      });
-      const { error } = await getSupabaseBrowserClient()
-        .from("accounts")
-        .update({
-          has_display_wall: next,
-          display_last_verified_at: next ? stamp : null,
-        })
-        .eq("id", accountId);
-      if (error) void attempt();
-    },
-    [attempt],
-  );
-
   // What each market covers, for the region lens's grey legend.
   const coverage = useMemo(
     () => regionCoverage(territoryStates, territoryCities),
@@ -857,48 +629,6 @@ export function ManagerHome({ name }: { name: string }) {
     },
     [profile, attempt],
   );
-
-  const focusedGates = useMemo(() => {
-    if (!focus) return null;
-    const b = branches.find((x) => x.account_id === focus.accountId);
-    if (!b) return null;
-    const on = (v: string) => (v === "OK" ? 1 : 0);
-    const pending = (v: string) => (v === "PENDING" ? 1 : 0);
-    return {
-      branches: 1,
-      pk_done: on(b.pk_state),
-      merchandiser_done: on(b.merchandiser_state),
-      display_wall_done: on(b.display_wall_state),
-      material_done: on(b.material_state),
-      pk_pending: pending(b.pk_state),
-      merchandiser_pending: 0,
-      display_wall_pending: pending(b.display_wall_state),
-      material_pending: pending(b.material_state),
-      fully_through: gatesOn(b) === 3 ? 1 : 0,
-      not_started: 0,
-      pk_total: b.pk_count,
-    };
-  }, [focus, branches]);
-
-  // The one branch's own unfold row, so the class can be recorded from the
-  // focused reading with the same control the book uses.
-  const focusedPk = useMemo<PkAccount[] | undefined>(() => {
-    if (!focus) return undefined;
-    const b = branches.find((x) => x.account_id === focus.accountId);
-    return b ? [{ account_id: b.account_id, name: b.name, pk_count: b.pk_count }] : undefined;
-  }, [focus, branches]);
-
-  const focusedMaterial = useMemo<MaterialAccount[] | undefined>(() => {
-    if (!focus) return undefined;
-    const b = materialAccounts.find((x) => x.account_id === focus.accountId);
-    return b ? [b] : undefined;
-  }, [focus, materialAccounts]);
-
-  const focusedDisplay = useMemo<DisplayAccount[] | undefined>(() => {
-    if (!focus) return undefined;
-    const b = displayAccounts.find((x) => x.account_id === focus.accountId);
-    return b ? [b] : undefined;
-  }, [focus, displayAccounts]);
 
   // GONE QUIET, MEANING QUIET (Andre, 2026-09-01: "se comprou esse mês que
   // passou não é quiet") — AND THEN THE FADING, because the silent alone
@@ -1401,57 +1131,29 @@ export function ManagerHome({ name }: { name: string }) {
     (returnChasers.length > 0 ? 1 : 0) + (slipGroupsShown.length > 0 ? 1 : 0);
 
 
-  // ── HOW THE DESK PACKS ITSELF (Andre, 2026-10-02) ──────────────────────────
+  // ── WHAT EACH BLOCK NEEDS (Andre, 2026-10-02) ─────────────────────────────
   //
-  // Every block used to be nailed to a column in the CSS: the recurrence card
-  // on the left, the goal chart on the right. That reads well only while both
-  // of them exist. Choose Year to date and "Who kept buying" cannot be drawn —
-  // it needs two months to compare — so the goal chart sat alone in the right
-  // column with 826 pixels of empty page beside it. The page could not close
-  // its own hole because nothing in it knew what else was on screen.
+  // A block names the width it NEEDS, never a column, and the page closes its
+  // own holes: choose Year to date and "Who kept buying" cannot be drawn — it
+  // needs two months to compare — so before this the goal chart sat alone in
+  // the right column with 826 pixels of empty page beside it.
   //
-  // So a block no longer names a column; it names the width it NEEDS, and the
-  // page packs them in reading order:
-  //   wide (8/12) + narrow (4/12) = a full line,
-  //   narrow + narrow = a full line, split evenly — six and six, because two
-  //     cards of the same weight should not be read as one and its appendix,
-  //   anything left alone on its line grows to the full width.
-  // Two wides never pair: squeezed to six each they would both be worse off
-  // than stacked.
-  //
-  // The widths themselves are what the content is: the book and the gates own
-  // the line, the register of quiet accounts is wide WHEN it carries the
-  // two-chapter ranking and narrow when it is a couple of one-line cards.
-  const deskSpans = useMemo(() => {
-    type W = "full" | "wide" | "narrow";
-    const want: { k: string; w: W }[] = [{ k: "sales", w: "full" }];
+  // The widths are what the content is: the book owns the line, the register
+  // of quiet accounts is wide WHEN it carries the two-chapter ranking and
+  // narrow when it is a couple of one-line cards. A block that renders
+  // nothing must not be listed, or its ghost takes a place on a line.
+  // The packing itself lives in src/lib/desk-pack.ts: it is a RULE, and the
+  // Reps board (and whatever the admin adds next) obeys the same one rather
+  // than a copy of it. Only the widths are this page's business.
+  const span = useMemo(() => {
+    const want: { k: string; w: DeskWidth }[] = [{ k: "sales", w: "full" }];
     if (recur) want.push({ k: "recurrence", w: "wide" });
     if (goalMonths) want.push({ k: "goalmonths", w: "narrow" });
-    if (salesLens === "rep") want.push({ k: "gates", w: "full" });
     if (monthRows.length > 0) want.push({ k: "months", w: "narrow" });
     if (slipRail > 0 || quietAsRanking)
       want.push({ k: "slipping", w: quietAsRanking ? "wide" : "narrow" });
-
-    const out = new Map<string, string>();
-    for (let i = 0; i < want.length; ) {
-      const a = want[i];
-      const b = want[i + 1];
-      const pairs =
-        a.w !== "full" && b && b.w !== "full" && !(a.w === "wide" && b.w === "wide");
-      if (!pairs) {
-        // Alone on its line — whatever it asked for, it takes the width.
-        out.set(a.k, "full");
-        i += 1;
-        continue;
-      }
-      const even = a.w === "narrow" && b.w === "narrow";
-      out.set(a.k, even ? "half" : a.w);
-      out.set(b.k, even ? "half" : b.w);
-      i += 2;
-    }
-    return out;
-  }, [recur, goalMonths, salesLens, monthRows.length, slipRail, quietAsRanking]);
-  const span = (k: string) => deskSpans.get(k) ?? "full";
+    return spanner(packDesk(want));
+  }, [recur, goalMonths, monthRows.length, slipRail, quietAsRanking]);
 
   // The figures travel to their new value rather than jumping, so a number
   // that changed because someone asked a different question looks like it.
@@ -1841,47 +1543,12 @@ export function ManagerHome({ name }: { name: string }) {
         </section>
       )}
 
-      {/* Bianca's tracker, as the journey a branch walks rather than four
-          numbers in a box — and ONLY under the Rep lens: the gates are the
-          reps' work, and next to a region or a distributor reading they were
-          an answer to a question nobody had asked. */}
-      {/* The rollout answers for one branch when one is chosen, and steps
-          aside for a distributor — a house does not have a display wall. */}
-      {salesLens === "rep" && (
-        <div
-          className="adapt"
-          data-desk="gates"
-          data-span={span("gates")}
-          key={`gates-${focus?.id ?? "all"}`}
-        >
-          {focus ? (
-            focusedGates ? (
-              <RolloutTimeline
-                counts={focusedGates}
-                heading="Their rollout"
-                pkAccounts={focusedPk}
-                onPkCount={setPkCount}
-                materialAccounts={focusedMaterial}
-                onMaterial={setMaterial}
-                displayAccounts={focusedDisplay}
-                onDisplay={setDisplay}
-              />
-            ) : null
-          ) : (
-            rollout && (
-              <RolloutTimeline
-                counts={rollout}
-                pkAccounts={pkAccounts}
-                onPkCount={setPkCount}
-                materialAccounts={materialAccounts}
-                onMaterial={setMaterial}
-                displayAccounts={displayAccounts}
-                onDisplay={setDisplay}
-              />
-            )
-          )}
-        </div>
-      )}
+      {/* GETTING DEALERS SELLING LIVES ON /reps NOW (Andre, 2026-10-02:
+          "podemos transferir a section de getting dealers selling para a nova
+          pagina de reps"). It only ever appeared here under the Rep lens,
+          which was the tell — a list of dealers somebody has to go and finish
+          is not a sales reading, and the page it belongs on is the one that
+          also carries the buttons to finish them. Sales keeps sales. */}
 
       {/* An empty block still holds a cell in the grid: MonthByMonth draws
           nothing until a deal is won, and the ghost it left behind was taking

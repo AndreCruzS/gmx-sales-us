@@ -100,3 +100,105 @@ export const PIPELINE_GATES: readonly {
 
 /** How many of the VISIBLE gates the timeline reads against. */
 export const GATE_COUNT = PIPELINE_GATES.length;
+
+// ── READING THE GATES OFF `account_rollout_status` ──────────────────────────
+//
+// These used to live inside the Sales page, which is where the book was first
+// drawn. The book moved to the REPS page on 2026-10-02 (Andre: "podemos
+// transferir a section de getting dealers selling para a nova pagina de reps"),
+// and rather than carry four memos across with it they became functions here —
+// one place where a row of the view turns into what the timeline reads.
+
+/** One row of `account_rollout_status`: a dealer and where it stands. */
+export interface GateRow {
+  account_id: string;
+  org_id: string;
+  /** Whose patch it is. null = nobody's — the page says so out loud. */
+  owner_id?: string | null;
+  name: string;
+  pk_state: string;
+  merchandiser_state: string;
+  display_wall_state: string;
+  material_state: string;
+  pk_count: number;
+}
+
+/** How many of the THREE visible gates this dealer has cleared. The
+ *  merchandiser stays in the data and out of every reading (2026-08-28). */
+export function gatesCleared(b: GateRow): number {
+  const on = (v: string) => (v === "OK" ? 1 : 0);
+  return on(b.pk_state) + on(b.material_state) + on(b.display_wall_state);
+}
+
+/**
+ * Summed from the same rows the unfold lists, so the book's counts and the
+ * names behind them cannot disagree. `dashboard_rollout` still exists for the
+ * desktop stopgap; this stopped asking two sources one question.
+ */
+export function countGates(rows: readonly GateRow[]): RolloutCounts | null {
+  if (rows.length === 0) return null;
+  const on = (v: string) => (v === "OK" ? 1 : 0);
+  const pend = (v: string) => (v === "PENDING" ? 1 : 0);
+  const sum = (f: (b: GateRow) => number) => rows.reduce((n, b) => n + f(b), 0);
+  return {
+    branches: rows.length,
+    pk_done: sum((b) => on(b.pk_state)),
+    merchandiser_done: sum((b) => on(b.merchandiser_state)),
+    display_wall_done: sum((b) => on(b.display_wall_state)),
+    material_done: sum((b) => on(b.material_state)),
+    fully_through: rows.filter((b) => gatesCleared(b) === GATE_COUNT).length,
+    not_started: rows.filter((b) => gatesCleared(b) === 0).length,
+    pk_pending: sum((b) => pend(b.pk_state)),
+    merchandiser_pending: 0,
+    display_wall_pending: sum((b) => pend(b.display_wall_state)),
+    material_pending: sum((b) => pend(b.material_state)),
+    pk_total: sum((b) => b.pk_count),
+  };
+}
+
+export function pkRoster(rows: readonly GateRow[]): PkAccount[] {
+  return rows
+    .map((b) => ({ account_id: b.account_id, name: b.name, pk_count: b.pk_count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The latest month each dealer is seen selling in — the Material gate's
+ *  citation. Latest, not a list: one month of proof reads, three read as a
+ *  spreadsheet. */
+export function latestMaterialEvidence(
+  rows: readonly { account_id: string; period: string; lf: number | string }[],
+): Map<string, { period: string; lf: number }> {
+  const m = new Map<string, { period: string; lf: number }>();
+  for (const r of rows) {
+    const cur = m.get(r.account_id);
+    if (!cur || r.period > cur.period)
+      m.set(r.account_id, { period: r.period, lf: Number(r.lf) });
+  }
+  return m;
+}
+
+export function materialRoster(
+  rows: readonly GateRow[],
+  evidence: ReadonlyMap<string, { period: string; lf: number }>,
+): MaterialAccount[] {
+  return rows.map((b) => ({
+    account_id: b.account_id,
+    name: b.name,
+    on: b.material_state === "OK",
+    pending: b.material_state === "PENDING",
+    evidence: evidence.get(b.account_id),
+  }));
+}
+
+export function displayRoster(
+  rows: readonly GateRow[],
+  walls: ReadonlyMap<string, { display_last_verified_at: string | null }>,
+): DisplayAccount[] {
+  return rows.map((b) => ({
+    account_id: b.account_id,
+    name: b.name,
+    on: b.display_wall_state === "OK",
+    pending: b.display_wall_state === "PENDING",
+    verifiedAt: walls.get(b.account_id)?.display_last_verified_at ?? null,
+  }));
+}

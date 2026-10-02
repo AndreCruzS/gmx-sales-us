@@ -53,6 +53,15 @@ const TABS = [
   { href: "/contacts", label: "Contacts", Icon: UsersIcon },
 ];
 
+// THE DESK'S BOARDS (Andre, 2026-10-02): SALES · REPS · ACCOUNTS · CONTACTS,
+// one destination each so that walking between them never loses your place.
+// Reps is the desk's board about PEOPLE — who is carrying what, what is owed,
+// which of their dealers is not selling yet — and it is a manager's reading,
+// so it only appears for a role that manages somebody. A rep reaches their own
+// work through Home and the Agenda, where it has always been; a sixth icon on
+// the phone's bar would crowd the five that pay the bills.
+const REPS_TAB = { href: "/reps", label: "Reps", Icon: UsersIcon } as const;
+
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
 // up closest to the button that opened it. The order is how often a rep
 // actually reaches for each — notes daily, visits weekly, quotes when the
@@ -246,7 +255,38 @@ export function TabBar() {
       )}
 
       <nav className="tabbar" aria-label="Primary">
-        {[today, agenda].map(({ href, label, Icon }) => {
+        {[today].map(({ href, label, Icon }) => {
+          const TabIcon = iconOf(label, Icon);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className="tab"
+              data-active={isActive(href)}
+              aria-current={isActive(href) ? "page" : undefined}
+            >
+              <TabIcon size={21} />
+              {labelOf(label)}
+            </Link>
+          );
+        })}
+
+        {/* Second in the bar, straight after Sales — his order, with the
+            rep's own two destinations following. Desk-only, so the phone's
+            five-slot bar is untouched. */}
+        {desk && (
+          <Link
+            href={REPS_TAB.href}
+            className="tab tab-desk"
+            data-active={isActive(REPS_TAB.href)}
+            aria-current={isActive(REPS_TAB.href) ? "page" : undefined}
+          >
+            <REPS_TAB.Icon size={21} />
+            {REPS_TAB.label}
+          </Link>
+        )}
+
+        {[agenda].map(({ href, label, Icon }) => {
           const TabIcon = iconOf(label, Icon);
           return (
             <Link
