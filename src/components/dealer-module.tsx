@@ -767,8 +767,8 @@ function DealerModule({
                  screen, so the section says what is happening instead of a
                  quiet line somebody scrolls past. What it names is true —
                  the files, products and yards it is actually being given. */
-              <section className="dmod-card dmod-loading" aria-busy="true" aria-live="polite">
-                <span className="dmod-loading-head">
+              <section className="dmod-card dmod-loading" aria-busy="true">
+                <span className="dmod-loading-head" aria-live="polite">
                   <span className="dmod-spinner" aria-hidden="true" />
                   Analyzing all data, please wait…
                 </span>
@@ -784,6 +784,26 @@ function DealerModule({
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
+                <LoadingSteps
+                  key={facts.key}
+                  steps={[
+                    `Reading every month this dealer appears in — ${facts.filesOnHand.length} ${
+                      facts.filesOnHand.length === 1 ? "file" : "files"
+                    } on hand.`,
+                    "Lining the months up against each other, and against last year where the file carries it.",
+                    facts.houses.length > 0
+                      ? `Following the volume back through ${
+                          facts.houses.length === 1 ? "the house" : "each house"
+                        } and the branch that served it.`
+                      : "Following the volume back to the branch that served it.",
+                    facts.products.length > 0
+                      ? `Reading what they actually buy — ${facts.products.length} ${
+                          facts.products.length === 1 ? "product" : "products"
+                        }, and which of them moved.`
+                      : "Reading what they actually buy, and which of it moved.",
+                    "Then: up to three findings, each naming what it rests on, and one thing to do.",
+                  ]}
+                />
                 <span className="dmod-skel" aria-hidden="true">
                   <i />
                   <i />
@@ -838,5 +858,44 @@ function DealerModule({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── WHAT IS COMING, WHILE IT COMES (Andre, 2026-10-02) ──────────────────────
+//
+// "Analyzing all data" asks for patience without saying what for. Fifteen
+// seconds of a spinner is long enough that a person decides whether to wait,
+// and they decide on what they are promised. So the card walks through what
+// the reading is actually made of — the months, the houses, the products — and
+// ends on what will land: up to three findings and one thing to do.
+//
+// Every line is TRUE of this dealer: the counts come from the facts already on
+// screen, and the steps are the facts the model is being handed, in the order
+// the answer uses them. It is not a progress bar — nothing here measures the
+// request — so it walks once and HOLDS on the last line rather than looping,
+// which would read as a machine stuck in a circle.
+//
+// The rotating line is hidden from screen readers: the head above it is the
+// polite announcement, and a live region that changes every two seconds talks
+// over the reader instead of to them.
+function LoadingSteps({ steps }: { steps: readonly string[] }) {
+  const [at, setAt] = useState(0);
+  useEffect(() => {
+    const id = setInterval(
+      () => setAt((n) => (n + 1 < steps.length ? n + 1 : n)),
+      2600,
+    );
+    return () => clearInterval(id);
+  }, [steps.length]);
+  // Starting over for another dealer is a REMOUNT, keyed at the call site —
+  // resetting the index from inside the effect sets state during the effect
+  // and cascades a render for nothing.
+  return (
+    /* keyed by the step, so each sentence is a NEW node and the fade plays
+       again — the same element with new text would animate once and never
+       more */
+    <span key={at} className="dmod-loading-step" aria-hidden="true">
+      {steps[Math.min(at, steps.length - 1)]}
+    </span>
   );
 }

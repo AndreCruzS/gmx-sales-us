@@ -5543,6 +5543,32 @@ input[type="datetime-local"] {
   font-weight: 700;
   color: var(--ink-primary);
 }
+/* The line that says what the reading is made of, one step at a time. It holds
+   a two-line box whatever the sentence is: a card that grows and shrinks under
+   a sentence that changes every two seconds is a page that will not sit still
+   while somebody is waiting on it. The fade is the only movement, and it is
+   dropped for a reader who asked for less of it. */
+.dmod-loading-step {
+  display: block;
+  min-height: 2.8em;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+  animation: dmod-step-in 320ms ease-out;
+}
+@keyframes dmod-step-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dmod-loading-step {
+    animation: none;
+  }
+}
 .dmod-spinner {
   width: 16px;
   height: 16px;
