@@ -57,6 +57,11 @@ export interface SellThroughRow {
   /** MONTH unless the upload said otherwise. YTD rows are January-through-the-
    *  period aggregates and must never join the month-over-month pair. */
   period_kind?: "MONTH" | "YTD" | null;
+  /** The label is the DISTRIBUTOR'S OWN counter — samples, cash sales,
+   *  displays, staff, an internal division — not a dealer buying. The volume
+   *  counts in the book; the row is nobody's customer. Optional: fixtures and
+   *  older callers do not set it. */
+  is_house_account?: boolean | null;
 }
 
 /** A branch of a distributor, including the ones that bought nothing — which is
@@ -1397,6 +1402,132 @@ export function recurrence(
     fresh,
     dropped,
     buying: again.count + fresh.count,
+    unit,
+    oneFileHouses,
+  };
+}
+
+// ── Conversion — only what would not have happened anyway ─────────────────
+//
+// "How many of my dealers bought this month" is not a rep's score. Andre,
+// 2026-10-02: "muitos dealers continuam comprando naturalmente sem a
+// intervenção deles o que está ótimo mas que não é justo atribuir a eles como
+// sucesso mensal. Quando estava parado, eles fizeram algo e voltou blz, ou
+// novos." So the rate counts the dealers that needed converting and were
+// converted, and the ones already buying last month are not in it at all —
+// they never needed the work, and a rep should be neither paid nor blamed for
+// the inertia of a good account.
+//
+// THE POOL is dealers who had bought before and did NOT buy last month: the
+// ones there was something to win back. A dealer buying for the first time is
+// a WIN but not a rate — the only denominator available would be "accounts we
+// happen to have created", which grew by 78 in one afternoon on 2026-09-29 and
+// would have collapsed every rep's percentage for no reason on earth. So new
+// dealers are counted beside the rate, never inside it.
+//
+// Same guard as the recurrence card: a house that sent only one of the two
+// months takes no part. Against a July Russin never reported, every Russin
+// dealer would read as won back, and the rate would measure the post.
+
+export interface Conversion {
+  latest: string;
+  previous: string;
+  /** Dealers that had bought before and were silent last month. */
+  pool: number;
+  /** Of the pool, the ones buying again this month. */
+  wonBack: number;
+  /** Buying this month, never seen in any earlier file. */
+  brandNew: number;
+  /** This month's LF of the won-back and the new together — what the work
+   *  actually moved. */
+  lf: number;
+  /** wonBack / pool, or null when nobody was there to win back. */
+  rate: number | null;
+  unit: string;
+  oneFileHouses: string[];
+}
+
+export function conversion(
+  rows: readonly SellThroughRow[],
+  latest: string | null,
+  previous: string | null,
+  regionId: string | null = null,
+): Conversion | null {
+  if (!latest || !previous) return null;
+
+  const housesLatest = new Set<string>();
+  const housesPrevious = new Set<string>();
+  for (const r of rows) {
+    if (r.period_kind === "YTD") continue;
+    if (r.period === latest) housesLatest.add(r.distributor_id);
+    else if (r.period === previous) housesPrevious.add(r.distributor_id);
+  }
+  const bothMonths = (id: string) => housesLatest.has(id) && housesPrevious.has(id);
+  // The precondition is that the two FILES exist, not that this region sold
+  // anything last month. A market that was silent in June and bought in July
+  // has the most to say of any of them, and a region filter must not turn that
+  // into "no answer".
+  if (![...housesLatest].some(bothMonths)) return null;
+
+  const cur = new Map<string, number>();
+  const prev = new Map<string, number>();
+  // Bought at ANY point before the month we are comparing against — the
+  // year-to-date aggregate counts, which is the whole of January to June for
+  // most of this book.
+  const earlier = new Set<string>();
+  let unit = "LF";
+  for (const r of rows) {
+    if (!bothMonths(r.distributor_id)) continue;
+    if (regionId !== null && r.region_id !== regionId) continue;
+    // The house's own counter is not a dealer anybody won back. A sample box
+    // that appears in August and not in July would otherwise read as a rep's
+    // victory, and the cash till as a new customer.
+    if (r.is_house_account) continue;
+    const key = r.dealer_id ?? r.dealer_label;
+    const qty = Number(r.quantity);
+    if (r.period_kind !== "YTD" && r.period === latest) {
+      unit = r.unit || unit;
+      cur.set(key, (cur.get(key) ?? 0) + qty);
+    } else if (r.period_kind !== "YTD" && r.period === previous) {
+      prev.set(key, (prev.get(key) ?? 0) + qty);
+    } else if (r.period < previous && qty > 0) {
+      earlier.add(key);
+    }
+  }
+
+  const houseNames = new Map<string, string>();
+  for (const r of rows) houseNames.set(r.distributor_id, r.distributor_name);
+  const oneFileHouses = [...new Set([...housesLatest, ...housesPrevious])]
+    .filter((h) => !bothMonths(h))
+    .map((h) => houseNames.get(h) ?? h)
+    .sort();
+
+  const boughtThen = (k: string) => (prev.get(k) ?? 0) > 0;
+
+  // The pool: everyone with a history who was silent last month. Taken from
+  // both maps and the history, because a dealer can be known from an earlier
+  // file alone and never appear in either of the two months.
+  const pool = new Set<string>();
+  for (const k of earlier) if (!boughtThen(k)) pool.add(k);
+
+  let wonBack = 0;
+  let brandNew = 0;
+  let lf = 0;
+  for (const [k, c] of cur) {
+    if (c <= 0 || boughtThen(k)) continue;
+    if (pool.has(k)) wonBack += 1;
+    else brandNew += 1;
+    lf += c;
+  }
+
+  return {
+    latest,
+    previous,
+    pool: pool.size,
+    wonBack,
+    brandNew,
+    lf,
+    rate: pool.size > 0 ? wonBack / pool.size : null,
     unit,
     oneFileHouses,
   };

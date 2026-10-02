@@ -32,6 +32,7 @@ import {
   periodShort,
   dealerWhere,
   recurrence,
+  conversion,
   regionCoverage,
   scopeProductLine,
   DEFAULT_PRODUCT_LINE,
@@ -290,7 +291,7 @@ export function ManagerHome({ name }: { name: string }) {
         .sort()
         .reverse()[0] ?? null;
     const SELL_COLS =
-      "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind";
+      "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account";
     const none = Promise.resolve({ data: [], error: null });
     const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc, tt] = await Promise.all([
       supabase
@@ -1055,6 +1056,26 @@ export function ManagerHome({ name }: { name: string }) {
     [salesLens, focus, windowInfo.kind, monthlyRows, latest, previous, buyRegion],
   );
 
+  // THE REP LENS ANSWERS FOR THE REP, NOT FOR THE CHANNEL (Andre, 2026-10-02).
+  // Distributor buy-in is the houses' money, which says nothing about how a
+  // rep sold; under this lens the two right-hand tiles become what the month
+  // did to their dealers — what stopped, and what their own work moved.
+  // Both need a single month with the month before it on file: the year file
+  // is one aggregate and has no month to be compared against.
+  const repTiles = useMemo(() => {
+    if (salesLens !== "rep" || windowInfo.kind !== "month") return null;
+    return {
+      lost: recurrence(monthlyRows, latest, previous, null),
+      // linedRows, not monthlyRows: the measure needs the YEAR file to know
+      // who has bought before. January through June is one aggregate for most
+      // of this book, and stripped of it every dealer whose history lives
+      // there reads as having none — the pool came out empty while the tile
+      // beside it said ten had stopped.
+      conv: conversion(linedRows, latest, previous, null),
+    };
+  }, [salesLens, windowInfo.kind, monthlyRows, linedRows, latest, previous]);
+
+
   // A LINE WITH ONE MONTH CANNOT SAY WHO CAME BACK (2026-09-24). Accoya and
   // Hardwoods appear in a single monthly file so far, so recurrence and the
   // quiet register have nothing to compare and answer null — and a card that
@@ -1066,6 +1087,16 @@ export function ManagerHome({ name }: { name: string }) {
     );
     return months.size < 2 ? [...months][0] ?? null : null;
   }, [line, monthlyRows]);
+
+  // WHY THERE IS NO NUMBER, in the words of the actual obstacle. Saying "pick
+  // a month" to somebody who has picked one — Accoya is in a single monthly
+  // file and has nothing to compare against — sends them to the wrong control.
+  const noCompareReason =
+    windowInfo.kind !== "month"
+      ? "pick a month — the year file is one aggregate"
+      : lineHasOneMonth !== null
+        ? `${line === "ALL" ? "This line" : PRODUCT_LINE_LABEL[line]} is in one monthly file so far — nothing to compare it against`
+        : "no month before this one on file yet";
 
   // MONTH AGAINST GOAL — the goal line across every month on file. The
   // country reads against the goals of the regions in the book added up;
@@ -1577,7 +1608,57 @@ export function ManagerHome({ name }: { name: string }) {
               chosen: the pair above already switched to that door's own
               buying, and a company-wide figure under a focus bar would be
               two screens disagreeing. */}
-          {!focus && (
+          {/* UNDER THE REP LENS the pair is the rep's own month: what fell
+              out of their book, and what their work put back in. The channel
+              cards below answer for the houses, which is a different question
+              asked by a different filter. */}
+          {!focus && salesLens === "rep" && (
+            <>
+              <div className="card card-pad">
+                <div className="t-meta uppercase tracking-wide">Stopped buying</div>
+                <div className="fig fig-xl mt-1">
+                  {repTiles?.lost ? QTY.format(repTiles.lost.dropped.count) : "—"}
+                </div>
+                <div className="t-hint mt-0.5">
+                  {repTiles?.lost
+                    ? `${QTY.format(Math.round(repTiles.lost.dropped.lf))} ${repTiles.lost.unit} went silent`
+                    : noCompareReason}
+                </div>
+              </div>
+              {/* THE RATE SAYS WHAT IT IS MADE OF, on the card, not in a
+                  tooltip (Andre, 2026-10-02). A dealer already buying last
+                  month is not in the denominator: it never needed converting,
+                  and crediting a rep for that inertia — or docking them for
+                  it — is the thing this measure exists to avoid. The new
+                  dealers sit beside the rate and never inside it, because
+                  their only possible pool is "accounts we happen to have
+                  created", which grew by 78 in one afternoon. */}
+              <div className="card card-pad">
+                <div className="t-meta uppercase tracking-wide">Conversion rate</div>
+                <div className="fig fig-xl mt-1">
+                  {repTiles?.conv && repTiles.conv.rate !== null
+                    ? `${Math.round(repTiles.conv.rate * 100)}%`
+                    : "—"}
+                </div>
+                <div className="t-hint mt-0.5">
+                  {repTiles?.conv
+                    ? repTiles.conv.rate !== null
+                      ? `${QTY.format(repTiles.conv.wonBack)} of ${QTY.format(repTiles.conv.pool)} dealers that had stopped bought again${
+                          repTiles.conv.brandNew > 0
+                            ? ` · ${QTY.format(repTiles.conv.brandNew)} new`
+                            : ""
+                        }`
+                      : "nobody had stopped, so there was nothing to win back"
+                    : noCompareReason}
+                </div>
+                <div className="t-hint mt-0.5">
+                  Dealers already buying last month are not counted — they did
+                  not need converting.
+                </div>
+              </div>
+            </>
+          )}
+          {!focus && salesLens !== "rep" && (
             <>
               {/* The card answers for the SAME window the filter set — the
                   hint names it, so the number and the dashboard below can

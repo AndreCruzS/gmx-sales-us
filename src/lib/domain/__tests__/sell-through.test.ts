@@ -37,6 +37,7 @@ import {
   SCOPE_NO_REGION,
   scopeDealerRows,
   recurrence,
+  conversion,
   monthsOnFile,
   regionsOnFile,
   rowMatchesPath,
@@ -1424,5 +1425,122 @@ describe("scopeProductLine", () => {
     expect(scopeProductLine(rows, "HARDWOODS")[0].quantity).toBe(50);
     expect(scopeProductLine(rows, "ACCOYA")[0].quantity).toBe(25);
     expect(scopeProductLine(rows, "ALL")).toBe(rows);
+  });
+});
+
+// The rep's own number: only what would not have happened anyway (Andre,
+// 2026-10-02). A dealer that simply kept buying is nobody's monthly success.
+describe("conversion", () => {
+  const MAY = "2026-05-01";
+  const book = [
+    // History: anaheim, corona and orange all bought in May.
+    row({ period: MAY, dealer_id: "anaheim", quantity: 1000 }),
+    row({ period: MAY, dealer_id: "corona", dealer_name: "Ganahl Corona", quantity: 800 }),
+    row({ period: MAY, dealer_id: "orange", dealer_name: "Orange Coast", quantity: 400 }),
+    // June: only anaheim buys. corona and orange are silent going into July.
+    row({ period: JUN, dealer_id: "anaheim", quantity: 900 }),
+    // July: anaheim carries on by itself, corona is won back, fresno is new.
+    row({ period: JUL, dealer_id: "anaheim", quantity: 950 }),
+    row({ period: JUL, dealer_id: "corona", dealer_name: "Ganahl Corona", quantity: 700 }),
+    row({ period: JUL, dealer_id: "fresno", dealer_name: "Fresno Lumber", quantity: 250 }),
+  ];
+
+  it("counts the ones that needed converting, and leaves the inertia out", () => {
+    const c = conversion(book, JUL, JUN)!;
+    // corona and orange had stopped; only corona came back.
+    expect(c.pool).toBe(2);
+    expect(c.wonBack).toBe(1);
+    expect(c.rate).toBe(0.5);
+    // fresno is a win, but not in the rate — there is no pool of dealers that
+    // do not exist yet.
+    expect(c.brandNew).toBe(1);
+    // what the work moved: the won-back and the new, this month.
+    expect(c.lf).toBe(950);
+    // anaheim bought in both months and is nowhere in this measure.
+  });
+
+  it("does not count a dealer nobody could have lost", () => {
+    // Everyone bought last month: nothing to win back, so there is no rate at
+    // all rather than a flattering 100% or a damning zero.
+    const steady = [
+      row({ period: JUN, dealer_id: "anaheim", quantity: 900 }),
+      row({ period: JUL, dealer_id: "anaheim", quantity: 950 }),
+    ];
+    const c = conversion(steady, JUL, JUN)!;
+    expect(c.pool).toBe(0);
+    expect(c.rate).toBeNull();
+    expect(c.wonBack).toBe(0);
+    expect(c.lf).toBe(0);
+  });
+
+  it("keeps a house with one of the two months out of it, and says so", () => {
+    // Russin's first file is July. Against a June Russin never sent, its
+    // dealer would read as won back and the rate would be measuring the post.
+    const withRussin = [
+      ...book,
+      row({
+        period: JUL,
+        distributor_id: "russin",
+        distributor_name: "Russin",
+        dealer_id: "tague",
+        dealer_name: "Tague Lumber Philadelphia",
+        quantity: 5000,
+      }),
+    ];
+    const c = conversion(withRussin, JUL, JUN)!;
+    expect(c.brandNew).toBe(1); // fresno only — Russin's dealer is unknown, not new
+    expect(c.lf).toBe(950);
+    expect(c.oneFileHouses).toEqual(["Russin"]);
+  });
+
+  it("reads the year file as history, so January through June is not a blank", () => {
+    // The distributors' year-to-date report is one aggregate for Jan–Jun. A
+    // dealer in it HAS bought before, and coming back in July is a win back,
+    // never a new dealer.
+    const ytd = [
+      row({ period: MAY, period_kind: "YTD", dealer_id: "oakley", dealer_name: "Oakley Lumber", quantity: 7000 }),
+      row({ period: JUN, dealer_id: "anaheim", quantity: 900 }),
+      row({ period: JUL, dealer_id: "anaheim", quantity: 950 }),
+      row({ period: JUL, dealer_id: "oakley", dealer_name: "Oakley Lumber", quantity: 1200 }),
+    ];
+    const c = conversion(ytd, JUL, JUN)!;
+    expect(c.pool).toBe(1);
+    expect(c.wonBack).toBe(1);
+    expect(c.brandNew).toBe(0);
+    expect(c.lf).toBe(1200);
+  });
+
+  it("does not credit the house's own counter as a dealer won back", () => {
+    // "ZZSAM - SAMPLES" and the cash till come and go between months like any
+    // label. Counted, a rep wins back the sample box.
+    const withSamples = [
+      ...book,
+      row({
+        period: MAY,
+        dealer_id: null,
+        dealer_name: null,
+        dealer_label: "ZZSAM - SAMPLES",
+        is_house_account: true,
+        quantity: 300,
+      }),
+      row({
+        period: JUL,
+        dealer_id: null,
+        dealer_name: null,
+        dealer_label: "ZZSAM - SAMPLES",
+        is_house_account: true,
+        quantity: 336,
+      }),
+    ];
+    const c = conversion(withSamples, JUL, JUN)!;
+    expect(c.pool).toBe(2);
+    expect(c.wonBack).toBe(1);
+    expect(c.lf).toBe(950);
+  });
+
+  it("answers for one region when the book has walked into one", () => {
+    const c = conversion(book, JUL, JUN, "norcal");
+    expect(c!.pool).toBe(0);
+    expect(c!.wonBack).toBe(0);
   });
 });
