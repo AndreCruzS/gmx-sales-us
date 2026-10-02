@@ -1437,6 +1437,9 @@ describe("conversion", () => {
     row({ period: MAY, dealer_id: "anaheim", quantity: 1000 }),
     row({ period: MAY, dealer_id: "corona", dealer_name: "Ganahl Corona", quantity: 800 }),
     row({ period: MAY, dealer_id: "orange", dealer_name: "Orange Coast", quantity: 400 }),
+    // irvine also stopped, was worked too, and did not come back — without one
+    // of these the rate could only ever read 100%.
+    row({ period: MAY, dealer_id: "irvine", dealer_name: "Irvine Lumber", quantity: 600 }),
     // June: only anaheim buys. corona and orange are silent going into July.
     row({ period: JUN, dealer_id: "anaheim", quantity: 900 }),
     // July: anaheim carries on by itself, corona is won back, fresno is new.
@@ -1445,8 +1448,12 @@ describe("conversion", () => {
     row({ period: JUL, dealer_id: "fresno", dealer_name: "Fresno Lumber", quantity: 250 }),
   ];
 
+  // Everything the rep actually did, on the record. corona was visited and
+  // fresno was quoted; nobody touched orange.
+  const worked = new Set(["corona", "fresno", "oakley", "irvine"]);
+
   it("counts the ones that needed converting, and leaves the inertia out", () => {
-    const c = conversion(book, JUL, JUN)!;
+    const c = conversion(book, JUL, JUN, worked)!;
     // corona and orange had stopped; only corona came back.
     expect(c.pool).toBe(2);
     expect(c.wonBack).toBe(1);
@@ -1466,7 +1473,7 @@ describe("conversion", () => {
       row({ period: JUN, dealer_id: "anaheim", quantity: 900 }),
       row({ period: JUL, dealer_id: "anaheim", quantity: 950 }),
     ];
-    const c = conversion(steady, JUL, JUN)!;
+    const c = conversion(steady, JUL, JUN, worked)!;
     expect(c.pool).toBe(0);
     expect(c.rate).toBeNull();
     expect(c.wonBack).toBe(0);
@@ -1487,7 +1494,7 @@ describe("conversion", () => {
         quantity: 5000,
       }),
     ];
-    const c = conversion(withRussin, JUL, JUN)!;
+    const c = conversion(withRussin, JUL, JUN, worked)!;
     expect(c.brandNew).toBe(1); // fresno only — Russin's dealer is unknown, not new
     expect(c.lf).toBe(950);
     expect(c.oneFileHouses).toEqual(["Russin"]);
@@ -1503,11 +1510,28 @@ describe("conversion", () => {
       row({ period: JUL, dealer_id: "anaheim", quantity: 950 }),
       row({ period: JUL, dealer_id: "oakley", dealer_name: "Oakley Lumber", quantity: 1200 }),
     ];
-    const c = conversion(ytd, JUL, JUN)!;
+    const c = conversion(ytd, JUL, JUN, worked)!;
     expect(c.pool).toBe(1);
     expect(c.wonBack).toBe(1);
     expect(c.brandNew).toBe(0);
     expect(c.lf).toBe(1200);
+  });
+
+  it("does not hand the rep a dealer that came back on its own", () => {
+    // Nobody worked orange. It buys again in July all by itself: good news,
+    // and not a rep's monthly success (Andre, 2026-10-02).
+    const alone = [
+      ...book,
+      row({ period: JUL, dealer_id: "orange", dealer_name: "Orange Coast", quantity: 2000 }),
+    ];
+    const c = conversion(alone, JUL, JUN, worked)!;
+    expect(c.cameBackAlone).toBe(1);
+    // orange is not in the pool either — there was nothing tried to count.
+    expect(c.pool).toBe(2);
+    expect(c.wonBack).toBe(1);
+    expect(c.rate).toBe(0.5);
+    // and its volume is not in "what the work moved"
+    expect(c.lf).toBe(950);
   });
 
   it("does not credit the house's own counter as a dealer won back", () => {
@@ -1532,14 +1556,14 @@ describe("conversion", () => {
         quantity: 336,
       }),
     ];
-    const c = conversion(withSamples, JUL, JUN)!;
+    const c = conversion(withSamples, JUL, JUN, worked)!;
     expect(c.pool).toBe(2);
     expect(c.wonBack).toBe(1);
     expect(c.lf).toBe(950);
   });
 
   it("answers for one region when the book has walked into one", () => {
-    const c = conversion(book, JUL, JUN, "norcal");
+    const c = conversion(book, JUL, JUN, worked, "norcal");
     expect(c!.pool).toBe(0);
     expect(c!.wonBack).toBe(0);
   });

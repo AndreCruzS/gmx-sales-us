@@ -198,6 +198,7 @@ export function ManagerHome({ name }: { name: string }) {
   const [period, setPeriod] = useState<SalesPeriod | null>(null);
   const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
+  const [effort, setEffort] = useState<{ account_id: string | null; happened_at: string | null }[]>([]);
   // The synced order book, read light, plus who each customer is and which
   // houses have ever sent their return — the sell-out tiles and the
   // return-chasing read are built from these three.
@@ -293,7 +294,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc, tt] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, br, so, ol, hr, me, dw, ts, tc, tt, ef] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -398,6 +399,11 @@ export function ManagerHome({ name }: { name: string }) {
       supabase.from("territory_cities").select("state, city, territory_id").limit(500),
       // The month goals, region by region — what the book is read against.
       supabase.from("territory_targets").select("territory_id, monthly_lf").limit(100),
+      // THE WORK ON THE RECORD (Andre, 2026-10-02): a dealer's return only
+      // counts for a rep when something they did is against that dealer.
+      // rep_effort unions the visits, planned actions, notes, quotes and PK
+      // classes; order attribution and e-mail will join it when they exist.
+      supabase.from("rep_effort").select("account_id, happened_at").limit(1000),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -411,6 +417,11 @@ export function ManagerHome({ name }: { name: string }) {
     setMonths(monthsAvail);
     setSellBranches(sb.error ? [] : ((sb.data as BranchRef[]) ?? []));
     setBranches(br.error ? [] : ((br.data as BranchRow[]) ?? []));
+    setEffort(
+      ef.error
+        ? []
+        : ((ef.data as { account_id: string | null; happened_at: string | null }[]) ?? []),
+    );
     setSellOut(so.error ? [] : ((so.data as unknown as SellOutOrder[]) ?? []));
     setOrderLinks(ol.error ? [] : ((ol.data as unknown as OrderLinkRow[]) ?? []));
     setHouseReturns(
@@ -1064,6 +1075,22 @@ export function ManagerHome({ name }: { name: string }) {
   // is one aggregate and has no month to be compared against.
   const repTiles = useMemo(() => {
     if (salesLens !== "rep" || windowInfo.kind !== "month") return null;
+    // The window the work had to happen in: from the start of the month we are
+    // comparing against to the end of the one being read. Work older than that
+    // did not bring anybody back this month.
+    const from = previous ?? latest ?? "";
+    const until = latest ? `${latest.slice(0, 7)}-32` : "";
+    const worked = new Set(
+      effort
+        .filter(
+          (e) =>
+            e.account_id !== null &&
+            e.happened_at !== null &&
+            e.happened_at >= from &&
+            e.happened_at <= until,
+        )
+        .map((e) => e.account_id as string),
+    );
     return {
       lost: recurrence(monthlyRows, latest, previous, null),
       // linedRows, not monthlyRows: the measure needs the YEAR file to know
@@ -1071,9 +1098,9 @@ export function ManagerHome({ name }: { name: string }) {
       // of this book, and stripped of it every dealer whose history lives
       // there reads as having none — the pool came out empty while the tile
       // beside it said ten had stopped.
-      conv: conversion(linedRows, latest, previous, null),
+      conv: conversion(linedRows, latest, previous, worked, null),
     };
-  }, [salesLens, windowInfo.kind, monthlyRows, linedRows, latest, previous]);
+  }, [salesLens, windowInfo.kind, monthlyRows, linedRows, latest, previous, effort]);
 
 
   // A LINE WITH ONE MONTH CANNOT SAY WHO CAME BACK (2026-09-24). Accoya and
@@ -1643,17 +1670,21 @@ export function ManagerHome({ name }: { name: string }) {
                 <div className="t-hint mt-0.5">
                   {repTiles?.conv
                     ? repTiles.conv.rate !== null
-                      ? `${QTY.format(repTiles.conv.wonBack)} of ${QTY.format(repTiles.conv.pool)} dealers that had stopped bought again${
+                      ? `${QTY.format(repTiles.conv.wonBack)} of ${QTY.format(repTiles.conv.pool)} dealers you worked bought again${
                           repTiles.conv.brandNew > 0
                             ? ` · ${QTY.format(repTiles.conv.brandNew)} new`
                             : ""
                         }`
-                      : "nobody had stopped, so there was nothing to win back"
+                      : "no work on the record against a dealer that had stopped"
                     : noCompareReason}
                 </div>
                 <div className="t-hint mt-0.5">
-                  Dealers already buying last month are not counted — they did
-                  not need converting.
+                  Counts a visit, a quote, a note or a PK class against that
+                  dealer. Ones already buying last month are not in it — they
+                  did not need converting.
+                  {repTiles?.conv && repTiles.conv.cameBackAlone > 0
+                    ? ` ${QTY.format(repTiles.conv.cameBackAlone)} came back with nothing on the record.`
+                    : ""}
                 </div>
               </div>
             </>

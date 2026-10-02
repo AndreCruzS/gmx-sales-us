@@ -1418,12 +1418,23 @@ export function recurrence(
 // they never needed the work, and a rep should be neither paid nor blamed for
 // the inertia of a good account.
 //
-// THE POOL is dealers who had bought before and did NOT buy last month: the
-// ones there was something to win back. A dealer buying for the first time is
-// a WIN but not a rate — the only denominator available would be "accounts we
-// happen to have created", which grew by 78 in one afternoon on 2026-09-29 and
-// would have collapsed every rep's percentage for no reason on earth. So new
-// dealers are counted beside the rate, never inside it.
+// AND IT TAKES MORE THAN THE RETURN ITSELF (Andre, same day): "we are assuming
+// every dealer which got back buying was because of reps effort". A dealer can
+// come back on its own, and handing a rep that one too is the same unearned
+// credit by another door. So a return only counts when the rep's work is ON
+// THE RECORD against that dealer — a visit, a planned action, a note, a quote,
+// a PK class held — within the window. `worked` is that set of accounts, read
+// from the rep_effort view. Returns with nothing behind them are reported too,
+// as their own figure, because they are good news; they are simply nobody's
+// score.
+//
+// THE POOL is dealers who had bought before, did NOT buy last month, and were
+// worked: the ones there was something to win back AND somebody tried. A
+// dealer buying for the first time is a WIN but not a rate — the only
+// denominator available would be "accounts we happen to have created", which
+// grew by 78 in one afternoon on 2026-09-29 and would have collapsed every
+// rep's percentage for no reason on earth. So new dealers are counted beside
+// the rate, never inside it, and they too need the work on the record.
 //
 // Same guard as the recurrence card: a house that sent only one of the two
 // months takes no part. Against a July Russin never reported, every Russin
@@ -1432,12 +1443,18 @@ export function recurrence(
 export interface Conversion {
   latest: string;
   previous: string;
-  /** Dealers that had bought before and were silent last month. */
+  /** Dealers that had bought before, were silent last month, and have the
+   *  rep's work on the record — the ones there was something to win back and
+   *  somebody tried. */
   pool: number;
   /** Of the pool, the ones buying again this month. */
   wonBack: number;
-  /** Buying this month, never seen in any earlier file. */
+  /** Buying this month, never seen in any earlier file, with work on the
+   *  record. */
   brandNew: number;
+  /** Came back or arrived with NOTHING on the record. Good news, and nobody's
+   *  score — reported so it is never silently hidden. */
+  cameBackAlone: number;
   /** This month's LF of the won-back and the new together — what the work
    *  actually moved. */
   lf: number;
@@ -1451,6 +1468,10 @@ export function conversion(
   rows: readonly SellThroughRow[],
   latest: string | null,
   previous: string | null,
+  /** Accounts with a trace of the rep's work in the window (rep_effort). A
+   *  dealer with no account cannot have been worked — you cannot log a visit
+   *  against a label — so it can never be in the pool. */
+  worked: ReadonlySet<string>,
   regionId: string | null = null,
 ): Conversion | null {
   if (!latest || !previous) return null;
@@ -1508,14 +1529,19 @@ export function conversion(
   // both maps and the history, because a dealer can be known from an earlier
   // file alone and never appear in either of the two months.
   const pool = new Set<string>();
-  for (const k of earlier) if (!boughtThen(k)) pool.add(k);
+  for (const k of earlier) if (!boughtThen(k) && worked.has(k)) pool.add(k);
 
   let wonBack = 0;
   let brandNew = 0;
+  let cameBackAlone = 0;
   let lf = 0;
   for (const [k, c] of cur) {
     if (c <= 0 || boughtThen(k)) continue;
-    if (pool.has(k)) wonBack += 1;
+    if (!worked.has(k)) {
+      cameBackAlone += 1;
+      continue;
+    }
+    if (earlier.has(k)) wonBack += 1;
     else brandNew += 1;
     lf += c;
   }
@@ -1526,6 +1552,7 @@ export function conversion(
     pool: pool.size,
     wonBack,
     brandNew,
+    cameBackAlone,
     lf,
     rate: pool.size > 0 ? wonBack / pool.size : null,
     unit,
