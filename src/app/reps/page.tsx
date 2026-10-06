@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CalendarIcon, MicrophoneIcon } from "@/components/icons";
 import { Pager, usePaged, usePageSize } from "@/components/pager";
+import { RepsMenu } from "@/components/reps-menu";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import { packDesk, spanner, type DeskWidth } from "@/lib/desk-pack";
 import {
@@ -311,6 +312,7 @@ export default function RepsPage() {
   if (loadedAt === null && !loadFailed) {
     return (
       <div className="stack pt-2" aria-busy="true">
+        <RepsMenu />
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
             Reps
@@ -356,6 +358,7 @@ export default function RepsPage() {
   if (loadedAt === null) {
     return (
       <div className="stack pt-2">
+        <RepsMenu />
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
             Reps
@@ -379,6 +382,7 @@ export default function RepsPage() {
 
   return (
     <div className="stack pt-2 mgr-home reps-board">
+      <RepsMenu />
       <section data-desk="hero" data-span="full">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
           Reps

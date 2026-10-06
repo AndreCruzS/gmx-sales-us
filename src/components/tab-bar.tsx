@@ -22,6 +22,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { isAdmin, manages } from "@/lib/domain/roles";
+import { underReps } from "./reps-menu";
 import { useReviewCount } from "@/lib/review/count";
 import { SyncBadge } from "./sync-badge";
 import { SignOutButton } from "./sign-out";
@@ -57,9 +58,14 @@ const TABS = [
 // one destination each so that walking between them never loses your place.
 // Reps is the desk's board about PEOPLE — who is carrying what, what is owed,
 // which of their dealers is not selling yet — and it is a manager's reading,
-// so it only appears for a role that manages somebody. A rep reaches their own
-// work through Home and the Agenda, where it has always been; a sixth icon on
-// the phone's bar would crowd the five that pay the bills.
+// so it only appears for a role that manages somebody.
+//
+// AND NOTHING ELSE (Andre, 2026-10-06, from the meeting with Bianca): the
+// Agenda and the Quotes are a rep's work, so for a desk role they moved
+// UNDER Reps (see reps-menu.tsx) and left the bar. That leaves a manager's
+// bar at four boards plus Add — five slots, which is exactly what the phone
+// has, so the desk's bar is the same bar at every width. A rep's bar is
+// untouched: Home · Agenda · Add · Quotes · Accounts, Contacts on the desk.
 const REPS_TAB = { href: "/reps", label: "Reps", Icon: UsersIcon } as const;
 
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
@@ -204,13 +210,19 @@ export function TabBar() {
       : pathname.startsWith(href);
 
   const [today, agenda, quotes, accounts, contacts] = TABS;
+  const desk = manages(profile?.role);
+  // The desk's bar: Sales · Reps · Add · Accounts · Contacts. The two that
+  // left it are reached from the Reps board, and the Reps tab stays lit while
+  // the reader is on either of them — they are that board's readings.
+  const repTabs = desk ? [] : [agenda];
+  const moneyTabs = desk ? [accounts, contacts] : [quotes, accounts, contacts];
+  const deskOnly = (label: string) => !desk && label === "Contacts";
   // For the desk's roles every destination IS a dashboard, and every tab
   // OPENS on its own overview — so the first tab is named for its subject,
   // SALES, not for the word "overview" (Bianca, 2026-09-08: "cada um desses,
   // quando eu clico, eu vejo o overview... aqui eu colocaria Sales"). It
   // wears the chart, not the little house. A rep's day still starts at
   // Home, under its roof.
-  const desk = manages(profile?.role);
   const labelOf = (label: string) =>
     label === "Home" && desk ? "Sales" : label;
   const iconOf = (label: string, Icon: (p: IconProps) => React.ReactElement) =>
@@ -271,22 +283,22 @@ export function TabBar() {
           );
         })}
 
-        {/* Second in the bar, straight after Sales — his order, with the
-            rep's own two destinations following. Desk-only, so the phone's
-            five-slot bar is untouched. */}
+        {/* Second in the bar, straight after Sales — his order. Lit on the
+            Agenda and the Quotes too, because for a desk role those are
+            this board's readings, not destinations of their own. */}
         {desk && (
           <Link
             href={REPS_TAB.href}
-            className="tab tab-desk"
-            data-active={isActive(REPS_TAB.href)}
-            aria-current={isActive(REPS_TAB.href) ? "page" : undefined}
+            className="tab"
+            data-active={underReps(pathname)}
+            aria-current={underReps(pathname) ? "page" : undefined}
           >
             <REPS_TAB.Icon size={21} />
             {REPS_TAB.label}
           </Link>
         )}
 
-        {[agenda].map(({ href, label, Icon }) => {
+        {repTabs.map(({ href, label, Icon }) => {
           const TabIcon = iconOf(label, Icon);
           return (
             <Link
@@ -317,11 +329,11 @@ export function TabBar() {
           <span className="tab-capture-label">Add</span>
         </button>
 
-        {[quotes, accounts, contacts].map(({ href, label, Icon }) => (
+        {moneyTabs.map(({ href, label, Icon }) => (
           <Link
             key={href}
             href={href}
-            className={label === "Contacts" ? "tab tab-desk" : "tab"}
+            className={deskOnly(label) ? "tab tab-desk" : "tab"}
             data-active={isActive(href)}
             aria-current={isActive(href) ? "page" : undefined}
           >

@@ -21,6 +21,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { RepsMenu } from "@/components/reps-menu";
 import {
   ACTIVE_QUOTE_STAGES,
   isOverdue,
@@ -128,6 +129,7 @@ export default function QuotesPage() {
 
   return (
     <div className="stack pt-2">
+      <RepsMenu />
       <div className="flex gap-2">
         <label className="search-field flex-1">
           <SearchIcon size={18} />

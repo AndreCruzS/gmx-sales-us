@@ -5828,3 +5828,12 @@ input[type="datetime-local"] {
 .reps-board .fu-pager {
   padding: 8px 16px 12px;
 }
+
+/* THE REPS MENU — Reps · Agenda · Quotes as one board's three readings
+   (reps-menu.tsx). A link, not a button, so the "on" state is aria-current
+   rather than aria-pressed; inked the same way, so it reads as the Sales
+   lenses do. */
+.reps-menu > .chip[aria-current="page"] {
+  background: var(--fill-ink);
+  color: var(--on-ink);
+}

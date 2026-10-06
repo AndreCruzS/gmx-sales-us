@@ -19,6 +19,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { AgendaCalendar } from "@/components/agenda-calendar";
 import { NewCompanyInline } from "@/components/new-company-inline";
+import { RepsMenu } from "@/components/reps-menu";
 import { manages } from "@/lib/domain/roles";
 import {
   AlertIcon,
@@ -404,6 +405,7 @@ function VisitsPageInner() {
 
   return (
     <div className="stack pt-2">
+      <RepsMenu />
       <section>
         {/* planning is occasional; the day is the screen. The action sits
             quiet on the right instead of pushing the day below the fold. */}
