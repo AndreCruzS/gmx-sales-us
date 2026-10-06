@@ -50,8 +50,16 @@ import {
   totalValue,
 } from "@/lib/domain/quotes";
 import { manages } from "@/lib/domain/roles";
+import {
+  conversion,
+  periodLabel,
+  recurrence,
+  type PeriodTotal,
+  type SellThroughRow,
+} from "@/lib/domain/sell-through";
 import { displayAccountName, formatDay, formatMoney } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchAllPages } from "@/lib/supabase/page";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
@@ -103,6 +111,16 @@ interface WallRow {
   display_last_verified_at: string | null;
 }
 
+/** One recorded trace of a rep working an account (the rep_effort view). */
+interface EffortRow {
+  account_id: string | null;
+  membership_id: string | null;
+  happened_at: string | null;
+}
+
+const SELL_COLS =
+  "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account";
+
 /** Whose board is being read. `undefined` means nobody has chosen yet, so the
  *  default below still applies; `null` is the deliberate choice of everyone,
  *  which is a different thing and must survive a reload. */
@@ -119,13 +137,41 @@ export default function RepsPage() {
   const [gates, setGates] = useState<GateRow[]>([]);
   const [evidence, setEvidence] = useState<EvidenceRow[]>([]);
   const [walls, setWalls] = useState<WallRow[]>([]);
+  // THE TWO MEASURES THAT CAME OFF SALES (Andre, 2026-10-06: "Open quotes |
+  // Stopped buying | Conversion rate … we need it on this Reps home"). They
+  // read the distributors' returns — the newest month, the month before it
+  // that has a file, and the year file for who had ever bought — and the
+  // work on the record. Every product line: a rep's work is not Thermo-only.
+  const [sellRows, setSellRows] = useState<SellThroughRow[]>([]);
+  const [latest, setLatest] = useState<string | null>(null);
+  const [previous, setPrevious] = useState<string | null>(null);
+  const [effort, setEffort] = useState<EffortRow[]>([]);
   const [pick, setPick] = useState<Pick>(undefined);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [sc, na, qt, gs, ev, dw] = await Promise.all([
+    // WHICH months exist, before fetching any of them — the Sales board's
+    // rule. The newest month and the one before it that has a file are the
+    // pair the two measures compare; the year file says who had ever bought.
+    const pv = await supabase
+      .from("sell_through_periods")
+      .select("period, period_kind, region_id, quantity, product_line")
+      .limit(2000);
+    const periodRows = (pv.data as PeriodTotal[] | null) ?? [];
+    const monthsAvail = [
+      ...new Set(periodRows.filter((r) => r.period_kind !== "YTD").map((r) => r.period)),
+    ]
+      .sort()
+      .reverse();
+    const wantedMonths = monthsAvail.slice(0, 2);
+    const ytdPeriod =
+      [...new Set(periodRows.filter((r) => r.period_kind === "YTD").map((r) => r.period))]
+        .sort()
+        .reverse()[0] ?? null;
+    const none = Promise.resolve({ data: [] as SellThroughRow[], error: null });
+    const [sc, na, qt, gs, ev, dw, st, sy, ef] = await Promise.all([
       supabase
         .from("dashboard_rep_scorecard")
         .select(
@@ -170,7 +216,44 @@ export default function RepsPage() {
         .select("id, display_last_verified_at")
         .eq("account_type", "DEALER")
         .limit(500),
+      // The pair of months, every row — paged, because PostgREST caps a
+      // query at 1,000 rows without saying so.
+      wantedMonths.length > 0
+        ? fetchAllPages<SellThroughRow>((from, to) =>
+            supabase
+              .from("sell_through_rows")
+              .select(SELL_COLS)
+              .in("period", wantedMonths)
+              .order("row_id")
+              .range(from, to),
+          ).then((data) => ({ data, error: null }))
+        : none,
+      ytdPeriod
+        ? fetchAllPages<SellThroughRow>((from, to) =>
+            supabase
+              .from("sell_through_rows")
+              .select(SELL_COLS)
+              .eq("period_kind", "YTD")
+              .eq("period", ytdPeriod)
+              .order("row_id")
+              .range(from, to),
+          ).then((data) => ({ data, error: null }))
+        : none,
+      // THE WORK ON THE RECORD: a dealer's return only counts for a rep when
+      // something they did is against that dealer. rep_effort unions the
+      // visits, planned actions, notes, quotes and PK classes.
+      supabase
+        .from("rep_effort")
+        .select("account_id, membership_id, happened_at")
+        .limit(2000),
     ]);
+    setSellRows([
+      ...(st.error ? [] : ((st.data as SellThroughRow[]) ?? [])),
+      ...(sy.error ? [] : ((sy.data as SellThroughRow[]) ?? [])),
+    ]);
+    setLatest(wantedMonths[0] ?? null);
+    setPrevious(wantedMonths[1] ?? null);
+    setEffort(ef.error ? [] : ((ef.data as unknown as EffortRow[]) ?? []));
     setReps(sc.error ? [] : ((sc.data as unknown as RepRow[]) ?? []));
     setActions(na.error ? [] : ((na.data as unknown as ActionRow[]) ?? []));
     setQuotes(qt.error ? [] : ((qt.data as unknown as QuoteRow[]) ?? []));
@@ -222,29 +305,14 @@ export default function RepsPage() {
     () => (at ? actions.filter((a) => a.owner_id === at) : actions),
     [actions, at],
   );
-  // THE AGENDA AND THE PROMISES are one table told apart by kind: a visit is
-  // on the calendar, everything else is owed. Both come back soonest first.
-  const visits = useMemo(
-    () => myActions.filter((a) => a.kind === "VISIT" || a.kind === null),
-    [myActions],
-  );
+  // THE PROMISES are the open next actions that are not visits: a visit is
+  // on the calendar above, everything else is owed.
   const owed = useMemo(
     () => myActions.filter((a) => a.kind !== "VISIT" && a.kind !== null),
     [myActions],
   );
   // Read against the day the data landed on, like the quotes — never
   // Date.now() inside a render.
-  const missed = useMemo(
-    () => (todayIso ? visits.filter((v) => v.due_date < todayIso).length : 0),
-    [visits, todayIso],
-  );
-  const soon = useMemo(() => {
-    if (!todayIso) return 0;
-    const horizon = new Date(`${todayIso}T00:00:00`);
-    horizon.setDate(horizon.getDate() + 14);
-    const until = isoOf(horizon);
-    return visits.filter((v) => v.due_date >= todayIso && v.due_date <= until).length;
-  }, [visits, todayIso]);
   const owedLate = useMemo(
     () => (todayIso ? owed.filter((o) => o.due_date < todayIso).length : 0),
     [owed, todayIso],
@@ -271,6 +339,49 @@ export default function RepsPage() {
     for (const q of quotes) add(q.owner_id);
     return m;
   }, [actions, quotes]);
+
+  // THE RETURNS, READ FOR THE SCOPE. Under one rep the rows are their own
+  // dealers' — the accounts on their patch — so an unmatched label, which is
+  // nobody's dealer, drops out; under Everyone the whole book answers.
+  const scopedRows = useMemo(() => {
+    if (!at) return sellRows;
+    const mine = new Set(gates.filter((g) => g.owner_id === at).map((g) => g.account_id));
+    return sellRows.filter((r) => r.dealer_id !== null && mine.has(r.dealer_id));
+  }, [sellRows, gates, at]);
+
+  const lost = useMemo(
+    () => recurrence(scopedRows.filter((r) => r.period_kind !== "YTD"), latest, previous),
+    [scopedRows, latest, previous],
+  );
+
+  // The window the work had to happen in: from the start of the month being
+  // compared against to the end of the one being read. Under one rep only
+  // THEIR traces count — a colleague's visit is not this rep's conversion.
+  const conv = useMemo(() => {
+    if (!latest || !previous) return null;
+    const from = previous;
+    const until = `${latest.slice(0, 7)}-32`;
+    const worked = new Set(
+      effort
+        .filter(
+          (e) =>
+            e.account_id !== null &&
+            e.happened_at !== null &&
+            e.happened_at >= from &&
+            e.happened_at <= until &&
+            (at === null || e.membership_id === at),
+        )
+        .map((e) => e.account_id as string),
+    );
+    return conversion(scopedRows, latest, previous, worked);
+  }, [scopedRows, latest, previous, effort, at]);
+
+  // WHY THERE IS NO NUMBER, in the words of the actual obstacle.
+  const noCompareReason = !latest
+    ? "no distributor return on file yet"
+    : !previous
+      ? "one month on file — nothing to compare it against yet"
+      : "the houses in these two months do not overlap";
 
   /** membership_id → name, for the caption on a row while everyone is read. */
   const names = useMemo(
@@ -518,43 +629,57 @@ export default function RepsPage() {
         </div>
       </section>
 
-      {/* THE THREE FIGURES a manager asks about the work, for the scope the
-          row above set: what is on the calendar, what is owed, what is out
-          for a price. Each one is the headline of the list below it. */}
+      {/* THE THREE FIGURES, the ones the Rep lens used to show on Sales and
+          that came here by name (Andre, 2026-10-06): what is out for a
+          price, what fell out of the book last month, and what the work put
+          back in. All three answer for the scope the row above set. */}
       <section className="adapt" data-desk="tiles" key={`tiles-${at ?? "all"}`}>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           <div className="card card-pad">
-            <div className="t-meta uppercase tracking-wide">Visits planned</div>
-            <div className="fig fig-xl mt-1">{QTY.format(visits.length)}</div>
-            <div className="t-hint mt-0.5">
-              {visits.length === 0
-                ? "nothing on the calendar"
-                : `${QTY.format(soon)} in the next 14 days${missed > 0 ? ` · ${QTY.format(missed)} missed` : ""}`}
-            </div>
-          </div>
-          <div className="card card-pad">
-            <div className="t-meta uppercase tracking-wide">Owed</div>
-            <div
-              className="fig fig-xl mt-1"
-              style={{ color: owedLate > 0 ? "var(--danger)" : undefined }}
-            >
-              {QTY.format(owed.length)}
-            </div>
-            <div className="t-hint mt-0.5">
-              {owed.length === 0
-                ? "no promise waiting"
-                : owedLate > 0
-                  ? `${QTY.format(owedLate)} past the date`
-                  : "all still inside their dates"}
-            </div>
-          </div>
-          <div className="card card-pad">
-            <div className="t-meta uppercase tracking-wide">Out for quote</div>
+            <div className="t-meta uppercase tracking-wide">Open quotes</div>
             <div className="fig fig-xl mt-1">{QTY.format(myQuotes.length)}</div>
             <div className="t-hint mt-0.5">
               {myQuotes.length === 0
-                ? "no price in anybody’s hands"
-                : `${formatMoney(Math.round(totalValue(myQuotes)))} out${quotesLate > 0 ? ` · ${QTY.format(quotesLate)} past the close date` : ""}`}
+                ? "waiting on an answer"
+                : `${formatMoney(Math.round(totalValue(myQuotes)))} waiting on an answer${quotesLate > 0 ? ` · ${QTY.format(quotesLate)} past the close date` : ""}`}
+            </div>
+          </div>
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">Stopped buying</div>
+            <div className="fig fig-xl mt-1">
+              {lost ? QTY.format(lost.dropped.count) : "—"}
+            </div>
+            <div className="t-hint mt-0.5">
+              {lost
+                ? `${QTY.format(Math.round(lost.dropped.lf))} ${lost.unit} went silent · ${periodLabel(lost.latest)} against ${periodLabel(lost.previous)}`
+                : noCompareReason}
+            </div>
+          </div>
+          {/* THE RATE SAYS WHAT IT IS MADE OF, on the card, not in a tooltip
+              (Andre, 2026-10-02). A dealer already buying last month is not
+              in the denominator: it never needed converting, and crediting a
+              rep for that inertia — or docking them for it — is the thing
+              this measure exists to avoid. The new dealers sit beside the
+              rate and never inside it. */}
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">Conversion rate</div>
+            <div className="fig fig-xl mt-1">
+              {conv && conv.rate !== null ? `${Math.round(conv.rate * 100)}%` : "—"}
+            </div>
+            <div className="t-hint mt-0.5">
+              {conv
+                ? conv.rate !== null
+                  ? `${QTY.format(conv.wonBack)} of ${QTY.format(conv.pool)} dealers ${chosen ? "they" : "the team"} worked bought again${conv.brandNew > 0 ? ` · ${QTY.format(conv.brandNew)} new` : ""}`
+                  : "no work on the record against a dealer that had stopped"
+                : noCompareReason}
+            </div>
+            <div className="t-hint mt-0.5">
+              Counts a visit, a quote, a note or a PK class against that
+              dealer. Ones already buying last month are not in it — they did
+              not need converting.
+              {conv && conv.cameBackAlone > 0
+                ? ` ${QTY.format(conv.cameBackAlone)} came back with nothing on the record.`
+                : ""}
             </div>
           </div>
         </div>
