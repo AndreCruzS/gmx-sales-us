@@ -6,11 +6,14 @@
 // they live under Reps, as the three readings of one board: the people, their
 // week, their money out for an answer.
 //
-// It is a row of chips on the page and not a dropdown in the bar, for the same
-// reason the Sales lenses are: a menu that has to be re-opened to see where
-// you are loses the reader their place, which is the thing the four-board
-// desk exists to prevent. Walking Reps → Agenda → Quotes is walking the same
-// board, so the chips stay where they were and the one you are on is inked.
+// THE BOARD ITSELF CARRIES ALL THREE (Andre, 2026-10-06, the same day): the
+// Reps page reads like Sales — filter row, three figures, then the team, the
+// agenda, the promises and the quotes on one screen. So this strip is not on
+// the board any more; it sits on the two full views the board links out to —
+// the month on the wall at /visits and the searchable list at /quotes — as
+// the way back and across. A row of chips and not a dropdown, for the reason
+// the Sales lenses are: a menu that has to be re-opened to see where you are
+// loses the reader their place.
 //
 // A rep never sees it. Their Agenda and Quotes keep their own tabs on the
 // phone's bar, where the thumb already knows them.

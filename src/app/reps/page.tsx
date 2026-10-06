@@ -30,7 +30,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CalendarIcon, MicrophoneIcon } from "@/components/icons";
 import { Pager, usePaged, usePageSize } from "@/components/pager";
-import { RepsMenu } from "@/components/reps-menu";
 import { RolloutTimeline } from "@/components/rollout-timeline";
 import { packDesk, spanner, type DeskWidth } from "@/lib/desk-pack";
 import {
@@ -41,8 +40,21 @@ import {
   pkRoster,
   type GateRow,
 } from "@/lib/domain/rollout";
+import { humanize } from "@/lib/domain/enums";
+import {
+  ACTIVE_QUOTE_STAGES,
+  isOverdue,
+  quoteStageLabel,
+  sortQuotes,
+  totalValue,
+} from "@/lib/domain/quotes";
 import { manages } from "@/lib/domain/roles";
-import { avatarLetter, displayAccountName, formatDay } from "@/lib/format";
+import {
+  avatarLetter,
+  displayAccountName,
+  formatDay,
+  formatMoney,
+} from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -65,7 +77,23 @@ interface ActionRow {
   due_date: string;
   owner_id: string;
   account_id: string | null;
+  /** VISIT is the agenda; anything else is a promise. null is a row the
+   *  trigger has not classified yet, read as a visit — the Agenda's rule. */
+  kind: string | null;
+  objective: string | null;
   accounts: { name: string } | null;
+}
+
+interface QuoteRow {
+  id: string;
+  name: string;
+  stage: string;
+  estimated_revenue: number | null;
+  expected_close_date: string | null;
+  updated_at: string | null;
+  owner_id: string;
+  primary_account_id: string;
+  account: { name: string } | null;
 }
 
 interface EvidenceRow {
@@ -89,6 +117,9 @@ export default function RepsPage() {
 
   const [reps, setReps] = useState<RepRow[]>([]);
   const [actions, setActions] = useState<ActionRow[]>([]);
+  const [quotes, setQuotes] = useState<QuoteRow[]>([]);
+  // Stamped when the data lands, never read during a render.
+  const [todayIso, setTodayIso] = useState("");
   const [gates, setGates] = useState<GateRow[]>([]);
   const [evidence, setEvidence] = useState<EvidenceRow[]>([]);
   const [walls, setWalls] = useState<WallRow[]>([]);
@@ -98,7 +129,7 @@ export default function RepsPage() {
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const [sc, na, gs, ev, dw] = await Promise.all([
+    const [sc, na, qt, gs, ev, dw] = await Promise.all([
       supabase
         .from("dashboard_rep_scorecard")
         .select(
@@ -110,10 +141,20 @@ export default function RepsPage() {
       // their own without a second sort.
       supabase
         .from("next_actions")
-        .select("id, action, due_date, owner_id, account_id, accounts(name)")
+        .select("id, action, due_date, owner_id, account_id, kind, objective, accounts(name)")
         .is("completed_at", null)
         .order("due_date")
         .limit(1000),
+      // THE QUOTES, as the Quotes page defines them: a price is out and no
+      // answer is back. The embed names its constraint because opportunities
+      // reaches accounts by half a dozen columns.
+      supabase
+        .from("opportunities")
+        .select(
+          "id, name, stage, estimated_revenue, expected_close_date, updated_at, owner_id, primary_account_id, account:accounts!opportunities_primary_account_id_fkey(name)",
+        )
+        .in("stage", ACTIVE_QUOTE_STAGES as unknown as string[])
+        .limit(500),
       // The gates, with the owner — this is what makes the book a REP's book
       // rather than a list of 136 dealers nobody is standing next to.
       supabase
@@ -136,9 +177,11 @@ export default function RepsPage() {
     ]);
     setReps(sc.error ? [] : ((sc.data as unknown as RepRow[]) ?? []));
     setActions(na.error ? [] : ((na.data as unknown as ActionRow[]) ?? []));
+    setQuotes(qt.error ? [] : ((qt.data as unknown as QuoteRow[]) ?? []));
     setGates(gs.error ? [] : ((gs.data as unknown as GateRow[]) ?? []));
     setEvidence(ev.error ? [] : ((ev.data as unknown as EvidenceRow[]) ?? []));
     setWalls(dw.error ? [] : ((dw.data as unknown as WallRow[]) ?? []));
+    setTodayIso(isoToday());
     setLoadedAt(Date.now());
   }, []);
 
@@ -182,6 +225,49 @@ export default function RepsPage() {
   const myActions = useMemo(
     () => (at ? actions.filter((a) => a.owner_id === at) : actions),
     [actions, at],
+  );
+  // THE AGENDA AND THE PROMISES are one table told apart by kind: a visit is
+  // on the calendar, everything else is owed. Both come back soonest first.
+  const visits = useMemo(
+    () => myActions.filter((a) => a.kind === "VISIT" || a.kind === null),
+    [myActions],
+  );
+  const owed = useMemo(
+    () => myActions.filter((a) => a.kind !== "VISIT" && a.kind !== null),
+    [myActions],
+  );
+  // Read against the day the data landed on, like the quotes — never
+  // Date.now() inside a render.
+  const missed = useMemo(
+    () => (todayIso ? visits.filter((v) => v.due_date < todayIso).length : 0),
+    [visits, todayIso],
+  );
+  const soon = useMemo(() => {
+    if (!todayIso) return 0;
+    const horizon = new Date(`${todayIso}T00:00:00`);
+    horizon.setDate(horizon.getDate() + 14);
+    const until = isoOf(horizon);
+    return visits.filter((v) => v.due_date >= todayIso && v.due_date <= until).length;
+  }, [visits, todayIso]);
+  const owedLate = useMemo(
+    () => (todayIso ? owed.filter((o) => o.due_date < todayIso).length : 0),
+    [owed, todayIso],
+  );
+  const everOne = actions.length > 0;
+
+  const myQuotes = useMemo(
+    () => sortQuotes(at ? quotes.filter((q) => q.owner_id === at) : quotes, todayIso),
+    [quotes, at, todayIso],
+  );
+  const quotesLate = useMemo(
+    () => (todayIso ? myQuotes.filter((q) => isOverdue(q, todayIso)).length : 0),
+    [myQuotes, todayIso],
+  );
+
+  /** membership_id → name, for the caption on a row while everyone is read. */
+  const names = useMemo(
+    () => new Map(reps.map((r) => [r.membership_id, r.rep_name] as const)),
+    [reps],
   );
 
   const myGates = useMemo(
@@ -301,8 +387,12 @@ export default function RepsPage() {
   // The desk packs itself — the same rule the Sales board obeys, so a block
   // added here later finds its line without anybody naming a column.
   const span = useMemo(() => {
-    const want: { k: string; w: DeskWidth }[] = [{ k: "roster", w: "full" }];
-    want.push({ k: "followups", w: counts ? "wide" : "full" });
+    const want: { k: string; w: DeskWidth }[] = [
+      { k: "roster", w: "full" },
+      { k: "agenda", w: "wide" },
+      { k: "followups", w: "narrow" },
+      { k: "quotes", w: "full" },
+    ];
     if (counts) want.push({ k: "gates", w: "full" });
     return spanner(packDesk(want));
   }, [counts]);
@@ -312,7 +402,6 @@ export default function RepsPage() {
   if (loadedAt === null && !loadFailed) {
     return (
       <div className="stack pt-2" aria-busy="true">
-        <RepsMenu />
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
             Reps
@@ -358,7 +447,6 @@ export default function RepsPage() {
   if (loadedAt === null) {
     return (
       <div className="stack pt-2">
-        <RepsMenu />
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
             Reps
@@ -382,21 +470,91 @@ export default function RepsPage() {
 
   return (
     <div className="stack pt-2 mgr-home reps-board">
-      <RepsMenu />
       <section data-desk="hero" data-span="full">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">
           Reps
         </h1>
         <p className="t-sub mt-1" style={{ maxWidth: "58ch" }}>
           {chosen
-            ? `${chosen.rep_name} — ${chosen.territory_name ?? "no patch"}. What is owed, and which of their dealers is not selling yet.`
-            : "Who is carrying what. Pick a name to read one patch; the work is done from here, not from somewhere else."}
+            ? `${chosen.rep_name} — ${chosen.territory_name ?? "no patch"}. Their agenda, what they are owed, what is out for a price, and which of their dealers is not selling yet.`
+            : "The team, its agenda, its promises and its quotes on one screen. Pick a name to read one patch; the work is done from here, not from somewhere else."}
         </p>
       </section>
 
-      {/* THE ROSTER — the page's filter and its first reading at once. Each
-          card says the three things a manager asks about a person: what they
-          are waiting on, what is out for an answer, when they were last seen
+      {/* THE FILTER ROW GOVERNS THE WHOLE PAGE — the Sales board's rule
+          (Andre, 2026-09-04), and this board is built to its shape (Andre,
+          2026-10-06: "primeiro a visão geral … e depois podemos filtrar").
+          Everyone first, then the names; whatever is pressed scopes every
+          tile and every list beneath it. */}
+      <section className="adapt sales-filters" data-desk="filters">
+        <div className="chip-row mb-3" role="group" aria-label="Whose work">
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={at === null}
+            onClick={() => setPick(null)}
+          >
+            Everyone
+          </button>
+          {reps.map((r) => (
+            <button
+              key={r.membership_id}
+              type="button"
+              className="chip"
+              aria-pressed={r.membership_id === at}
+              onClick={() => setPick(r.membership_id)}
+            >
+              {r.rep_name}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* THE THREE FIGURES a manager asks about the work, for the scope the
+          row above set: what is on the calendar, what is owed, what is out
+          for a price. Each one is the headline of the list below it. */}
+      <section className="adapt" data-desk="tiles" key={`tiles-${at ?? "all"}`}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">Visits planned</div>
+            <div className="fig fig-xl mt-1">{QTY.format(visits.length)}</div>
+            <div className="t-hint mt-0.5">
+              {visits.length === 0
+                ? "nothing on the calendar"
+                : `${QTY.format(soon)} in the next 14 days${missed > 0 ? ` · ${QTY.format(missed)} missed` : ""}`}
+            </div>
+          </div>
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">Owed</div>
+            <div
+              className="fig fig-xl mt-1"
+              style={{ color: owedLate > 0 ? "var(--danger)" : undefined }}
+            >
+              {QTY.format(owed.length)}
+            </div>
+            <div className="t-hint mt-0.5">
+              {owed.length === 0
+                ? "no promise waiting"
+                : owedLate > 0
+                  ? `${QTY.format(owedLate)} past the date`
+                  : "all still inside their dates"}
+            </div>
+          </div>
+          <div className="card card-pad">
+            <div className="t-meta uppercase tracking-wide">Out for quote</div>
+            <div className="fig fig-xl mt-1">{QTY.format(myQuotes.length)}</div>
+            <div className="t-hint mt-0.5">
+              {myQuotes.length === 0
+                ? "no price in anybody’s hands"
+                : `${formatMoney(Math.round(totalValue(myQuotes)))} out${quotesLate > 0 ? ` · ${QTY.format(quotesLate)} past the close date` : ""}`}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* THE ROSTER — the first reading, and a second way to pick: each card
+          says the three things a manager asks about a person: what they are
+          waiting on, what is out for an answer, when they were last seen
           doing something. */}
       <section className="adapt" data-desk="roster" data-span={span("roster")}>
         <div className="section-head">
@@ -490,13 +648,61 @@ export default function RepsPage() {
         )}
       </section>
 
-      {/* THE FOLLOW-UPS — moved off Sales (Andre, 2026-10-02: the Sales board
-          is about sales; a promise is about a person). */}
-      <FollowUps
-        rows={myActions}
+      {/* THE AGENDA — the team's planned visits, soonest first, the rep named
+          on each row when the whole team is being read. The month on the
+          wall is one click away; this is the list of what is booked. */}
+      <PromiseList
+        desk="agenda"
+        title="Agenda"
+        rows={visits}
         who={chosen?.rep_name ?? null}
-        everOne={actions.length > 0}
+        names={names}
+        hint={
+          visits.length === 0
+            ? "nothing booked"
+            : `${QTY.format(visits.length)} booked${missed > 0 ? ` · ${QTY.format(missed)} missed` : ""}${chosen ? ` · ${chosen.rep_name}` : ""}`
+        }
+        empty={
+          everOne
+            ? "No visit is booked. One is planned from a dealer’s page, or from Add."
+            : "No visit has been planned yet. They are booked from a dealer’s page, or from Add, and land here with their objective."
+        }
+        more={{ href: "/visits", label: "Calendar" }}
+        span={span("agenda")}
+      />
+
+      {/* THE PROMISES — moved off Sales (Andre, 2026-10-02: the Sales board
+          is about sales; a promise is about a person). A visit is not one of
+          these: it is on the agenda above. */}
+      <PromiseList
+        desk="followups"
+        title="Waiting on somebody"
+        rows={owed}
+        who={chosen?.rep_name ?? null}
+        names={names}
+        hint={
+          owed.length === 0
+            ? "nothing is owed right now"
+            : `${QTY.format(owed.length)} open${owedLate > 0 ? ` · ${QTY.format(owedLate)} past the date` : ""}${chosen ? ` · ${chosen.rep_name}` : ""}`
+        }
+        empty={
+          everOne
+            ? "Everything that was promised here has been recorded."
+            : "No follow-up has been written yet — nothing has been promised, which is not the same as nothing being owed. They appear here the moment a visit or a note sets a next step."
+        }
         span={span("followups")}
+      />
+
+      {/* THE QUOTES — every price in a customer's hands, the one past its
+          close date first. The quote is a reason to open the account, not a
+          place to sit, so the row opens the account. */}
+      <QuoteList
+        rows={myQuotes}
+        who={chosen?.rep_name ?? null}
+        names={names}
+        todayIso={todayIso}
+        late={quotesLate}
+        span={span("quotes")}
       />
 
       {/* GETTING DEALERS SELLING — the section that came across by name. */}
@@ -531,7 +737,10 @@ export default function RepsPage() {
   );
 }
 
-// ── What is still owed, and the two buttons that end it ─────────────────────
+// ── A list of promises, and the two buttons that end one ────────────────────
+//
+// The agenda and the follow-ups are the same row: something somebody said
+// they would do, against a dealer, by a date. One component, two headings.
 //
 // A row is not ticked here. "Done is earned, not ticked" has been the rule
 // since D45: a follow-up clears itself when the visit or the call is recorded
@@ -540,99 +749,218 @@ export default function RepsPage() {
 // other button moves the date, because a promise that cannot be kept today is
 // better re-booked than left to rot into an exception.
 //
-// The empty state is careful. Zero open follow-ups can mean two very different
+// The empty state is careful. Zero open rows can mean two very different
 // things, and reading one as the other is the kind of flattering lie this app
-// does not tell: all of them cleared, or none was ever written. So it says
-// which.
-function FollowUps({
+// does not tell: all of them cleared, or none was ever written. The caller
+// says which.
+function PromiseList({
+  desk,
+  title,
   rows,
   who,
-  everOne,
+  names,
+  hint,
+  empty,
+  more,
   span,
 }: {
+  desk: string;
+  title: string;
   rows: readonly ActionRow[];
   who: string | null;
-  everOne: boolean;
+  names: ReadonlyMap<string, string>;
+  hint: string;
+  empty: string;
+  more?: { href: string; label: string };
   span: string;
 }) {
   const size = usePageSize(8, 5);
   const { slice, page, pages, from, setPage, total } = usePaged(rows, size);
-  const late = rows.filter((r) => isLate(r.due_date)).length;
 
   return (
     <section
       className="adapt card quiet-col"
-      data-desk="followups"
+      data-desk={desk}
       data-span={span}
-      key={`fu-${who ?? "all"}`}
+      key={`${desk}-${who ?? "all"}`}
     >
       <div className="quiet-head">
-        <span className="t-title">Waiting on somebody</span>
+        <span className="t-title">{title}</span>
+        <span className="t-hint">
+          {hint}
+          {more && (
+            <>
+              {" · "}
+              <Link href={more.href} className="t-action">
+                {more.label}
+              </Link>
+            </>
+          )}
+        </span>
+      </div>
+
+      {total === 0 ? (
+        <p className="t-sub">{empty}</p>
+      ) : (
+        <ul className="list">
+          {slice.map((r) => {
+            const rep = names.get(r.owner_id);
+            // What the row is about, in the rep's words: the objective they
+            // booked it with, or the action as it was written.
+            const what = r.objective ? humanize(r.objective) : r.action;
+            return (
+              <li key={r.id}>
+                <div className="row fu-row">
+                  <span className="row-body">
+                    {r.account_id ? (
+                      <Link href={`/accounts/${r.account_id}`} className="t-title fu-name">
+                        {displayAccountName(r.accounts?.name ?? "—")}
+                      </Link>
+                    ) : (
+                      <span className="t-title">No company on it</span>
+                    )}
+                    <span className="t-hint">
+                      {what}
+                      {/* Whose, only while the whole team is on screen: under
+                          one name every row is theirs. */}
+                      {who === null && rep ? ` · ${rep}` : ""}
+                    </span>
+                  </span>
+                  <span className="fu-side">
+                    <span
+                      className="sales-move"
+                      data-dir={isLate(r.due_date) ? "down" : undefined}
+                    >
+                      {formatDay(r.due_date)}
+                    </span>
+                    <span className="fu-acts">
+                      {/* The item id rides along so recording CLOSES this
+                          promise instead of logging a stranger beside it. */}
+                      <Link
+                        href={
+                          r.account_id
+                            ? `/record?account=${r.account_id}&item=${r.id}`
+                            : `/record?item=${r.id}`
+                        }
+                        className="fu-act"
+                        title="Record what happened — that is what clears it"
+                      >
+                        <MicrophoneIcon size={14} />
+                        Log it
+                      </Link>
+                      {r.account_id && (
+                        <Link
+                          href={`/visits?plan=${r.account_id}`}
+                          className="fu-act"
+                          title="Book it for a day you can keep"
+                        >
+                          <CalendarIcon size={14} />
+                          Re-book
+                        </Link>
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {pages > 1 && (
+        <Pager
+          page={page}
+          pages={pages}
+          from={from}
+          shown={slice.length}
+          total={total}
+          onPage={setPage}
+          className="fu-pager"
+        />
+      )}
+    </section>
+  );
+}
+
+// ── Every price in a customer's hands ────────────────────────────────────────
+//
+// The same definition of "a quote" the Quotes page uses — an opportunity at
+// QUOTE or DECISION, because a price is out and no answer is back — and the
+// same order: past its close date first, then by date, the undated last. A
+// quote with no close date is not urgent, it is unmanaged.
+function QuoteList({
+  rows,
+  who,
+  names,
+  todayIso,
+  late,
+  span,
+}: {
+  rows: readonly QuoteRow[];
+  who: string | null;
+  names: ReadonlyMap<string, string>;
+  todayIso: string;
+  late: number;
+  span: string;
+}) {
+  const size = usePageSize(8, 5);
+  const { slice, page, pages, from, setPage, total } = usePaged(rows, size);
+
+  return (
+    <section
+      className="adapt card quiet-col"
+      data-desk="quotes"
+      data-span={span}
+      key={`quotes-${who ?? "all"}`}
+    >
+      <div className="quiet-head">
+        <span className="t-title">Out for quote</span>
         <span className="t-hint">
           {total === 0
-            ? "nothing is owed right now"
-            : `${QTY.format(total)} open${late > 0 ? ` · ${QTY.format(late)} past the date` : ""}${who ? ` · ${who}` : ""}`}
+            ? "no price in anybody’s hands"
+            : `${QTY.format(total)} open · ${formatMoney(Math.round(totalValue(rows)))}${late > 0 ? ` · ${QTY.format(late)} past the close date` : ""}${who ? ` · ${who}` : ""}`}
+          {" · "}
+          <Link href="/quotes" className="t-action">
+            All quotes
+          </Link>
         </span>
       </div>
 
       {total === 0 ? (
         <p className="t-sub">
-          {everOne
-            ? "Everything that was promised here has been recorded."
-            : "No follow-up has been written yet — nothing has been promised, which is not the same as nothing being owed. They appear here the moment a visit or a note sets a next step."}
+          Nothing out for quote. When a deal reaches a price, it lands here.
         </p>
       ) : (
         <ul className="list">
-          {slice.map((r) => (
-            <li key={r.id}>
-              <div className="row fu-row">
-                <span className="row-body">
-                  {r.account_id ? (
-                    <Link href={`/accounts/${r.account_id}`} className="t-title fu-name">
-                      {displayAccountName(r.accounts?.name ?? "—")}
+          {slice.map((r) => {
+            const over = isOverdue(r, todayIso);
+            const rep = names.get(r.owner_id);
+            return (
+              <li key={r.id}>
+                <div className="row fu-row">
+                  <span className="row-body">
+                    <Link href={`/accounts/${r.primary_account_id}`} className="t-title fu-name">
+                      {r.name}
                     </Link>
-                  ) : (
-                    <span className="t-title">No company on it</span>
-                  )}
-                  <span className="t-hint">{r.action}</span>
-                </span>
-                <span className="fu-side">
-                  <span
-                    className="sales-move"
-                    data-dir={isLate(r.due_date) ? "down" : undefined}
-                  >
-                    {formatDay(r.due_date)}
+                    <span className="t-hint">
+                      {r.account ? displayAccountName(r.account.name) : "Account"}
+                      {who === null && rep ? ` · ${rep}` : ""}
+                      {" · "}
+                      {quoteStageLabel(r.stage)}
+                    </span>
                   </span>
-                  <span className="fu-acts">
-                    {/* The item id rides along so recording CLOSES this
-                        promise instead of logging a stranger beside it. */}
-                    <Link
-                      href={
-                        r.account_id
-                          ? `/record?account=${r.account_id}&item=${r.id}`
-                          : `/record?item=${r.id}`
-                      }
-                      className="fu-act"
-                      title="Record what happened — that is what clears it"
-                    >
-                      <MicrophoneIcon size={14} />
-                      Log it
-                    </Link>
-                    {r.account_id && (
-                      <Link
-                        href={`/visits?plan=${r.account_id}`}
-                        className="fu-act"
-                        title="Book it for a day you can keep"
-                      >
-                        <CalendarIcon size={14} />
-                        Re-book
-                      </Link>
-                    )}
+                  <span className="fu-side">
+                    <span className="sales-move" data-dir={over ? "down" : undefined}>
+                      {r.expected_close_date
+                        ? `${over ? "was due" : "closes"} ${formatDay(r.expected_close_date)}`
+                        : "no close date"}
+                    </span>
+                    <span className="fig fig-md">{formatMoney(r.estimated_revenue)}</span>
                   </span>
-                </span>
-              </div>
-            </li>
-          ))}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -654,7 +982,13 @@ function FollowUps({
 /** Past the date, read against the local day — the same boundary the rest of
  *  the app's dates use. */
 function isLate(due: string): boolean {
-  const today = new Date();
-  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  return due < iso;
+  return due < isoToday();
+}
+
+function isoOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isoToday(): string {
+  return isoOf(new Date());
 }

@@ -5801,11 +5801,15 @@ input[type="datetime-local"] {
   }
   /* Inside the card the rows flatten to ruled lines: a list of cards inside
      a card is the thing this app spent September removing. */
-  .reps-board [data-desk="followups"] > .list {
+  .reps-board [data-desk="followups"] > .list,
+  .reps-board [data-desk="agenda"] > .list,
+  .reps-board [data-desk="quotes"] > .list {
     gap: 0;
     padding: 0 16px 4px;
   }
-  .reps-board [data-desk="followups"] .fu-row {
+  .reps-board [data-desk="followups"] .fu-row,
+  .reps-board [data-desk="agenda"] .fu-row,
+  .reps-board [data-desk="quotes"] .fu-row {
     border: 0;
     border-radius: 0;
     box-shadow: none;
@@ -5813,12 +5817,16 @@ input[type="datetime-local"] {
     padding: 11px 0;
     border-top: 1px solid var(--rule);
   }
-  .reps-board [data-desk="followups"] > .list > li:first-child .fu-row {
+  .reps-board [data-desk="followups"] > .list > li:first-child .fu-row,
+  .reps-board [data-desk="agenda"] > .list > li:first-child .fu-row,
+  .reps-board [data-desk="quotes"] > .list > li:first-child .fu-row {
     border-top: 0;
   }
   /* The arrows sit on the floor of the widget — the pager rule, which is why
      the card is a flex column (Andre, 2026-10-02). */
-  .reps-board [data-desk="followups"] {
+  .reps-board [data-desk="followups"],
+  .reps-board [data-desk="agenda"],
+  .reps-board [data-desk="quotes"] {
     display: flex;
     flex-direction: column;
   }
