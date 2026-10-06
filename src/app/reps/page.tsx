@@ -27,6 +27,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AgendaCalendar } from "@/components/agenda-calendar";
 import { useOffline } from "@/components/offline-provider";
 import { CalendarIcon, MicrophoneIcon } from "@/components/icons";
 import { Pager, usePaged, usePageSize } from "@/components/pager";
@@ -49,12 +50,7 @@ import {
   totalValue,
 } from "@/lib/domain/quotes";
 import { manages } from "@/lib/domain/roles";
-import {
-  avatarLetter,
-  displayAccountName,
-  formatDay,
-  formatMoney,
-} from "@/lib/format";
+import { displayAccountName, formatDay, formatMoney } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -264,6 +260,18 @@ export default function RepsPage() {
     [myQuotes, todayIso],
   );
 
+  // WHAT IS ON EACH PLATE — the one figure a chip can carry (the Sales
+  // board's "Slipping 4" idiom). With the roster cards gone (Andre,
+  // 2026-10-06: the filter row made them redundant) this is where the team
+  // is still compared at a glance: open visits, promises and quotes, by rep.
+  const plate = useMemo(() => {
+    const m = new Map<string, number>();
+    const add = (id: string) => m.set(id, (m.get(id) ?? 0) + 1);
+    for (const a of actions) add(a.owner_id);
+    for (const q of quotes) add(q.owner_id);
+    return m;
+  }, [actions, quotes]);
+
   /** membership_id → name, for the caption on a row while everyone is read. */
   const names = useMemo(
     () => new Map(reps.map((r) => [r.membership_id, r.rep_name] as const)),
@@ -387,11 +395,11 @@ export default function RepsPage() {
   // The desk packs itself — the same rule the Sales board obeys, so a block
   // added here later finds its line without anybody naming a column.
   const span = useMemo(() => {
+    // The week first and whole; the promises and the quotes share a line.
     const want: { k: string; w: DeskWidth }[] = [
-      { k: "roster", w: "full" },
-      { k: "agenda", w: "wide" },
+      { k: "agenda", w: "full" },
       { k: "followups", w: "narrow" },
-      { k: "quotes", w: "full" },
+      { k: "quotes", w: "narrow" },
     ];
     if (counts) want.push({ k: "gates", w: "full" });
     return spanner(packDesk(want));
@@ -408,33 +416,28 @@ export default function RepsPage() {
           </h1>
           <span className="skel mt-2" style={{ width: "70%", height: 13 }} />
         </section>
+        {/* The filter row, the three figures, the week: the shape the page
+            takes, drawn before its numbers. */}
         <section>
-          <div className="section-head">
-            <h2 className="t-section">The team</h2>
-          </div>
-          <ul className="reps-roster">
-            {[0, 1, 2, 3].map((i) => (
-              <li key={i}>
-                <span className="rep-card" aria-hidden="true">
-                  <span className="rep-card-head">
-                    <span className="skel" style={{ width: 34, height: 34, borderRadius: 999 }} />
-                    <span className="rep-who">
-                      <span className="skel" style={{ width: "72%", height: 14 }} />
-                      <span className="skel mt-1" style={{ width: "48%", height: 11 }} />
-                    </span>
-                  </span>
-                  <span className="rep-figs">
-                    {[0, 1, 2].map((j) => (
-                      <span key={j} className="rep-fig">
-                        <span className="skel" style={{ width: "60%", height: 19 }} />
-                        <span className="skel mt-1" style={{ width: "90%", height: 10 }} />
-                      </span>
-                    ))}
-                  </span>
-                </span>
-              </li>
+          <div className="chip-row" aria-hidden="true">
+            {[88, 120, 110, 112, 104].map((w, i) => (
+              <span key={i} className="skel" style={{ width: w, height: 36, borderRadius: 999 }} />
             ))}
-          </ul>
+          </div>
+        </section>
+        <section>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="card card-pad block">
+                <span className="skel" style={{ width: "40%", height: 10 }} />
+                <span className="skel mt-2" style={{ width: "30%", height: 28 }} />
+                <span className="skel mt-2" style={{ width: "60%", height: 11 }} />
+              </span>
+            ))}
+          </div>
+        </section>
+        <section>
+          <span className="skel" style={{ width: "100%", height: 220 }} />
         </section>
         <div className="card">
           <span className="skel" style={{ width: "36%", height: 14 }} />
@@ -505,6 +508,11 @@ export default function RepsPage() {
               onClick={() => setPick(r.membership_id)}
             >
               {r.rep_name}
+              {(plate.get(r.membership_id) ?? 0) > 0 && (
+                <span className="chip-count">
+                  {QTY.format(plate.get(r.membership_id) ?? 0)}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -550,91 +558,6 @@ export default function RepsPage() {
             </div>
           </div>
         </div>
-      </section>
-
-      {/* THE ROSTER — the first reading, and a second way to pick: each card
-          says the three things a manager asks about a person: what they are
-          waiting on, what is out for an answer, when they were last seen
-          doing something. */}
-      <section className="adapt" data-desk="roster" data-span={span("roster")}>
-        <div className="section-head">
-          <h2 className="t-section">The team</h2>
-          {at && (
-            <button type="button" className="t-action" onClick={() => setPick(null)}>
-              Everyone
-            </button>
-          )}
-        </div>
-        {reps.length === 0 ? (
-          <p className="t-sub">
-            No active rep or manager is on the books yet.
-          </p>
-        ) : (
-          <ul className="reps-roster">
-            {reps.map((r) => {
-              const on = r.membership_id === at;
-              return (
-                <li key={r.membership_id}>
-                  <button
-                    type="button"
-                    className="rep-card"
-                    data-on={on}
-                    aria-pressed={on}
-                    onClick={() => setPick(on ? null : r.membership_id)}
-                  >
-                    <span className="rep-card-head">
-                      <span className="rep-mark" aria-hidden="true">
-                        {avatarLetter(r.rep_name ?? "?")}
-                      </span>
-                      <span className="rep-who">
-                        <span className="t-title">{r.rep_name ?? "—"}</span>
-                        <span className="t-hint">
-                          {r.territory_name ?? "No patch"}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="rep-figs">
-                      <span className="rep-fig">
-                        <span
-                          className="fig fig-md"
-                          style={{
-                            color:
-                              r.overdue_next_actions > 0
-                                ? "var(--danger)"
-                                : undefined,
-                          }}
-                        >
-                          {QTY.format(r.open_next_actions ?? 0)}
-                        </span>
-                        <span className="t-meta uppercase tracking-wide">
-                          {r.overdue_next_actions > 0
-                            ? `owed · ${r.overdue_next_actions} late`
-                            : "owed"}
-                        </span>
-                      </span>
-                      <span className="rep-fig">
-                        <span className="fig fig-md">
-                          {QTY.format(r.quotes_outstanding ?? 0)}
-                        </span>
-                        <span className="t-meta uppercase tracking-wide">
-                          out for quote
-                        </span>
-                      </span>
-                      <span className="rep-fig">
-                        <span className="fig fig-md">
-                          {QTY.format(r.activities_30d ?? 0)}
-                        </span>
-                        <span className="t-meta uppercase tracking-wide">
-                          logged, 30d
-                        </span>
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
         {/* The hole, stated. 45 of the 136 dealers sit under an admin rather
             than a rep, which is a leadership decision waiting to be made —
             and a number we can read ourselves rather than ask for. */}
@@ -648,28 +571,28 @@ export default function RepsPage() {
         )}
       </section>
 
-      {/* THE AGENDA — the team's planned visits, soonest first, the rep named
-          on each row when the whole team is being read. The month on the
-          wall is one click away; this is the list of what is booked. */}
-      <PromiseList
-        desk="agenda"
-        title="Agenda"
-        rows={visits}
-        who={chosen?.rep_name ?? null}
-        names={names}
-        hint={
-          visits.length === 0
-            ? "nothing booked"
-            : `${QTY.format(visits.length)} booked${missed > 0 ? ` · ${QTY.format(missed)} missed` : ""}${chosen ? ` · ${chosen.rep_name}` : ""}`
-        }
-        empty={
-          everOne
-            ? "No visit is booked. One is planned from a dealer’s page, or from Add."
-            : "No visit has been planned yet. They are booked from a dealer’s page, or from Add, and land here with their objective."
-        }
-        more={{ href: "/visits", label: "Calendar" }}
-        span={span("agenda")}
-      />
+      {/* THE TEAM'S WEEK, up front (Andre, 2026-10-06): the wall itself, not
+          a list about it — the month one click away. The chip row above is
+          its filter, so the calendar's own rail is off. Nothing is booked
+          from here yet: that arrives with the team's Google Calendar. */}
+      <section
+        className="adapt"
+        data-desk="agenda"
+        data-span={span("agenda")}
+        key={`agenda-${at ?? "all"}`}
+      >
+        <AgendaCalendar
+          bump={0}
+          onError={() => undefined}
+          defaultView="week"
+          owner={at}
+          extra={
+            <Link href="/visits?plan=new" className="btn-quiet">
+              Plan a visit
+            </Link>
+          }
+        />
+      </section>
 
       {/* THE PROMISES — moved off Sales (Andre, 2026-10-02: the Sales board
           is about sales; a promise is about a person). A visit is not one of
