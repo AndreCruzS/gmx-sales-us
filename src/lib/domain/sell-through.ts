@@ -78,10 +78,13 @@ export interface BranchRef {
 export type SellDim = "region" | "rep" | "distributor" | "branch" | "dealer";
 export type SellLens = "region" | "rep" | "distribution" | "dealer";
 
-/** The order leadership listed them in. */
+/** The order leadership listed them in. THE REP LENS LEFT THE SALES BOARD
+ *  (Bianca + Andre, meeting 2026-10-02, dictated 2026-10-06): Sales reads the
+ *  book by Region, Distribution and Dealer only. People are the Reps board's
+ *  question. The walk itself (SELL_CHAIN.rep) is kept: it is a valid reading
+ *  of the same rows, just not one this picker offers. */
 export const SELL_LENSES: readonly (readonly [SellLens, string])[] = [
   ["region", "Region"],
-  ["rep", "Rep"],
   ["distribution", "Distribution"],
   ["dealer", "Dealer"],
 ];
