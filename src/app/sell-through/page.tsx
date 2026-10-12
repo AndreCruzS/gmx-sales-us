@@ -60,6 +60,7 @@ interface UploadRow {
   period_kind: "MONTH" | "YTD";
   row_count: number;
   unmatched_count: number;
+  detail: "dealer" | "branch";
   uploaded_at: string;
 }
 
@@ -70,7 +71,10 @@ const FIELDS: readonly { key: ImportField; label: string; need: boolean }[] = [
   // with no state never reaches the territory map, and volume off the map is
   // credited to whoever owns the dealer's banner instead of to the region.
   { key: "state", label: "Branch state", need: false },
-  { key: "dealer", label: "Customer", need: true },
+  // No longer required (Boise, 2026-10-12): a file with no customer column
+  // can be loaded BY BRANCH — but only when the admin ticks the box below
+  // the table, never on a guess. See mappingProblem.
+  { key: "dealer", label: "Customer", need: false },
   // The item, and it earns more than a name: the length in its description is
   // what turns a piece count into linear feet.
   { key: "product", label: "Item", need: false },
@@ -116,6 +120,9 @@ export default function SellThroughPage() {
   const [reading, setReading] = useState(false);
   const [pasted, setPasted] = useState("");
   const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING);
+  // THE ADMIN'S WORD that this file has no customer column (Boise, from
+  // September 2026). Reset with every new sheet: the word is given per file.
+  const [branchOnly, setBranchOnly] = useState(false);
   const [touchedMapping, setTouchedMapping] = useState(false);
   const [addBranches, setAddBranches] = useState(true);
   // The client's map, so a new yard can be shown landing in a region BEFORE it is
@@ -185,7 +192,7 @@ export default function SellThroughPage() {
     const [us, br, ts, tr] = await Promise.all([
       supabase
         .from("sell_through_uploads")
-        .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at")
+        .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at, detail")
         .order("period", { ascending: false })
         .limit(200),
       supabase
@@ -252,6 +259,11 @@ export default function SellThroughPage() {
     const t = setTimeout(() => setMapping(guessMapping(sheet.headers)), 0);
     return () => clearTimeout(t);
   }, [sheet.headers, touchedMapping]);
+  useEffect(() => {
+    const t = setTimeout(() => setBranchOnly(false), 0);
+    return () => clearTimeout(t);
+  }, [sheet.headers]);
+  const byBranch = branchOnly && mapping.dealer < 0;
 
   const mineBranches = useMemo(
     () =>
@@ -265,8 +277,8 @@ export default function SellThroughPage() {
     () =>
       sheet.rows.length === 0
         ? null
-        : buildImport(sheet, mapping, { branches: mineBranches, dealers, aliases }),
-    [sheet, mapping, mineBranches, dealers, aliases],
+        : buildImport(sheet, mapping, { branches: mineBranches, dealers, aliases }, { branchOnly }),
+    [sheet, mapping, mineBranches, dealers, aliases, branchOnly],
   );
 
   /** What the file said this yard's state was, or what an admin typed instead. */
@@ -281,7 +293,7 @@ export default function SellThroughPage() {
       u.period === period &&
       u.period_kind === kind,
   );
-  const problem = mappingProblem(mapping);
+  const problem = mappingProblem(mapping, { branchOnly });
   const loadable = plan
     ? plan.rows.filter((r) => r.branchId !== null || addBranches).length
     : 0;
@@ -367,7 +379,9 @@ export default function SellThroughPage() {
           filename: file?.name ?? null,
           storage_path: storagePath,
           row_count: rows.length,
-          unmatched_count: rows.filter((r) => r.dealerId === null).length,
+          // By branch nobody is unnamed — there was nobody to name.
+          unmatched_count: byBranch ? 0 : rows.filter((r) => r.dealerId === null).length,
+          detail: byBranch ? "branch" : "dealer",
         })
         .select("id")
         .single();
@@ -743,6 +757,25 @@ export default function SellThroughPage() {
                   </select>
                 </label>
               ))}
+              {/* THE BOX (Boise, 2026-10-12). Offered only when no customer
+                  column is mapped, and the file loads only with it ticked: a
+                  month with no dealers is the admin's decision, in writing on
+                  the upload, never the loader's guess. */}
+              {mapping.dealer < 0 && (
+                <label className="flex items-start gap-2 t-sub">
+                  <input
+                    type="checkbox"
+                    checked={branchOnly}
+                    onChange={(e) => setBranchOnly(e.target.checked)}
+                  />
+                  <span>
+                    This file has no customer column. Load it{" "}
+                    <strong>by branch</strong>: totals count, dealers do not —
+                    every reading of who bought leaves this house out and says
+                    so.
+                  </span>
+                </label>
+              )}
               {problem && (
                 <p className="t-sub" style={{ color: "var(--danger)" }}>
                   {problem}
@@ -774,8 +807,10 @@ export default function SellThroughPage() {
             <div className="card card-pad">
               <div className="t-meta uppercase tracking-wide">Matched</div>
               <div className="fig fig-xl mt-1">
-                {QTY.format(plan.matchedRows)}
-                <span className="t-meta"> / {QTY.format(plan.rows.length)}</span>
+                {byBranch ? "—" : QTY.format(plan.matchedRows)}
+                <span className="t-meta">
+                  {byBranch ? " by branch, no dealers in this file" : ` / ${QTY.format(plan.rows.length)}`}
+                </span>
               </div>
               <div className="t-meta mt-0.5">
                 {plan.value !== null
@@ -1069,9 +1104,11 @@ export default function SellThroughPage() {
                       </span>
                       <span className="t-sub block">
                         {QTY.format(u.row_count)} rows
-                        {u.unmatched_count > 0
-                          ? ` · ${QTY.format(u.unmatched_count)} unnamed`
-                          : ""}
+                        {u.detail === "branch"
+                          ? " · by branch · no dealer detail"
+                          : u.unmatched_count > 0
+                            ? ` · ${QTY.format(u.unmatched_count)} unnamed`
+                            : ""}
                       </span>
                     </span>
                     <button
