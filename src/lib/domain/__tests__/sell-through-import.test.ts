@@ -629,7 +629,7 @@ describe("a file with no customer column (Boise, 2026-10-12)", () => {
   });
 
   it("buildImport by branch keeps every line, with no dealer at all", () => {
-    const sheet = parseSheet("Branch\tItem\tQty\tUOM\nRiverside\t1X6-16' THERMO\t10\tPC\n");
+    const sheet = parseSheet("Branch\tItem\tQty\tUOM\nRiverside\tTHERMOWOOD CLAD\t10\tLF\n");
     const m = mapping({ branch: 0, product: 1, quantity: 2, unit: 3 });
     const plan = buildImport(sheet, m, { branches: BRANCHES, dealers: DEALERS }, { branchOnly: true });
     expect(plan.rows).toHaveLength(1);
