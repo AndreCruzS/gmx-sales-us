@@ -1,6 +1,6 @@
 # Team Google Calendar — design
 
-Status: approved in conversation by Andre, 2026-10-12. Supersedes spec §6
+Status: shipped 2026-10-12 (commits c3caec1..f55834e); approved in conversation by Andre the same day. Supersedes spec §6
 (one secondary calendar per rep, owned by a service account, one-way).
 
 ## Why
