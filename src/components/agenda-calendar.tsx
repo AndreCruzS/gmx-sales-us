@@ -31,6 +31,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckIcon } from "@/components/icons";
+import { useOffline } from "@/components/offline-provider";
+import { manages } from "@/lib/domain/roles";
 import { humanize } from "@/lib/domain/enums";
 import { getOfflineLayer } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -277,6 +279,39 @@ export function AgendaCalendar({
   // a week cell is a working day.
   const cap = view === "week" ? 8 : 3;
 
+  // HANDING A VISIT TO A REP (spec 2026-10-12): a visit born in Google is the
+  // calendar owner's until a manager says whose it is. The owner changes
+  // here, through the same outbox a completion takes; the rep label on the
+  // Google event follows on the next sync. Managers only — a rep's wall has
+  // nobody else's visits on it to hand over.
+  const { profile } = useOffline();
+  const canAssign = manages(profile?.role);
+  const assignable = useMemo(
+    () => [...repNames.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+    [repNames],
+  );
+
+  async function assign(item: CalRow, ownerId: string) {
+    if (ownerId === item.owner_id) return;
+    try {
+      const layer = getOfflineLayer();
+      await layer.sync.enqueue({
+        clientId: item.id,
+        entityType: "next_action",
+        op: "update",
+        payload: { id: item.id, owner_id: ownerId },
+        baseVersion: item.updated_at,
+        blobRef: null,
+      });
+      setRows((prev) =>
+        prev.map((r) => (r.id === item.id ? { ...r, owner_id: ownerId } : r)),
+      );
+      void layer.sync.drain();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function markDone(item: CalRow) {
     try {
       const layer = getOfflineLayer();
@@ -522,6 +557,20 @@ export function AgendaCalendar({
                         </span>
                       )}
                     </span>
+                  )}
+                  {canAssign && !r.completed_at && assignable.length > 0 && (
+                    <select
+                      className="btn-quiet shrink-0"
+                      value={r.owner_id ?? ""}
+                      onChange={(e) => void assign(r, e.target.value)}
+                      aria-label={`Assign ${r.action} to`}
+                    >
+                      {assignable.map(([id, name]) => (
+                        <option key={id} value={id}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
                   )}
                   {r.completed_at ? (
                     <span className="tag tag-accent shrink-0">done</span>

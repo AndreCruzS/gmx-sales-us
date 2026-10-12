@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  nextActionUpdateSchema,
   accountCreateSchema,
   accountNoteCreateSchema,
   accountRelationshipCreateSchema,
@@ -254,5 +255,15 @@ describe("accountNoteCreateSchema", () => {
 
   it("is registered on the outbox boundary as account_note:create", () => {
     expect(outboxPayloadSchemas["account_note:create"]).toBe(accountNoteCreateSchema);
+  });
+});
+
+describe("nextActionUpdateSchema — handing a visit to a rep (team calendar, 2026-10-12)", () => {
+  it("keeps owner_id in an update payload", () => {
+    const out = nextActionUpdateSchema.parse({
+      id: "11111111-1111-4111-8111-111111111111",
+      owner_id: "22222222-2222-4222-8222-222222222222",
+    });
+    expect(out.owner_id).toBe("22222222-2222-4222-8222-222222222222");
   });
 });

@@ -94,6 +94,10 @@ export type NextActionCreate = z.infer<typeof nextActionCreateSchema>;
 export const nextActionUpdateSchema = z.object({
   id: uuid,
   completed_at: isoTimestamp.nullish(),
+  // A manager handing a visit to a rep (team calendar, 2026-10-12). Zod
+  // strips unknown keys silently, so an owner change not listed here would
+  // vanish in the outbox without a sound.
+  owner_id: uuid.optional(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   action: z.string().min(1).optional(),
 });

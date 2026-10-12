@@ -281,6 +281,25 @@ export default function RepsPage() {
     return () => clearTimeout(timer);
   }, [profile, attempt, status.lastPulledAt]);
 
+  // THE WEEK IS AS FRESH AS GOOGLE (spec 2026-10-12): opening the board asks
+  // the server to reconcile the team calendar, then re-reads the grid. Fire
+  // and forget — a 501 before the owner connected is silence, not an error.
+  const [calBump, setCalBump] = useState(0);
+  useEffect(() => {
+    let stale = false;
+    const t = setTimeout(() => {
+      void fetch("/api/calendar/team/sync", { method: "POST" })
+        .then((r) => {
+          if (!stale && r.ok) setCalBump((b) => b + 1);
+        })
+        .catch(() => undefined);
+    }, 0);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, []);
+
   // A REP LANDS ON THEMSELVES, because for them "the team" is not the
   // question. DERIVED, not set from an effect: an effect that preselects has
   // to remember whether it already ran, and that memory is the bug — a reload
@@ -707,7 +726,7 @@ export default function RepsPage() {
         key={`agenda-${at ?? "all"}`}
       >
         <AgendaCalendar
-          bump={0}
+          bump={calBump}
           onError={() => undefined}
           defaultView="week"
           owner={at}
