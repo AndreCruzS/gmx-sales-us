@@ -11,8 +11,12 @@
 // Pure: rows in, facts out. The relationship half (contacts, visits, notes,
 // quotes, rollout) is ours, not the files', and is read separately.
 
-import { displayDealerLabel } from "@/lib/format";
-import type { SellThroughRow } from "@/lib/domain/sell-through";
+import {
+  dealerDisplayName,
+  dealerKey,
+  isBranchLevel,
+  type SellThroughRow,
+} from "@/lib/domain/sell-through";
 
 export interface DealerPeriod {
   /** The period key as stored: a month's first day, or the year file's cut. */
@@ -53,6 +57,9 @@ export interface DealerFacts {
   lastBought: string | null;
   /** The newest month on file in which this dealer bought nothing. */
   silentIn: string | null;
+  /** Houses of this dealer that stopped naming their dealers, and since when
+   *  — purchases through them are no longer visible here. */
+  detailEnded: { house: string; since: string }[];
   yearSoFar: number;
   /** The year file's own last-year figure, when the dealer is in it. */
   yearFileLy: number;
@@ -66,7 +73,7 @@ const num = (v: number | string | null | undefined) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-export const dealerKeyOf = (r: SellThroughRow) => r.dealer_id ?? r.dealer_label;
+export const dealerKeyOf = (r: SellThroughRow) => dealerKey(r);
 
 /**
  * "083003213 1X6-154\" THERMOWOOD CLAD V-GRV/NCKL GAP AYOUS" → the family
@@ -92,13 +99,27 @@ export function dealerFacts(
   const mine = rows.filter((r) => keys.has(dealerKeyOf(r)));
   if (mine.length === 0) return null;
 
-  const filesOnHand = [...new Set(rows.map((r) => r.period))].sort();
+  // A MONTH ONLY COUNTS IF ONE OF THIS DEALER'S HOUSES NAMED ITS DEALERS in
+  // it (Boise, 2026-10-12). A branch-level month from Boise says nothing
+  // about whether this yard bought, so it is neither a column nor silence.
+  const myHouses = new Set(mine.map((r) => r.distributor_id));
+  const detailed = rows.filter((r) => myHouses.has(r.distributor_id) && !isBranchLevel(r));
+  const filesOnHand = [...new Set(detailed.map((r) => r.period))].sort();
+  const detailEndedAt = new Map<string, string>();
+  for (const r of rows) {
+    if (!myHouses.has(r.distributor_id) || !isBranchLevel(r) || r.period_kind === "YTD") continue;
+    const at = detailEndedAt.get(r.distributor_name);
+    if (!at || r.period < at) detailEndedAt.set(r.distributor_name, r.period);
+  }
+  const detailEnded = [...detailEndedAt.entries()]
+    .map(([house, since]) => ({ house, since }))
+    .sort((a, b) => a.house.localeCompare(b.house));
   const first = mine[0];
   const accountId = mine.find((r) => r.dealer_id)?.dealer_id ?? null;
   // A label off the file leads with the distributor's customer code
   // ("THRBUSCO - MAXIMUS BUILDING SUPPLY"); the name a person says is after it.
   const name =
-    mine.find((r) => r.dealer_name)?.dealer_name ?? displayDealerLabel(first.dealer_label);
+    mine.find((r) => r.dealer_name)?.dealer_name ?? dealerDisplayName(first);
 
   const uniq = (xs: (string | null | undefined)[]) =>
     [...new Set(xs.filter((x): x is string => !!x))].sort();
@@ -136,7 +157,7 @@ export function dealerFacts(
   // Silence is only silence in a MONTH file that exists and is newer than the
   // last purchase; a missing file is unknown, never zero.
   const monthFiles = [
-    ...new Set(rows.filter((r) => r.period_kind !== "YTD").map((r) => r.period)),
+    ...new Set(detailed.filter((r) => r.period_kind !== "YTD").map((r) => r.period)),
   ].sort();
   const lastBought = bought.at(-1)?.period ?? null;
   const silentIn =
@@ -197,6 +218,7 @@ export function dealerFacts(
     firstSeen: bought[0]?.period ?? null,
     lastBought,
     silentIn,
+    detailEnded,
     yearSoFar,
     yearFileLy: yearFile?.ly ?? 0,
     latestSplit,

@@ -90,3 +90,31 @@ describe("dealerFacts", () => {
     expect(dealerFacts(new Set(["nobody"]), ROWS)).toBeNull();
   });
 });
+
+describe("dealerFacts · a house that sends no dealer detail (Boise, 2026-10-12)", () => {
+  const blind = (o: Partial<SellThroughRow>) =>
+    row({ dealer_id: null, dealer_name: null, dealer_label: null, detail: "branch", ...o });
+
+  it("does not call a dealer silent in a month its house sent by branch", () => {
+    const rows = [
+      row({ period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      blind({ period: "2026-09-01", quantity: 50 }),
+    ];
+    const f = dealerFacts(new Set(["acc-g"]), rows)!;
+    expect(f.silentIn).toBeNull();
+    expect(f.filesOnHand).toEqual(["2026-08-01"]);
+    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", since: "2026-09-01" }]);
+  });
+
+  it("judges silence against the house that still has detail", () => {
+    const rows = [
+      row({ period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      blind({ period: "2026-09-01", quantity: 50 }),
+      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "GAN - GANAHL", quantity: 10 }),
+      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-09-01", dealer_id: "acc-v", dealer_name: "V", dealer_label: "V", quantity: 10 }),
+    ];
+    const f = dealerFacts(new Set(["acc-g"]), rows)!;
+    expect(f.silentIn).toBe("2026-09-01");
+    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", since: "2026-09-01" }]);
+  });
+});
