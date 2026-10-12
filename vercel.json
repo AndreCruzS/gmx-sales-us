@@ -5,8 +5,8 @@
       "schedule": "*/15 * * * *"
     },
     {
-      "path": "/api/calendar/sync",
-      "schedule": "0 * * * *"
+      "path": "/api/calendar/team/sync",
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/hubspot/sync",
