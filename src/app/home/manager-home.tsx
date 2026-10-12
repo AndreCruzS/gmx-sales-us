@@ -30,8 +30,14 @@ import {
   movementLabel,
   periodLabel,
   periodShort,
+  dealerDisplayName,
+  dealerKey,
   dealerWhere,
+  housesWithoutDetail,
+  noDetailHouses,
+  noDetailSentence,
   recurrence,
+  type NoDetailHouse,
   regionCoverage,
   scopeProductLine,
   DEFAULT_PRODUCT_LINE,
@@ -52,7 +58,7 @@ import { PagedNames } from "@/components/paged-names";
 import { WhereTags } from "@/components/where-tags";
 import { DealerModuleProvider, DealerName } from "@/components/dealer-module";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
-import { displayDealerLabel, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
   orderVolume,
@@ -252,7 +258,7 @@ export function ManagerHome({ name }: { name: string }) {
         .sort()
         .reverse()[0] ?? null;
     const SELL_COLS =
-      "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account";
+      "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account, detail";
     const none = Promise.resolve({ data: [], error: null });
     const [ch, sc, ex, wm, pl, st, sy, sb, so, ol, hr, ts, tc, tt] = await Promise.all([
       supabase
@@ -659,8 +665,14 @@ export function ManagerHome({ name }: { name: string }) {
         houses: string[];
       }[],
       hasPrev: false,
+      /** Houses that sent the newest month by branch — nobody of theirs can
+       *  be judged quiet or fading, so they are left out and named. */
+      noDetail: [] as NoDetailHouse[],
     };
     if (!pLatest) return empty;
+    // A HOUSE BLIND IN THE NEWEST MONTH (Boise, 2026-10-12) cannot say who
+    // went quiet: its dealers are left out of both chapters, in both modes.
+    const blind = latest ? housesWithoutDetail(monthlyRows, latest) : new Set<string>();
     const cur = new Map<string, number>();
     const prev = new Map<string, number>();
     const names = new Map<string, string>();
@@ -671,15 +683,16 @@ export function ManagerHome({ name }: { name: string }) {
     const later = new Map<string, number>();
     if (quietYtd && latest) {
       for (const r of monthlyRows) {
-        if (r.period !== latest) continue;
-        const key = r.dealer_id ?? r.dealer_label;
+        if (r.period !== latest || blind.has(r.distributor_id)) continue;
+        const key = dealerKey(r);
         later.set(key, (later.get(key) ?? 0) + Number(r.quantity));
       }
     }
     let unit = "LF";
     for (const r of base) {
-      const key = r.dealer_id ?? r.dealer_label;
-      names.set(key, r.dealer_name ?? displayDealerLabel(r.dealer_label));
+      if (blind.has(r.distributor_id)) continue;
+      const key = dealerKey(r);
+      names.set(key, dealerDisplayName(r));
       ids.set(key, r.dealer_id);
       unit = r.unit || unit;
       if (r.period === pLatest) {
@@ -769,7 +782,11 @@ export function ManagerHome({ name }: { name: string }) {
     }
     grouped.sort((a, b) => a.group - b.group || b.loss - a.loss);
     for (const g of grouped) rows.push(g.row);
-    return { rows, hasPrev };
+    return {
+      rows,
+      hasPrev,
+      noDetail: latest ? noDetailHouses(monthlyRows, [latest]) : [],
+    };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
 
   // RECURRENCE — Bianca's other word ("meta e recorrência"). Of the dealers
@@ -1380,6 +1397,10 @@ export function ManagerHome({ name }: { name: string }) {
                 ` · ${recur.oneFileHouses.join(", ")} sent only one of the two months, so ${
                   recur.oneFileHouses.length === 1 ? "its" : "their"
                 } dealers are not counted`}
+              {/* a house that sends no dealer detail (Boise, from September
+                  2026) is left out the same way, and said so */}
+              {noDetailSentence(recur.noDetailHouses) &&
+                ` · ${noDetailSentence(recur.noDetailHouses)}`}
             </span>
           </div>
           <div className="recur-cells">
@@ -1522,6 +1543,8 @@ export function ManagerHome({ name }: { name: string }) {
                 <span className="t-title">Account gone quiet</span>
                 <span className="t-hint">
                   who stopped, and who is fading — biggest loss first in each
+                  {noDetailSentence(quietRanking.noDetail) &&
+                    ` · ${noDetailSentence(quietRanking.noDetail)}`}
                 </span>
               </div>
               {/* TWO CHAPTERS, TWO COLUMNS on the desk (Andre, 2026-09-09):

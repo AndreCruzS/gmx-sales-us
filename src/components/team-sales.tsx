@@ -90,6 +90,9 @@ import {
   type SellGroup,
   type SellLens,
   type SellThroughRow,
+  dealerDisplayName,
+  dealerKey,
+  isBranchLevel,
 } from "@/lib/domain/sell-through";
 
 /** What the page narrows to. See focusAccount: the NAME is the deepest link of
@@ -1937,6 +1940,9 @@ function SalesBook({
         branchSegs: { key: string; name: string; qty: number }[];
         dealers: { key: string; name: string; qty: number }[];
         dealerCount: number;
+        /** Volume in this region that named no dealer, by house (Boise, from
+         *  September 2026) — said beside the list, never inside it. */
+        undisclosed: { house: string; qty: number }[];
       }
     >();
     if (lens !== "region") return map;
@@ -1950,25 +1956,33 @@ function SalesBook({
     for (const [k, list] of byRegion) {
       const br = new Map<string, { key: string; name: string; qty: number }>();
       const dl = new Map<string, { key: string; name: string; qty: number }>();
+      const und = new Map<string, number>();
       for (const r of list) {
         const q = Number(r.quantity) || 0;
         const b = br.get(r.branch_id);
         if (b) b.qty += q;
         else br.set(r.branch_id, { key: r.branch_id, name: r.branch_name, qty: q });
+        if (isBranchLevel(r)) {
+          und.set(r.distributor_name, (und.get(r.distributor_name) ?? 0) + q);
+          continue;
+        }
         // ONE DEALER, ONE ROW: the same account arrives spelled two ways
         // when two houses supply it ("Ganahl Lumber" from Boise, "GAN7275 -
         // GANAHL LUMBER COMPANY" from Hardwoods). Keyed by the account when
         // matched, by the label only when not — the rule the whole book uses.
-        const dk = r.dealer_id ?? r.dealer_label;
+        const dk = dealerKey(r);
         const d = dl.get(dk);
         if (d) d.qty += q;
-        else dl.set(dk, { key: dk, name: r.dealer_name ?? r.dealer_label, qty: q });
+        else dl.set(dk, { key: dk, name: dealerDisplayName(r), qty: q });
       }
       const dealers = [...dl.values()].sort((a, b) => b.qty - a.qty);
       map.set(k, {
         branchSegs: [...br.values()].sort((a, b) => b.qty - a.qty),
         dealers: dealers.slice(0, 4),
         dealerCount: dealers.length,
+        undisclosed: [...und.entries()]
+          .map(([house, qty]) => ({ house, qty }))
+          .sort((a, b) => b.qty - a.qty),
       });
     }
     return map;
@@ -2584,6 +2598,11 @@ function SalesBook({
                           + {ex.dealerCount - 4} more dealers
                         </span>
                       )}
+                      {ex?.undisclosed.map((u) => (
+                        <span key={u.house} className="t-hint">
+                          · {u.house}: no dealer detail
+                        </span>
+                      ))}
                     </span>
                   </button>
                 );

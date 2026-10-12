@@ -30,6 +30,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { geoAlbersUsa, geoPath } from "d3-geo";
+import { dealerDisplayName, dealerKey, isBranchLevel } from "@/lib/domain/sell-through";
 import type { BranchRef, SellThroughRow } from "@/lib/domain/sell-through";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -172,6 +173,9 @@ export function SalesMap({
     // Which market owns each state, by volume — in practice one, but a state
     // split between two markets goes to the bigger half, not a flicker.
     const regionVotes = new Map<string, Map<string, number>>();
+    // Branches whose rows named no dealer (Boise, from September 2026): the
+    // volume is on the map, the count of dealers is not knowable.
+    const blindBranches = new Set<string>();
     for (const r of rows) {
       const q = Number(r.quantity) || 0;
       const rk = r.region_id ?? "unmapped";
@@ -186,16 +190,17 @@ export function SalesMap({
       const bv = branchRegion.get(r.branch_id) ?? new Map<string, number>();
       bv.set(rk, (bv.get(rk) ?? 0) + q);
       branchRegion.set(r.branch_id, bv);
+      if (isBranchLevel(r)) {
+        blindBranches.add(r.branch_id);
+        continue;
+      }
       const dl =
         branchDealers.get(r.branch_id) ??
         new Map<string, { name: string; qty: number }>();
-      const d = dl.get(r.dealer_label);
+      const dk = dealerKey(r);
+      const d = dl.get(dk);
       if (d) d.qty += q;
-      else
-        dl.set(r.dealer_label, {
-          name: r.dealer_name ?? r.dealer_label,
-          qty: q,
-        });
+      else dl.set(dk, { name: dealerDisplayName(r), qty: q });
       branchDealers.set(r.branch_id, dl);
     }
     const stateRegion = new Map<string, string>();
@@ -222,6 +227,8 @@ export function SalesMap({
         qty,
         regionKey: top?.[0] ?? null,
         dealers,
+        /** Volume with no dealer named behind it — the count would be a lie. */
+        blind: dealers.length === 0 && blindBranches.has(b.id),
         xy: (coords ? PROJECT(coords) : null) as [number, number] | null,
       };
     });
@@ -367,7 +374,7 @@ export function SalesMap({
               const dimmed = picked !== null && p.regionKey !== picked;
               return (
                 <g key={p.id} data-dim={dimmed || undefined}>
-                  {p.qty > 0 && p.dealers.length > 0 && (
+                  {p.qty > 0 && (p.dealers.length > 0 || p.blind) && (
                     <text
                       x={p.at[0] + r + 5 / k}
                       y={p.at[1] + 4 / k}
@@ -375,7 +382,7 @@ export function SalesMap({
                       style={{ fontSize: `${13 / k}px` }}
                       aria-hidden="true"
                     >
-                      {p.dealers.length}
+                      {p.blind ? "no dealer detail" : p.dealers.length}
                     </text>
                   )}
                   <circle
@@ -396,8 +403,10 @@ export function SalesMap({
                         [
                           [p.city, p.state].filter(Boolean).join(", "),
                           p.qty > 0
-                            ? `${QTY.format(p.qty)} ${unit} · ${p.dealers.length} ${
-                                p.dealers.length === 1 ? "dealer" : "dealers"
+                            ? `${QTY.format(p.qty)} ${unit} · ${
+                                p.blind
+                                  ? "no dealer detail"
+                                  : `${p.dealers.length} ${p.dealers.length === 1 ? "dealer" : "dealers"}`
                               }`
                             : "quiet this period",
                         ]

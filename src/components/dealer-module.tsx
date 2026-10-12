@@ -558,6 +558,19 @@ function DealerModule({
           <div className="dmod-col">
             <p className="dmod-eyebrow">1 · Overview</p>
             <p className="dmod-lede">{overviewSentence(facts)}</p>
+            {/* A HOUSE THAT STOPPED NAMING ITS DEALERS (Boise, from September
+                2026): what this yard buys through it is no longer visible,
+                which is not the same as nothing — said here, once. */}
+            {facts.detailEnded.length > 0 && (
+              <p className="t-hint">
+                {facts.detailEnded
+                  .map(
+                    (d) =>
+                      `${d.house} stopped sending dealer detail in ${periodLabel(d.since)} — purchases through them are no longer visible here.`,
+                  )
+                  .join(" ")}
+              </p>
+            )}
 
             <div className="dmod-tiles">
               <div className="dmod-tile">

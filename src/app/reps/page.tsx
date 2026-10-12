@@ -52,8 +52,10 @@ import {
 import { manages } from "@/lib/domain/roles";
 import {
   conversion,
+  noDetailSentence,
   periodLabel,
   recurrence,
+  type NoDetailHouse,
   type PeriodTotal,
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
@@ -119,7 +121,7 @@ interface EffortRow {
 }
 
 const SELL_COLS =
-  "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account";
+  "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account, detail";
 
 /** Whose board is being read. `undefined` means nobody has chosen yet, so the
  *  default below still applies; `null` is the deliberate choice of everyone,
@@ -394,6 +396,13 @@ export default function RepsPage() {
     );
     return conversion(scopedRows, latest, previous, worked);
   }, [scopedRows, latest, previous, effort, at]);
+
+  // A HOUSE THAT SENDS NO DEALER DETAIL is out of both tiles and named on
+  // them (Boise, from September 2026).
+  const blindNote = (houses: readonly NoDetailHouse[]) => {
+    const s = noDetailSentence(houses);
+    return s ? ` · ${s}` : "";
+  };
 
   // WHY THERE IS NO NUMBER, in the words of the actual obstacle.
   const noCompareReason = !latest
@@ -670,7 +679,7 @@ export default function RepsPage() {
             </div>
             <div className="t-hint mt-0.5">
               {lost
-                ? `${QTY.format(Math.round(lost.dropped.lf))} ${lost.unit} went silent · ${periodLabel(lost.latest)} against ${periodLabel(lost.previous)}`
+                ? `${QTY.format(Math.round(lost.dropped.lf))} ${lost.unit} went silent · ${periodLabel(lost.latest)} against ${periodLabel(lost.previous)}${blindNote(lost.noDetailHouses)}`
                 : noCompareReason}
             </div>
           </div>
@@ -688,8 +697,8 @@ export default function RepsPage() {
             <div className="t-hint mt-0.5">
               {conv
                 ? conv.rate !== null
-                  ? `${QTY.format(conv.wonBack)} of ${QTY.format(conv.pool)} dealers ${chosen ? "they" : "the team"} worked bought again${conv.brandNew > 0 ? ` · ${QTY.format(conv.brandNew)} new` : ""}`
-                  : "no work on the record against a dealer that had stopped"
+                  ? `${QTY.format(conv.wonBack)} of ${QTY.format(conv.pool)} dealers ${chosen ? "they" : "the team"} worked bought again${conv.brandNew > 0 ? ` · ${QTY.format(conv.brandNew)} new` : ""}${blindNote(conv.noDetailHouses)}`
+                  : `no work on the record against a dealer that had stopped${blindNote(conv.noDetailHouses)}`
                 : noCompareReason}
             </div>
             <div className="t-hint mt-0.5">
