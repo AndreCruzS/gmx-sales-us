@@ -679,11 +679,19 @@ export function ManagerHome({ name }: { name: string }) {
     // So is a house that has not SENT the newest month: its dealers are
     // unknown, not stopped — the rule recurrence has always kept, which this
     // ranking lacked until one house's file landed ahead of the others.
-    const blind = latest ? housesWithoutDetail(monthlyRows, latest) : new Set<string>();
+    const blind = new Set<string>([
+      ...(latest ? housesWithoutDetail(monthlyRows, latest) : []),
+      ...(previous ? housesWithoutDetail(monthlyRows, previous) : []),
+    ]);
     const reported = new Set(
       monthlyRows.filter((r) => r.period === latest).map((r) => r.distributor_id),
     );
-    const out = (houseId: string) => blind.has(houseId) || (latest !== null && !reported.has(houseId));
+    // MONTHLY MODE ONLY: the YTD ranking compares the year file against its
+    // own last year and needs no newest month to stand; there, a house blind
+    // or missing in the newest month merely gives no later proof (the `later`
+    // map already skips it) and its dealers stay readable.
+    const out = (houseId: string) =>
+      !quietYtd && (blind.has(houseId) || (latest !== null && !reported.has(houseId)));
     const cur = new Map<string, number>();
     const prev = new Map<string, number>();
     const names = new Map<string, string>();
@@ -796,8 +804,8 @@ export function ManagerHome({ name }: { name: string }) {
     return {
       rows,
       hasPrev,
-      noDetail: latest ? noDetailHouses(monthlyRows, [latest]) : [],
-      missing: [...housesMissing(monthlyRows, latest)],
+      noDetail: !quietYtd && latest ? noDetailHouses(monthlyRows, [latest, previous ?? latest]) : [],
+      missing: quietYtd ? [] : [...housesMissing(monthlyRows, latest)],
     };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
 

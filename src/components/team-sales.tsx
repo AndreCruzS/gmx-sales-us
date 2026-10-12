@@ -980,7 +980,7 @@ export function TeamSales({
           // from the dealer list to dealer › house, so "one dealer on the
           // step" alone never happened.
           const d = path.find((s) => s.dim === "dealer");
-          if (!d) return null;
+          if (!d || d.key.startsWith("undisclosed:")) return null;
           return (
             <DealerName
               dealerKey={d.accountId ?? d.key.replace(/^unmatched:/, "")}
@@ -1702,7 +1702,16 @@ export function TeamSales({
                       {openMoved ? ` · ${openMoved}` : ""}
                     </p>
 
-                    {open.entity.accountId === null ? (
+                    {undisclosed(open.entity) ? (
+                      // The house sent this month by branch (Boise, from
+                      // September 2026): the volume is real, the dealers are
+                      // not knowable, and no admin can match what was never named.
+                      <p className="t-sub mt-2">
+                        This house sent the month without a customer column, so
+                        this volume has no dealer behind it and counts towards
+                        nobody&rsquo;s patch.
+                      </p>
+                    ) : open.entity.accountId === null ? (
                       // An unmatched dealer name. Its volume is real and its
                       // owner is unknown, which is a job for an admin rather
                       // than a number anybody should be held to.

@@ -118,3 +118,12 @@ describe("dealerFacts · a house that sends no dealer detail (Boise, 2026-10-12)
     expect(f.detailEnded).toEqual([{ house: "Boise Cascade", since: "2026-09-01" }]);
   });
 });
+
+describe("dealerFacts · the undisclosed key is not a dealer", () => {
+  it("answers nothing for a house's branch-level volume", () => {
+    const rows = [
+      row({ dealer_id: null, dealer_name: null, dealer_label: null, detail: "branch", period: "2026-09-01", quantity: 50 }),
+    ];
+    expect(dealerFacts(new Set(["undisclosed:boise"]), rows)).toBeNull();
+  });
+});

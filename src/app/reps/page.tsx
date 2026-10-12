@@ -53,6 +53,7 @@ import { manages } from "@/lib/domain/roles";
 import {
   conversion,
   housesMissing,
+  isBranchLevel,
   noDetailHouses,
   noDetailSentence,
   periodLabel,
@@ -369,7 +370,12 @@ export default function RepsPage() {
   const scopedRows = useMemo(() => {
     if (!at) return sellRows;
     const mine = new Set(gates.filter((g) => g.owner_id === at).map((g) => g.account_id));
-    return sellRows.filter((r) => r.dealer_id !== null && mine.has(r.dealer_id));
+    // A branch-level row belongs to nobody's patch, but it stays so the
+    // house that sent it is SEEN as blind and named — otherwise Boise would
+    // read as a house missing a month, and the sentence would be wrong.
+    return sellRows.filter(
+      (r) => isBranchLevel(r) || (r.dealer_id !== null && mine.has(r.dealer_id)),
+    );
   }, [sellRows, gates, at]);
 
   const lost = useMemo(

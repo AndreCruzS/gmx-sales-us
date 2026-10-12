@@ -15,6 +15,7 @@ import {
   dealerDisplayName,
   dealerKey,
   isBranchLevel,
+  UNDISCLOSED_PREFIX,
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
 
@@ -96,6 +97,9 @@ export function dealerFacts(
   keys: ReadonlySet<string>,
   rows: readonly SellThroughRow[],
 ): DealerFacts | null {
+  // A house's volume with no dealer named behind it is not a dealer: no
+  // profile, no insight, no account to create (Boise, 2026-10-12).
+  if ([...keys].some((k) => k.startsWith(UNDISCLOSED_PREFIX))) return null;
   const mine = rows.filter((r) => keys.has(dealerKeyOf(r)));
   if (mine.length === 0) return null;
 

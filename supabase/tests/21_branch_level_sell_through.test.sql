@@ -7,7 +7,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(5);
 
-select col_default_is('public', 'sell_through_uploads', 'detail', '''dealer''::text',
+select col_default_is('public', 'sell_through_uploads', 'detail', 'dealer',
   'uploads default to dealer detail');
 select col_is_null('public', 'sell_through', 'dealer_label', 'a branch-level row has no label');
 select has_column('public', 'sell_through_rows', 'detail', 'the reading view carries the level');
