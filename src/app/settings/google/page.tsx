@@ -18,10 +18,29 @@ import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-const GOOGLE_SCOPES = [
+// A REP asks for what a rep does: send a quote, put a visit on a calendar.
+// An ADMIN asks for the whole Calendar scope, because the team calendar is
+// created and shared from their account (spec 2026-10-12) and neither
+// creating a calendar nor sharing it fits inside calendar.events.
+const REP_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/calendar.events",
 ];
+const ADMIN_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/calendar",
+];
+function scopesFor(role: string | null | undefined): string[] {
+  return role === "admin" ? ADMIN_SCOPES : REP_SCOPES;
+}
+
+interface TeamCalendar {
+  google_calendar_id: string;
+  owner_membership_id: string;
+  summary: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+}
 
 interface Connection {
   google_email: string | null;
@@ -41,6 +60,9 @@ export default function GoogleSetupPage() {
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [team, setTeam] = useState<TeamCalendar | null>(null);
+  const [teamNote, setTeamNote] = useState<string | null>(null);
+  const [ownerName, setOwnerName] = useState<string | null>(null);
 
   // One effect owns the whole story: capture a fresh handshake if the OAuth
   // redirect just landed, then read whatever connection now stands.
@@ -64,7 +86,7 @@ export default function GoogleSetupPage() {
               membership_id: profile.membershipId,
               org_id: profile.orgId,
               google_email: session?.user.email ?? null,
-              scopes: GOOGLE_SCOPES,
+              scopes: scopesFor(profile.role),
               refresh_token: refresh,
               updated_at: new Date().toISOString(),
             });
@@ -75,6 +97,34 @@ export default function GoogleSetupPage() {
             .eq("membership_id", profile.membershipId)
             .maybeSingle();
           if (!stale) setConn((data as Connection | null) ?? null);
+          // THE DESK'S NEXT STEP: with a fresh admin grant, run the sync now
+          // so the page can say "GMX Sales Team · owned by …" — or the error
+          // in words — before the admin leaves.
+          if (profile.role === "admin") {
+            if (refresh) {
+              const res = await fetch("/api/calendar/team/sync", { method: "POST" });
+              const body = (await res.json().catch(() => ({}))) as { error?: string };
+              if (!stale) setTeamNote(res.ok ? null : (body.error ?? `sync failed (${res.status})`));
+            }
+            const { data: tc } = await supabase
+              .from("team_calendars")
+              .select("google_calendar_id, owner_membership_id, summary, last_synced_at, last_error")
+              .eq("org_id", profile.orgId)
+              .maybeSingle();
+            if (!stale) setTeam((tc as TeamCalendar | null) ?? null);
+            if (tc?.owner_membership_id) {
+              const { data: who } = await supabase
+                .from("memberships")
+                .select("users(full_name)")
+                .eq("id", tc.owner_membership_id)
+                .maybeSingle();
+              if (!stale)
+                setOwnerName(
+                  (who as unknown as { users: { full_name: string | null } | null } | null)
+                    ?.users?.full_name ?? null,
+                );
+            }
+          }
         } catch {
           if (!stale)
             setError("Couldn't reach the server — try again with signal.");
@@ -98,7 +148,7 @@ export default function GoogleSetupPage() {
           provider: "google",
           options: {
             redirectTo: `${location.origin}/settings/google`,
-            scopes: GOOGLE_SCOPES.join(" "),
+            scopes: scopesFor(profile?.role).join(" "),
             queryParams: {
               access_type: "offline",
               prompt: "consent",
@@ -177,6 +227,42 @@ export default function GoogleSetupPage() {
         ) : (
           <div className="card card-pad" aria-busy="true">
             <p className="t-hint">Checking your connection…</p>
+          </div>
+        )}
+
+        {/* THE TEAM CALENDAR, AS IT STANDS (spec 2026-10-12): whose it is,
+            when it last agreed with the app, and the last thing that went
+            wrong, in words. Admins only — a rep never sees it in Google. */}
+        {profile?.role === "admin" && (
+          <div className="card card-pad flex flex-col gap-1">
+            <p className="t-meta uppercase tracking-wide">Team calendar</p>
+            {team ? (
+              <>
+                <p className="t-title">{team.summary}</p>
+                <p className="t-sub">
+                  Owned by {ownerName ?? "an admin"}
+                  {team.last_synced_at
+                    ? ` · last synced ${DAY.format(new Date(team.last_synced_at))}`
+                    : ""}
+                </p>
+                {team.last_error && (
+                  <p className="t-sub" style={{ color: "var(--danger)" }}>
+                    {team.last_error}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="t-sub">
+                Not created yet. The admin whose Google account will own it
+                taps Connect above; the calendar is created and shared with
+                every admin on the spot.
+              </p>
+            )}
+            {teamNote && (
+              <p className="t-sub" style={{ color: "var(--danger)" }}>
+                {teamNote}
+              </p>
+            )}
           </div>
         )}
 

@@ -29,6 +29,10 @@ export function SetupBanner() {
   const { profile } = useOffline();
   const pathname = usePathname();
   const [connected, setConnected] = useState<boolean | null>(null);
+  // THE OWNER'S GRANT DIED (spec 2026-10-12): Google answered invalid_grant
+  // on the team calendar's refresh token. Only the owner can mend it, so
+  // only the owner is told — the words come from team_calendars.last_error.
+  const [reconnect, setReconnect] = useState(false);
 
   const asked = profile ? profile.role === "rep" || manages(profile.role) : false;
 
@@ -44,6 +48,20 @@ export function SetupBanner() {
             .eq("membership_id", profile.membershipId)
             .maybeSingle();
           if (!stale && !error) setConnected(Boolean(data));
+          if (manages(profile.role)) {
+            const { data: tc } = await getSupabaseBrowserClient()
+              .from("team_calendars")
+              .select("owner_membership_id, last_error")
+              .eq("org_id", profile.orgId)
+              .maybeSingle();
+            if (
+              !stale &&
+              tc?.owner_membership_id === profile.membershipId &&
+              typeof tc.last_error === "string" &&
+              /reconnect/i.test(tc.last_error)
+            )
+              setReconnect(true);
+          }
         } catch {
           // offline — no nagging on a guess
         }
@@ -58,7 +76,7 @@ export function SetupBanner() {
   if (
     !profile ||
     !asked ||
-    connected !== false ||
+    (connected !== false && !reconnect) ||
     pathname === "/login" ||
     pathname.startsWith("/settings/google")
   ) {
@@ -72,9 +90,11 @@ export function SetupBanner() {
       </span>
       <span>
         <strong>Finish your setup</strong>
-        {profile.role === "rep"
-          ? " — connect your Gmail & Calendar so quotes and visits can travel as you"
-          : " — connect Google Calendar so the team's agenda can show here"}
+        {reconnect
+          ? " — Google dropped the team calendar connection; reconnect to keep the agenda in sync"
+          : profile.role === "rep"
+            ? " — connect your Gmail & Calendar so quotes and visits can travel as you"
+            : " — connect Google Calendar so the team's agenda can show here"}
       </span>
       <span aria-hidden="true">›</span>
     </Link>
