@@ -1,6 +1,6 @@
 # Branch-level sell-through — design
 
-Status: approved in conversation by Andre, 2026-10-12 ("precisamos manter ao
+Status: shipped 2026-10-12 (commits d7bf99e..8c71ac6); approved in conversation by Andre the same day ("precisamos manter ao máximo o que já temos e implementar a solução para a Boise").
 máximo o que já temos e implementar a solução para a Boise").
 
 ## Why
