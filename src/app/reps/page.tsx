@@ -52,6 +52,8 @@ import {
 import { manages } from "@/lib/domain/roles";
 import {
   conversion,
+  housesMissing,
+  noDetailHouses,
   noDetailSentence,
   periodLabel,
   recurrence,
@@ -405,11 +407,21 @@ export default function RepsPage() {
   };
 
   // WHY THERE IS NO NUMBER, in the words of the actual obstacle.
-  const noCompareReason = !latest
-    ? "no distributor return on file yet"
-    : !previous
-      ? "one month on file — nothing to compare it against yet"
-      : "the houses in these two months do not overlap";
+  const noCompareReason = useMemo(() => {
+    if (!latest) return "no distributor return on file yet";
+    if (!previous) return "one month on file — nothing to compare it against yet";
+    // Both months exist and still nothing compares: say which house is blind
+    // and which has not sent — the same two sentences the Sales board uses.
+    const monthly = sellRows.filter((r) => r.period_kind !== "YTD");
+    const missing = housesMissing(monthly, latest);
+    const why = [
+      noDetailSentence(noDetailHouses(monthly, [latest, previous])),
+      missing.length > 0
+        ? `${missing.join(" and ")} ${missing.length === 1 ? "has" : "have"} not sent ${periodLabel(latest)} yet`
+        : null,
+    ].filter((x): x is string => x !== null);
+    return why.length > 0 ? why.join("; ") : "the houses in these two months do not overlap";
+  }, [sellRows, latest, previous]);
 
   /** membership_id → name, for the caption on a row while everyone is read. */
   const names = useMemo(
