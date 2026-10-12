@@ -33,6 +33,7 @@ import {
   dealerDisplayName,
   dealerKey,
   dealerWhere,
+  housesMissing,
   housesWithoutDetail,
   noDetailHouses,
   noDetailSentence,
@@ -668,11 +669,21 @@ export function ManagerHome({ name }: { name: string }) {
       /** Houses that sent the newest month by branch — nobody of theirs can
        *  be judged quiet or fading, so they are left out and named. */
       noDetail: [] as NoDetailHouse[],
+      /** Houses that have not sent the newest month — their dealers are
+       *  unknown, not quiet, and the card says so. */
+      missing: [] as string[],
     };
     if (!pLatest) return empty;
     // A HOUSE BLIND IN THE NEWEST MONTH (Boise, 2026-10-12) cannot say who
     // went quiet: its dealers are left out of both chapters, in both modes.
+    // So is a house that has not SENT the newest month: its dealers are
+    // unknown, not stopped — the rule recurrence has always kept, which this
+    // ranking lacked until one house's file landed ahead of the others.
     const blind = latest ? housesWithoutDetail(monthlyRows, latest) : new Set<string>();
+    const reported = new Set(
+      monthlyRows.filter((r) => r.period === latest).map((r) => r.distributor_id),
+    );
+    const out = (houseId: string) => blind.has(houseId) || (latest !== null && !reported.has(houseId));
     const cur = new Map<string, number>();
     const prev = new Map<string, number>();
     const names = new Map<string, string>();
@@ -683,14 +694,14 @@ export function ManagerHome({ name }: { name: string }) {
     const later = new Map<string, number>();
     if (quietYtd && latest) {
       for (const r of monthlyRows) {
-        if (r.period !== latest || blind.has(r.distributor_id)) continue;
+        if (r.period !== latest || out(r.distributor_id)) continue;
         const key = dealerKey(r);
         later.set(key, (later.get(key) ?? 0) + Number(r.quantity));
       }
     }
     let unit = "LF";
     for (const r of base) {
-      if (blind.has(r.distributor_id)) continue;
+      if (out(r.distributor_id)) continue;
       const key = dealerKey(r);
       names.set(key, dealerDisplayName(r));
       ids.set(key, r.dealer_id);
@@ -786,6 +797,7 @@ export function ManagerHome({ name }: { name: string }) {
       rows,
       hasPrev,
       noDetail: latest ? noDetailHouses(monthlyRows, [latest]) : [],
+      missing: [...housesMissing(monthlyRows, latest)],
     };
   }, [quietYtd, ytdSellRows, monthlyRows, latest, previous]);
 
@@ -802,6 +814,24 @@ export function ManagerHome({ name }: { name: string }) {
     [salesLens, focus, windowInfo.kind, monthlyRows, latest, previous, buyRegion],
   );
 
+
+  // WHEN NOTHING CAN BE COMPARED the strip used to vanish. Now it says why,
+  // in the two sentences the book already has: a house blind in one of the
+  // two months, a house that has not sent the newest one (2026-10-12).
+  const recurWhy = useMemo(() => {
+    if (recur !== null || salesLens !== "region" || focus || windowInfo.kind !== "month") return null;
+    if (!latest || !previous) return null;
+    const why = [
+      noDetailSentence(noDetailHouses(monthlyRows, [latest, previous])),
+      (() => {
+        const m = housesMissing(monthlyRows, latest);
+        return m.length > 0
+          ? `${m.join(" and ")} ${m.length === 1 ? "has" : "have"} not sent ${periodLabel(latest)} yet`
+          : null;
+      })(),
+    ].filter((x): x is string => x !== null);
+    return why.length > 0 ? why.join("; ") : null;
+  }, [recur, salesLens, focus, windowInfo.kind, monthlyRows, latest, previous]);
 
   // A LINE WITH ONE MONTH CANNOT SAY WHO CAME BACK (2026-09-24). Accoya and
   // Hardwoods appear in a single monthly file so far, so recurrence and the
@@ -1378,6 +1408,14 @@ export function ManagerHome({ name }: { name: string }) {
         </p>
       )}
 
+      {recurWhy && (
+        <section className="adapt card card-pad" data-desk="recurrence" data-span={span("recurrence")}>
+          <span className="t-title">Who kept buying</span>
+          <p className="t-hint mt-1">
+            Nothing to compare for {periodLabel(latest)} against {periodShort(previous)} yet: {recurWhy}.
+          </p>
+        </section>
+      )}
       {recur && (
         <section
           className="adapt card recur"
@@ -1545,6 +1583,10 @@ export function ManagerHome({ name }: { name: string }) {
                   who stopped, and who is fading — biggest loss first in each
                   {noDetailSentence(quietRanking.noDetail) &&
                     ` · ${noDetailSentence(quietRanking.noDetail)}`}
+                  {quietRanking.missing.length > 0 &&
+                    ` · ${quietRanking.missing.join(" and ")} ${
+                      quietRanking.missing.length === 1 ? "has" : "have"
+                    } not sent ${periodLabel(latest)} yet, so their dealers are not judged`}
                 </span>
               </div>
               {/* TWO CHAPTERS, TWO COLUMNS on the desk (Andre, 2026-09-09):
