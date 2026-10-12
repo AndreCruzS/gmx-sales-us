@@ -22,9 +22,13 @@ select results_eq(
   $$ select google_calendar_id from team_calendars $$,
   $$ values ('cal-abc@group.calendar.google.com') $$,
   'an active member reads the org calendar');
-select throws_like(
-  $$ update team_calendars set summary = 'x' $$,
-  '%permission denied%',
+-- The project's default grants give authenticated UPDATE on every table
+-- (20260722001300_grants.sql); what keeps writes out is the absence of an
+-- update policy, so the statement touches no row and raises nothing.
+update team_calendars set summary = 'x';
+select results_eq(
+  $$ select summary from team_calendars $$,
+  $$ values ('GMX Sales Team') $$,
   'authenticated cannot write team_calendars');
 reset role;
 
