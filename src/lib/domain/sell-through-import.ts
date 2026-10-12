@@ -430,7 +430,9 @@ export interface PlannedRow {
   branchCode: string | null;
   /** Null is not a failure: the volume loads and an admin maps it later. */
   dealerId: string | null;
-  dealerLabel: string;
+  /** Null only when the file was loaded BY BRANCH (no customer column at
+   *  all, on the admin's word). An empty string never reaches here. */
+  dealerLabel: string | null;
   product: string | null;
   /** Linear feet, always — converted if the file used something else. */
   quantity: number;
@@ -496,7 +498,14 @@ export function buildImport(
      *  word match, because they are an answer and the match is a guess. */
     aliases?: readonly KnownAlias[];
   },
+  opts: {
+    /** The admin's word that this file has no customer column and is to be
+     *  loaded by branch (Boise, 2026-10-12). Ignored when a dealer column IS
+     *  mapped — a column the file has always wins over the box. */
+    branchOnly?: boolean;
+  } = {},
 ): ImportPlan {
+  const byBranch = Boolean(opts.branchOnly) && mapping.dealer < 0;
   const byAlias = new Map<string, string>();
   for (const a of known.aliases ?? []) byAlias.set(aliasKey(a.label), a.dealer_id);
   const byCode = new Map<string, string>();
@@ -531,18 +540,18 @@ export function buildImport(
   let matchedRows = 0;
 
   for (const row of sheet.rows) {
-    const dealerLabel = at(row, "dealer");
+    const dealerLabel: string | null = byBranch ? null : at(row, "dealer");
     const itemText = at(row, "product");
 
     // Subtotals FIRST, before anything is counted. They carry a real quantity in
     // a real column, so every test that follows would happily let them through.
-    if (isSubtotal([dealerLabel, itemText, at(row, "branch")])) {
+    if (isSubtotal([dealerLabel ?? "", itemText, at(row, "branch")])) {
       subtotals += 1;
       continue;
     }
 
     const qty = parseNumber(at(row, "quantity"));
-    if (qty === null || dealerLabel.length === 0) {
+    if (qty === null || (dealerLabel !== null && dealerLabel.length === 0)) {
       skipped += 1;
       continue;
     }
@@ -586,7 +595,9 @@ export function buildImport(
     }
 
     const dealerId =
-      byAlias.get(aliasKey(dealerLabel)) ?? matchDealer(dealerLabel, dealerIndex);
+      dealerLabel === null
+        ? null
+        : (byAlias.get(aliasKey(dealerLabel)) ?? matchDealer(dealerLabel, dealerIndex));
 
     // Into linear feet, which is the only unit anything downstream understands.
     // A zero needs no conversion — asking would let a zero row die on a product
@@ -594,7 +605,7 @@ export function buildImport(
     const unit = at(row, "unit");
     const feet = qty === 0 ? 0 : toLinearFeet(qty, unit, itemText);
     if (feet === null) {
-      unconvertible.push({ label: dealerLabel, quantity: qty, unit: unit || "?" });
+      unconvertible.push({ label: dealerLabel ?? "(by branch)", quantity: qty, unit: unit || "?" });
       continue;
     }
     // Last year rides the same conversion. When only the LY fails to convert,
@@ -613,7 +624,8 @@ export function buildImport(
     sourceQuantity += qty;
 
     if (dealerId !== null) matchedRows += 1;
-    else {
+    else if (dealerLabel !== null) {
+      // By branch there is nobody to match and nothing to list as unmatched.
       const key = normaliseName(dealerLabel);
       const seen = unmatched.get(key);
       if (seen) seen.quantity += feet;
@@ -652,9 +664,13 @@ export function buildImport(
 }
 
 /** Nothing can be written until the file says, at minimum, who bought how much. */
-export function mappingProblem(mapping: Mapping): string | null {
+export function mappingProblem(
+  mapping: Mapping,
+  opts: { branchOnly?: boolean } = {},
+): string | null {
   if (mapping.quantity < 0) return "Say which column holds the quantity.";
-  if (mapping.dealer < 0) return "Say which column holds the dealer.";
+  // A file with no dealer column loads only on the admin's explicit word.
+  if (mapping.dealer < 0 && !opts.branchOnly) return "Say which column holds the dealer.";
   if (mapping.branch < 0 && mapping.branch_code < 0) {
     return "Say which column holds the branch, or its code.";
   }

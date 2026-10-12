@@ -620,3 +620,28 @@ describe("next month's file lands where this month's did", () => {
       .rows[0].dealerId).toBe("banner");
   });
 });
+
+describe("a file with no customer column (Boise, 2026-10-12)", () => {
+  it("mappingProblem still refuses it unless the admin says branch-only", () => {
+    const m = mapping({ branch: 0, product: 1, quantity: 2 });
+    expect(mappingProblem(m)).toBe("Say which column holds the dealer.");
+    expect(mappingProblem(m, { branchOnly: true })).toBeNull();
+  });
+
+  it("buildImport by branch keeps every line, with no dealer at all", () => {
+    const sheet = parseSheet("Branch\tItem\tQty\tUOM\nRiverside\t1X6-16' THERMO\t10\tPC\n");
+    const m = mapping({ branch: 0, product: 1, quantity: 2, unit: 3 });
+    const plan = buildImport(sheet, m, { branches: BRANCHES, dealers: DEALERS }, { branchOnly: true });
+    expect(plan.rows).toHaveLength(1);
+    expect(plan.rows[0].dealerId).toBeNull();
+    expect(plan.rows[0].dealerLabel).toBeNull();
+    expect(plan.unmatched).toEqual([]);
+  });
+
+  it("a mapped customer column wins over the box", () => {
+    const sheet = parseSheet("Branch\tCustomer\tQty\nRiverside\tGanahl\t10\n");
+    const m = mapping({ branch: 0, dealer: 1, quantity: 2 });
+    const plan = buildImport(sheet, m, { branches: BRANCHES, dealers: DEALERS }, { branchOnly: true });
+    expect(plan.rows[0].dealerLabel).toBe("Ganahl");
+  });
+});
