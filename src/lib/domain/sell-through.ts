@@ -46,7 +46,12 @@ export interface SellThroughRow {
   branch_state: string | null;
   dealer_id: string | null;
   dealer_name: string | null;
-  dealer_label: string;
+  /** Null only on a branch-level upload (Boise, 2026-10-12): the file never
+   *  said who bought. */
+  dealer_label: string | null;
+  /** What the upload knew: who bought (dealer) or only which branch sold
+   *  (branch). Missing on old fixtures and old rows means dealer. */
+  detail?: "dealer" | "branch" | null;
   product: string | null;
   quantity: number | string;
   unit: string | null;
@@ -148,6 +153,79 @@ export interface SellEntity {
 
 const UNMATCHED_PREFIX = "unmatched:";
 
+// A BRANCH-LEVEL ROW (Boise, 2026-10-12) is volume with no dealer: the file
+// said which branch sold and nothing about who bought. It is keyed on the
+// HOUSE, never on a made-up dealer, and every reading that judges dealers
+// leaves the house out and names it (noDetailSentence).
+export const UNDISCLOSED_PREFIX = "undisclosed:";
+
+export function isBranchLevel(r: Pick<SellThroughRow, "detail">): boolean {
+  return r.detail === "branch";
+}
+
+/** The key every dealer reading groups by: the account when matched, the
+ *  house when the file named nobody, the label when it named someone we do
+ *  not hold yet. */
+export function dealerKey(r: SellThroughRow): string {
+  if (r.dealer_id) return r.dealer_id;
+  if (isBranchLevel(r) || r.dealer_label === null) return `${UNDISCLOSED_PREFIX}${r.distributor_id}`;
+  return r.dealer_label;
+}
+
+export function dealerDisplayName(r: SellThroughRow): string {
+  if (r.dealer_name) return r.dealer_name;
+  if (isBranchLevel(r) || r.dealer_label === null) return `${r.distributor_name} — no dealer detail`;
+  return displayDealerLabel(r.dealer_label);
+}
+
+/** Houses with rows in `period` and NONE of them at dealer level — a month
+ *  that cannot say who bought. YTD rows do not count. */
+export function housesWithoutDetail(rows: readonly SellThroughRow[], period: string): Set<string> {
+  const seen = new Set<string>();
+  const detailed = new Set<string>();
+  for (const r of rows) {
+    if (r.period_kind === "YTD" || r.period !== period) continue;
+    seen.add(r.distributor_id);
+    if (!isBranchLevel(r)) detailed.add(r.distributor_id);
+  }
+  return new Set([...seen].filter((h) => !detailed.has(h)));
+}
+
+export interface NoDetailHouse {
+  name: string;
+  /** The house's earliest branch-level month on file, YYYY-MM-DD. */
+  since: string;
+}
+
+/** The houses blind in any of `periods`, each with the month it went blind. */
+export function noDetailHouses(rows: readonly SellThroughRow[], periods: readonly string[]): NoDetailHouse[] {
+  const blind = new Set<string>();
+  for (const p of periods) for (const h of housesWithoutDetail(rows, p)) blind.add(h);
+  const out: NoDetailHouse[] = [];
+  for (const h of blind) {
+    let name = h;
+    let since: string | null = null;
+    for (const r of rows) {
+      if (r.distributor_id !== h) continue;
+      name = r.distributor_name;
+      if (r.period_kind !== "YTD" && isBranchLevel(r) && (since === null || r.period < since)) since = r.period;
+    }
+    if (since) out.push({ name, since });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The one sentence every screen prints for a blind house; null when none. */
+export function noDetailSentence(houses: readonly NoDetailHouse[]): string | null {
+  if (houses.length === 0) return null;
+  if (houses.length === 1) {
+    return `${houses[0].name} sends no dealer detail since ${periodLabel(houses[0].since)}, so its dealers are not counted`;
+  }
+  const list = houses.map((h) => `${h.name} (since ${periodLabel(h.since)})`);
+  const joined = `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+  return `${joined} send no dealer detail, so their dealers are not counted`;
+}
+
 /** True when this entity is a dealer name the upload could not match to one of
  *  our accounts. Its volume is real; its owner is unknown. */
 export function isUnmatched(e: SellEntity): boolean {
@@ -220,10 +298,23 @@ export function entityAt(row: SellThroughRow, dim: SellDim): SellEntity {
       };
     }
     case "dealer":
+      if (!row.dealer_id && (isBranchLevel(row) || row.dealer_label === null)) {
+        // The file named nobody. One band per house, in the unmatched tone,
+        // with no account behind it and no module to open — the volume is
+        // real, the dealer is not knowable.
+        return {
+          key: `${UNDISCLOSED_PREFIX}${row.distributor_id}`,
+          name: `${row.distributor_name} — no dealer detail`,
+          dim,
+          accountId: null,
+          kind: null,
+          sub: "the house sends no dealer detail",
+        };
+      }
       return row.dealer_id
         ? {
             key: row.dealer_id,
-            name: row.dealer_name ?? row.dealer_label,
+            name: row.dealer_name ?? row.dealer_label ?? row.dealer_id,
             dim,
             accountId: row.dealer_id,
             kind: "DEALER",
@@ -233,11 +324,11 @@ export function entityAt(row: SellThroughRow, dim: SellDim): SellEntity {
             // Keyed on the label because that is all we know it by. Two files
             // spelling the same yard two ways stay two rows until somebody maps
             // them, which is the truth rather than a guess.
-            key: `${UNMATCHED_PREFIX}${row.dealer_label}`,
+            key: `${UNMATCHED_PREFIX}${row.dealer_label ?? ""}`,
             // A distributor's system shouts and writes its own customer code
             // into the name; the label is kept verbatim in the database and
             // only read plainly here (Bianca, 2026-09-28).
-            name: displayDealerLabel(row.dealer_label),
+            name: displayDealerLabel(row.dealer_label ?? ""),
             dim,
             accountId: null,
             kind: null,
@@ -1272,7 +1363,7 @@ export function dealerWhere(
 ): Map<string, { regions: string[]; houses: string[] }> {
   const acc = new Map<string, { regions: Set<string>; houses: Set<string> }>();
   for (const r of rows) {
-    const key = r.dealer_id ?? r.dealer_label;
+    const key = dealerKey(r);
     const at = acc.get(key) ?? { regions: new Set<string>(), houses: new Set<string>() };
     if (r.region_name) at.regions.add(r.region_name);
     at.houses.add(r.distributor_name);
@@ -1308,6 +1399,9 @@ export interface Recurrence {
   /** Houses with only one of the two months on file — left out, and named,
    *  because "not counted" must never pass for "nobody came back". */
   oneFileHouses: string[];
+  /** Houses that sent one of the two months by branch — left out, and named
+   *  with the month their detail stopped (Boise, 2026-10-12). */
+  noDetailHouses: NoDetailHouse[];
 }
 
 /** The two-month recurrence over the monthly files. `regionId` narrows it to
@@ -1334,6 +1428,15 @@ export function recurrence(
     if (r.period === latest) housesLatest.add(r.distributor_id);
     else if (r.period === previous) housesPrevious.add(r.distributor_id);
   }
+  // A HOUSE THAT SENT A MONTH BY BRANCH cannot say who came back either
+  // (Boise, 2026-10-12): it is left out like a house missing a file, and
+  // named separately so the screen can say since when.
+  const blind = new Set([
+    ...housesWithoutDetail(rows, latest),
+    ...housesWithoutDetail(rows, previous),
+  ]);
+  const takesPart = (id: string) =>
+    housesLatest.has(id) && housesPrevious.has(id) && !blind.has(id);
   const cur = new Map<string, number>();
   const prev = new Map<string, number>();
   const names = new Map<string, string>();
@@ -1343,9 +1446,9 @@ export function recurrence(
   for (const r of rows) {
     if (r.period_kind === "YTD") continue;
     if (regionId !== null && r.region_id !== regionId) continue;
-    if (!housesLatest.has(r.distributor_id) || !housesPrevious.has(r.distributor_id)) continue;
-    const key = r.dealer_id ?? r.dealer_label;
-    names.set(key, r.dealer_name ?? displayDealerLabel(r.dealer_label));
+    if (!takesPart(r.distributor_id)) continue;
+    const key = dealerKey(r);
+    names.set(key, dealerDisplayName(r));
     ids.set(key, r.dealer_id);
     unit = r.unit || unit;
     const qty = Number(r.quantity);
@@ -1359,7 +1462,7 @@ export function recurrence(
   const houseNames = new Map<string, string>();
   for (const r of rows) houseNames.set(r.distributor_id, r.distributor_name);
   const oneFileHouses = [...new Set([...housesLatest, ...housesPrevious])]
-    .filter((h) => !(housesLatest.has(h) && housesPrevious.has(h)))
+    .filter((h) => !(housesLatest.has(h) && housesPrevious.has(h)) && !blind.has(h))
     .map((h) => houseNames.get(h) ?? h)
     .sort();
   const side = (): RecurrenceSide => ({ count: 0, lf: 0, dealers: [] });
@@ -1407,6 +1510,7 @@ export function recurrence(
     buying: again.count + fresh.count,
     unit,
     oneFileHouses,
+    noDetailHouses: noDetailHouses(rows, [latest, previous]),
   };
 }
 
@@ -1465,6 +1569,8 @@ export interface Conversion {
   rate: number | null;
   unit: string;
   oneFileHouses: string[];
+  /** Houses blind in one of the two months — out of the pool, and named. */
+  noDetailHouses: NoDetailHouse[];
 }
 
 export function conversion(
@@ -1486,7 +1592,12 @@ export function conversion(
     if (r.period === latest) housesLatest.add(r.distributor_id);
     else if (r.period === previous) housesPrevious.add(r.distributor_id);
   }
-  const bothMonths = (id: string) => housesLatest.has(id) && housesPrevious.has(id);
+  const blind = new Set([
+    ...housesWithoutDetail(rows, latest),
+    ...housesWithoutDetail(rows, previous),
+  ]);
+  const bothMonths = (id: string) =>
+    housesLatest.has(id) && housesPrevious.has(id) && !blind.has(id);
   // The precondition is that the two FILES exist, not that this region sold
   // anything last month. A market that was silent in June and bought in July
   // has the most to say of any of them, and a region filter must not turn that
@@ -1507,7 +1618,7 @@ export function conversion(
     // that appears in August and not in July would otherwise read as a rep's
     // victory, and the cash till as a new customer.
     if (r.is_house_account) continue;
-    const key = r.dealer_id ?? r.dealer_label;
+    const key = dealerKey(r);
     const qty = Number(r.quantity);
     if (r.period_kind !== "YTD" && r.period === latest) {
       unit = r.unit || unit;
@@ -1522,7 +1633,7 @@ export function conversion(
   const houseNames = new Map<string, string>();
   for (const r of rows) houseNames.set(r.distributor_id, r.distributor_name);
   const oneFileHouses = [...new Set([...housesLatest, ...housesPrevious])]
-    .filter((h) => !bothMonths(h))
+    .filter((h) => !bothMonths(h) && !blind.has(h))
     .map((h) => houseNames.get(h) ?? h)
     .sort();
 
@@ -1560,6 +1671,7 @@ export function conversion(
     rate: pool.size > 0 ? wonBack / pool.size : null,
     unit,
     oneFileHouses,
+    noDetailHouses: noDetailHouses(rows, [latest, previous]),
   };
 }
 

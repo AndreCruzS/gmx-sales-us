@@ -47,6 +47,8 @@ import {
   type BranchRef,
   type PathStep,
   type SellThroughRow,
+  housesWithoutDetail,
+  noDetailSentence,
 } from "../sell-through";
 
 // A small stand-in for the real book: two houses, three branches, four dealers,
@@ -1566,5 +1568,79 @@ describe("conversion", () => {
     const c = conversion(book, JUL, JUN, worked, "norcal");
     expect(c!.pool).toBe(0);
     expect(c!.wonBack).toBe(0);
+  });
+});
+
+describe("branch-level rows (Boise, 2026-10-12)", () => {
+  const blind = (o: Partial<SellThroughRow>) =>
+    row({ dealer_id: null, dealer_name: null, dealer_label: null, detail: "branch", ...o });
+  const named = (label: string, o: Partial<SellThroughRow>) =>
+    row({ dealer_id: null, dealer_name: null, dealer_label: label, ...o });
+
+  it("entityAt keys a branch-level row on the house, with no account", () => {
+    const e = entityAt(blind({ distributor_id: "boise", distributor_name: "Boise Cascade" }), "dealer");
+    expect(e.key).toBe("undisclosed:boise");
+    expect(e.name).toBe("Boise Cascade — no dealer detail");
+    expect(e.accountId).toBeNull();
+  });
+
+  it("housesWithoutDetail names a house whose month has no dealer rows", () => {
+    const rows = [
+      blind({ distributor_id: "boise", period: "2026-09-01" }),
+      named("A", { distributor_id: "hw", period: "2026-09-01" }),
+    ];
+    expect([...housesWithoutDetail(rows, "2026-09-01")]).toEqual(["boise"]);
+    expect([...housesWithoutDetail(rows, "2026-08-01")]).toEqual([]);
+  });
+
+  it("recurrence leaves a house out from its first branch-level month and names it", () => {
+    const rows = [
+      named("Ganahl", { distributor_id: "boise", distributor_name: "Boise Cascade", period: "2026-08-01", quantity: 100 }),
+      blind({ distributor_id: "boise", distributor_name: "Boise Cascade", period: "2026-09-01", quantity: 90 }),
+      named("Valencia", { distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-08-01", quantity: 10 }),
+      named("Valencia", { distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-09-01", quantity: 12 }),
+    ];
+    const r = recurrence(rows, "2026-09-01", "2026-08-01")!;
+    expect(r.dropped.count).toBe(0);
+    expect(r.again.dealers.map((d) => d.name)).toEqual(["Valencia"]);
+    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01" }]);
+    expect(r.oneFileHouses).toEqual([]);
+  });
+
+  it("recurrence survives a house branch-level in both months", () => {
+    const rows = [
+      blind({ distributor_id: "boise", period: "2026-08-01", quantity: 5 }),
+      blind({ distributor_id: "boise", period: "2026-09-01", quantity: 5 }),
+      named("V", { distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-08-01", quantity: 1 }),
+      named("V", { distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-09-01", quantity: 1 }),
+    ];
+    expect(recurrence(rows, "2026-09-01", "2026-08-01")!.noDetailHouses[0].since).toBe("2026-08-01");
+  });
+
+  it("conversion excludes the blind house the same way", () => {
+    const rows = [
+      row({ distributor_id: "boise", distributor_name: "Boise Cascade", period: "2026-07-01", dealer_id: "acc-g", dealer_name: "Ganahl", quantity: 50 }),
+      row({ distributor_id: "boise", distributor_name: "Boise Cascade", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", quantity: 0 }),
+      blind({ distributor_id: "boise", distributor_name: "Boise Cascade", period: "2026-09-01", quantity: 80 }),
+      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-07-01", dealer_id: "acc-v", dealer_name: "V", quantity: 3 }),
+      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-08-01", dealer_id: "acc-v", dealer_name: "V", quantity: 0 }),
+      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-09-01", dealer_id: "acc-v", dealer_name: "V", quantity: 4 }),
+    ];
+    const c = conversion(rows, "2026-09-01", "2026-08-01", new Set(["acc-v", "acc-g"]))!;
+    expect(c.pool).toBe(1);
+    expect(c.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01" }]);
+  });
+
+  it("noDetailSentence reads one house or several", () => {
+    expect(noDetailSentence([])).toBeNull();
+    expect(noDetailSentence([{ name: "Boise Cascade", since: "2026-09-01" }])).toBe(
+      "Boise Cascade sends no dealer detail since September 2026, so its dealers are not counted",
+    );
+    expect(
+      noDetailSentence([
+        { name: "A", since: "2026-09-01" },
+        { name: "B", since: "2026-08-01" },
+      ]),
+    ).toBe("A (since September 2026) and B (since August 2026) send no dealer detail, so their dealers are not counted");
   });
 });
