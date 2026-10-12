@@ -17,7 +17,7 @@ import { Pager, usePaged, usePageSize } from "@/components/pager";
 import { useOffline } from "@/components/offline-provider";
 import { groupByRep, latestStartedWeek, type ChannelRow } from "@/lib/domain/channel";
 import { ManagerHomeSkeleton } from "./home-skeleton";
-import { TeamSales, type Focus } from "@/components/team-sales";
+import { type BranchContact, TeamSales, type Focus } from "@/components/team-sales";
 import {
   PeriodPicker,
   periodChipLabel,
@@ -167,6 +167,7 @@ export function ManagerHome({ name }: { name: string }) {
   // era before adoption. null = the newest month with a return on file.
   const [period, setPeriod] = useState<SalesPeriod | null>(null);
   const [sellBranches, setSellBranches] = useState<BranchRef[]>([]);
+  const [branchContacts, setBranchContacts] = useState<Map<string, BranchContact[]>>(new Map());
   // The synced order book, read light, plus who each customer is and which
   // houses have ever sent their return — the sell-out tiles and the
   // return-chasing read are built from these three.
@@ -261,7 +262,7 @@ export function ManagerHome({ name }: { name: string }) {
     const SELL_COLS =
       "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account, detail";
     const none = Promise.resolve({ data: [], error: null });
-    const [ch, sc, ex, wm, pl, st, sy, sb, so, ol, hr, ts, tc, tt] = await Promise.all([
+    const [ch, sc, ex, wm, pl, st, sy, sb, so, ol, hr, ts, tc, tt, bc] = await Promise.all([
       supabase
         .from("dashboard_plan_by_channel")
         .select(
@@ -346,6 +347,13 @@ export function ManagerHome({ name }: { name: string }) {
       supabase.from("territory_cities").select("state, city, territory_id").limit(500),
       // The month goals, region by region — what the book is read against.
       supabase.from("territory_targets").select("territory_id, monthly_lf").limit(100),
+      // WHO TO CALL AT A BRANCH (Andre, 2026-10-12): the distributor contact
+      // directories, loaded with the branch each person sits in.
+      supabase
+        .from("contacts")
+        .select("id, name, job_title, email, phone, branch_id")
+        .not("branch_id", "is", null)
+        .limit(500),
     ]);
     setChannel(ch.error ? [] : ((ch.data as ChannelRow[]) ?? []));
     setScorecard(sc.error ? [] : ((sc.data as ScorecardRow[]) ?? []));
@@ -358,6 +366,15 @@ export function ManagerHome({ name }: { name: string }) {
     ]);
     setMonths(monthsAvail);
     setSellBranches(sb.error ? [] : ((sb.data as BranchRef[]) ?? []));
+    {
+      const map = new Map<string, BranchContact[]>();
+      for (const c of (bc.error ? [] : ((bc.data as unknown as (BranchContact & { branch_id: string })[]) ?? []))) {
+        const list = map.get(c.branch_id) ?? [];
+        list.push(c);
+        map.set(c.branch_id, list);
+      }
+      setBranchContacts(map);
+    }
     setSellOut(so.error ? [] : ((so.data as unknown as SellOutOrder[]) ?? []));
     setOrderLinks(ol.error ? [] : ((ol.data as unknown as OrderLinkRow[]) ?? []));
     setHouseReturns(
@@ -1385,6 +1402,7 @@ export function ManagerHome({ name }: { name: string }) {
         }
         ytdRows={ytdSellRows}
         branches={sellBranches}
+        branchContacts={branchContacts}
         latest={latest}
         previous={previous}
         path={path}

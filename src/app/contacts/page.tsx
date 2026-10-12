@@ -26,6 +26,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface ContactRow extends CachedContact {
   accountName: string | null;
+  /** The distributor branch this person sits in, when the directory knows. */
+  branchName?: string | null;
 }
 
 interface AccountOption {
@@ -36,7 +38,7 @@ interface AccountOption {
 }
 
 const COLUMNS =
-  "id, account_id, name, job_title, email, phone, is_champion, updated_at, accounts(name)";
+  "id, account_id, name, job_title, email, phone, is_champion, updated_at, accounts(name), distributor_branches(name)";
 
 // The form's working copy — one shape for both acts. `editing` carries the
 // row being corrected (with its baseVersion); null means a new person.
@@ -138,8 +140,13 @@ export default function ContactsPage() {
             rows: (
               ct.data as unknown as (CachedContact & {
                 accounts: { name: string } | null;
+                distributor_branches?: { name: string } | null;
               })[]
-            ).map((c) => ({ ...c, accountName: c.accounts?.name ?? null })),
+            ).map((c) => ({
+              ...c,
+              accountName: c.accounts?.name ?? null,
+              branchName: c.distributor_branches?.name ?? null,
+            })),
           });
         }
         if (!ac.error && ac.data) setAccounts(ac.data as AccountOption[]);
@@ -468,6 +475,7 @@ export default function ContactsPage() {
                     {[
                       c.job_title,
                       c.accountName ? displayAccountName(c.accountName) : null,
+                      c.branchName ?? null,
                     ]
                       .filter(Boolean)
                       .join(" · ") || "—"}

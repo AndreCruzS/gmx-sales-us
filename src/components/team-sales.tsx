@@ -165,6 +165,42 @@ const keyOf = (path: readonly PathStep[]) => path.map((s) => s.key).join(">");
 
 /** What the dealer module keys a dealer by — the same key every list uses:
  *  its account, or the label off the file (the walk prefixes unmatched ones). */
+/** A person who sits in a distributor branch — who to call there. */
+export interface BranchContact {
+  id: string;
+  name: string;
+  job_title: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+/** The people of one branch, under its header: name, role, how to reach them. */
+function WhoToCall({ people }: { people: readonly BranchContact[] }) {
+  if (people.length === 0) return null;
+  return (
+    <div className="mt-2">
+      <p className="t-meta uppercase tracking-wide">Who to call</p>
+      <ul className="mt-1 flex flex-col gap-1">
+        {people.map((c) => (
+          <li key={c.id} className="t-sub">
+            <span className="t-title">{c.name}</span>
+            {c.job_title ? ` · ${c.job_title}` : ""}
+            {c.phone ? ` · ${c.phone}` : ""}
+            {c.email ? (
+              <>
+                {" · "}
+                <a href={`mailto:${c.email}`} className="underline">
+                  {c.email}
+                </a>
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const profileKey = (e: SellEntity) => e.accountId ?? e.key.replace(/^unmatched:/, "");
 /** A house's volume with no dealer named behind it (Boise, from September
  *  2026): a band in the dealer lens, never a dealer — no profile to open and
@@ -175,6 +211,7 @@ export function TeamSales({
   rows,
   ytdRows,
   branches,
+  branchContacts,
   latest: latestMonth,
   previous: previousMonth,
   path,
@@ -201,6 +238,8 @@ export function TeamSales({
   ytdRows?: readonly SellThroughRow[];
   /** Every known branch, including the ones that bought nothing. */
   branches: readonly BranchRef[];
+  /** Branch id → the people who sit there, when the directory knows. */
+  branchContacts?: ReadonlyMap<string, readonly BranchContact[]>;
   /** The month the book is good to, and the one before it. */
   latest: string | null;
   previous: string | null;
@@ -961,6 +1000,7 @@ export function TeamSales({
           prior={prior}
           lens={lens}
           branches={branches}
+          branchContacts={branchContacts}
           previous={previous}
           mv={mv}
           month={month}
@@ -1806,6 +1846,7 @@ function SalesBook({
   prior,
   lens,
   branches,
+  branchContacts,
   previous,
   mv,
   month,
@@ -1821,6 +1862,8 @@ function SalesBook({
   prior: readonly SellThroughRow[];
   lens: SellLens;
   branches: readonly BranchRef[];
+  /** Branch id → the people who sit there, when the directory knows. */
+  branchContacts?: ReadonlyMap<string, readonly BranchContact[]>;
   previous: string | null;
   mv?: { on?: string; fresh?: string };
   month: string;
@@ -2099,6 +2142,9 @@ function SalesBook({
                       <DealerName dealerKey={profileKey(g.entity)} className="bkp-profile">
                         Dealer profile ›
                       </DealerName>
+                    )}
+                    {g.entity.dim === "branch" && (
+                      <WhoToCall people={branchContacts?.get(g.entity.key) ?? []} />
                     )}
                     {(g.sub || g.value !== null) && (
                       <span className="sales-head-sub">
