@@ -166,6 +166,10 @@ const keyOf = (path: readonly PathStep[]) => path.map((s) => s.key).join(">");
 /** What the dealer module keys a dealer by — the same key every list uses:
  *  its account, or the label off the file (the walk prefixes unmatched ones). */
 const profileKey = (e: SellEntity) => e.accountId ?? e.key.replace(/^unmatched:/, "");
+/** A house's volume with no dealer named behind it (Boise, from September
+ *  2026): a band in the dealer lens, never a dealer — no profile to open and
+ *  no "new this month", because nothing is known to have been new. */
+const undisclosed = (e: SellEntity) => e.key.startsWith("undisclosed:");
 
 export function TeamSales({
   rows,
@@ -1126,7 +1130,7 @@ export function TeamSales({
             const moved =
               gGoal !== null
                 ? goalLabel(g.total, gGoal)
-                : movementLabel(g.total, g.prevTotal, previous, mv);
+                : (undisclosed(g.entity) ? null : movementLabel(g.total, g.prevTotal, previous, mv));
             const movedDir =
               gGoal !== null
                 ? goalDir(g.total, gGoal)
@@ -1475,7 +1479,7 @@ export function TeamSales({
                     const bandMoved =
                       gGoal !== null
                         ? goalLabel(b.qty, gGoal)
-                        : movementLabel(b.qty, b.prevQty, previous, mv);
+                        : (undisclosed(b.entity) ? null : movementLabel(b.qty, b.prevQty, previous, mv));
                     const bandDir =
                       gGoal !== null
                         ? goalDir(b.qty, gGoal)
@@ -1495,7 +1499,12 @@ export function TeamSales({
                           }
                           aria-pressed={open?.key === b.key}
                           onClick={() => {
-                            if (dealerModule && b.entity.dim === "dealer" && !b.drillable) {
+                            if (
+                              dealerModule &&
+                              b.entity.dim === "dealer" &&
+                              !b.drillable &&
+                              !undisclosed(b.entity)
+                            ) {
                               dealerModule.open(profileKey(b.entity));
                               return;
                             }
@@ -1907,7 +1916,7 @@ function SalesBook({
   }, [onRegion, pickedRegion]);
   // Below the top there is exactly one row: the thing the pane walked into.
   const g = paneStep.groups[0] ?? null;
-  const gMoved = g ? movementLabel(g.total, g.prevTotal, previous, mv) : null;
+  const gMoved = g ? (undisclosed(g.entity) ? null : movementLabel(g.total, g.prevTotal, previous, mv)) : null;
 
   // THE GOAL LINE (Bianca, 2026-09-08): a picked region reads against its
   // monthly LF goal, because "625% pra cima de nada" deceives — last month
@@ -2077,7 +2086,7 @@ function SalesBook({
                 <div className="bkp-head">
                   <span className="min-w-0">
                     <span className="sales-head-name">{g.title}</span>
-                    {g.entity.dim === "dealer" && (
+                    {g.entity.dim === "dealer" && !undisclosed(g.entity) && (
                       <DealerName dealerKey={profileKey(g.entity)} className="bkp-profile">
                         Dealer profile ›
                       </DealerName>
@@ -2200,7 +2209,7 @@ function SalesBook({
 
                 <ul className="sales-list">
                   {g.bands.map((b) => {
-                    const bandMoved = movementLabel(b.qty, b.prevQty, previous, mv);
+                    const bandMoved = (undisclosed(b.entity) ? null : movementLabel(b.qty, b.prevQty, previous, mv));
                     // THE LAST LINK OPENS TOO (Bianca, 2026-09-16: "abriu
                     // Boise, abriu Dallas Branch, só que não abriu 10
                     // produtos"). The chain ends at the branch under the
