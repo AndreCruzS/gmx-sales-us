@@ -39,7 +39,10 @@ export class SupabaseTeamCalendarStore implements TeamCalendarStore {
       .select("google_calendar_id")
       .eq("org_id", this.orgId)
       .maybeSingle();
-    return data ? { googleCalendarId: data.google_calendar_id as string } : null;
+    // The row exists before the calendar does (the route registers the
+    // owner first); null here means "not found or created yet".
+    const id = (data?.google_calendar_id as string | null | undefined) ?? null;
+    return id ? { googleCalendarId: id } : null;
   }
 
   async saveCalendarId(id: string) {
@@ -51,17 +54,36 @@ export class SupabaseTeamCalendarStore implements TeamCalendarStore {
   }
 
   async listAdminEmails() {
+    // The owner is not on the list: the calendar is theirs already, and
+    // asking Google to make its owner a "writer" is a request with no
+    // documented answer (review, 2026-10-12).
     const { data, error } = await this.service
       .from("memberships")
-      .select("users(email)")
+      .select("id, users(email)")
       .eq("org_id", this.orgId)
       .eq("role", "admin")
-      .eq("status", "active");
+      .eq("status", "active")
+      .neq("id", this.owner);
     if (error) throw new Error(`admins read failed: ${error.message}`);
     return ((data ?? []) as unknown as { users: { email: string } | null }[])
       .map((r) => r.users?.email)
       .filter((e): e is string => Boolean(e))
       .sort();
+  }
+
+  async lookupVisits(ids: string[]) {
+    const out = new Map<string, { calendar_event_id: string | null; completed_at: string | null }>();
+    if (ids.length === 0) return out;
+    const { data, error } = await this.service
+      .from("next_actions")
+      .select("id, calendar_event_id, completed_at")
+      .eq("org_id", this.orgId)
+      .in("id", ids.slice(0, 500));
+    if (error) throw new Error(`next_actions lookup failed: ${error.message}`);
+    for (const r of (data ?? []) as { id: string; calendar_event_id: string | null; completed_at: string | null }[]) {
+      out.set(r.id, { calendar_event_id: r.calendar_event_id, completed_at: r.completed_at });
+    }
+    return out;
   }
 
   async ownerMembershipId() {

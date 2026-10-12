@@ -75,4 +75,9 @@ export interface TeamCalendarStore {
   updateImported(nextActionId: string, v: { date: string; title: string }): Promise<void>;
   deleteImported(nextActionId: string): Promise<void>;
   recordResult(r: { syncedAt: string; error: string | null }): Promise<void>;
+  /** Rows by id, in or out of the window — for a tagged event whose visit
+   *  the window did not return: deleted, completed, or just moved. */
+  lookupVisits(
+    ids: string[],
+  ): Promise<Map<string, { calendar_event_id: string | null; completed_at: string | null }>>;
 }

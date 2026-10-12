@@ -35,7 +35,8 @@ function scopesFor(role: string | null | undefined): string[] {
 }
 
 interface TeamCalendar {
-  google_calendar_id: string;
+  /** null once an owner is registered but before the first pass made the calendar. */
+  google_calendar_id: string | null;
   owner_membership_id: string;
   summary: string;
   last_synced_at: string | null;
@@ -238,9 +239,12 @@ export default function GoogleSetupPage() {
             <p className="t-meta uppercase tracking-wide">Team calendar</p>
             {team ? (
               <>
-                <p className="t-title">{team.summary}</p>
+                <p className="t-title">
+                  {team.google_calendar_id ? team.summary : "Not created yet"}
+                </p>
                 <p className="t-sub">
-                  Owned by {ownerName ?? "an admin"}
+                  {team.google_calendar_id ? "Owned by " : "Registered to "}
+                  {ownerName ?? "an admin"}
                   {team.last_synced_at
                     ? ` · last synced ${DAY.format(new Date(team.last_synced_at))}`
                     : ""}

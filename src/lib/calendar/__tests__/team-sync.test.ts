@@ -146,6 +146,15 @@ class FakeStore implements TeamCalendarStore {
   async recordResult(r: { syncedAt: string; error: string | null }) {
     this.results.push(r);
   }
+  async lookupVisits(ids: string[]) {
+    const out = new Map<string, { calendar_event_id: string | null; completed_at: string | null }>();
+    for (const v of this.visits) {
+      if (ids.includes(v.id)) {
+        out.set(v.id, { calendar_event_id: v.calendar_event_id, completed_at: v.completed_at });
+      }
+    }
+    return out;
+  }
   /** Test helper: a visit planned in the app. */
   planned(id: string, date: string, extra: Partial<VisitRow> = {}): VisitRow {
     const v: VisitRow = {
@@ -391,5 +400,71 @@ describe("idempotence", () => {
     };
     await expect(syncTeamCalendar(cal, store, TODAY)).rejects.toThrow("calendar 503");
     expect(store.results).toEqual([{ syncedAt: expect.any(String), error: "calendar 503" }]);
+  });
+});
+
+describe("the review's findings (2026-10-12)", () => {
+  it("imports an untagged event listed twice in one pass only once", async () => {
+    const id = await cal.createCalendar(TEAM_CALENDAR_SUMMARY);
+    cal.handMade(id, "2026-10-20", "Twice");
+    const once = cal.listEvents.bind(cal);
+    cal.listEvents = async (c, f, t) => {
+      const list = await once(c, f, t);
+      // A copy, not the same object: a real page overlap is a second JSON body.
+      return [...list, ...list.map((e) => ({ ...e }))];
+    };
+    const r = await syncTeamCalendar(cal, store, TODAY);
+    expect(r.imported).toBe(1);
+    expect(store.visits).toHaveLength(1);
+  });
+
+  it("does not import a Google event dated before today", async () => {
+    const id = await cal.createCalendar(TEAM_CALENDAR_SUMMARY);
+    cal.handMade(id, "2026-09-20", "Team lunch, long ago");
+    const r = await syncTeamCalendar(cal, store, TODAY);
+    expect(r.imported).toBe(0);
+    expect(store.visits).toHaveLength(0);
+  });
+
+  it("deletes a tagged event whose visit no longer exists in the app", async () => {
+    store.planned("na-1", "2026-10-15");
+    const r1 = await syncTeamCalendar(cal, store, TODAY);
+    store.visits = [];
+    const r2 = await syncTeamCalendar(cal, store, TODAY);
+    expect(r2.deleted).toBe(1);
+    expect(cal.events.get(r1.calendarId)).toHaveLength(0);
+  });
+
+  it("deletes a second event that claims a visit already holding another", async () => {
+    const v = store.planned("na-1", "2026-10-15");
+    const r1 = await syncTeamCalendar(cal, store, TODAY);
+    const ghost = `ev-ghost`;
+    cal.events.get(r1.calendarId)!.push({
+      eventId: ghost,
+      date: "2026-10-15",
+      title: "Visit — Ganahl Lumber · Deonn",
+      nextActionId: "na-1",
+      membershipId: "m-deonn",
+      cancelled: false,
+    });
+    const r2 = await syncTeamCalendar(cal, store, TODAY);
+    expect(r2.deleted).toBe(1);
+    const left = cal.events.get(r1.calendarId)!;
+    expect(left).toHaveLength(1);
+    expect(left[0].eventId).toBe(v.calendar_event_id);
+  });
+
+  it("one failing event does not stop the pass; it lands in errors", async () => {
+    store.planned("na-1", "2026-10-15");
+    store.planned("na-2", "2026-10-16");
+    const insert = cal.insertEvent.bind(cal);
+    cal.insertEvent = async (c, e) => {
+      if (e.nextActionId === "na-1") throw new Error("events.insert 400: bad");
+      return insert(c, e);
+    };
+    const r = await syncTeamCalendar(cal, store, TODAY);
+    expect(r.inserted).toBe(1);
+    expect(r.errors).toEqual(["na-1: events.insert 400: bad"]);
+    expect(store.results[0].error).toBe("na-1: events.insert 400: bad");
   });
 });

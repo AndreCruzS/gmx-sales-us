@@ -32,7 +32,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { useOffline } from "@/components/offline-provider";
-import { manages } from "@/lib/domain/roles";
+import { isAdmin } from "@/lib/domain/roles";
 import { humanize } from "@/lib/domain/enums";
 import { getOfflineLayer } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -134,6 +134,7 @@ export function AgendaCalendar({
   // FADING the rest — the chosen rep keeps full clarity, the others recede
   // but stay legible, because a manager filtering still reads the month.
   const [repNames, setRepNames] = useState<Map<string, string>>(new Map());
+  const [assignableRoles, setAssignableRoles] = useState<Map<string, string>>(new Map());
   const [railFilter, setRailFilter] = useState<string | null>(null);
   // The host's filter wins when there is one; the rail is only for a wall
   // that stands on its own.
@@ -167,7 +168,7 @@ export function AgendaCalendar({
         // visit is on it too, and the scorecard view doesn't know admins.
         supabase
           .from("memberships")
-          .select("id, users(full_name)")
+          .select("id, role, users(full_name)")
           .eq("status", "active"),
       ]);
       if (na.error) throw new Error(na.error.message);
@@ -179,16 +180,13 @@ export function AgendaCalendar({
         ).map((r) => ({ ...r, accountName: r.accounts?.name })),
       );
       if (!sc.error && sc.data) {
-        setRepNames(
-          new Map(
-            (
-              sc.data as unknown as {
-                id: string;
-                users: { full_name: string | null } | null;
-              }[]
-            ).map((r) => [r.id, r.users?.full_name ?? "—"]),
-          ),
-        );
+        const members = sc.data as unknown as {
+          id: string;
+          role: string;
+          users: { full_name: string | null } | null;
+        }[];
+        setRepNames(new Map(members.map((r) => [r.id, r.users?.full_name ?? "—"])));
+        setAssignableRoles(new Map(members.map((r) => [r.id, r.role])));
       }
     } catch {
       // offline: the desk calendar reads the server; the phone's list is the
@@ -280,15 +278,21 @@ export function AgendaCalendar({
   const cap = view === "week" ? 8 : 3;
 
   // HANDING A VISIT TO A REP (spec 2026-10-12): a visit born in Google is the
-  // calendar owner's until a manager says whose it is. The owner changes
+  // calendar owner's until somebody says whose it is. The owner changes
   // here, through the same outbox a completion takes; the rep label on the
-  // Google event follows on the next sync. Managers only — a rep's wall has
-  // nobody else's visits on it to hand over.
+  // Google event follows on the next sync. ADMINS only (review, 2026-10-12):
+  // the update policy lets a manager hand a visit only within their own
+  // chain and never back to an admin, so for them the list would promise
+  // moves the server refuses. The names offered are the reps and the
+  // admins — support staff do not carry visits.
   const { profile } = useOffline();
-  const canAssign = manages(profile?.role);
+  const canAssign = isAdmin(profile?.role);
   const assignable = useMemo(
-    () => [...repNames.entries()].sort((a, b) => a[1].localeCompare(b[1])),
-    [repNames],
+    () =>
+      [...repNames.entries()]
+        .filter(([id]) => assignableRoles.get(id) === "rep" || assignableRoles.get(id) === "admin")
+        .sort((a, b) => a[1].localeCompare(b[1])),
+    [repNames, assignableRoles],
   );
 
   async function assign(item: CalRow, ownerId: string) {
@@ -306,7 +310,10 @@ export function AgendaCalendar({
       setRows((prev) =>
         prev.map((r) => (r.id === item.id ? { ...r, owner_id: ownerId } : r)),
       );
-      void layer.sync.drain();
+      // Re-read once the write lands: the row's updated_at moved, and a
+      // second change from this panel must carry the new version (D61).
+      await layer.sync.drain();
+      await load();
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     }
