@@ -14,6 +14,17 @@
 
 ## September 2026 — the customer column is missing
 
+**LOADED BY BRANCH on 2026-10-12** (272 rows, 11,118 raw → 72,211 LF, upload
+`detail = 'branch'`), after Boise refused for good to put the customer column
+back (Andre, 2026-10-12). From this month on every Boise file loads this way:
+the loader's "This file has no customer column — load it by branch" box, ticked
+by an admin. Totals by region, branch and product count it; every reading of
+WHO bought (kept buying / stopped / new, gone quiet, conversion rate, the dealer
+module, the map's dealer counts) leaves Boise out from September 2026 and says
+so on the screen. Spec: `docs/superpowers/specs/2026-10-12-branch-level-sell-through-design.md`.
+The paragraphs below describe the file as it arrived and why it was first refused.
+
+
 Cory Dalos sent it on 2026-10-05 (Bianca forwarded it; Andre confirmed the
 month on 2026-10-06 — nothing inside the file says so). It carries
 **no `Customer Name` column at all**: 284 detail lines that say which branch
