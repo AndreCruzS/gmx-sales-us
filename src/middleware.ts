@@ -57,6 +57,6 @@ export const config = {
   // this exclusion every documented curl (setup, backfill) 307s to /login
   // before the handler ever sees the request.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest|api/hubspot/sync|api/hubspot/admin|api/email/sync|api/calendar/sync).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest|api/hubspot/sync|api/hubspot/admin|api/email/sync|api/calendar/team/sync).*)",
   ],
 };
