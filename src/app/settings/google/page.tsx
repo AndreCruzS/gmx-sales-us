@@ -123,6 +123,16 @@ export default function GoogleSetupPage() {
           sent folder, replies to your inbox — and put visits on your own
           calendar.
         </p>
+        {/* THE DESK'S REASON (Andre, 2026-10-12): the team calendar belongs
+            to a desk account. Whoever holds it connects here once, and the
+            Reps board reads the team's week through that grant. */}
+        {profile && profile.role !== "rep" && (
+          <p className="t-hint">
+            If your Google account owns the team calendar, this is the one
+            connection that lets the Reps board read the team&rsquo;s week and
+            put visits on it.
+          </p>
+        )}
 
         {conn ? (
           <div className="card card-pad flex flex-col gap-2">

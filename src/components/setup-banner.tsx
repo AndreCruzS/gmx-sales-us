@@ -1,14 +1,20 @@
 "use client";
 
-// FINISH YOUR SETUP — the rep's second handshake (Andre, 2026-09-01).
+// FINISH YOUR SETUP — the second handshake (Andre, 2026-09-01).
 //
 // Logging in proves who you are; the Google connection proves the app may
 // act AS you: send a quote from your own Gmail, write a visit to your own
-// calendar. Admins run the desk and are never asked. Every rep is, and the
-// ask does not go away — no dismiss, by design: an unconnected rep sees it
-// on every screen until the handshake is done.
+// calendar. The ask does not go away — no dismiss, by design: an
+// unconnected person sees it on every screen until the handshake is done.
 //
-// The banner only speaks when it KNOWS: profile says rep, and the
+// ADMINS ARE ASKED TOO (Andre, 2026-10-12). The agenda is becoming ONE team
+// Google Calendar, read into the Reps board and written from it, and the
+// account that owns that calendar is a desk account, not a rep's. Nobody at
+// the desk had ever seen this banner — it was written for reps only — which
+// is why, a month on, not one connection existed. Same page, same two
+// permissions; only the reason on the banner changes with the role.
+//
+// The banner only speaks when it KNOWS: profile says rep or admin, and the
 // connections table answered "no row". Offline, or still loading, it stays
 // silent rather than nagging on a guess.
 
@@ -16,6 +22,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { manages } from "@/lib/domain/roles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SetupBanner() {
@@ -23,8 +30,10 @@ export function SetupBanner() {
   const pathname = usePathname();
   const [connected, setConnected] = useState<boolean | null>(null);
 
+  const asked = profile ? profile.role === "rep" || manages(profile.role) : false;
+
   useEffect(() => {
-    if (!profile || profile.role !== "rep") return;
+    if (!profile || !asked) return;
     let stale = false;
     const timer = setTimeout(() => {
       void (async () => {
@@ -44,11 +53,11 @@ export function SetupBanner() {
       stale = true;
       clearTimeout(timer);
     };
-  }, [profile]);
+  }, [profile, asked]);
 
   if (
     !profile ||
-    profile.role !== "rep" ||
+    !asked ||
     connected !== false ||
     pathname === "/login" ||
     pathname.startsWith("/settings/google")
@@ -62,8 +71,10 @@ export function SetupBanner() {
         !
       </span>
       <span>
-        <strong>Finish your setup</strong> — connect your Gmail &amp; Calendar
-        so quotes and visits can travel as you
+        <strong>Finish your setup</strong>
+        {profile.role === "rep"
+          ? " — connect your Gmail & Calendar so quotes and visits can travel as you"
+          : " — connect Google Calendar so the team's agenda can show here"}
       </span>
       <span aria-hidden="true">›</span>
     </Link>
