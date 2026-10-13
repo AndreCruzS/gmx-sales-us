@@ -191,39 +191,104 @@ export function housesWithoutDetail(rows: readonly SellThroughRow[], period: str
   return new Set([...seen].filter((h) => !detailed.has(h)));
 }
 
-export interface NoDetailHouse {
-  name: string;
-  /** The house's earliest branch-level month on file, YYYY-MM-DD. */
-  since: string;
+/** Branches with rows in `period` and NONE of them at dealer level — the
+ *  blind unit since Riverside's own sheet (2026-10-13): one Boise branch can
+ *  name its dealers while the others do not. YTD rows do not count. */
+export function branchesWithoutDetail(rows: readonly SellThroughRow[], period: string): Set<string> {
+  const seen = new Set<string>();
+  const detailed = new Set<string>();
+  for (const r of rows) {
+    if (r.period_kind === "YTD" || r.period !== period) continue;
+    seen.add(r.branch_id);
+    if (!isBranchLevel(r)) detailed.add(r.branch_id);
+  }
+  return new Set([...seen].filter((b) => !detailed.has(b)));
 }
 
-/** The houses blind in any of `periods`, each with the month it went blind. */
+/** Dealers with ANY row at a blind branch, in any month: their present
+ *  cannot be read, so no comparison may count them — not dropped, not new,
+ *  not won back, not quiet. A dealer that also buys through a detailed
+ *  branch is unknown all the same: half a dealer is not a reading. */
+export function unknownDealers(
+  rows: readonly SellThroughRow[],
+  blindBranches: ReadonlySet<string>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (isBranchLevel(r) || !blindBranches.has(r.branch_id)) continue;
+    out.add(dealerKey(r));
+  }
+  return out;
+}
+
+export interface NoDetailHouse {
+  name: string;
+  /** The earliest branch-level month on file among the blind branches, YYYY-MM-DD. */
+  since: string;
+  /** The blind branches' short names; null when every branch the house has
+   *  rows for in the periods read is blind — the whole house. */
+  branches: string[] | null;
+}
+
+/** The houses with a blind branch in any of `periods`, each with the month
+ *  it went blind and which branches — or null for the whole house. */
 export function noDetailHouses(rows: readonly SellThroughRow[], periods: readonly string[]): NoDetailHouse[] {
   const blind = new Set<string>();
-  for (const p of periods) for (const h of housesWithoutDetail(rows, p)) blind.add(h);
+  for (const p of periods) for (const b of branchesWithoutDetail(rows, p)) blind.add(b);
+  if (blind.size === 0) return [];
+  const byHouse = new Map<
+    string,
+    { name: string; branches: Map<string, string>; all: Set<string> }
+  >();
+  for (const r of rows) {
+    if (r.period_kind === "YTD" || !periods.includes(r.period)) continue;
+    const h = byHouse.get(r.distributor_id) ?? {
+      name: r.distributor_name,
+      branches: new Map<string, string>(),
+      all: new Set<string>(),
+    };
+    h.all.add(r.branch_id);
+    if (blind.has(r.branch_id)) {
+      h.branches.set(r.branch_id, shortBranchName(r.branch_name, r.distributor_name));
+    }
+    byHouse.set(r.distributor_id, h);
+  }
   const out: NoDetailHouse[] = [];
-  for (const h of blind) {
-    let name = h;
+  for (const [id, h] of byHouse) {
+    if (h.branches.size === 0) continue;
     let since: string | null = null;
     for (const r of rows) {
-      if (r.distributor_id !== h) continue;
-      name = r.distributor_name;
-      if (r.period_kind !== "YTD" && isBranchLevel(r) && (since === null || r.period < since)) since = r.period;
+      if (r.distributor_id !== id || r.period_kind === "YTD" || !isBranchLevel(r)) continue;
+      if (!h.branches.has(r.branch_id)) continue;
+      if (since === null || r.period < since) since = r.period;
     }
-    if (since) out.push({ name, since });
+    if (!since) continue;
+    const whole = h.branches.size === h.all.size;
+    out.push({
+      name: h.name,
+      since,
+      branches: whole ? null : [...h.branches.values()].sort((a, b) => a.localeCompare(b)),
+    });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
+
+const listOf = (xs: readonly string[]): string =>
+  xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
 
 /** The one sentence every screen prints for a blind house; null when none. */
 export function noDetailSentence(houses: readonly NoDetailHouse[]): string | null {
   if (houses.length === 0) return null;
   if (houses.length === 1) {
-    return `${houses[0].name} sends no dealer detail since ${periodLabel(houses[0].since)}, so its dealers are not counted`;
+    const h = houses[0];
+    return h.branches === null
+      ? `${h.name} sends no dealer detail since ${periodLabel(h.since)}, so its dealers are not counted`
+      : `${h.name} sends no dealer detail for ${listOf(h.branches)} since ${periodLabel(h.since)}, so dealers buying there are not counted`;
   }
-  const list = houses.map((h) => `${h.name} (since ${periodLabel(h.since)})`);
-  const joined = `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
-  return `${joined} send no dealer detail, so their dealers are not counted`;
+  const list = houses.map(
+    (h) => `${h.name}${h.branches ? ` for ${listOf(h.branches)}` : ""} (since ${periodLabel(h.since)})`,
+  );
+  return `${listOf(list)} send no dealer detail, so their dealers are not counted`;
 }
 
 /** True when this entity is a dealer name the upload could not match to one of
@@ -308,7 +373,7 @@ export function entityAt(row: SellThroughRow, dim: SellDim): SellEntity {
           dim,
           accountId: null,
           kind: null,
-          sub: "the house sends no dealer detail",
+          sub: "no dealer detail for this volume",
         };
       }
       return row.dealer_id
@@ -1428,15 +1493,17 @@ export function recurrence(
     if (r.period === latest) housesLatest.add(r.distributor_id);
     else if (r.period === previous) housesPrevious.add(r.distributor_id);
   }
-  // A HOUSE THAT SENT A MONTH BY BRANCH cannot say who came back either
-  // (Boise, 2026-10-12): it is left out like a house missing a file, and
-  // named separately so the screen can say since when.
-  const blind = new Set([
-    ...housesWithoutDetail(rows, latest),
-    ...housesWithoutDetail(rows, previous),
+  // A BRANCH THAT SENT A MONTH BLIND cannot say who came back either
+  // (Boise, 2026-10-12; per branch since Riverside's own sheet, 2026-10-13):
+  // its rows are skipped, and so is every dealer that buys through it in
+  // any month — unknown, not dropped and not new. The house still takes
+  // part for its branches that name their dealers.
+  const blindBranches = new Set([
+    ...branchesWithoutDetail(rows, latest),
+    ...branchesWithoutDetail(rows, previous),
   ]);
-  const takesPart = (id: string) =>
-    housesLatest.has(id) && housesPrevious.has(id) && !blind.has(id);
+  const unknown = unknownDealers(rows, blindBranches);
+  const takesPart = (id: string) => housesLatest.has(id) && housesPrevious.has(id);
   const cur = new Map<string, number>();
   const prev = new Map<string, number>();
   const names = new Map<string, string>();
@@ -1447,7 +1514,9 @@ export function recurrence(
     if (r.period_kind === "YTD") continue;
     if (regionId !== null && r.region_id !== regionId) continue;
     if (!takesPart(r.distributor_id)) continue;
+    if (isBranchLevel(r) || blindBranches.has(r.branch_id)) continue;
     const key = dealerKey(r);
+    if (unknown.has(key)) continue;
     names.set(key, dealerDisplayName(r));
     ids.set(key, r.dealer_id);
     unit = r.unit || unit;
@@ -1462,7 +1531,7 @@ export function recurrence(
   const houseNames = new Map<string, string>();
   for (const r of rows) houseNames.set(r.distributor_id, r.distributor_name);
   const oneFileHouses = [...new Set([...housesLatest, ...housesPrevious])]
-    .filter((h) => !(housesLatest.has(h) && housesPrevious.has(h)) && !blind.has(h))
+    .filter((h) => !(housesLatest.has(h) && housesPrevious.has(h)))
     .map((h) => houseNames.get(h) ?? h)
     .sort();
   const side = (): RecurrenceSide => ({ count: 0, lf: 0, dealers: [] });
@@ -1592,12 +1661,14 @@ export function conversion(
     if (r.period === latest) housesLatest.add(r.distributor_id);
     else if (r.period === previous) housesPrevious.add(r.distributor_id);
   }
-  const blind = new Set([
-    ...housesWithoutDetail(rows, latest),
-    ...housesWithoutDetail(rows, previous),
+  // Blind branches and the dealers that buy through them are out of the
+  // pool and out of the count (per branch since 2026-10-13, see recurrence).
+  const blindBranches = new Set([
+    ...branchesWithoutDetail(rows, latest),
+    ...branchesWithoutDetail(rows, previous),
   ]);
-  const bothMonths = (id: string) =>
-    housesLatest.has(id) && housesPrevious.has(id) && !blind.has(id);
+  const unknown = unknownDealers(rows, blindBranches);
+  const bothMonths = (id: string) => housesLatest.has(id) && housesPrevious.has(id);
   // The precondition is that the two FILES exist, not that this region sold
   // anything last month. A market that was silent in June and bought in July
   // has the most to say of any of them, and a region filter must not turn that
@@ -1618,7 +1689,9 @@ export function conversion(
     // that appears in August and not in July would otherwise read as a rep's
     // victory, and the cash till as a new customer.
     if (r.is_house_account) continue;
+    if (isBranchLevel(r) || blindBranches.has(r.branch_id)) continue;
     const key = dealerKey(r);
+    if (unknown.has(key)) continue;
     const qty = Number(r.quantity);
     if (r.period_kind !== "YTD" && r.period === latest) {
       unit = r.unit || unit;
@@ -1633,7 +1706,7 @@ export function conversion(
   const houseNames = new Map<string, string>();
   for (const r of rows) houseNames.set(r.distributor_id, r.distributor_name);
   const oneFileHouses = [...new Set([...housesLatest, ...housesPrevious])]
-    .filter((h) => !bothMonths(h) && !blind.has(h))
+    .filter((h) => !bothMonths(h))
     .map((h) => houseNames.get(h) ?? h)
     .sort();
 
