@@ -564,10 +564,14 @@ function DealerModule({
             {facts.detailEnded.length > 0 && (
               <p className="t-hint">
                 {facts.detailEnded
-                  .map(
-                    (d) =>
-                      `${d.house} stopped sending dealer detail in ${periodLabel(d.since)} — purchases through them are no longer visible here.`,
-                  )
+                  .map((d) => {
+                    const list =
+                      d.branches.length <= 1
+                        ? (d.branches[0] ?? "")
+                        : `${d.branches.slice(0, -1).join(", ")} and ${d.branches[d.branches.length - 1]}`;
+                    const them = d.branches.length === 1 ? "it" : "them";
+                    return `${d.house} stopped sending dealer detail for ${list} in ${periodLabel(d.since)} — purchases through ${them} are no longer visible here.`;
+                  })
                   .join(" ")}
               </p>
             )}

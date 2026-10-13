@@ -91,39 +91,45 @@ describe("dealerFacts", () => {
   });
 });
 
-describe("dealerFacts · a house that sends no dealer detail (Boise, 2026-10-12)", () => {
+describe("dealerFacts · a branch that sends no dealer detail (Boise, 2026-10-12; per branch 2026-10-13)", () => {
   const blind = (o: Partial<SellThroughRow>) =>
     row({ dealer_id: null, dealer_name: null, dealer_label: null, detail: "branch", ...o });
+  const NAMES: Record<string, string> = { dal: "Dallas Branch", slc: "Salt Lake Branch", riv: "Riverside Branch" };
+  const blindAt = (branch: string, o: Partial<SellThroughRow>) =>
+    blind({ branch_id: branch, branch_name: NAMES[branch], ...o });
 
-  it("does not call a dealer silent in a month its house sent by branch", () => {
+  it("does not call a dealer silent in a month its BRANCH sent by branch", () => {
     const rows = [
-      row({ period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
-      blind({ period: "2026-09-01", quantity: 50 }),
+      row({ branch_id: "dal", branch_name: "Dallas Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      blindAt("dal", { period: "2026-09-01", quantity: 50 }),
+      // Riverside named its dealers in September; Ganahl does not buy there.
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-09-01", dealer_id: "acc-v", dealer_name: "V", dealer_label: "V", quantity: 10 }),
     ];
     const f = dealerFacts(new Set(["acc-g"]), rows)!;
     expect(f.silentIn).toBeNull();
     expect(f.filesOnHand).toEqual(["2026-08-01"]);
-    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", since: "2026-09-01" }]);
+    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", branches: ["Dallas Branch"], since: "2026-09-01" }]);
   });
 
-  it("judges silence against the house that still has detail", () => {
+  it("judges silence against the branch that still has detail", () => {
     const rows = [
-      row({ period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
-      blind({ period: "2026-09-01", quantity: 50 }),
-      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "GAN - GANAHL", quantity: 10 }),
-      row({ distributor_id: "hw", distributor_name: "Hardwoods", period: "2026-09-01", dealer_id: "acc-v", dealer_name: "V", dealer_label: "V", quantity: 10 }),
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-09-01", dealer_id: "acc-v", dealer_name: "V", dealer_label: "V", quantity: 10 }),
+      blindAt("dal", { period: "2026-09-01", quantity: 50 }),
     ];
     const f = dealerFacts(new Set(["acc-g"]), rows)!;
     expect(f.silentIn).toBe("2026-09-01");
-    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", since: "2026-09-01" }]);
+    expect(f.detailEnded).toEqual([]);
   });
-});
 
-describe("dealerFacts · the undisclosed key is not a dealer", () => {
-  it("answers nothing for a house's branch-level volume", () => {
+  it("names every blind branch of the house this dealer buys through", () => {
     const rows = [
-      row({ dealer_id: null, dealer_name: null, dealer_label: null, detail: "branch", period: "2026-09-01", quantity: 50 }),
+      row({ branch_id: "dal", branch_name: "Dallas Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      row({ branch_id: "slc", branch_name: "Salt Lake Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 20 }),
+      blindAt("dal", { period: "2026-09-01", quantity: 50 }),
+      blindAt("slc", { period: "2026-09-01", quantity: 5 }),
     ];
-    expect(dealerFacts(new Set(["undisclosed:boise"]), rows)).toBeNull();
+    const f = dealerFacts(new Set(["acc-g"]), rows)!;
+    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", branches: ["Dallas Branch", "Salt Lake Branch"], since: "2026-09-01" }]);
   });
 });

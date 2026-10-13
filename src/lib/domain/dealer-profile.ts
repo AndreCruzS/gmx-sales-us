@@ -58,9 +58,10 @@ export interface DealerFacts {
   lastBought: string | null;
   /** The newest month on file in which this dealer bought nothing. */
   silentIn: string | null;
-  /** Houses of this dealer that stopped naming their dealers, and since when
-   *  — purchases through them are no longer visible here. */
-  detailEnded: { house: string; since: string }[];
+  /** Branches of this dealer's houses that stopped naming their dealers,
+   *  by house, and since when — purchases through them are no longer
+   *  visible here (per branch since Riverside's own sheet, 2026-10-13). */
+  detailEnded: { house: string; branches: string[]; since: string }[];
   yearSoFar: number;
   /** The year file's own last-year figure, when the dealer is in it. */
   yearFileLy: number;
@@ -103,20 +104,24 @@ export function dealerFacts(
   const mine = rows.filter((r) => keys.has(dealerKeyOf(r)));
   if (mine.length === 0) return null;
 
-  // A MONTH ONLY COUNTS IF ONE OF THIS DEALER'S HOUSES NAMED ITS DEALERS in
-  // it (Boise, 2026-10-12). A branch-level month from Boise says nothing
-  // about whether this yard bought, so it is neither a column nor silence.
-  const myHouses = new Set(mine.map((r) => r.distributor_id));
-  const detailed = rows.filter((r) => myHouses.has(r.distributor_id) && !isBranchLevel(r));
+  // A MONTH ONLY COUNTS IF ONE OF THIS DEALER'S BRANCHES NAMED ITS DEALERS
+  // in it (Boise, 2026-10-12; per branch since Riverside's own sheet,
+  // 2026-10-13). A blind Dallas says nothing about a yard that buys at
+  // Dallas — neither a column nor silence — and nothing at all about one
+  // that buys at Riverside, which is read as before.
+  const myBranches = new Set(mine.map((r) => r.branch_id));
+  const detailed = rows.filter((r) => myBranches.has(r.branch_id) && !isBranchLevel(r));
   const filesOnHand = [...new Set(detailed.map((r) => r.period))].sort();
-  const detailEndedAt = new Map<string, string>();
+  const ended = new Map<string, { branches: Set<string>; since: string }>();
   for (const r of rows) {
-    if (!myHouses.has(r.distributor_id) || !isBranchLevel(r) || r.period_kind === "YTD") continue;
-    const at = detailEndedAt.get(r.distributor_name);
-    if (!at || r.period < at) detailEndedAt.set(r.distributor_name, r.period);
+    if (!myBranches.has(r.branch_id) || !isBranchLevel(r) || r.period_kind === "YTD") continue;
+    const at = ended.get(r.distributor_name) ?? { branches: new Set<string>(), since: r.period };
+    at.branches.add(r.branch_name);
+    if (r.period < at.since) at.since = r.period;
+    ended.set(r.distributor_name, at);
   }
-  const detailEnded = [...detailEndedAt.entries()]
-    .map(([house, since]) => ({ house, since }))
+  const detailEnded = [...ended.entries()]
+    .map(([house, e]) => ({ house, branches: [...e.branches].sort((a, b) => a.localeCompare(b)), since: e.since }))
     .sort((a, b) => a.house.localeCompare(b.house));
   const first = mine[0];
   const accountId = mine.find((r) => r.dealer_id)?.dealer_id ?? null;
