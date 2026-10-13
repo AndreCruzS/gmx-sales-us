@@ -33,6 +33,7 @@ import {
   mappingProblem,
   parseSheet,
   periodOf,
+  sheetBranch,
   type ImportField,
   type KnownBranch,
   type KnownAlias,
@@ -61,6 +62,8 @@ interface UploadRow {
   row_count: number;
   unmatched_count: number;
   detail: "dealer" | "branch";
+  /** Set when the file was ONE branch's own sheet (Riverside, 2026-10-13). */
+  branch_id: string | null;
   uploaded_at: string;
 }
 
@@ -123,6 +126,11 @@ export default function SellThroughPage() {
   // THE ADMIN'S WORD that this file has no customer column (Boise, from
   // September 2026). Reset with every new sheet: the word is given per file.
   const [branchOnly, setBranchOnly] = useState(false);
+  // A BRANCH'S OWN SHEET (Riverside, 2026-10-13): when the file holds one
+  // branch we hold and names its dealers, it loads for that branch alone on
+  // top of the house's month. Ticked by default because the file itself says
+  // so; unticked, it replaces the whole month — the admin's call, in writing.
+  const [branchSheet, setBranchSheet] = useState(true);
   const [touchedMapping, setTouchedMapping] = useState(false);
   const [addBranches, setAddBranches] = useState(true);
   // The client's map, so a new yard can be shown landing in a region BEFORE it is
@@ -192,7 +200,7 @@ export default function SellThroughPage() {
     const [us, br, ts, tr] = await Promise.all([
       supabase
         .from("sell_through_uploads")
-        .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at, detail")
+        .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at, detail, branch_id")
         .order("period", { ascending: false })
         .limit(200),
       supabase
@@ -260,7 +268,10 @@ export default function SellThroughPage() {
     return () => clearTimeout(t);
   }, [sheet.headers, touchedMapping]);
   useEffect(() => {
-    const t = setTimeout(() => setBranchOnly(false), 0);
+    const t = setTimeout(() => {
+      setBranchOnly(false);
+      setBranchSheet(true);
+    }, 0);
     return () => clearTimeout(t);
   }, [sheet.headers]);
   const byBranch = branchOnly && mapping.dealer < 0;
@@ -281,21 +292,47 @@ export default function SellThroughPage() {
     [sheet, mapping, mineBranches, dealers, aliases, branchOnly],
   );
 
+  const sheetBranchId = plan ? sheetBranch(plan, mapping) : null;
+  const asBranchSheet = branchSheet && sheetBranchId !== null;
+  const sheetBranchName =
+    (sheetBranchId && mineBranches.find((b) => b.id === sheetBranchId)?.name) || null;
+
   /** What the file said this yard's state was, or what an admin typed instead. */
   function stateFor(b: { name: string; state: string | null }): string {
     return (statePicked[b.name] ?? b.state ?? "").trim().toUpperCase();
   }
 
   const period = when ? periodOf(when.year, when.month) : null;
-  const existing = uploads.find(
-    (u) =>
-      u.distributor_id === distributorId &&
-      u.period === period &&
-      u.period_kind === kind,
+  const sameMonth = (u: UploadRow) =>
+    u.distributor_id === distributorId && u.period === period && u.period_kind === kind;
+  /** The house's own file for this month, if loaded. */
+  const existing = uploads.find((u) => sameMonth(u) && u.branch_id === null);
+  /** This branch's previous sheet for the month, if any. */
+  const existingSheet = uploads.find(
+    (u) => sameMonth(u) && u.branch_id !== null && u.branch_id === sheetBranchId,
   );
+  /** Branches that have their own sheet for this month: a whole-house load
+   *  leaves them alone — their sheet, with dealers, is the better word. */
+  const sheetsForMonth = useMemo(
+    () =>
+      asBranchSheet
+        ? []
+        : uploads
+            .filter((u) => sameMonth(u) && u.branch_id !== null)
+            .map((u) => ({
+              upload: u,
+              name: branches.find((b) => b.id === u.branch_id)?.name ?? "a branch",
+              inFile: plan ? plan.rows.filter((r) => r.branchId === u.branch_id).length : 0,
+            })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [uploads, distributorId, period, kind, asBranchSheet, branches, plan],
+  );
+  const keptBranches = new Set(sheetsForMonth.map((s) => s.upload.branch_id));
   const problem = mappingProblem(mapping, { branchOnly });
   const loadable = plan
-    ? plan.rows.filter((r) => r.branchId !== null || addBranches).length
+    ? plan.rows.filter(
+        (r) => (r.branchId !== null || addBranches) && !keptBranches.has(r.branchId),
+      ).length
     : 0;
 
   async function save() {
@@ -307,7 +344,37 @@ export default function SellThroughPage() {
       // A month is REPLACED, never added to. Deleting the upload takes its rows
       // with it, which is the whole reason uploads exist as a row of their own —
       // reloading a corrected file must not double the book.
-      if (existing) {
+      if (asBranchSheet && sheetBranchId) {
+        // A BRANCH'S OWN SHEET replaces that branch inside the month and
+        // nothing else: its previous sheet goes, and the house's file loses
+        // only this branch's rows — the other branches, the file in storage
+        // and the upload itself stay.
+        if (existingSheet) {
+          const { error: delErr } = await supabase
+            .from("sell_through_uploads")
+            .delete()
+            .eq("id", existingSheet.id);
+          if (delErr) throw new Error(delErr.message);
+        }
+        if (existing) {
+          const { error: rowsErr } = await supabase
+            .from("sell_through")
+            .delete()
+            .eq("upload_id", existing.id)
+            .eq("branch_id", sheetBranchId);
+          if (rowsErr) throw new Error(rowsErr.message);
+          const { count, error: cntErr } = await supabase
+            .from("sell_through")
+            .select("id", { count: "exact", head: true })
+            .eq("upload_id", existing.id);
+          if (cntErr) throw new Error(cntErr.message);
+          const { error: updErr } = await supabase
+            .from("sell_through_uploads")
+            .update({ row_count: count ?? 0 })
+            .eq("id", existing.id);
+          if (updErr) throw new Error(updErr.message);
+        }
+      } else if (existing) {
         const { error: delErr } = await supabase
           .from("sell_through_uploads")
           .delete()
@@ -353,7 +420,9 @@ export default function SellThroughPage() {
             null;
           return branchId === null ? null : { ...r, branchId };
         })
-        .filter((r): r is NonNullable<typeof r> => r !== null);
+        // A branch with its own sheet for the month keeps its sheet: the
+        // house's file is not allowed to put blind rows back under it.
+        .filter((r): r is NonNullable<typeof r> => r !== null && !keptBranches.has(r.branchId));
 
       // The original goes to storage BEFORE the rows land, so a month can never
       // exist in the database with its own source already lost. A failed upload
@@ -361,7 +430,10 @@ export default function SellThroughPage() {
       let storagePath: string | null = null;
       if (file) {
         const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
-        storagePath = `${profile.orgId}/${distributorId}/${period}-${safe}`;
+        const branchSlug = asBranchSheet
+          ? `${(sheetBranchName ?? "branch").replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}-`
+          : "";
+        storagePath = `${profile.orgId}/${distributorId}/${period}-${branchSlug}${safe}`;
         const { error: putErr } = await supabase.storage
           .from("sell-through")
           .upload(storagePath, file, { upsert: true });
@@ -382,6 +454,7 @@ export default function SellThroughPage() {
           // By branch nobody is unnamed — there was nobody to name.
           unmatched_count: byBranch ? 0 : rows.filter((r) => r.dealerId === null).length,
           detail: byBranch ? "branch" : "dealer",
+          branch_id: asBranchSheet ? sheetBranchId : null,
         })
         .select("id")
         .single();
@@ -412,7 +485,7 @@ export default function SellThroughPage() {
       }
 
       setDone(
-        `${QTY.format(rows.length)} ${rows.length === 1 ? "row" : "rows"} loaded for ${kind === "YTD" ? `the year through ${periodLabel(period)}` : periodLabel(period)}.`,
+        `${QTY.format(rows.length)} ${rows.length === 1 ? "row" : "rows"} loaded for ${asBranchSheet ? `${sheetBranchName}, ` : ""}${kind === "YTD" ? `the year through ${periodLabel(period)}` : periodLabel(period)}.`,
       );
       setPasted("");
       setFile(null);
@@ -560,6 +633,7 @@ export default function SellThroughPage() {
   }
 
   const mine = uploads.filter((u) => u.distributor_id === distributorId);
+  const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "a branch";
 
   return (
     <div className="stack pt-2">
@@ -643,12 +717,16 @@ export default function SellThroughPage() {
           </select>
         </label>
 
-        {existing && (
+        {asBranchSheet && existingSheet ? (
+          <p className="t-sub" style={{ color: "var(--warn-ink)" }}>
+            {`${sheetBranchName} already has its own sheet for ${periodLabel(period)} — ${QTY.format(existingSheet.row_count)} rows. Loading again REPLACES it.`}
+          </p>
+        ) : existing && !asBranchSheet ? (
           <p className="t-sub" style={{ color: "var(--warn-ink)" }}>
             {kind === "YTD" ? `Year-to-date through ${periodLabel(period)}` : periodLabel(period)} is already loaded for this house
             {` — ${QTY.format(existing.row_count)} rows. Loading again REPLACES it, so the book cannot double.`}
           </p>
-        )}
+        ) : null}
       </section>
 
       {distributorId && (
@@ -773,6 +851,24 @@ export default function SellThroughPage() {
                     <strong>by branch</strong>: totals count, dealers do not —
                     every reading of who bought leaves this house out and says
                     so.
+                  </span>
+                </label>
+              )}
+              {/* A BRANCH'S OWN SHEET (Riverside, 2026-10-13): one branch,
+                  with dealers. Ticked by default because the file itself says
+                  so; unticking it is the explicit choice to replace the month. */}
+              {sheetBranchId !== null && sheetBranchName && period && (
+                <label className="flex items-start gap-2 t-sub">
+                  <input
+                    type="checkbox"
+                    checked={branchSheet}
+                    onChange={(e) => setBranchSheet(e.target.checked)}
+                  />
+                  <span>
+                    This file holds one branch only — <strong>{sheetBranchName}</strong>.
+                    Load it as {sheetBranchName}&apos;s own sheet: it replaces {sheetBranchName} in{" "}
+                    {periodLabel(period)} and leaves every other branch of the month as it is.
+                    Unticked, it loads as the whole month and replaces everything this house has for it.
                   </span>
                 </label>
               )}
@@ -1028,6 +1124,16 @@ export default function SellThroughPage() {
             </p>
           )}
 
+          {sheetsForMonth.length > 0 && period && (
+            <p className="t-sub" style={{ color: "var(--warn-ink)" }}>
+              {sheetsForMonth
+                .map(
+                  (s) =>
+                    `${s.name} has its own sheet for ${periodLabel(period)} — ${QTY.format(s.upload.row_count)} rows with dealer detail. Its ${QTY.format(s.inFile)} rows in this file are left out.`,
+                )
+                .join(" ")}
+            </p>
+          )}
           <button
             type="button"
             className="btn-primary"
@@ -1036,7 +1142,9 @@ export default function SellThroughPage() {
           >
             {saving
               ? "Loading…"
-              : `${existing ? "Replace" : "Load"} ${kind === "YTD" ? `YTD through ${periodLabel(period)}` : periodLabel(period)} · ${QTY.format(loadable)} rows`}
+              : asBranchSheet
+                ? `${existingSheet ? "Replace" : "Load"} ${sheetBranchName} · ${kind === "YTD" ? `YTD through ${periodLabel(period)}` : periodLabel(period)} · ${QTY.format(loadable)} rows`
+                : `${existing ? "Replace" : "Load"} ${kind === "YTD" ? `YTD through ${periodLabel(period)}` : periodLabel(period)} · ${QTY.format(loadable)} rows`}
           </button>
         </section>
       )}
@@ -1069,10 +1177,12 @@ export default function SellThroughPage() {
                   <span className="row" style={{ borderColor: "var(--danger)" }}>
                     <span className="row-body">
                       <span className="t-title">
-                        {`Remove ${u.period_kind === "YTD" ? `YTD through ${periodLabel(u.period)}` : periodLabel(u.period)}?`}
+                        {`Remove ${u.period_kind === "YTD" ? `YTD through ${periodLabel(u.period)}` : periodLabel(u.period)}${u.branch_id ? ` · ${branchName(u.branch_id)} sheet` : ""}?`}
                       </span>
                       <span className="t-sub block">
-                        {`Its ${QTY.format(u.row_count)} rows go with it. No other month is touched, and it cannot be undone — but the file can be loaded again.`}
+                        {u.branch_id
+                          ? `Its ${QTY.format(u.row_count)} rows go with it. ${branchName(u.branch_id)} is then empty for ${periodLabel(u.period)} until the house's file is loaded again. It cannot be undone — but the sheet can be loaded again.`
+                          : `Its ${QTY.format(u.row_count)} rows go with it. No other month is touched, and it cannot be undone — but the file can be loaded again.`}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-col gap-1.5">
@@ -1101,14 +1211,17 @@ export default function SellThroughPage() {
                       <span className="t-title">
                         {periodLabel(u.period)}
                         {u.period_kind === "YTD" ? " · YTD" : ""}
+                        {u.branch_id ? ` · ${branchName(u.branch_id)} sheet` : ""}
                       </span>
                       <span className="t-sub block">
                         {QTY.format(u.row_count)} rows
                         {u.detail === "branch"
                           ? " · by branch · no dealer detail"
-                          : u.unmatched_count > 0
-                            ? ` · ${QTY.format(u.unmatched_count)} unnamed`
-                            : ""}
+                          : u.branch_id
+                            ? ` · dealer detail${u.unmatched_count > 0 ? ` · ${QTY.format(u.unmatched_count)} unnamed` : ""}`
+                            : u.unmatched_count > 0
+                              ? ` · ${QTY.format(u.unmatched_count)} unnamed`
+                              : ""}
                       </span>
                     </span>
                     <button

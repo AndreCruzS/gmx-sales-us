@@ -14,6 +14,7 @@ import {
   parseSheet,
   periodOf,
   rowsToSheet,
+  sheetBranch,
   toLinearFeet,
   type KnownBranch,
   type KnownDealer,
@@ -643,5 +644,38 @@ describe("a file with no customer column (Boise, 2026-10-12)", () => {
     const m = mapping({ branch: 0, dealer: 1, quantity: 2 });
     const plan = buildImport(sheet, m, { branches: BRANCHES, dealers: DEALERS }, { branchOnly: true });
     expect(plan.rows[0].dealerLabel).toBe("Ganahl");
+  });
+});
+
+describe("a branch's own sheet (Riverside, 2026-10-13)", () => {
+  it("sheetBranch is the one branch every row sits in, only with a dealer column", () => {
+    const m = mapping({ branch: 0, dealer: 1, quantity: 2 });
+    const one = buildImport(
+      parseSheet("Branch\tCustomer\tQty\nBoise Cascade - Riverside\tGanahl\t10\nBoise Cascade - Riverside\tCorona\t5\n"),
+      m,
+      { branches: BRANCHES, dealers: DEALERS },
+    );
+    expect(sheetBranch(one, m)).toBe("riv");
+    const two = buildImport(
+      parseSheet("Branch\tCustomer\tQty\nBoise Cascade - Riverside\tGanahl\t10\nBoise Cascade - Modesto\tCorona\t5\n"),
+      m,
+      { branches: BRANCHES, dealers: DEALERS },
+    );
+    expect(sheetBranch(two, m)).toBeNull();
+    const noDealer = mapping({ branch: 0, product: 1, quantity: 2 });
+    const blind = buildImport(
+      parseSheet("Branch\tItem\tQty\nRiverside\tX\t10\n"),
+      noDealer,
+      { branches: BRANCHES, dealers: DEALERS },
+      { branchOnly: true },
+    );
+    expect(sheetBranch(blind, noDealer)).toBeNull();
+    // A branch we do not hold yet is not a sheet either: the admin adds the yard first.
+    const unknown = buildImport(
+      parseSheet("Branch\tCustomer\tQty\nPhoenix\tGanahl\t10\n"),
+      m,
+      { branches: BRANCHES, dealers: DEALERS },
+    );
+    expect(sheetBranch(unknown, m)).toBeNull();
   });
 });

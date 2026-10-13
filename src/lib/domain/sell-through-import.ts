@@ -663,6 +663,19 @@ export function buildImport(
   };
 }
 
+/** A BRANCH'S OWN SHEET (Riverside, 2026-10-13): when every row of a file
+ *  with a dealer column sits in ONE branch we already hold, the file can be
+ *  loaded for that branch alone, on top of the house's month. Returns the
+ *  branch id, or null. Never a guess: the loader still asks, this only says
+ *  the question applies. */
+export function sheetBranch(plan: ImportPlan, mapping: Mapping): string | null {
+  if (mapping.dealer < 0 || plan.rows.length === 0) return null;
+  const ids = new Set(plan.rows.map((r) => r.branchId));
+  if (ids.size !== 1) return null;
+  const [only] = ids;
+  return only ?? null;
+}
+
 /** Nothing can be written until the file says, at minimum, who bought how much. */
 export function mappingProblem(
   mapping: Mapping,
