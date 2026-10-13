@@ -1,7 +1,10 @@
 # Branch sheets: dealer detail one branch at a time — design
 
-Status: approved in conversation by Andre, 2026-10-13 ("ok" to the path
-below). Evolves `2026-10-12-branch-level-sell-through-design.md`.
+Status: shipped 2026-10-13 (commits c73999a..3f4a22e); approved in conversation
+by Andre the same day ("ok" to the path below). Evolves
+`2026-10-12-branch-level-sell-through-design.md`. Riverside September 2026
+loaded as a branch sheet the same day: 140 rows, 46,651 LF, reconciled to the
+cent with the by-branch file.
 
 ## Why
 

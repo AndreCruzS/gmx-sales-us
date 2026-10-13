@@ -7,10 +7,38 @@
   eye will be caught out.
 - `2026-08-boise-sell-through.xlsx` — August 2026, columns
   `Branch / Customer Name / Item / Qty / LY Qty / UOM`.
-- `2026-09-boise-sell-through-AS-RECEIVED.xlsx` — September 2026, and **NOT
-  LOADED**: see below. Columns `Branch / Item / Qty / LY Qty / UOM` — five, not
+- `2026-09-boise-sell-through-AS-RECEIVED.xlsx` — September 2026, loaded BY
+  BRANCH (see below). Columns `Branch / Item / Qty / LY Qty / UOM` — five, not
   six. Kept here exactly as it arrived, unedited, because the rule at the foot
   of this file applies to the bad ones too.
+- `2026-09-boise-riverside-AS-RECEIVED.xlsx` — September 2026, **Riverside
+  Branch's own sheet**, columns `Branch / Item / Customer Name / Qty / LY Qty /
+  UOM`, Riverside only. Loaded 2026-10-13 as a branch sheet (see below).
+
+## September 2026 — Riverside sends its own sheet with customers (2026-10-13)
+
+Bianca received a Riverside-only sheet for September with the customer column
+back: 223 lines, 78 `Total` subtotals, 140 sales lines (5 blank/zero), 19
+customers, 6,186 PC → **46,651 LF — exactly what the by-branch file gave
+Riverside**. Loaded as a **branch sheet** (upload `branch_id` = Riverside,
+`detail = 'dealer'`): it replaced Riverside's 140 blind rows inside the
+by-branch September (now 132 rows) and left the other seven branches as they
+were. Totals unchanged at 72,211 LF. Other branches may follow — each sheet
+loads the same way, one branch at a time; none is assumed.
+
+Since then every dealer reading judges "no dealer detail" per BRANCH and
+month: Riverside's dealers are back in kept buying / stopped / new, the quiet
+register, the conversion rate and the dealer module; the other seven branches'
+dealers stay out and the screen says "Boise Cascade sends no dealer detail for
+Atlanta, Dallas, Detroit, Houston, Memphis, Nashville and Salt Lake since
+September 2026, so dealers buying there are not counted". Spec:
+`docs/superpowers/specs/2026-10-13-branch-sheet-sell-through-design.md`.
+
+Three Riverside labels could not be matched and loaded under their own
+spelling: `HARSPPDE - HARDWOODS SPECIALTY PROD US LP` (1,408 LF — another
+distributor, a house-to-house sale, Bianca to decide whether it is a house
+account), `LAMELLA - LA MESA LUMBER CO` (1,082 LF), `ZZGLOFOLAV - GLOBAL FOREST
+LUMBER COMPANY` (0 LF, LY only).
 
 ## September 2026 — the customer column is missing
 
