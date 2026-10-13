@@ -34,7 +34,9 @@ import {
   dealerKey,
   dealerWhere,
   housesMissing,
-  housesWithoutDetail,
+  branchesWithoutDetail,
+  unknownDealers,
+  isBranchLevel,
   noDetailHouses,
   noDetailSentence,
   recurrence,
@@ -691,24 +693,29 @@ export function ManagerHome({ name }: { name: string }) {
       missing: [] as string[],
     };
     if (!pLatest) return empty;
-    // A HOUSE BLIND IN THE NEWEST MONTH (Boise, 2026-10-12) cannot say who
-    // went quiet: its dealers are left out of both chapters, in both modes.
-    // So is a house that has not SENT the newest month: its dealers are
-    // unknown, not stopped — the rule recurrence has always kept, which this
-    // ranking lacked until one house's file landed ahead of the others.
-    const blind = new Set<string>([
-      ...(latest ? housesWithoutDetail(monthlyRows, latest) : []),
-      ...(previous ? housesWithoutDetail(monthlyRows, previous) : []),
+    // A BRANCH BLIND IN ONE OF THE TWO MONTHS (Boise, 2026-10-12; per branch
+    // since Riverside's own sheet, 2026-10-13) cannot say who went quiet:
+    // its rows and every dealer that buys through it are left out of both
+    // chapters. So is a house that has not SENT the newest month: its
+    // dealers are unknown, not stopped — the rule recurrence has always
+    // kept, which this ranking lacked until one house's file landed ahead
+    // of the others.
+    const blindBranches = new Set<string>([
+      ...(latest ? branchesWithoutDetail(monthlyRows, latest) : []),
+      ...(previous ? branchesWithoutDetail(monthlyRows, previous) : []),
     ]);
+    const unknown = quietYtd ? new Set<string>() : unknownDealers(monthlyRows, blindBranches);
     const reported = new Set(
       monthlyRows.filter((r) => r.period === latest).map((r) => r.distributor_id),
     );
     // MONTHLY MODE ONLY: the YTD ranking compares the year file against its
-    // own last year and needs no newest month to stand; there, a house blind
-    // or missing in the newest month merely gives no later proof (the `later`
-    // map already skips it) and its dealers stay readable.
+    // own last year and needs no newest month to stand; there, a branch blind
+    // or a house missing in the newest month merely gives no later proof (the
+    // `later` map already skips it) and its dealers stay readable.
     const out = (houseId: string) =>
-      !quietYtd && (blind.has(houseId) || (latest !== null && !reported.has(houseId)));
+      !quietYtd && latest !== null && !reported.has(houseId);
+    const blindRow = (r: SellThroughRow) =>
+      !quietYtd && (isBranchLevel(r) || blindBranches.has(r.branch_id));
     const cur = new Map<string, number>();
     const prev = new Map<string, number>();
     const names = new Map<string, string>();
@@ -719,15 +726,17 @@ export function ManagerHome({ name }: { name: string }) {
     const later = new Map<string, number>();
     if (quietYtd && latest) {
       for (const r of monthlyRows) {
-        if (r.period !== latest || out(r.distributor_id)) continue;
+        if (r.period !== latest || out(r.distributor_id) || blindRow(r)) continue;
         const key = dealerKey(r);
+        if (unknown.has(key)) continue;
         later.set(key, (later.get(key) ?? 0) + Number(r.quantity));
       }
     }
     let unit = "LF";
     for (const r of base) {
-      if (out(r.distributor_id)) continue;
+      if (out(r.distributor_id) || blindRow(r)) continue;
       const key = dealerKey(r);
+      if (unknown.has(key)) continue;
       names.set(key, dealerDisplayName(r));
       ids.set(key, r.dealer_id);
       unit = r.unit || unit;
