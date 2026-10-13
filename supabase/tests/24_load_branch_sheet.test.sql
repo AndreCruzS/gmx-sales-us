@@ -23,11 +23,12 @@ select 'e0000000-0000-0000-0000-000000000010', org_id, distributor_id, '2031-07-
 from t where n = 1;
 
 insert into sell_through (org_id, upload_id, branch_id, dealer_label, period, product, quantity)
-select org_id, 'e0000000-0000-0000-0000-000000000010', branch_id, null, '2031-07-01', 'X', 10 from t where n = 1
+-- Cast in a UNION: a bare literal is text there, and the column is uuid.
+select org_id, 'e0000000-0000-0000-0000-000000000010'::uuid, branch_id, null::text, '2031-07-01'::date, 'X', 10 from t where n = 1
 union all
-select org_id, 'e0000000-0000-0000-0000-000000000010', branch_id, null, '2031-07-01', 'Y', 20 from t where n = 1
+select org_id, 'e0000000-0000-0000-0000-000000000010'::uuid, branch_id, null::text, '2031-07-01'::date, 'Y', 20 from t where n = 1
 union all
-select org_id, 'e0000000-0000-0000-0000-000000000010', branch_id, null, '2031-07-01', 'Z', 30 from t where n = 2;
+select org_id, 'e0000000-0000-0000-0000-000000000010'::uuid, branch_id, null::text, '2031-07-01'::date, 'Z', 30 from t where n = 2;
 
 -- Branch 1 sends its own sheet with one dealer row.
 select lives_ok($$
