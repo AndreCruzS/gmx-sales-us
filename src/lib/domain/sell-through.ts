@@ -249,7 +249,10 @@ export function noDetailHouses(rows: readonly SellThroughRow[], periods: readonl
     };
     h.all.add(r.branch_id);
     if (blind.has(r.branch_id)) {
-      h.branches.set(r.branch_id, shortBranchName(r.branch_name, r.distributor_name));
+      // "Dallas", not "Dallas Branch": seven of them in one sentence is a
+      // list a person can read, and the house is already named before it.
+      const short = shortBranchName(r.branch_name, r.distributor_name);
+      h.branches.set(r.branch_id, short.replace(/\s+branch$/i, '') || short);
     }
     byHouse.set(r.distributor_id, h);
   }

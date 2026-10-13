@@ -1686,7 +1686,7 @@ describe("a branch's own sheet (Riverside, 2026-10-13): the blind unit is the br
       blindAt("Detroit", { distributor_name: "Boise Cascade", period: "2026-09-01" }),
     ];
     expect(noDetailHouses(partial, ["2026-09-01"])).toEqual([
-      { name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas Branch", "Detroit Branch"] },
+      { name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas", "Detroit"] },
     ]);
     const whole = [blindAt("Dallas", { distributor_name: "Boise Cascade", period: "2026-09-01" })];
     expect(noDetailHouses(whole, ["2026-09-01"])).toEqual([
@@ -1719,7 +1719,7 @@ describe("a branch's own sheet (Riverside, 2026-10-13): the blind unit is the br
     expect(r.again.dealers.map((d) => d.name)).toEqual(["Ganahl"]);
     expect(r.dropped.count).toBe(0);
     expect(r.oneFileHouses).toEqual([]);
-    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas Branch"] }]);
+    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas"] }]);
   });
 
   it("a dealer at both a blind and a detailed branch is unknown", () => {
@@ -1746,6 +1746,6 @@ describe("a branch's own sheet (Riverside, 2026-10-13): the blind unit is the br
     const c = conversion(rows, "2026-09-01", "2026-08-01", new Set(["acc-l", "acc-g"]))!;
     expect(c.pool).toBe(1);
     expect(c.wonBack).toBe(1);
-    expect(c.noDetailHouses[0].branches).toEqual(["Dallas Branch"]);
+    expect(c.noDetailHouses[0].branches).toEqual(["Dallas"]);
   });
 });
