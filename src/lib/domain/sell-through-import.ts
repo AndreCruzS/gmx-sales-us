@@ -668,7 +668,15 @@ export function buildImport(
  *  loaded for that branch alone, on top of the house's month. Returns the
  *  branch id, or null. Never a guess: the loader still asks, this only says
  *  the question applies. */
-export function sheetBranch(plan: ImportPlan, mapping: Mapping): string | null {
+export function sheetBranch(
+  plan: ImportPlan,
+  mapping: Mapping,
+  branches: readonly KnownBranch[],
+): string | null {
+  // A house with one branch has no "branch sheet": its only branch's file IS
+  // the house's file (review, 2026-10-13 — Russin would otherwise load every
+  // month as a sheet).
+  if (branches.length < 2) return null;
   if (mapping.dealer < 0 || plan.rows.length === 0) return null;
   const ids = new Set(plan.rows.map((r) => r.branchId));
   if (ids.size !== 1) return null;

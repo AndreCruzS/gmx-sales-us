@@ -132,4 +132,34 @@ describe("dealerFacts · a branch that sends no dealer detail (Boise, 2026-10-12
     const f = dealerFacts(new Set(["acc-g"]), rows)!;
     expect(f.detailEnded).toEqual([{ house: "Boise Cascade", branches: ["Dallas Branch", "Salt Lake Branch"], since: "2026-09-01" }]);
   });
+
+  it("is not called silent while one of its own branches is blind in the newest month", () => {
+    const rows = [
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      row({ branch_id: "dal", branch_name: "Dallas Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 10 }),
+      // September: Riverside names its dealers (Ganahl absent), Dallas is blind.
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-09-01", dealer_id: "acc-v", dealer_name: "V", dealer_label: "V", quantity: 10 }),
+      blindAt("dal", { period: "2026-09-01", quantity: 50 }),
+    ];
+    const f = dealerFacts(new Set(["acc-g"]), rows)!;
+    expect(f.silentIn).toBeNull();
+    expect(f.filesOnHand).toEqual(["2026-08-01"]);
+    expect(f.detailEnded).toEqual([{ house: "Boise Cascade", branches: ["Dallas Branch"], since: "2026-09-01" }]);
+  });
+
+  it("a branch that came back to naming its dealers has not 'ended'", () => {
+    const rows = [
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-08-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 100 }),
+      blindAt("riv", { period: "2026-09-01", quantity: 50 }),
+      row({ branch_id: "riv", branch_name: "Riverside Branch", period: "2026-10-01", dealer_id: "acc-g", dealer_name: "Ganahl", dealer_label: "Ganahl", quantity: 20 }),
+    ];
+    const f = dealerFacts(new Set(["acc-g"]), rows)!;
+    expect(f.detailEnded).toEqual([]);
+    expect(f.filesOnHand).toEqual(["2026-08-01", "2026-10-01"]);
+    expect(f.silentIn).toBeNull();
+  });
+
+  it("the undisclosed key has no profile", () => {
+    expect(dealerFacts(new Set(["undisclosed:boise"]), [blindAt("dal", { period: "2026-09-01", quantity: 5 })])).toBeNull();
+  });
 });

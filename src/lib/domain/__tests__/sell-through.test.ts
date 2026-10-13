@@ -1608,7 +1608,7 @@ describe("branch-level rows (Boise, 2026-10-12)", () => {
     const r = recurrence(rows, "2026-09-01", "2026-08-01")!;
     expect(r.dropped.count).toBe(0);
     expect(r.again.dealers.map((d) => d.name)).toEqual(["Valencia"]);
-    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: null }]);
+    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: null, still: true }]);
     expect(r.oneFileHouses).toEqual([]);
   });
 
@@ -1633,18 +1633,18 @@ describe("branch-level rows (Boise, 2026-10-12)", () => {
     ];
     const c = conversion(rows, "2026-09-01", "2026-08-01", new Set(["acc-v", "acc-g"]))!;
     expect(c.pool).toBe(1);
-    expect(c.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: null }]);
+    expect(c.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: null, still: true }]);
   });
 
   it("noDetailSentence reads one house or several", () => {
     expect(noDetailSentence([])).toBeNull();
-    expect(noDetailSentence([{ name: "Boise Cascade", since: "2026-09-01", branches: null }])).toBe(
+    expect(noDetailSentence([{ name: "Boise Cascade", since: "2026-09-01", branches: null, still: true }])).toBe(
       "Boise Cascade sends no dealer detail since September 2026, so its dealers are not counted",
     );
     expect(
       noDetailSentence([
-        { name: "A", since: "2026-09-01", branches: null },
-        { name: "B", since: "2026-08-01", branches: null },
+        { name: "A", since: "2026-09-01", branches: null, still: true },
+        { name: "B", since: "2026-08-01", branches: null, still: true },
       ]),
     ).toBe("A (since September 2026) and B (since August 2026) send no dealer detail, so their dealers are not counted");
   });
@@ -1686,24 +1686,24 @@ describe("a branch's own sheet (Riverside, 2026-10-13): the blind unit is the br
       blindAt("Detroit", { distributor_name: "Boise Cascade", period: "2026-09-01" }),
     ];
     expect(noDetailHouses(partial, ["2026-09-01"])).toEqual([
-      { name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas", "Detroit"] },
+      { name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas", "Detroit"], still: true },
     ]);
     const whole = [blindAt("Dallas", { distributor_name: "Boise Cascade", period: "2026-09-01" })];
     expect(noDetailHouses(whole, ["2026-09-01"])).toEqual([
-      { name: "Boise Cascade", since: "2026-09-01", branches: null },
+      { name: "Boise Cascade", since: "2026-09-01", branches: null, still: true },
     ]);
   });
 
   it("noDetailSentence names the branches when the house is only partly blind", () => {
     expect(
-      noDetailSentence([{ name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas", "Detroit", "Salt Lake"] }]),
+      noDetailSentence([{ name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas", "Detroit", "Salt Lake"], still: true }]),
     ).toBe(
       "Boise Cascade sends no dealer detail for Dallas, Detroit and Salt Lake since September 2026, so dealers buying there are not counted",
     );
     expect(
       noDetailSentence([
-        { name: "A", since: "2026-09-01", branches: null },
-        { name: "B", since: "2026-08-01", branches: ["X", "Y"] },
+        { name: "A", since: "2026-09-01", branches: null, still: true },
+        { name: "B", since: "2026-08-01", branches: ["X", "Y"], still: true },
       ]),
     ).toBe("A (since September 2026) and B for X and Y (since August 2026) send no dealer detail, so their dealers are not counted");
   });
@@ -1719,7 +1719,7 @@ describe("a branch's own sheet (Riverside, 2026-10-13): the blind unit is the br
     expect(r.again.dealers.map((d) => d.name)).toEqual(["Ganahl"]);
     expect(r.dropped.count).toBe(0);
     expect(r.oneFileHouses).toEqual([]);
-    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas"] }]);
+    expect(r.noDetailHouses).toEqual([{ name: "Boise Cascade", since: "2026-09-01", branches: ["Dallas"], still: true }]);
   });
 
   it("a dealer at both a blind and a detailed branch is unknown", () => {
@@ -1730,8 +1730,31 @@ describe("a branch's own sheet (Riverside, 2026-10-13): the blind unit is the br
       namedAt("Riverside", "Valencia", { period: "2026-09-01", quantity: 5 }),
       blindAt("Dallas", { period: "2026-09-01", quantity: 35 }),
     ];
-    const r = recurrence(rows, "2026-09-01", "2026-08-01");
-    expect(r === null || r.dropped.count === 0).toBe(true);
+    const r = recurrence(rows, "2026-09-01", "2026-08-01")!;
+    expect(r).not.toBeNull();
+    expect(r.again.dealers).toEqual([]);
+    expect(r.dropped.dealers).toEqual([]);
+    expect(r.fresh.dealers.map((d) => d.name)).toEqual(["Valencia"]);
+  });
+
+  it("a branch blind last month and detailed now is named in the past tense", () => {
+    const rows = [
+      blindAt("Riverside", { distributor_name: "Boise Cascade", period: "2026-08-01", quantity: 5 }),
+      namedAt("Riverside", "Ganahl", { distributor_name: "Boise Cascade", period: "2026-09-01", quantity: 5 }),
+      namedAt("Dallas", "Lowe's", { distributor_name: "Boise Cascade", period: "2026-08-01", quantity: 5 }),
+      namedAt("Dallas", "Lowe's", { distributor_name: "Boise Cascade", period: "2026-09-01", quantity: 5 }),
+    ];
+    const houses = noDetailHouses(rows, ["2026-09-01", "2026-08-01"]);
+    expect(houses).toEqual([{ name: "Boise Cascade", since: "2026-08-01", branches: ["Riverside"], still: false }]);
+    expect(noDetailSentence(houses)).toBe(
+      "Boise Cascade sent no dealer detail for Riverside in August 2026, so dealers buying there are not counted",
+    );
+    expect(noDetailSentence([{ name: "Boise Cascade", since: "2026-08-01", branches: null, still: false }])).toBe(
+      "Boise Cascade sent no dealer detail in August 2026, so its dealers are not counted",
+    );
+    const r = recurrence(rows, "2026-09-01", "2026-08-01")!;
+    expect(r.fresh.dealers).toEqual([]);
+    expect(r.again.dealers.map((d) => d.name)).toEqual(["Lowe's"]);
   });
 
   it("conversion leaves a blind branch's dealers out of the pool", () => {

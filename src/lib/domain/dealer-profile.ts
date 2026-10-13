@@ -12,6 +12,7 @@
 // quotes, rollout) is ours, not the files', and is read separately.
 
 import {
+  branchesWithoutDetail,
   dealerDisplayName,
   dealerKey,
   isBranchLevel,
@@ -110,15 +111,50 @@ export function dealerFacts(
   // Dallas — neither a column nor silence — and nothing at all about one
   // that buys at Riverside, which is read as before.
   const myBranches = new Set(mine.map((r) => r.branch_id));
-  const detailed = rows.filter((r) => myBranches.has(r.branch_id) && !isBranchLevel(r));
+  // A month is a file for THIS dealer only when none of its own branches is
+  // blind in it (review, 2026-10-13): with Dallas blind, a yard that buys at
+  // Riverside AND Dallas cannot be called silent on Riverside's word alone.
+  const blindIn = new Map<string, Set<string>>();
+  const blindAt = (period: string) => {
+    let b = blindIn.get(period);
+    if (!b) {
+      b = branchesWithoutDetail(rows, period);
+      blindIn.set(period, b);
+    }
+    return b;
+  };
+  const clean = (period: string) => ![...myBranches].some((b) => blindAt(period).has(b));
+  const detailed = rows.filter(
+    (r) => myBranches.has(r.branch_id) && !isBranchLevel(r) && (r.period_kind === "YTD" || clean(r.period)),
+  );
   const filesOnHand = [...new Set(detailed.map((r) => r.period))].sort();
-  const ended = new Map<string, { branches: Set<string>; since: string }>();
+  // A branch has "ended" only while its NEWEST month on file is blind; one
+  // that came back to naming its dealers is read again, and says nothing.
+  const lastDetailedAt = new Map<string, string>();
+  const blindMonthsAt = new Map<string, string[]>();
+  const branchMeta = new Map<string, { house: string; name: string }>();
   for (const r of rows) {
-    if (!myBranches.has(r.branch_id) || !isBranchLevel(r) || r.period_kind === "YTD") continue;
-    const at = ended.get(r.distributor_name) ?? { branches: new Set<string>(), since: r.period };
-    at.branches.add(r.branch_name);
-    if (r.period < at.since) at.since = r.period;
-    ended.set(r.distributor_name, at);
+    if (!myBranches.has(r.branch_id) || r.period_kind === "YTD") continue;
+    branchMeta.set(r.branch_id, { house: r.distributor_name, name: r.branch_name });
+    if (isBranchLevel(r)) {
+      const list = blindMonthsAt.get(r.branch_id) ?? [];
+      if (!list.includes(r.period)) list.push(r.period);
+      blindMonthsAt.set(r.branch_id, list);
+    } else {
+      const at = lastDetailedAt.get(r.branch_id);
+      if (!at || r.period > at) lastDetailedAt.set(r.branch_id, r.period);
+    }
+  }
+  const ended = new Map<string, { branches: Set<string>; since: string }>();
+  for (const [branchId, months] of blindMonthsAt) {
+    const last = lastDetailedAt.get(branchId) ?? "";
+    const after = months.filter((m) => m > last).sort();
+    if (after.length === 0) continue;
+    const meta = branchMeta.get(branchId)!;
+    const at = ended.get(meta.house) ?? { branches: new Set<string>(), since: after[0] };
+    at.branches.add(meta.name);
+    if (after[0] < at.since) at.since = after[0];
+    ended.set(meta.house, at);
   }
   const detailEnded = [...ended.entries()]
     .map(([house, e]) => ({ house, branches: [...e.branches].sort((a, b) => a.localeCompare(b)), since: e.since }))

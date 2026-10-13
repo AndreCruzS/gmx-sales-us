@@ -655,13 +655,15 @@ describe("a branch's own sheet (Riverside, 2026-10-13)", () => {
       m,
       { branches: BRANCHES, dealers: DEALERS },
     );
-    expect(sheetBranch(one, m)).toBe("riv");
+    expect(sheetBranch(one, m, BRANCHES)).toBe("riv");
+    // A house with ONE branch has no "branch sheet": its only branch's file is the house's file.
+    expect(sheetBranch(one, m, [BRANCHES[0]])).toBeNull();
     const two = buildImport(
       parseSheet("Branch\tCustomer\tQty\nBoise Cascade - Riverside\tGanahl\t10\nBoise Cascade - Modesto\tCorona\t5\n"),
       m,
       { branches: BRANCHES, dealers: DEALERS },
     );
-    expect(sheetBranch(two, m)).toBeNull();
+    expect(sheetBranch(two, m, BRANCHES)).toBeNull();
     const noDealer = mapping({ branch: 0, product: 1, quantity: 2 });
     const blind = buildImport(
       parseSheet("Branch\tItem\tQty\nRiverside\tX\t10\n"),
@@ -669,13 +671,13 @@ describe("a branch's own sheet (Riverside, 2026-10-13)", () => {
       { branches: BRANCHES, dealers: DEALERS },
       { branchOnly: true },
     );
-    expect(sheetBranch(blind, noDealer)).toBeNull();
+    expect(sheetBranch(blind, noDealer, BRANCHES)).toBeNull();
     // A branch we do not hold yet is not a sheet either: the admin adds the yard first.
     const unknown = buildImport(
       parseSheet("Branch\tCustomer\tQty\nPhoenix\tGanahl\t10\n"),
       m,
       { branches: BRANCHES, dealers: DEALERS },
     );
-    expect(sheetBranch(unknown, m)).toBeNull();
+    expect(sheetBranch(unknown, m, BRANCHES)).toBeNull();
   });
 });

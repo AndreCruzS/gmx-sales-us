@@ -228,6 +228,9 @@ export interface NoDetailHouse {
   /** The blind branches' short names; null when every branch the house has
    *  rows for in the periods read is blind — the whole house. */
   branches: string[] | null;
+  /** True while a listed branch is still blind in the newest period read;
+   *  false when it has come back — the sentence then speaks in the past. */
+  still: boolean;
 }
 
 /** The houses with a blind branch in any of `periods`, each with the month
@@ -236,6 +239,8 @@ export function noDetailHouses(rows: readonly SellThroughRow[], periods: readonl
   const blind = new Set<string>();
   for (const p of periods) for (const b of branchesWithoutDetail(rows, p)) blind.add(b);
   if (blind.size === 0) return [];
+  const newest = [...periods].sort().at(-1) ?? "";
+  const blindNow = branchesWithoutDetail(rows, newest);
   const byHouse = new Map<
     string,
     { name: string; branches: Map<string, string>; all: Set<string> }
@@ -271,6 +276,7 @@ export function noDetailHouses(rows: readonly SellThroughRow[], periods: readonl
       name: h.name,
       since,
       branches: whole ? null : [...h.branches.values()].sort((a, b) => a.localeCompare(b)),
+      still: [...h.branches.keys()].some((b) => blindNow.has(b)),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
@@ -282,16 +288,22 @@ const listOf = (xs: readonly string[]): string =>
 /** The one sentence every screen prints for a blind house; null when none. */
 export function noDetailSentence(houses: readonly NoDetailHouse[]): string | null {
   if (houses.length === 0) return null;
+  // "sends … since" while the branch is still blind; "sent … in" once it
+  // has come back — a sentence in the present tense above a month that
+  // names its dealers would be a lie.
+  const when = (h: NoDetailHouse) => (h.still ? `since ${periodLabel(h.since)}` : `in ${periodLabel(h.since)}`);
   if (houses.length === 1) {
     const h = houses[0];
+    const verb = h.still ? "sends" : "sent";
     return h.branches === null
-      ? `${h.name} sends no dealer detail since ${periodLabel(h.since)}, so its dealers are not counted`
-      : `${h.name} sends no dealer detail for ${listOf(h.branches)} since ${periodLabel(h.since)}, so dealers buying there are not counted`;
+      ? `${h.name} ${verb} no dealer detail ${when(h)}, so its dealers are not counted`
+      : `${h.name} ${verb} no dealer detail for ${listOf(h.branches)} ${when(h)}, so dealers buying there are not counted`;
   }
   const list = houses.map(
-    (h) => `${h.name}${h.branches ? ` for ${listOf(h.branches)}` : ""} (since ${periodLabel(h.since)})`,
+    (h) => `${h.name}${h.branches ? ` for ${listOf(h.branches)}` : ""} (${when(h)})`,
   );
-  return `${listOf(list)} send no dealer detail, so their dealers are not counted`;
+  const verb = houses.some((h) => h.still) ? "send" : "sent";
+  return `${listOf(list)} ${verb} no dealer detail, so their dealers are not counted`;
 }
 
 /** True when this entity is a dealer name the upload could not match to one of
@@ -1518,6 +1530,10 @@ export function recurrence(
     if (regionId !== null && r.region_id !== regionId) continue;
     if (!takesPart(r.distributor_id)) continue;
     if (isBranchLevel(r) || blindBranches.has(r.branch_id)) continue;
+    // The earlier file exists the moment a readable row of it is seen —
+    // before the unknown-dealer skip, or a month whose every dealer buys
+    // through a blind branch would read as "no earlier file".
+    if (r.period === previous) sawPrevious = true;
     const key = dealerKey(r);
     if (unknown.has(key)) continue;
     names.set(key, dealerDisplayName(r));
@@ -1525,10 +1541,7 @@ export function recurrence(
     unit = r.unit || unit;
     const qty = Number(r.quantity);
     if (r.period === latest) cur.set(key, (cur.get(key) ?? 0) + qty);
-    else if (r.period === previous) {
-      sawPrevious = true;
-      prev.set(key, (prev.get(key) ?? 0) + qty);
-    }
+    else if (r.period === previous) prev.set(key, (prev.get(key) ?? 0) + qty);
   }
   if (!sawPrevious) return null;
   const houseNames = new Map<string, string>();

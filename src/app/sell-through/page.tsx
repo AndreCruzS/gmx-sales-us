@@ -198,11 +198,16 @@ export default function SellThroughPage() {
       ),
     ]);
     const [us, br, ts, tr] = await Promise.all([
-      supabase
-        .from("sell_through_uploads")
-        .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at, detail, branch_id")
-        .order("period", { ascending: false })
-        .limit(200),
+      // Paged: branch sheets multiply uploads per month, and a sheet past a
+      // cap would be invisible to "existing" and surface only as a raw
+      // duplicate-key error.
+      fetchAllPages<UploadRow>((from, to) =>
+        supabase
+          .from("sell_through_uploads")
+          .select("id, distributor_id, period, period_kind, row_count, unmatched_count, uploaded_at, detail, branch_id")
+          .order("period", { ascending: false })
+          .range(from, to),
+      ),
       supabase
         .from("distributor_branches")
         .select("id, distributor_id, name, external_code")
@@ -219,7 +224,7 @@ export default function SellThroughPage() {
     // file — a contractor buying off a branch is unusual but it is not an error,
     // and the alternative is silently refusing to match one.
     setDealers(accounts.filter((a) => a.account_type !== "DISTRIBUTOR"));
-    setUploads(us.error ? [] : ((us.data as UploadRow[]) ?? []));
+    setUploads(us);
     setBranches(
       br.error
         ? []
@@ -292,7 +297,8 @@ export default function SellThroughPage() {
     [sheet, mapping, mineBranches, dealers, aliases, branchOnly],
   );
 
-  const sheetBranchId = plan ? sheetBranch(plan, mapping) : null;
+  // Only a MONTH can be one branch's sheet; a year file is the house's.
+  const sheetBranchId = plan && kind === "MONTH" ? sheetBranch(plan, mapping, mineBranches) : null;
   const asBranchSheet = branchSheet && sheetBranchId !== null;
   const sheetBranchName =
     (sheetBranchId && mineBranches.find((b) => b.id === sheetBranchId)?.name) || null;
@@ -313,20 +319,15 @@ export default function SellThroughPage() {
   );
   /** Branches that have their own sheet for this month: a whole-house load
    *  leaves them alone — their sheet, with dealers, is the better word. */
-  const sheetsForMonth = useMemo(
-    () =>
-      asBranchSheet
-        ? []
-        : uploads
-            .filter((u) => sameMonth(u) && u.branch_id !== null)
-            .map((u) => ({
-              upload: u,
-              name: branches.find((b) => b.id === u.branch_id)?.name ?? "a branch",
-              inFile: plan ? plan.rows.filter((r) => r.branchId === u.branch_id).length : 0,
-            })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [uploads, distributorId, period, kind, asBranchSheet, branches, plan],
-  );
+  const sheetsForMonth = asBranchSheet
+    ? []
+    : uploads
+        .filter((u) => sameMonth(u) && u.branch_id !== null)
+        .map((u) => ({
+          upload: u,
+          name: branches.find((b) => b.id === u.branch_id)?.name ?? "a branch",
+          inFile: plan ? plan.rows.filter((r) => r.branchId === u.branch_id).length : 0,
+        }));
   const keptBranches = new Set(sheetsForMonth.map((s) => s.upload.branch_id));
   const problem = mappingProblem(mapping, { branchOnly });
   const loadable = plan
@@ -343,38 +344,10 @@ export default function SellThroughPage() {
     try {
       // A month is REPLACED, never added to. Deleting the upload takes its rows
       // with it, which is the whole reason uploads exist as a row of their own —
-      // reloading a corrected file must not double the book.
-      if (asBranchSheet && sheetBranchId) {
-        // A BRANCH'S OWN SHEET replaces that branch inside the month and
-        // nothing else: its previous sheet goes, and the house's file loses
-        // only this branch's rows — the other branches, the file in storage
-        // and the upload itself stay.
-        if (existingSheet) {
-          const { error: delErr } = await supabase
-            .from("sell_through_uploads")
-            .delete()
-            .eq("id", existingSheet.id);
-          if (delErr) throw new Error(delErr.message);
-        }
-        if (existing) {
-          const { error: rowsErr } = await supabase
-            .from("sell_through")
-            .delete()
-            .eq("upload_id", existing.id)
-            .eq("branch_id", sheetBranchId);
-          if (rowsErr) throw new Error(rowsErr.message);
-          const { count, error: cntErr } = await supabase
-            .from("sell_through")
-            .select("id", { count: "exact", head: true })
-            .eq("upload_id", existing.id);
-          if (cntErr) throw new Error(cntErr.message);
-          const { error: updErr } = await supabase
-            .from("sell_through_uploads")
-            .update({ row_count: count ?? 0 })
-            .eq("id", existing.id);
-          if (updErr) throw new Error(updErr.message);
-        }
-      } else if (existing) {
+      // reloading a corrected file must not double the book. A BRANCH SHEET is
+      // replaced inside load_branch_sheet, in one transaction, after the file
+      // is stored (below) — nothing is deleted up here for it.
+      if (!asBranchSheet && existing) {
         const { error: delErr } = await supabase
           .from("sell_through_uploads")
           .delete()
@@ -440,48 +413,80 @@ export default function SellThroughPage() {
         if (putErr) throw new Error(`Could not store the file: ${putErr.message}`);
       }
 
-      const { data: up, error: upErr } = await supabase
-        .from("sell_through_uploads")
-        .insert({
-          org_id: profile.orgId,
-          distributor_id: distributorId,
-          period,
-          period_kind: kind,
-          uploaded_by: profile.membershipId,
-          filename: file?.name ?? null,
-          storage_path: storagePath,
-          row_count: rows.length,
-          // By branch nobody is unnamed — there was nobody to name.
-          unmatched_count: byBranch ? 0 : rows.filter((r) => r.dealerId === null).length,
-          detail: byBranch ? "branch" : "dealer",
-          branch_id: asBranchSheet ? sheetBranchId : null,
-        })
-        .select("id")
-        .single();
-      if (upErr) throw new Error(upErr.message);
-      const uploadId = (up as { id: string }).id;
-
-      // Chunked, because a real month is thousands of lines and one request
-      // carrying all of them is one request that can fail all of them.
-      for (let i = 0; i < rows.length; i += 400) {
-        const { error: rowErr } = await supabase.from("sell_through").insert(
-          rows.slice(i, i + 400).map((r) => ({
+      if (asBranchSheet && sheetBranchId) {
+        // ONE TRANSACTION (review, 2026-10-13): the previous sheet, the house
+        // file's rows for this branch, its row_count, the new upload and its
+        // rows all change together or not at all. The file is already in
+        // storage, so the worst case is an orphan file — never an empty branch.
+        const { error: rpcErr } = await supabase.rpc("load_branch_sheet", {
+          p_upload: {
             org_id: profile.orgId,
-            upload_id: uploadId,
+            distributor_id: distributorId,
+            period,
+            period_kind: kind,
+            branch_id: sheetBranchId,
+            uploaded_by: profile.membershipId,
+            filename: file?.name ?? null,
+            storage_path: storagePath,
+            unmatched_count: rows.filter((r) => r.dealerId === null).length,
+          },
+          p_rows: rows.map((r) => ({
             branch_id: r.branchId,
             dealer_id: r.dealerId,
             dealer_label: r.dealerLabel,
-            period,
             product: r.product,
             quantity: r.quantity,
             ly_quantity: r.lastYear,
-            unit: "LF",
             source_quantity: r.sourceQuantity,
             source_unit: r.sourceUnit,
             value: r.value,
           })),
-        );
-        if (rowErr) throw new Error(rowErr.message);
+        });
+        if (rpcErr) throw new Error(rpcErr.message);
+      } else {
+        const { data: up, error: upErr } = await supabase
+          .from("sell_through_uploads")
+          .insert({
+            org_id: profile.orgId,
+            distributor_id: distributorId,
+            period,
+            period_kind: kind,
+            uploaded_by: profile.membershipId,
+            filename: file?.name ?? null,
+            storage_path: storagePath,
+            row_count: rows.length,
+            // By branch nobody is unnamed — there was nobody to name.
+            unmatched_count: byBranch ? 0 : rows.filter((r) => r.dealerId === null).length,
+            detail: byBranch ? "branch" : "dealer",
+            branch_id: null,
+          })
+          .select("id")
+          .single();
+        if (upErr) throw new Error(upErr.message);
+        const uploadId = (up as { id: string }).id;
+
+        // Chunked, because a real month is thousands of lines and one request
+        // carrying all of them is one request that can fail all of them.
+        for (let i = 0; i < rows.length; i += 400) {
+          const { error: rowErr } = await supabase.from("sell_through").insert(
+            rows.slice(i, i + 400).map((r) => ({
+              org_id: profile.orgId,
+              upload_id: uploadId,
+              branch_id: r.branchId,
+              dealer_id: r.dealerId,
+              dealer_label: r.dealerLabel,
+              period,
+              product: r.product,
+              quantity: r.quantity,
+              ly_quantity: r.lastYear,
+              unit: "LF",
+              source_quantity: r.sourceQuantity,
+              source_unit: r.sourceUnit,
+              value: r.value,
+            })),
+          );
+          if (rowErr) throw new Error(rowErr.message);
+        }
       }
 
       setDone(
