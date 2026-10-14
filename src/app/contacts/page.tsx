@@ -6,6 +6,13 @@
 // for. This list is the other direction: the name first, the company as the
 // subtitle, the e-mail and phone one tap away.
 //
+// READ LIKE THE SALES BOARD (Andre, 2026-10-14). With the distributor
+// directories loaded the list is sixty-five names and climbing, so it gets
+// the board's narrowings — kind, region, house — above it, reads company by
+// company with a head where the block changes, and turns a page at a time.
+// The rules live in lib/domain/contact-list and are tested there; this file
+// only wires them to the screen.
+//
 // Adding and correcting live here too: one form, blank for a new person,
 // prefilled for an edit. Writes ride the outbox like every other capture —
 // create is idempotent by client-minted id (D57), edit is LWW-guarded by the
@@ -17,28 +24,48 @@
 // query to the caller either way, so there is no second set of rules.
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { ChipSelect } from "@/components/chip-select";
 import { PlusIcon, SearchIcon } from "@/components/icons";
+import { Pager, usePaged, usePageSize } from "@/components/pager";
+import {
+  NO_CONTACT_SCOPE,
+  contactGroup,
+  contactKind,
+  contactRegion,
+  countBy,
+  narrowContacts,
+  sortContacts,
+  withGroupHeads,
+  type ContactKind,
+  type ContactListRow,
+  type ContactScope,
+} from "@/lib/domain/contact-list";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedContact } from "@/lib/offline";
+import { fetchAllPages } from "@/lib/supabase/page";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-interface ContactRow extends CachedContact {
-  accountName: string | null;
-  /** The distributor branch this person sits in, when the directory knows. */
-  branchName?: string | null;
-}
+type ContactRow = CachedContact & ContactListRow;
 
 interface AccountOption {
   id: string;
   name: string;
   account_type: string;
   city: string | null;
+  territory_id: string | null;
 }
 
 const COLUMNS =
-  "id, account_id, name, job_title, email, phone, is_champion, updated_at, accounts(name), distributor_branches(name)";
+  "id, account_id, name, job_title, email, phone, is_champion, updated_at, " +
+  "accounts(name, account_type, territory_id), distributor_branches(name, territory_id)";
+
+const KINDS: readonly (readonly [ContactKind, string])[] = [
+  ["all", "All"],
+  ["distributor", "Distributors"],
+  ["dealer", "Dealers"],
+];
 
 // The form's working copy — one shape for both acts. `editing` carries the
 // row being corrected (with its baseVersion); null means a new person.
@@ -70,7 +97,8 @@ export default function ContactsPage() {
     rows: [],
   });
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
-  const [query, setQuery] = useState("");
+  const [regions, setRegions] = useState<{ id: string; name: string }[]>([]);
+  const [scope, setScope] = useState<ContactScope>(NO_CONTACT_SCOPE);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [accountQuery, setAccountQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -80,9 +108,12 @@ export default function ContactsPage() {
   const [localEdits, setLocalEdits] = useState<Map<string, ContactRow>>(
     new Map(),
   );
+  const size = usePageSize(20, 10);
 
   // The cache first — contacts ride the working set with the account names
-  // beside them, so the list stands with no signal at all.
+  // beside them, so the list stands with no signal at all. The cache knows no
+  // branches, so a cached distributor person sits under the house's region
+  // until the network answers.
   useEffect(() => {
     if (!profile) return;
     void (async () => {
@@ -91,12 +122,19 @@ export default function ContactsPage() {
         layer.local.getContacts(),
         layer.local.getAccounts(),
       ]);
-      const nameOf = new Map(accts.map((a) => [a.id, a.name]));
+      const byId = new Map(accts.map((a) => [a.id, a]));
       setCached(
-        contacts.map((c) => ({
-          ...c,
-          accountName: nameOf.get(c.account_id) ?? null,
-        })),
+        contacts.map((c) => {
+          const a = byId.get(c.account_id);
+          return {
+            ...c,
+            accountName: a?.name ?? null,
+            accountType: a?.account_type ?? null,
+            accountTerritoryId: a?.territory_id ?? null,
+            branchName: null,
+            branchTerritoryId: null,
+          };
+        }),
       );
       // The picker starts on the cached working set; the live list below
       // replaces it when the network answers.
@@ -108,6 +146,7 @@ export default function ContactsPage() {
               name: a.name,
               account_type: a.account_type,
               city: a.city,
+              territory_id: a.territory_id,
             })),
       );
     })();
@@ -120,36 +159,51 @@ export default function ContactsPage() {
     void (async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const [ct, ac] = await Promise.all([
-          supabase
-            .from("contacts")
-            .select(COLUMNS)
-            .order("is_champion", { ascending: false })
-            .order("name")
-            .limit(1000),
-          supabase
-            .from("accounts")
-            .select("id, name, account_type, city")
-            .order("name")
-            .limit(500),
+        const [ct, ac, tr] = await Promise.all([
+          fetchAllPages((from, to) =>
+            supabase
+              .from("contacts")
+              .select(COLUMNS)
+              .order("name")
+              .order("id")
+              .range(from, to),
+          ),
+          fetchAllPages((from, to) =>
+            supabase
+              .from("accounts")
+              .select("id, name, account_type, city, territory_id")
+              .order("name")
+              .order("id")
+              .range(from, to),
+          ),
+          supabase.from("territories").select("id, name").order("name"),
         ]);
         if (stale) return;
-        if (!ct.error && ct.data) {
-          setLive({
-            fresh: true,
-            rows: (
-              ct.data as unknown as (CachedContact & {
-                accounts: { name: string } | null;
-                distributor_branches?: { name: string } | null;
-              })[]
-            ).map((c) => ({
-              ...c,
-              accountName: c.accounts?.name ?? null,
-              branchName: c.distributor_branches?.name ?? null,
-            })),
-          });
-        }
-        if (!ac.error && ac.data) setAccounts(ac.data as AccountOption[]);
+        setLive({
+          fresh: true,
+          rows: (
+            ct as unknown as (CachedContact & {
+              accounts: {
+                name: string;
+                account_type: string;
+                territory_id: string | null;
+              } | null;
+              distributor_branches: {
+                name: string;
+                territory_id: string | null;
+              } | null;
+            })[]
+          ).map((c) => ({
+            ...c,
+            accountName: c.accounts?.name ?? null,
+            accountType: c.accounts?.account_type ?? null,
+            accountTerritoryId: c.accounts?.territory_id ?? null,
+            branchName: c.distributor_branches?.name ?? null,
+            branchTerritoryId: c.distributor_branches?.territory_id ?? null,
+          })),
+        });
+        setAccounts(ac as AccountOption[]);
+        if (!tr.error && tr.data) setRegions(tr.data);
       } catch {
         // no signal — the cached working set below is the view
       }
@@ -170,17 +224,59 @@ export default function ContactsPage() {
     return merged;
   }, [live, cached, localEdits]);
 
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.accountName ?? "").toLowerCase().includes(q) ||
-        (c.email ?? "").toLowerCase().includes(q) ||
-        (c.job_title ?? "").toLowerCase().includes(q),
+  const shown = useMemo(
+    () => sortContacts(narrowContacts(rows, scope)),
+    [rows, scope],
+  );
+  const { slice, page, pages, from, setPage } = usePaged(shown, size);
+  const listRef = useRef<HTMLElement | null>(null);
+  // A page turn is tapped at the FOOT of the list; the new page starts at
+  // its head, so the reader is taken there rather than left at the end.
+  function turn(next: number) {
+    setPage(next);
+    listRef.current?.scrollIntoView({ block: "start" });
+  }
+
+  // A new narrowing starts at its own first page, never halfway down the
+  // last one.
+  function narrow(patch: Partial<ContactScope>) {
+    setScope((s) => ({ ...s, ...patch }));
+    setPage(0);
+  }
+
+  // Each chip is counted under the OTHER narrowings, so a choice that would
+  // empty the screen says so before it is made — the dealer lens's rule.
+  const kindCounts = useMemo(() => {
+    const under = narrowContacts(rows, { ...scope, kind: "all" });
+    return countBy(under, (r) => contactKind(r));
+  }, [rows, scope]);
+  const regionOptions = useMemo(() => {
+    const under = narrowContacts(rows, { ...scope, regionId: "" });
+    const n = countBy(under, contactRegion);
+    return regions
+      .filter((t) => (n.get(t.id) ?? 0) > 0 || t.id === scope.regionId)
+      .map((t) => ({ id: t.id, label: t.name, hint: String(n.get(t.id) ?? 0) }));
+  }, [rows, regions, scope]);
+  const houseOptions = useMemo(() => {
+    const under = narrowContacts(rows, { ...scope, houseId: "" });
+    const n = countBy(under, (r) =>
+      contactKind(r) === "distributor" ? r.account_id : null,
     );
-  }, [rows, query]);
+    return accounts
+      .filter(
+        (a) =>
+          a.account_type === "DISTRIBUTOR" &&
+          ((n.get(a.id) ?? 0) > 0 || a.id === scope.houseId),
+      )
+      .map((a) => ({
+        id: a.id,
+        label: displayAccountName(a.name),
+        hint: String(n.get(a.id) ?? 0),
+      }));
+  }, [rows, accounts, scope]);
+
+  const narrowed =
+    scope.kind !== "all" || scope.regionId !== "" || scope.houseId !== "";
 
   const chosenAccount = draft
     ? (accounts.find((a) => a.id === draft.accountId) ?? null)
@@ -287,6 +383,10 @@ export default function ContactsPage() {
             is_champion: draft.champion,
             updated_at: now,
             accountName: chosenAccount?.name ?? null,
+            accountType: chosenAccount?.account_type ?? null,
+            accountTerritoryId: chosenAccount?.territory_id ?? null,
+            branchName: null,
+            branchTerritoryId: null,
           }),
         );
       }
@@ -306,8 +406,8 @@ export default function ContactsPage() {
           <label className="field flex min-w-0 flex-1 items-center gap-2">
             <SearchIcon size={16} style={{ color: "var(--ink-muted)" }} />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={scope.query}
+              onChange={(e) => narrow({ query: e.target.value })}
               placeholder="Find a person, a company, an e-mail"
               className="min-w-0 flex-1 bg-transparent outline-none"
               aria-label="Search contacts"
@@ -444,6 +544,56 @@ export default function ContactsPage() {
         )}
       </section>
 
+      {/* THE NARROWINGS, the sales board's shape: kind as radios, region and
+          house as chips that open a list, each choice counted. The row must
+          not clip — the chip-select's panel is absolute (see chip-select). */}
+      {rows.length > 0 && (
+        <section className="dealer-scope" aria-label="Narrow the directory">
+          {KINDS.map(([key, label]) => {
+            const n =
+              key === "all"
+                ? [...kindCounts.values()].reduce((a, b) => a + b, 0)
+                : (kindCounts.get(key) ?? 0);
+            return (
+              <button
+                key={key}
+                type="button"
+                className="chip"
+                aria-pressed={scope.kind === key}
+                onClick={() => narrow({ kind: key })}
+              >
+                {label} <span className="chip-count">{n}</span>
+              </button>
+            );
+          })}
+          <ChipSelect
+            label="Narrow to one region"
+            allLabel="All regions"
+            value={scope.regionId}
+            options={regionOptions}
+            onChange={(id) => narrow({ regionId: id })}
+          />
+          {scope.kind !== "dealer" && (
+            <ChipSelect
+              label="Narrow to one distributor"
+              allLabel="All distributors"
+              value={scope.houseId}
+              options={houseOptions}
+              onChange={(id) => narrow({ houseId: id })}
+            />
+          )}
+          {narrowed && (
+            <button
+              type="button"
+              className="chip chip-clear"
+              onClick={() => narrow({ kind: "all", regionId: "", houseId: "" })}
+            >
+              Clear
+            </button>
+          )}
+        </section>
+      )}
+
       {shown.length === 0 ? (
         <p className="t-sub px-1">
           {rows.length === 0
@@ -451,14 +601,20 @@ export default function ContactsPage() {
             : "Nobody matches that."}
         </p>
       ) : (
-        <section>
+        <section ref={listRef} style={{ scrollMarginTop: 72 }}>
           <div className="section-head">
             <h2 className="t-section">People</h2>
             <span className="t-meta">{shown.length}</span>
           </div>
           <ul className="list">
-            {shown.map((c) => (
-              <li key={c.id} className="row">
+            {withGroupHeads(slice, contactGroup).map(({ row: c, head }) => (
+              <Fragment key={c.id}>
+              {head && (
+                <li className="acct-step-head contact-head" aria-hidden="true">
+                  {head}
+                </li>
+              )}
+              <li className="row">
                 {/* the row opens the company the person answers for; the
                     e-mail, phone and edit stay their own targets */}
                 <Link
@@ -501,8 +657,20 @@ export default function ContactsPage() {
                   </button>
                 </span>
               </li>
+              </Fragment>
             ))}
           </ul>
+          {pages > 1 && (
+            <Pager
+              page={page}
+              pages={pages}
+              from={from}
+              shown={slice.length}
+              total={shown.length}
+              onPage={turn}
+              className="contact-pager"
+            />
+          )}
         </section>
       )}
     </div>

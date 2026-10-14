@@ -21,9 +21,10 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { Pager, usePaged, usePageSize } from "@/components/pager";
 import { ACCOUNT_TYPES, humanize, type AccountType } from "@/lib/domain/enums";
 import {
   ACCOUNT_EXCEPTION_TYPES,
@@ -32,6 +33,7 @@ import {
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fetchAllPages } from "@/lib/supabase/page";
 
 interface AccountFlag {
   type: string;
@@ -101,20 +103,25 @@ function AccountsView() {
   }, [profile, status.lastPulledAt]);
 
   // The full territory (RLS already scopes it to what this person may see).
+  // Paged, not capped: 136 dealers already sat two thirds of the way to the
+  // old limit of 200, and a list that stops at 200 stops silently.
   useEffect(() => {
     if (!profile) return;
     let stale = false;
     void (async () => {
       try {
-        let q = getSupabaseBrowserClient()
-          .from("accounts")
-          .select(COLUMNS)
-          .order("name")
-          .limit(200);
-        if (owner) q = q.eq("owner_id", owner);
-        if (accountType) q = q.eq("account_type", accountType);
-        const { data, error } = await q;
-        if (!stale && !error && data) {
+        const data = await fetchAllPages((from, to) => {
+          let q = getSupabaseBrowserClient()
+            .from("accounts")
+            .select(COLUMNS)
+            .order("name")
+            .order("id")
+            .range(from, to);
+          if (owner) q = q.eq("owner_id", owner);
+          if (accountType) q = q.eq("account_type", accountType);
+          return q;
+        });
+        if (!stale) {
           setTerritory({ fresh: true, rows: data as CachedAccount[] });
         }
       } catch {
@@ -414,58 +421,110 @@ function AccountsView() {
         ) : (
           <div className="acct-steps">
             {sections.map((sec) => (
-              <div key={sec.key} className="acct-step" data-step={sec.key}>
-                <p className="acct-step-head">
-                  {sec.title}
-                  <span className="chip-count">{sec.rows.length}</span>
-                </p>
-              <ul className="list">
-                {sec.rows.map((a) => {
-                  const fs = flags.get(a.id) ?? [];
-                  return (
-                    <li key={a.id}>
-                      <Link href={`/accounts/${a.id}`} className="row">
-                        {/* initials differentiate rows the way one repeated glyph
-                            can't — the lead slot has to earn its 56px */}
-                        <span className="row-lead">
-                          {displayAccountName(a.name)
-                            .split(" ")
-                            .slice(0, 2)
-                            .map((w) => w[0])
-                            .join("")
-                            .toUpperCase()}
-                        </span>
-                        <span className="row-body">
-                          <span className="t-title block truncate">
-                            {displayAccountName(a.name)}
-                          </span>
-                          <span className="t-sub block truncate">
-                            {/* what it is and where first — a yard names its
-                                banner — then whatever needs attention */}
-                            {[
-                              sec.key === "OTHER" ? humanize(a.account_type) : null,
-                              a.city,
-                              parentName(a),
-                              ...fs.map((f) => exceptionShort(f.type)),
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || humanize(a.account_type)}
-                          </span>
-                        </span>
-                        <ChevronRightIcon
-                          size={14}
-                          style={{ color: "var(--ink-muted)" }}
-                        />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-              </div>
+              <AccountStep
+                key={sec.key}
+                step={sec}
+                flags={flags}
+                parentName={parentName}
+                resetKey={`${query}|${filter}|${owner ?? ""}|${accountType ?? ""}`}
+              />
             ))}
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// ONE STEP, A PAGE AT A TIME (Andre, 2026-10-14: "the accounts page ... only
+// needs pagination"). Each step keeps its own pager so the desk's two columns
+// — houses beside dealers — stay two columns; one pager over both would put a
+// dealer under the Distributors head halfway down a page. The pager is the
+// app's one pager, on the floor of the step.
+function AccountStep({
+  step,
+  flags,
+  parentName,
+  resetKey,
+}: {
+  step: { key: string; title: string; rows: CachedAccount[] };
+  flags: Map<string, AccountFlag[]>;
+  parentName: (a: CachedAccount) => string | null;
+  /** Changes whenever the list under the pager is a different list — a new
+   *  term, another chip — so the reader starts at its first page. */
+  resetKey: string;
+}) {
+  const size = usePageSize(20, 10);
+  const { slice, page, pages, from, setPage } = usePaged(step.rows, size);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    setPage(0);
+  }, [resetKey, setPage]);
+  // The arrows sit at the step's foot; the next page starts at its head.
+  function turn(next: number) {
+    setPage(next);
+    ref.current?.scrollIntoView({ block: "start" });
+  }
+
+  return (
+    <div className="acct-step" data-step={step.key} ref={ref} style={{ scrollMarginTop: 72 }}>
+      <p className="acct-step-head">
+        {step.title}
+        <span className="chip-count">{step.rows.length}</span>
+      </p>
+      <ul className="list">
+        {slice.map((a) => {
+          const fs = flags.get(a.id) ?? [];
+          return (
+            <li key={a.id}>
+              <Link href={`/accounts/${a.id}`} className="row">
+                {/* initials differentiate rows the way one repeated glyph
+                    can't — the lead slot has to earn its 56px */}
+                <span className="row-lead">
+                  {displayAccountName(a.name)
+                    .split(" ")
+                    .slice(0, 2)
+                    .map((w) => w[0])
+                    .join("")
+                    .toUpperCase()}
+                </span>
+                <span className="row-body">
+                  <span className="t-title block truncate">
+                    {displayAccountName(a.name)}
+                  </span>
+                  <span className="t-sub block truncate">
+                    {/* what it is and where first — a yard names its
+                        banner — then whatever needs attention */}
+                    {[
+                      step.key === "OTHER" ? humanize(a.account_type) : null,
+                      a.city,
+                      parentName(a),
+                      ...fs.map((f) => exceptionShort(f.type)),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || humanize(a.account_type)}
+                  </span>
+                </span>
+                <ChevronRightIcon
+                  size={14}
+                  style={{ color: "var(--ink-muted)" }}
+                />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {pages > 1 && (
+        <Pager
+          page={page}
+          pages={pages}
+          from={from}
+          shown={slice.length}
+          total={step.rows.length}
+          onPage={turn}
+          className="acct-pager"
+        />
+      )}
     </div>
   );
 }

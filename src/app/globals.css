@@ -5752,3 +5752,21 @@ input[type="datetime-local"] {
   background: var(--fill-ink);
   color: var(--on-ink);
 }
+
+/* ── The directory, read in blocks (Andre, 2026-10-14) ──────────────────────
+   A head where the company or branch changes, in the account steps' voice; a
+   pager on the floor of the list with a rule above it, like the book's. */
+.contact-head {
+  margin-top: 10px;
+}
+.contact-head:first-child {
+  margin-top: 0;
+}
+.pager.contact-pager {
+  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+}
+.pager.acct-pager {
+  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+}
