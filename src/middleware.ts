@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { gate } from "@/lib/supabase/gate";
 
 // Session refresh + auth gate. The offline SYNC path never passes through
-// here (D3) — this guards page navigation only.
+// here (D3) — this guards page navigation only. Who may pass is decided in
+// lib/supabase/gate, including the Google return (see there).
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -31,15 +33,29 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLogin = request.nextUrl.pathname.startsWith("/login");
-  if (!user && !isLogin) {
+  const code = request.nextUrl.searchParams.get("code");
+  const decision = gate({
+    pathname: request.nextUrl.pathname,
+    signedIn: user !== null,
+    code,
+  });
+
+  if (decision.kind === "exchange") {
+    // Google's return: mint the session from the code (the PKCE verifier is a
+    // cookie the browser client set before leaving), then send the person on
+    // without the code. The session cookies were written onto `response` by
+    // setAll above, so they have to ride on the redirect as well.
+    const { error } = await supabase.auth.exchangeCodeForSession(code!);
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    url.searchParams.delete("code");
+    if (error || url.pathname.startsWith("/login")) url.pathname = error ? "/login" : "/";
+    const redirect = NextResponse.redirect(url);
+    for (const c of response.cookies.getAll()) redirect.cookies.set(c);
+    return redirect;
   }
-  if (user && isLogin) {
+  if (decision.kind === "redirect") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = decision.pathname;
     return NextResponse.redirect(url);
   }
 
