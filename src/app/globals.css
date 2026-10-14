@@ -193,7 +193,12 @@ body {
   line-height: 16px;
   color: var(--ink-secondary);
 }
-/* The eyebrow/meta role: mono, so counts and dates sit apart from prose. */
+/* The eyebrow/meta role, in the FIGURES face (Inter, tabular), so counts and
+   dates sit apart from prose. THE TERMINAL MONO IS NOT AN EYEBROW FACE (Andre,
+   2026-08-28, and again 2026-10-14 when three heads were still wearing it):
+   every small uppercase head — section steps, the product-line title, the
+   dealer module's numbered eyebrows — takes .sales-eyebrow's face. Real mono
+   survives only where the content is a raw pasted sheet (.paste-box). */
 .t-meta {
   font-family: var(--font-fig);
   font-variant-numeric: tabular-nums;
@@ -1822,9 +1827,11 @@ body {
   }
 }
 .prodline-title {
-  font-family: var(--font-mono);
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
@@ -2567,9 +2574,11 @@ body {
   align-items: center;
   gap: 8px;
   margin: 0 4px 6px;
-  font-family: var(--font-mono);
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
@@ -5253,9 +5262,11 @@ input[type="datetime-local"] {
 .dmod-eyebrow,
 .dmod-eyebrow-row {
   margin: 4px 0 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
