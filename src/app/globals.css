@@ -5781,3 +5781,16 @@ input[type="datetime-local"] {
   border-top: 1px solid var(--rule);
   margin-top: 8px;
 }
+
+/* The directory walk: chip-selects chained with a quiet "›" (Andre,
+   2026-10-14: one organised line, not a sentence, a trail and a row). */
+.walk-sep {
+  color: var(--ink-muted);
+  opacity: 0.55;
+  font-size: var(--text-md);
+  line-height: 1;
+  margin: 0 -2px;
+}
+.walk .scope-divider {
+  display: block;
+}

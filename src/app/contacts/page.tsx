@@ -9,12 +9,17 @@
 // READ LIKE THE SALES BOARD (Andre, 2026-10-14). With the distributor
 // directories loaded the list is sixty-five names and climbing, so it gets
 // the board's WALK above it — Everyone › Distributors › Boise Cascade ›
-// Riverside, each step collapsing into a crumb while the next stage's
-// choices become chips, region as the one sideways narrowing — reads company
-// by company with a head where the block changes, and turns a page at a
-// time. The rules live in lib/domain/contact-list and are tested there; this
-// file only wires them to the screen, in the Sales board's own trail, back
-// pill and context sentence.
+// Riverside — reads company by company with a head where the block changes,
+// and turns a page at a time. The rules live in lib/domain/contact-list and
+// are tested there; this file only wires them to the screen.
+//
+// THE WALK IS ONE LINE OF CHIPS (Andre, same day, second cut: "preciso de
+// algo mais organizado visualmente"). The first cut drew it as the Sales
+// board's furniture — a sentence, a back pill, a trail, then the chips —
+// four rows of different sizes. Now each level of the path is ONE chip-select,
+// chained with "›": a chip in ink while it narrows, the next level in the
+// quiet fill until it is chosen. Region sits after a divider, the way the
+// product line does on Sales. Choosing a level above clears the ones below.
 //
 // Adding and correcting live here too: one form, blank for a new person,
 // prefilled for an edit. Writes ride the outbox like every other capture —
@@ -36,7 +41,6 @@ import {
   NO_CONTACT_SCOPE,
   contactGroup,
   contactRegion,
-  contextSentence,
   countBy,
   narrowContacts,
   nextStage,
@@ -45,6 +49,7 @@ import {
   type ContactListRow,
   type ContactScope,
   type ContactStep,
+  type Stage,
 } from "@/lib/domain/contact-list";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedContact } from "@/lib/offline";
@@ -52,6 +57,21 @@ import { fetchAllPages } from "@/lib/supabase/page";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ContactRow = CachedContact & ContactListRow;
+
+// What each level of the walk is called while nothing is chosen on it, and
+// for the screen reader.
+const WALK_ALL: Record<ContactStep["dim"], string> = {
+  kind: "Everyone",
+  house: "All distributors",
+  branch: "All branches",
+  dealer: "All dealers",
+};
+const WALK_LABEL: Record<ContactStep["dim"], string> = {
+  kind: "Narrow to distributors or dealers",
+  house: "Narrow to one distributor",
+  branch: "Narrow to one branch",
+  dealer: "Narrow to one dealer",
+};
 
 interface AccountOption {
   id: string;
@@ -242,13 +262,28 @@ export default function ContactsPage() {
     setPage(0);
   }
 
-  // The next stage's chips, counted under the region and the search, so a
-  // choice that would empty the screen says so before it is made — the
-  // dealer lens's rule. Region is counted under the path for the same reason.
-  const stage = useMemo(
-    () => nextStage(narrowContacts(rows, { ...scope, path: [] }), scope.path),
-    [rows, scope],
-  );
+  // One chip per level of the path, plus the level below it: each chip's
+  // options are the stage under the levels ABOVE it, counted under the
+  // region and the search, so a choice that would empty the screen says so
+  // before it is made — the dealer lens's rule. Region is counted under the
+  // path for the same reason.
+  const levels = useMemo(() => {
+    const under = narrowContacts(rows, { ...scope, path: [] });
+    const out: { stage: Stage; picked: ContactStep | null }[] = [];
+    for (let i = 0; i <= scope.path.length; i++) {
+      const stage = nextStage(under, scope.path.slice(0, i));
+      if (!stage) break;
+      const picked = scope.path[i] ?? null;
+      // The chosen step stays listed even when the region or the search has
+      // emptied it — a chip that reads "All branches" while still narrowing
+      // to Houston would be a lie.
+      if (picked && !stage.options.some((o) => o.key === picked.key)) {
+        stage.options.push({ key: picked.key, name: picked.name, count: 0 });
+      }
+      out.push({ stage, picked });
+    }
+    return out;
+  }, [rows, scope]);
   const regionOptions = useMemo(() => {
     const under = narrowContacts(rows, { ...scope, regionId: "" });
     const n = countBy(under, contactRegion);
@@ -257,17 +292,12 @@ export default function ContactsPage() {
       .map((t) => ({ id: t.id, label: t.name, hint: String(n.get(t.id) ?? 0) }));
   }, [rows, regions, scope]);
 
-  const path = scope.path;
-  // The way out names where it goes: "‹ Distributors" rather than "‹ Back".
-  const backLabel =
-    path.length === 0 ? null : path.length === 1 ? "Everyone" : path[path.length - 2].name;
-  function goTo(next: readonly ContactStep[]) {
-    narrow({ path: next });
+  // Choosing at level i keeps the levels above and drops the ones below.
+  function choose(level: number, stage: Stage, key: string) {
+    const kept = scope.path.slice(0, level);
+    const o = stage.options.find((x) => x.key === key);
+    narrow({ path: o ? [...kept, { dim: stage.dim, key, name: o.name }] : kept });
   }
-  function stepInto(dim: ContactStep["dim"], key: string, name: string) {
-    goTo([...path, { dim, key, name }]);
-  }
-  const sentence = contextSentence(path, shown.length);
 
   const chosenAccount = draft
     ? (accounts.find((a) => a.id === draft.accountId) ?? null)
@@ -535,78 +565,39 @@ export default function ContactsPage() {
         )}
       </section>
 
-      {/* THE WALK, in the Sales board's own furniture. Where you are as a
-          sentence; the trail with a solid way out, only once there is
-          somewhere to come back FROM; then the next stage's chips with the
-          region beside them. The row must not clip — the chip-select's panel
-          is absolute (see chip-select). */}
+      {/* THE WALK, one line of chips chained with "›" (see the file head).
+          The row must not clip — the chip-select's panel is absolute (see
+          chip-select). */}
       {rows.length > 0 && (
-        <section aria-label="Narrow the directory">
-          <p className="sales-context" aria-live="polite">
-            {sentence.map((part, i) => (
-              <span key={i} className={i === 0 ? "sales-context-what" : undefined}>
-                {i > 0 ? " · " : ""}
-                {part}
-              </span>
-            ))}
-          </p>
-
-          {path.length > 0 && (
-            <nav className="sales-crumbs" aria-label="Where you are">
-              <button
-                type="button"
-                className="sales-back"
-                onClick={() => goTo(path.slice(0, -1))}
-              >
-                <span className="sales-back-arrow" aria-hidden="true">
-                  &#8249;
+        <section className="dealer-scope walk" aria-label="Narrow the directory">
+          {levels.map(({ stage, picked }, i) => (
+            <Fragment key={stage.dim}>
+              {i > 0 && (
+                <span className="walk-sep" aria-hidden="true">
+                  ›
                 </span>
-                {backLabel}
-              </button>
-              <span className="sales-trail">
-                <button type="button" onClick={() => goTo([])}>
-                  Everyone
-                </button>
-                {path.map((st, i) => (
-                  <button
-                    key={`${st.dim}-${st.key}`}
-                    type="button"
-                    onClick={() => goTo(path.slice(0, i + 1))}
-                    aria-current={i === path.length - 1 ? "step" : undefined}
-                  >
-                    {st.name}
-                  </button>
-                ))}
-              </span>
-            </nav>
-          )}
-
-          <div className="dealer-scope">
-            {path.length === 0 && (
-              <button type="button" className="chip" aria-pressed>
-                Everyone <span className="chip-count">{shown.length}</span>
-              </button>
-            )}
-            {stage?.options.map((o) => (
-              <button
-                key={o.key}
-                type="button"
-                className="chip"
-                aria-pressed={false}
-                disabled={o.count === 0}
-                onClick={() => stepInto(stage.dim, o.key, o.name)}
-              >
-                {o.name} <span className="chip-count">{o.count}</span>
-              </button>
-            ))}
-            <ChipSelect
-              label="Narrow to one region"
-              allLabel="All regions"
-              value={scope.regionId}
-              options={regionOptions}
-              onChange={(id) => narrow({ regionId: id })}
-            />
-          </div>
+              )}
+              <ChipSelect
+                label={WALK_LABEL[stage.dim]}
+                allLabel={WALK_ALL[stage.dim]}
+                value={picked?.key ?? ""}
+                options={stage.options.map((o) => ({
+                  id: o.key,
+                  label: o.name,
+                  hint: String(o.count),
+                }))}
+                onChange={(id) => choose(i, stage, id)}
+              />
+            </Fragment>
+          ))}
+          <span className="scope-divider" aria-hidden="true" />
+          <ChipSelect
+            label="Narrow to one region"
+            allLabel="All regions"
+            value={scope.regionId}
+            options={regionOptions}
+            onChange={(id) => narrow({ regionId: id })}
+          />
         </section>
       )}
 

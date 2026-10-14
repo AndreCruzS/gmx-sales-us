@@ -645,56 +645,34 @@ export default function RepsPage() {
           (Andre, 2026-09-04), and this board is built to its shape (Andre,
           2026-10-06: "primeiro a visão geral … e depois podemos filtrar").
           Everyone first, then the names; whatever is pressed scopes every
-          tile and every list beneath it.
-
-          AND IT COLLAPSES INTO A CRUMB ONCE A NAME IS PICKED (Andre,
-          2026-10-14: "a sort of breadcrumb ... with first stage as collapsed
-          ... so the filter makes sense"). The roster is the first stage of a
-          walk; with a rep chosen, the stage is behind you, so it reads as
-          the Sales board's trail — a solid way out named after where it
-          goes, then "Everyone › Deonn Deford" — rather than a row of names
-          with one of them pressed. */}
+          tile and every list beneath it. */}
       <section className="adapt sales-filters" data-desk="filters">
-        {at === null ? (
-          <div className="chip-row mb-3" role="group" aria-label="Whose work">
-            <button type="button" className="chip" aria-pressed>
-              Everyone
+        <div className="chip-row mb-3" role="group" aria-label="Whose work">
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={at === null}
+            onClick={() => setPick(null)}
+          >
+            Everyone
+          </button>
+          {reps.map((r) => (
+            <button
+              key={r.membership_id}
+              type="button"
+              className="chip"
+              aria-pressed={r.membership_id === at}
+              onClick={() => setPick(r.membership_id)}
+            >
+              {r.rep_name}
+              {(plate.get(r.membership_id) ?? 0) > 0 && (
+                <span className="chip-count">
+                  {QTY.format(plate.get(r.membership_id) ?? 0)}
+                </span>
+              )}
             </button>
-            {reps.map((r) => (
-              <button
-                key={r.membership_id}
-                type="button"
-                className="chip"
-                aria-pressed={false}
-                onClick={() => setPick(r.membership_id)}
-              >
-                {r.rep_name}
-                {(plate.get(r.membership_id) ?? 0) > 0 && (
-                  <span className="chip-count">
-                    {QTY.format(plate.get(r.membership_id) ?? 0)}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <nav className="sales-crumbs" aria-label="Whose work">
-            <button type="button" className="sales-back" onClick={() => setPick(null)}>
-              <span className="sales-back-arrow" aria-hidden="true">
-                &#8249;
-              </span>
-              Everyone
-            </button>
-            <span className="sales-trail">
-              <button type="button" onClick={() => setPick(null)}>
-                Everyone
-              </button>
-              <button type="button" aria-current="step">
-                {chosen?.rep_name ?? "One rep"}
-              </button>
-            </span>
-          </nav>
-        )}
+          ))}
+        </div>
       </section>
 
       {/* THE THREE FIGURES, the ones the Rep lens used to show on Sales and
