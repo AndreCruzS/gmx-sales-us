@@ -3,11 +3,14 @@ import {
   contactGroup,
   contactKind,
   contactRegion,
+  contextSentence,
   countBy,
   narrowContacts,
+  nextStage,
   sortContacts,
   withGroupHeads,
   type ContactListRow,
+  type ContactStep,
 } from "@/lib/domain/contact-list";
 
 const REG = { socal: "t-socal", texas: "t-texas", se: "t-se" };
@@ -62,16 +65,27 @@ describe("where a contact sits (Andre, 2026-10-14: the contacts page gets the sa
   });
 });
 
+const DIST: ContactStep = { dim: "kind", key: "distributor", name: "Distributors" };
+const DEAL: ContactStep = { dim: "kind", key: "dealer", name: "Dealers" };
+const BOISE: ContactStep = { dim: "house", key: "acc-boise", name: "Boise Cascade" };
+const RIV: ContactStep = { dim: "branch", key: "Riverside Branch", name: "Riverside Branch" };
+
 describe("narrowing the directory", () => {
-  const all = { kind: "all" as const, regionId: "", houseId: "", query: "" };
+  const all = { path: [] as ContactStep[], regionId: "", query: "" };
 
   it("no narrowing hands back the same array", () => {
     expect(narrowContacts(ROWS, all)).toBe(ROWS);
   });
 
   it("by kind", () => {
-    expect(byId(narrowContacts(ROWS, { ...all, kind: "distributor" }))).toEqual(["c1", "c2", "c3", "c4", "c5"]);
-    expect(byId(narrowContacts(ROWS, { ...all, kind: "dealer" }))).toEqual(["c6"]);
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DIST] }))).toEqual(["c1", "c2", "c3", "c4", "c5"]);
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DEAL] }))).toEqual(["c6"]);
+  });
+
+  it("down the walk: house, then branch", () => {
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DIST, BOISE] }))).toEqual(["c1", "c2", "c3", "c4"]);
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DIST, BOISE, RIV] }))).toEqual(["c1", "c2"]);
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DEAL, { dim: "dealer", key: "acc-ganahl", name: "Ganahl" }] }))).toEqual(["c6"]);
   });
 
   it("by region, which keeps both the branch people and the dealer people of that region", () => {
@@ -85,7 +99,7 @@ describe("narrowing the directory", () => {
   });
 
   it("by house", () => {
-    expect(byId(narrowContacts(ROWS, { ...all, houseId: "acc-rugby" }))).toEqual(["c5"]);
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DIST, { dim: "house", key: "acc-rugby", name: "Rugby" }] }))).toEqual(["c5"]);
   });
 
   it("the search reads the name, the company, the branch, the e-mail and the title", () => {
@@ -96,7 +110,60 @@ describe("narrowing the directory", () => {
   });
 
   it("the narrowings stack", () => {
-    expect(byId(narrowContacts(ROWS, { ...all, kind: "distributor", regionId: REG.socal, query: "amy" }))).toEqual(["c2"]);
+    expect(byId(narrowContacts(ROWS, { ...all, path: [DIST], regionId: REG.socal, query: "amy" }))).toEqual(["c2"]);
+  });
+});
+
+describe("the next stage of the walk (Andre, 2026-10-14: a breadcrumb, the first stage collapsed)", () => {
+  it("at the top, the kinds with their counts", () => {
+    expect(nextStage(ROWS, [])).toEqual({
+      dim: "kind",
+      options: [
+        { key: "distributor", name: "Distributors", count: 5 },
+        { key: "dealer", name: "Dealers", count: 1 },
+      ],
+    });
+  });
+
+  it("under Distributors, the houses that have people, most people first", () => {
+    expect(nextStage(ROWS, [DIST])).toEqual({
+      dim: "house",
+      options: [
+        { key: "acc-boise", name: "Boise Cascade", count: 4 },
+        { key: "acc-rugby", name: "Rugby Architectural Building Products", count: 1 },
+      ],
+    });
+  });
+
+  it("under a house, its branches by name; people with no branch are not a chip", () => {
+    expect(nextStage(ROWS, [DIST, BOISE])).toEqual({
+      dim: "branch",
+      options: [
+        { key: "Dallas Branch", name: "Dallas Branch", count: 1 },
+        { key: "Nashville Branch", name: "Nashville Branch", count: 1 },
+        { key: "Riverside Branch", name: "Riverside Branch", count: 2 },
+      ],
+    });
+  });
+
+  it("a house with no branches has no further stage, and neither has a branch", () => {
+    expect(nextStage(ROWS, [DIST, { dim: "house", key: "acc-rugby", name: "Rugby" }])).toBeNull();
+    expect(nextStage(ROWS, [DIST, BOISE, RIV])).toBeNull();
+  });
+
+  it("under Dealers, the dealers with people, in display names", () => {
+    expect(nextStage(ROWS, [DEAL])).toEqual({
+      dim: "dealer",
+      options: [{ key: "acc-ganahl", name: "Ganahl Lumber Anaheim", count: 1 }],
+    });
+    expect(nextStage(ROWS, [DEAL, { dim: "dealer", key: "acc-ganahl", name: "Ganahl" }])).toBeNull();
+  });
+
+  it("the sentence names where you are and how many", () => {
+    expect(contextSentence([], 65)).toEqual(["Everyone", "65 people"]);
+    expect(contextSentence([DIST], 57)).toEqual(["Distributors", "57 people"]);
+    expect(contextSentence([DIST, BOISE, RIV], 1)).toEqual(["Riverside Branch", "Boise Cascade", "1 person"]);
+    expect(contextSentence([DEAL, { dim: "dealer", key: "x", name: "Big Creek Lumber" }], 0)).toEqual(["Big Creek Lumber", "nobody"]);
   });
 });
 

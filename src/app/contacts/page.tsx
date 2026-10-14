@@ -8,10 +8,13 @@
 //
 // READ LIKE THE SALES BOARD (Andre, 2026-10-14). With the distributor
 // directories loaded the list is sixty-five names and climbing, so it gets
-// the board's narrowings — kind, region, house — above it, reads company by
-// company with a head where the block changes, and turns a page at a time.
-// The rules live in lib/domain/contact-list and are tested there; this file
-// only wires them to the screen.
+// the board's WALK above it — Everyone › Distributors › Boise Cascade ›
+// Riverside, each step collapsing into a crumb while the next stage's
+// choices become chips, region as the one sideways narrowing — reads company
+// by company with a head where the block changes, and turns a page at a
+// time. The rules live in lib/domain/contact-list and are tested there; this
+// file only wires them to the screen, in the Sales board's own trail, back
+// pill and context sentence.
 //
 // Adding and correcting live here too: one form, blank for a new person,
 // prefilled for an edit. Writes ride the outbox like every other capture —
@@ -32,15 +35,16 @@ import { Pager, usePaged, usePageSize } from "@/components/pager";
 import {
   NO_CONTACT_SCOPE,
   contactGroup,
-  contactKind,
   contactRegion,
+  contextSentence,
   countBy,
   narrowContacts,
+  nextStage,
   sortContacts,
   withGroupHeads,
-  type ContactKind,
   type ContactListRow,
   type ContactScope,
+  type ContactStep,
 } from "@/lib/domain/contact-list";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedContact } from "@/lib/offline";
@@ -60,12 +64,6 @@ interface AccountOption {
 const COLUMNS =
   "id, account_id, name, job_title, email, phone, is_champion, updated_at, " +
   "accounts(name, account_type, territory_id), distributor_branches(name, territory_id)";
-
-const KINDS: readonly (readonly [ContactKind, string])[] = [
-  ["all", "All"],
-  ["distributor", "Distributors"],
-  ["dealer", "Dealers"],
-];
 
 // The form's working copy — one shape for both acts. `editing` carries the
 // row being corrected (with its baseVersion); null means a new person.
@@ -244,12 +242,13 @@ export default function ContactsPage() {
     setPage(0);
   }
 
-  // Each chip is counted under the OTHER narrowings, so a choice that would
-  // empty the screen says so before it is made — the dealer lens's rule.
-  const kindCounts = useMemo(() => {
-    const under = narrowContacts(rows, { ...scope, kind: "all" });
-    return countBy(under, (r) => contactKind(r));
-  }, [rows, scope]);
+  // The next stage's chips, counted under the region and the search, so a
+  // choice that would empty the screen says so before it is made — the
+  // dealer lens's rule. Region is counted under the path for the same reason.
+  const stage = useMemo(
+    () => nextStage(narrowContacts(rows, { ...scope, path: [] }), scope.path),
+    [rows, scope],
+  );
   const regionOptions = useMemo(() => {
     const under = narrowContacts(rows, { ...scope, regionId: "" });
     const n = countBy(under, contactRegion);
@@ -257,26 +256,18 @@ export default function ContactsPage() {
       .filter((t) => (n.get(t.id) ?? 0) > 0 || t.id === scope.regionId)
       .map((t) => ({ id: t.id, label: t.name, hint: String(n.get(t.id) ?? 0) }));
   }, [rows, regions, scope]);
-  const houseOptions = useMemo(() => {
-    const under = narrowContacts(rows, { ...scope, houseId: "" });
-    const n = countBy(under, (r) =>
-      contactKind(r) === "distributor" ? r.account_id : null,
-    );
-    return accounts
-      .filter(
-        (a) =>
-          a.account_type === "DISTRIBUTOR" &&
-          ((n.get(a.id) ?? 0) > 0 || a.id === scope.houseId),
-      )
-      .map((a) => ({
-        id: a.id,
-        label: displayAccountName(a.name),
-        hint: String(n.get(a.id) ?? 0),
-      }));
-  }, [rows, accounts, scope]);
 
-  const narrowed =
-    scope.kind !== "all" || scope.regionId !== "" || scope.houseId !== "";
+  const path = scope.path;
+  // The way out names where it goes: "‹ Distributors" rather than "‹ Back".
+  const backLabel =
+    path.length === 0 ? null : path.length === 1 ? "Everyone" : path[path.length - 2].name;
+  function goTo(next: readonly ContactStep[]) {
+    narrow({ path: next });
+  }
+  function stepInto(dim: ContactStep["dim"], key: string, name: string) {
+    goTo([...path, { dim, key, name }]);
+  }
+  const sentence = contextSentence(path, shown.length);
 
   const chosenAccount = draft
     ? (accounts.find((a) => a.id === draft.accountId) ?? null)
@@ -544,53 +535,78 @@ export default function ContactsPage() {
         )}
       </section>
 
-      {/* THE NARROWINGS, the sales board's shape: kind as radios, region and
-          house as chips that open a list, each choice counted. The row must
-          not clip — the chip-select's panel is absolute (see chip-select). */}
+      {/* THE WALK, in the Sales board's own furniture. Where you are as a
+          sentence; the trail with a solid way out, only once there is
+          somewhere to come back FROM; then the next stage's chips with the
+          region beside them. The row must not clip — the chip-select's panel
+          is absolute (see chip-select). */}
       {rows.length > 0 && (
-        <section className="dealer-scope" aria-label="Narrow the directory">
-          {KINDS.map(([key, label]) => {
-            const n =
-              key === "all"
-                ? [...kindCounts.values()].reduce((a, b) => a + b, 0)
-                : (kindCounts.get(key) ?? 0);
-            return (
+        <section aria-label="Narrow the directory">
+          <p className="sales-context" aria-live="polite">
+            {sentence.map((part, i) => (
+              <span key={i} className={i === 0 ? "sales-context-what" : undefined}>
+                {i > 0 ? " · " : ""}
+                {part}
+              </span>
+            ))}
+          </p>
+
+          {path.length > 0 && (
+            <nav className="sales-crumbs" aria-label="Where you are">
               <button
-                key={key}
+                type="button"
+                className="sales-back"
+                onClick={() => goTo(path.slice(0, -1))}
+              >
+                <span className="sales-back-arrow" aria-hidden="true">
+                  &#8249;
+                </span>
+                {backLabel}
+              </button>
+              <span className="sales-trail">
+                <button type="button" onClick={() => goTo([])}>
+                  Everyone
+                </button>
+                {path.map((st, i) => (
+                  <button
+                    key={`${st.dim}-${st.key}`}
+                    type="button"
+                    onClick={() => goTo(path.slice(0, i + 1))}
+                    aria-current={i === path.length - 1 ? "step" : undefined}
+                  >
+                    {st.name}
+                  </button>
+                ))}
+              </span>
+            </nav>
+          )}
+
+          <div className="dealer-scope">
+            {path.length === 0 && (
+              <button type="button" className="chip" aria-pressed>
+                Everyone <span className="chip-count">{shown.length}</span>
+              </button>
+            )}
+            {stage?.options.map((o) => (
+              <button
+                key={o.key}
                 type="button"
                 className="chip"
-                aria-pressed={scope.kind === key}
-                onClick={() => narrow({ kind: key })}
+                aria-pressed={false}
+                disabled={o.count === 0}
+                onClick={() => stepInto(stage.dim, o.key, o.name)}
               >
-                {label} <span className="chip-count">{n}</span>
+                {o.name} <span className="chip-count">{o.count}</span>
               </button>
-            );
-          })}
-          <ChipSelect
-            label="Narrow to one region"
-            allLabel="All regions"
-            value={scope.regionId}
-            options={regionOptions}
-            onChange={(id) => narrow({ regionId: id })}
-          />
-          {scope.kind !== "dealer" && (
+            ))}
             <ChipSelect
-              label="Narrow to one distributor"
-              allLabel="All distributors"
-              value={scope.houseId}
-              options={houseOptions}
-              onChange={(id) => narrow({ houseId: id })}
+              label="Narrow to one region"
+              allLabel="All regions"
+              value={scope.regionId}
+              options={regionOptions}
+              onChange={(id) => narrow({ regionId: id })}
             />
-          )}
-          {narrowed && (
-            <button
-              type="button"
-              className="chip chip-clear"
-              onClick={() => narrow({ kind: "all", regionId: "", houseId: "" })}
-            >
-              Clear
-            </button>
-          )}
+          </div>
         </section>
       )}
 
