@@ -94,7 +94,7 @@ export function zipLookupNote(lookup: ZipLookup): { text: string; bad: boolean }
         text: lookup.territoryName
           ? `Lands in ${lookup.territoryName}.`
           : lookup.how === "city-not-on-map"
-            ? "California is placed city by city, and this city is not on the map yet — the account saves unplaced."
+            ? "California is split at Santa Barbara, and this town is not on our list of California towns — the account saves unplaced."
             : "No region covers this state yet — the account saves unplaced.",
         bad: false,
       };

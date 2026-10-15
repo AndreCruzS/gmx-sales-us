@@ -6,10 +6,13 @@
 // for distributor branches; accounts now get it at the moment they are created,
 // from the ZIP a person types, instead of arriving unplaced and waiting.
 //
-// It never guesses. A California city missing from territory_cities is not
-// "probably Southern California" — the line between the two California reps has
-// not been drawn yet, and an account filed on the wrong side of it credits the
-// wrong person. It comes back unplaced, and says why.
+// It never guesses. The line between the two California reps is drawn at Santa
+// Barbara, county by county (Bianca's map, 2026-10-15; see the migration
+// california_split_by_county), and every California postal town is written into
+// territory_cities with its side. A California name still missing — a typo, a
+// neighbourhood no postal list carries — is not "probably Southern California":
+// an account filed on the wrong side credits the wrong rep. It comes back
+// unplaced, and says why.
 
 export interface TerritoryStateRow {
   state: string;

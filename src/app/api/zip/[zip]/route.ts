@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { placeAddress, type TerritoryCityRow, type TerritoryStateRow } from "@/lib/domain/placement";
+import { fetchAllPages } from "@/lib/supabase/page";
 
 interface ZippoPlace {
   "place name": string;
@@ -69,13 +70,24 @@ export async function GET(
 
   const [st, ct, tr] = await Promise.all([
     supabase.from("territory_states").select("state, territory_id").limit(200),
-    supabase.from("territory_cities").select("state, city, territory_id").limit(1000),
+    // Every California postal town, over the server's 1,000-row cap.
+    fetchAllPages<TerritoryCityRow>((from, to) =>
+      supabase
+        .from("territory_cities")
+        .select("state, city, territory_id")
+        .order("state")
+        .order("city")
+        .range(from, to),
+    ).then(
+      (data) => ({ data }),
+      () => ({ data: null }),
+    ),
     supabase.from("territories").select("id, name").limit(100),
   ]);
   const placement = placeAddress(
     { state, city },
     (st.data as TerritoryStateRow[] | null) ?? [],
-    (ct.data as TerritoryCityRow[] | null) ?? [],
+    ct.data ?? [],
   );
   const territoryName = placement.territoryId
     ? ((tr.data as { id: string; name: string }[] | null) ?? []).find(

@@ -346,7 +346,20 @@ export function ManagerHome({ name }: { name: string }) {
       // finds its region, so the buy-in can answer the region lens.
       supabase.from("territory_states").select("state, territory_id").limit(200),
       // And city by city for the split state: CA never resolves by code.
-      supabase.from("territory_cities").select("state, city, territory_id").limit(500),
+      // Every California postal town is on it since 2026-10-15 (the
+      // Santa Barbara line), over a thousand rows — so it is paged, never
+      // capped.
+      fetchAllPages<TerritoryCityRow>((from, to) =>
+        supabase
+          .from("territory_cities")
+          .select("state, city, territory_id")
+          .order("state")
+          .order("city")
+          .range(from, to),
+      ).then(
+        (data) => ({ data, error: null }),
+        (e: unknown) => ({ data: null, error: { message: String(e) } }),
+      ),
       // The month goals, region by region — what the book is read against.
       supabase.from("territory_targets").select("territory_id, monthly_lf").limit(100),
       // WHO TO CALL AT A BRANCH (Andre, 2026-10-12): the distributor contact
