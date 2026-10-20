@@ -3133,6 +3133,10 @@ input[type="datetime-local"] {
 .add-item:nth-child(5) {
   animation-delay: 0.18s;
 }
+/* The desk's sixth (Say it joined the menu, 2026-10-20). */
+.add-item:nth-child(6) {
+  animation-delay: 0.22s;
+}
 
 /* Folding away is the same move run backwards, and the order reverses with it:
    the entry unfolds outward from the button, so the exit collapses back toward
@@ -3165,7 +3169,8 @@ input[type="datetime-local"] {
 .add-menu.is-closing .add-item:nth-child(4) {
   animation-delay: 0.03s;
 }
-.add-menu.is-closing .add-item:nth-child(5) {
+.add-menu.is-closing .add-item:nth-child(5),
+.add-menu.is-closing .add-item:nth-child(6) {
   animation-delay: 0s;
 }
 .add-item:active {

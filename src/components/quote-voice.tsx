@@ -48,20 +48,33 @@ const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
 export function QuoteVoice({
   account,
   onDraft,
+  said,
 }: {
   account: string;
   onDraft: (draft: QuoteDraft) => void;
+  /** What was already said elsewhere (Say it, 2026-10-20): drafted on arrival,
+   *  through the same room, without asking the rep to say it twice. */
+  said?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [events, setEvents] = useState<RoomEvent[]>([]);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const saidSent = useRef(false);
 
   useEffect(() => {
     return () => {
       recorder.current?.stream.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  useEffect(() => {
+    if (!said || !account || saidSent.current) return;
+    saidSent.current = true;
+    setPhase("working");
+    void send(null, said);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [said, account]);
 
   async function start() {
     setEvents([]);
@@ -89,10 +102,11 @@ export function QuoteVoice({
     setPhase("working");
   }
 
-  async function send(blob: Blob) {
+  async function send(blob: Blob | null, text?: string) {
     try {
       const form = new FormData();
-      form.append("audio", blob, "quote.webm");
+      if (blob) form.append("audio", blob, "quote.webm");
+      if (text) form.append("transcript", text);
       form.append("account", account);
       const res = await fetch("/api/voice/quote", { method: "POST", body: form });
       if (!res.ok || !res.body) throw new Error(String(res.status));

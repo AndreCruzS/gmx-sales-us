@@ -85,7 +85,10 @@ function NewDealForm() {
   const { id: accountId } = useParams<{ id: string }>();
   const { profile } = useOffline();
   const router = useRouter();
-  const stageParam = useSearchParams().get("stage");
+  const params = useSearchParams();
+  const stageParam = params.get("stage");
+  // Say it (2026-10-20) hands over what was said; the quote drafts from it.
+  const said = params.get("say")?.slice(0, 2000) || undefined;
   const initialStage: OpportunityStage = (
     DEAL_STAGES as readonly string[]
   ).includes(stageParam ?? "")
@@ -545,6 +548,7 @@ function NewDealForm() {
               <QuoteVoice
                 account={account ? displayAccountName(account.name) : ""}
                 onDraft={landDraft}
+                said={said}
               />
             ) : (
               <StatusVoiceButton onText={setCurrentStatus} />

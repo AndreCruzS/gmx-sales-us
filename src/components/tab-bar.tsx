@@ -80,6 +80,14 @@ interface AddItem {
 }
 
 const ADD_ITEMS: readonly AddItem[] = [
+  // Say it (Andre, 2026-10-20): one sentence books a visit, a follow-up or
+  // starts a quote, each confirmed on a card — nearest the thumb.
+  {
+    href: "/say",
+    label: "Say it",
+    hint: "Book, chase or quote in one sentence",
+    Icon: CheckIcon,
+  },
   {
     href: "/record",
     label: "Voice note",
