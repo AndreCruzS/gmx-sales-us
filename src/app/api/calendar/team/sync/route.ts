@@ -1,4 +1,5 @@
-// The team calendar's one trigger (spec 2026-10-12). Two callers:
+// The team calendar's one trigger (spec 2026-10-12), and since 2026-10-20
+// the reps' mirrors right after it (mirror-sync.ts). Two callers:
 //   · Vercel Cron, GET with `authorization: Bearer ${CRON_SECRET}`, every org
 //   · a signed-in admin, POST, their org — the settings page right after the
 //     grant lands, and the Reps board on load (fire-and-forget)
@@ -13,13 +14,14 @@
 // ONE PASS AT A TIME (review, 2026-10-12): the cron, the Reps board opening
 // and the settings page can all ask at once, and two passes over one
 // calendar insert the same visit twice. The org's team_calendars row is
-// registered as soon as an owner is known and carries a two-minute lease;
+// registered as soon as an owner is known and carries a five-minute lease;
 // a caller that cannot claim it answers 409 and the next pass picks up.
 
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { GoogleTeamCalendar } from "@/lib/calendar/google-team-calendar";
-import { SupabaseTeamCalendarStore } from "@/lib/calendar/team-store";
+import { syncRepMirrors } from "@/lib/calendar/mirror-sync";
+import { SupabaseMirrorStore, SupabaseTeamCalendarStore } from "@/lib/calendar/team-store";
 import { syncTeamCalendar } from "@/lib/calendar/team-sync";
 import { GoogleReauthNeeded, oauthClientFromEnv } from "@/lib/google/oauth";
 import { orgIdFromJwt } from "@/lib/supabase/jwt";
@@ -31,7 +33,8 @@ export const maxDuration = 300;
  *  events-only grant every rep gives (and admins gave before 2026-10-12)
  *  cannot do it. */
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
-const LEASE_MS = 2 * 60_000;
+// As long as the function may run: the mirrors made the pass longer (2026-10-20).
+const LEASE_MS = 5 * 60_000;
 
 function serviceClient(): SupabaseClient {
   return createClient(
@@ -146,7 +149,19 @@ async function syncOrg(service: SupabaseClient, orgId: string) {
   const store = new SupabaseTeamCalendarStore(service, orgId, grant.owner);
   try {
     const report = await syncTeamCalendar(port, store, today());
-    return NextResponse.json({ ...report, owner: grant.owner });
+    // Each rep's mirror of their own visits (2026-10-20), under the same
+    // lease and grant. A mirror failing never fails the team pass.
+    let mirrors: unknown;
+    try {
+      mirrors = await syncRepMirrors(
+        port,
+        new SupabaseMirrorStore(service, orgId, grant.owner),
+        today(),
+      );
+    } catch (err) {
+      mirrors = { error: err instanceof Error ? err.message : String(err) };
+    }
+    return NextResponse.json({ ...report, mirrors, owner: grant.owner });
   } catch (err) {
     if (err instanceof GoogleReauthNeeded) {
       return NextResponse.json({ error: err.message, owner: grant.owner }, { status: 409 });

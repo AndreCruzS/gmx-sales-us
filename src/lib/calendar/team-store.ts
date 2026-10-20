@@ -4,6 +4,7 @@
 // them yet, read as a visit, the Agenda's rule).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MirrorRep, MirrorStore } from "./mirror-sync";
 import type { TeamCalendarStore, VisitRow } from "./team-port";
 
 const OWNER_EMBED = "memberships!next_actions_owner_id_fkey(users(full_name))";
@@ -24,6 +25,21 @@ interface Raw {
 
 function firstName(full: string | null | undefined): string {
   return (full ?? "").trim().split(/\s+/)[0] ?? "";
+}
+
+function toVisit(r: Raw): VisitRow {
+  return {
+    id: r.id,
+    action: r.action,
+    due_date: r.due_date,
+    completed_at: r.completed_at,
+    owner_id: r.owner_id,
+    objective: r.objective,
+    calendar_event_id: r.calendar_event_id,
+    calendar_origin: r.calendar_origin,
+    accountName: r.accounts?.name ?? null,
+    ownerFirstName: firstName(r.memberships?.users?.full_name),
+  };
 }
 
 export class SupabaseTeamCalendarStore implements TeamCalendarStore {
@@ -102,18 +118,7 @@ export class SupabaseTeamCalendarStore implements TeamCalendarStore {
       .order("due_date")
       .limit(500);
     if (error) throw new Error(`next_actions read failed: ${error.message}`);
-    return ((data ?? []) as unknown as Raw[]).map((r) => ({
-      id: r.id,
-      action: r.action,
-      due_date: r.due_date,
-      completed_at: r.completed_at,
-      owner_id: r.owner_id,
-      objective: r.objective,
-      calendar_event_id: r.calendar_event_id,
-      calendar_origin: r.calendar_origin,
-      accountName: r.accounts?.name ?? null,
-      ownerFirstName: firstName(r.memberships?.users?.full_name),
-    }));
+    return ((data ?? []) as unknown as Raw[]).map(toVisit);
   }
 
   async markProjected(id: string, eventId: string) {
@@ -175,5 +180,83 @@ export class SupabaseTeamCalendarStore implements TeamCalendarStore {
       .from("team_calendars")
       .update({ last_synced_at: r.syncedAt, last_error: r.error })
       .eq("org_id", this.orgId);
+  }
+}
+
+/** The reps' mirrors (mirror-sync.ts), over the same service-role client. */
+export class SupabaseMirrorStore implements MirrorStore {
+  constructor(
+    private service: SupabaseClient,
+    private orgId: string,
+    private owner: string,
+  ) {}
+
+  async listReps(): Promise<MirrorRep[]> {
+    const { data, error } = await this.service
+      .from("memberships")
+      .select("id, users(email, full_name)")
+      .eq("org_id", this.orgId)
+      .eq("role", "rep")
+      .eq("status", "active")
+      .neq("id", this.owner);
+    if (error) throw new Error(`reps read failed: ${error.message}`);
+    return ((data ?? []) as unknown as {
+      id: string;
+      users: { email: string | null; full_name: string | null } | null;
+    }[])
+      .filter((r) => r.users?.email)
+      .map((r) => ({
+        membershipId: r.id,
+        email: r.users!.email as string,
+        fullName: (r.users!.full_name ?? "").trim() || (r.users!.email as string),
+      }));
+  }
+
+  async getMirror(membershipId: string) {
+    const { data } = await this.service
+      .from("rep_mirror_calendars")
+      .select("google_calendar_id, shared_with")
+      .eq("membership_id", membershipId)
+      .maybeSingle();
+    if (!data?.google_calendar_id) return null;
+    return {
+      calendarId: data.google_calendar_id as string,
+      sharedWith: (data.shared_with as string | null) ?? null,
+    };
+  }
+
+  async saveMirror(membershipId: string, m: { calendarId: string; sharedWith: string | null }) {
+    const { error } = await this.service.from("rep_mirror_calendars").upsert(
+      {
+        membership_id: membershipId,
+        org_id: this.orgId,
+        google_calendar_id: m.calendarId,
+        shared_with: m.sharedWith,
+      },
+      { onConflict: "membership_id" },
+    );
+    if (error) throw new Error(`rep_mirror_calendars upsert failed: ${error.message}`);
+  }
+
+  async listOpenVisits(fromDate: string, toDate: string): Promise<VisitRow[]> {
+    const { data, error } = await this.service
+      .from("next_actions")
+      .select(VISIT_COLS)
+      .eq("org_id", this.orgId)
+      .or("kind.eq.VISIT,kind.is.null")
+      .is("completed_at", null)
+      .gte("due_date", fromDate)
+      .lte("due_date", toDate)
+      .order("due_date")
+      .limit(1000);
+    if (error) throw new Error(`next_actions read failed: ${error.message}`);
+    return ((data ?? []) as unknown as Raw[]).map(toVisit);
+  }
+
+  async recordMirror(membershipId: string, r: { syncedAt: string; error: string | null }) {
+    await this.service
+      .from("rep_mirror_calendars")
+      .update({ last_synced_at: r.syncedAt, last_error: r.error })
+      .eq("membership_id", membershipId);
   }
 }

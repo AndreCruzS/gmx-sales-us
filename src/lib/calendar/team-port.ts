@@ -33,6 +33,8 @@ export interface TeamCalendarPort {
   calendarExists(calendarId: string): Promise<boolean>;
   /** "Make changes to events". Inserting for an existing scope updates it. */
   grantWriter(calendarId: string, email: string): Promise<void>;
+  /** "See all event details" — a rep's mirror is read, never edited. */
+  grantReader(calendarId: string, email: string): Promise<void>;
   listEvents(calendarId: string, fromDate: string, toDate: string): Promise<TeamEvent[]>;
   /** Returns the new event id. */
   insertEvent(calendarId: string, e: TeamEventPayload): Promise<string>;

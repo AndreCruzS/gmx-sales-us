@@ -84,9 +84,19 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
   }
 
   async grantWriter(calendarId: string, email: string): Promise<void> {
+    await this.grant(calendarId, email, "writer");
+  }
+
+  async grantReader(calendarId: string, email: string): Promise<void> {
+    // Sent once per address (the store remembers it), so Google's invitation
+    // e-mail is what puts the calendar in front of the rep.
+    await this.grant(calendarId, email, "reader", true);
+  }
+
+  private async grant(calendarId: string, email: string, role: "writer" | "reader", notify = false) {
     await this.ok(
-      await this.call("POST", `${cal(calendarId)}/acl?sendNotifications=false`, {
-        role: "writer",
+      await this.call("POST", `${cal(calendarId)}/acl?sendNotifications=${notify}`, {
+        role,
         scope: { type: "user", value: email },
       }),
       `acl.insert(${email})`,
