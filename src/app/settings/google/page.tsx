@@ -3,8 +3,9 @@
 // EMAIL & CALENDAR — the rep's second handshake.
 //
 // The Google login only proved identity. This page asks Google for the two
-// working permissions — send mail as the rep (gmail.send) and write their
-// calendar (calendar.events) — through the SAME Google account they signed
+// working permissions — send mail as the rep (gmail.send), write their
+// calendar (calendar.events) and, for a rep, read the mail they trade with
+// CRM contacts (gmail.readonly, 2026-10-20) — through the SAME account they signed
 // in with. The OAuth round-trip comes back here carrying a provider refresh
 // token; that token is the durable key the server will use to send quotes
 // from the rep's own address and land visits on their own calendar, and it
@@ -16,23 +17,10 @@
 
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
+import { missingScopes, scopesFor } from "@/lib/google/scopes";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-// A REP asks for what a rep does: send a quote, put a visit on a calendar.
-// An ADMIN asks for the whole Calendar scope, because the team calendar is
-// created and shared from their account (spec 2026-10-12) and neither
-// creating a calendar nor sharing it fits inside calendar.events.
-const REP_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar.events",
-];
-const ADMIN_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar",
-];
-function scopesFor(role: string | null | undefined): string[] {
-  return role === "admin" ? ADMIN_SCOPES : REP_SCOPES;
-}
+// What each role asks for lives in lib/google/scopes, where the banner reads it too.
 
 interface TeamCalendar {
   /** null once an owner is registered but before the first pass made the calendar. */
@@ -87,7 +75,7 @@ export default function GoogleSetupPage() {
               membership_id: profile.membershipId,
               org_id: profile.orgId,
               google_email: session?.user.email ?? null,
-              scopes: scopesFor(profile.role),
+              scopes: [...scopesFor(profile.role)],
               refresh_token: refresh,
               updated_at: new Date().toISOString(),
             });
@@ -185,7 +173,32 @@ export default function GoogleSetupPage() {
           </p>
         )}
 
-        {conn ? (
+        {conn && missingScopes(profile?.role, conn.scopes).length > 0 ? (
+          // CONNECTED BEFORE THE ASK GREW (2026-10-20): the grant is whole for
+          // what it was, and short of what the role now asks — one tap mends it.
+          <div className="card card-pad flex flex-col gap-3">
+            <p className="t-title">One more permission</p>
+            <ul className="t-sub flex flex-col gap-1">
+              <li>
+                · Read your email with the clients on your accounts — so a
+                conversation, a promise or a quote lands on the client&rsquo;s
+                record by itself
+              </li>
+            </ul>
+            <p className="t-hint">
+              Only email exchanged with contacts in the app is kept. Everything
+              else in your inbox is never stored.
+            </p>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={busy}
+              onClick={() => void connect()}
+            >
+              {busy ? "Opening Google…" : "Update the connection"}
+            </button>
+          </div>
+        ) : conn ? (
           <div className="card card-pad flex flex-col gap-2">
             <p className="t-title">Connected</p>
             <p className="t-sub">
@@ -207,10 +220,18 @@ export default function GoogleSetupPage() {
           </div>
         ) : checked ? (
           <div className="card card-pad flex flex-col gap-3">
-            <p className="t-title">Two permissions, one tap</p>
+            <p className="t-title">
+              {profile?.role === "admin" ? "Two permissions, one tap" : "Three permissions, one tap"}
+            </p>
             <ul className="t-sub flex flex-col gap-1">
               <li>· Send email as you — your quotes, from your address</li>
               <li>· Add events to your calendar — your visits, on your days</li>
+              {profile?.role !== "admin" && (
+                <li>
+                  · Read your email with the clients on your accounts — only
+                  email with contacts in the app is kept
+                </li>
+              )}
             </ul>
             <button
               type="button"

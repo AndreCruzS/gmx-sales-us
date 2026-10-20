@@ -23,6 +23,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { manages } from "@/lib/domain/roles";
+import { missingScopes } from "@/lib/google/scopes";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SetupBanner() {
@@ -44,10 +45,17 @@ export function SetupBanner() {
         try {
           const { data, error } = await getSupabaseBrowserClient()
             .from("google_connections")
-            .select("membership_id")
+            .select("scopes")
             .eq("membership_id", profile.membershipId)
             .maybeSingle();
-          if (!stale && !error) setConnected(Boolean(data));
+          // A grant short of what the role now asks counts as unfinished
+          // (2026-10-20: reps were asked to let the app read their mail).
+          if (!stale && !error) {
+            setConnected(
+              Boolean(data) &&
+                missingScopes(profile.role, (data as { scopes: string[] | null }).scopes).length === 0,
+            );
+          }
           if (manages(profile.role)) {
             const { data: tc } = await getSupabaseBrowserClient()
               .from("team_calendars")
@@ -93,7 +101,7 @@ export function SetupBanner() {
         {reconnect
           ? " — Google dropped the team calendar connection; reconnect to keep the agenda in sync"
           : profile.role === "rep"
-            ? " — connect your Gmail & Calendar so quotes and visits can travel as you"
+            ? " — connect your Gmail & Calendar so quotes, visits and client email travel with you"
             : " — connect Google Calendar so the team's agenda can show here"}
       </span>
       <span aria-hidden="true">›</span>

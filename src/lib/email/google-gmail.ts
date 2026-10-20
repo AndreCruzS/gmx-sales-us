@@ -1,12 +1,16 @@
-// GmailPort over the raw Gmail REST API with a service account + domain-wide
-// delegation (spec §6): the SA signs a JWT with `sub` = the rep's mailbox and
-// exchanges it for an access token scoped gmail.readonly. No googleapis SDK —
-// two endpoints and a JWT don't justify 20MB of dependency.
+// GmailPort over the raw Gmail REST API, two ways in:
+//   · a service account + domain-wide delegation (spec §6): the SA signs a
+//     JWT with `sub` = the rep's mailbox for a gmail.readonly token;
+//   · THE REP'S OWN GRANT (Andre, 2026-10-20): the refresh token their
+//     "Finish your setup" tap left, with gmail.readonly in it — no service
+//     account needed, and only reps are ever asked for it.
+// No googleapis SDK — two endpoints and a JWT don't justify 20MB of dependency.
 
 import {
   serviceAccountToken,
   type ServiceAccountKey,
 } from "@/lib/google/auth";
+import { accessTokenFromRefresh, type OAuthClient } from "@/lib/google/oauth";
 import type {
   GmailAttachmentMeta,
   GmailMessage,
@@ -17,12 +21,24 @@ import type {
 const SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const API = "https://gmail.googleapis.com/gmail/v1/users";
 
+export type GmailAuth =
+  | { kind: "service-account"; key: ServiceAccountKey }
+  | { kind: "own-grant"; client: OAuthClient; refreshToken: string };
+
 export class GoogleGmailPort implements GmailPort {
-  constructor(private key: ServiceAccountKey) {}
+  private auth: GmailAuth;
+  constructor(auth: GmailAuth | ServiceAccountKey) {
+    this.auth = "kind" in auth ? auth : { kind: "service-account", key: auth };
+  }
 
   private async get(mailbox: string, path: string): Promise<Response> {
+    if (this.auth.kind === "own-grant") {
+      // The grant IS the mailbox: Gmail's "me" is whoever granted it.
+      const token = await accessTokenFromRefresh(this.auth.client, this.auth.refreshToken);
+      return fetch(`${API}/me/${path}`, { headers: { authorization: `Bearer ${token}` } });
+    }
     // domain-wide delegation: act as this mailbox
-    const token = await serviceAccountToken(this.key, SCOPE, mailbox);
+    const token = await serviceAccountToken(this.auth.key, SCOPE, mailbox);
     return fetch(`${API}/${encodeURIComponent(mailbox)}/${path}`, {
       headers: { authorization: `Bearer ${token}` },
     });
