@@ -153,10 +153,14 @@ async function syncOrg(service: SupabaseClient, orgId: string) {
     // lease and grant. A mirror failing never fails the team pass.
     let mirrors: unknown;
     try {
+      // A rep who connected Google is written into their own calendar
+      // (2026-10-20); colour 7 is Google's "Peacock", the app's teal.
       mirrors = await syncRepMirrors(
         port,
         new SupabaseMirrorStore(service, orgId, grant.owner),
         today(),
+        (refreshToken) =>
+          new GoogleTeamCalendar(client, refreshToken, { onlyOurs: true, colorId: "7" }),
       );
     } catch (err) {
       mirrors = { error: err instanceof Error ? err.message : String(err) };

@@ -7,6 +7,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MirrorRep, MirrorStore } from "./mirror-sync";
 import type { TeamCalendarStore, VisitRow } from "./team-port";
 
+const EVENT_SCOPES: ReadonlySet<string> = new Set([
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar",
+]);
+
 const OWNER_EMBED = "memberships!next_actions_owner_id_fkey(users(full_name))";
 const VISIT_COLS = `id, action, due_date, completed_at, owner_id, objective, calendar_event_id, calendar_origin, accounts(name), ${OWNER_EMBED}`;
 
@@ -200,16 +205,31 @@ export class SupabaseMirrorStore implements MirrorStore {
       .eq("status", "active")
       .neq("id", this.owner);
     if (error) throw new Error(`reps read failed: ${error.message}`);
-    return ((data ?? []) as unknown as {
+    const reps = ((data ?? []) as unknown as {
       id: string;
       users: { email: string | null; full_name: string | null } | null;
-    }[])
-      .filter((r) => r.users?.email)
-      .map((r) => ({
-        membershipId: r.id,
-        email: r.users!.email as string,
-        fullName: (r.users!.full_name ?? "").trim() || (r.users!.email as string),
-      }));
+    }[]).filter((r) => r.users?.email);
+    // A rep's own grant counts when it can write events in their calendar.
+    const { data: conns } = await this.service
+      .from("google_connections")
+      .select("membership_id, refresh_token, scopes")
+      .in("membership_id", reps.map((r) => r.id));
+    const grant = new Map<string, string>();
+    for (const c of (conns ?? []) as {
+      membership_id: string;
+      refresh_token: string | null;
+      scopes: string[] | null;
+    }[]) {
+      if (c.refresh_token && (c.scopes ?? []).some((x) => EVENT_SCOPES.has(x))) {
+        grant.set(c.membership_id, c.refresh_token);
+      }
+    }
+    return reps.map((r) => ({
+      membershipId: r.id,
+      email: r.users!.email as string,
+      fullName: (r.users!.full_name ?? "").trim() || (r.users!.email as string),
+      ownGrant: grant.get(r.id) ?? null,
+    }));
   }
 
   async getMirror(membershipId: string) {

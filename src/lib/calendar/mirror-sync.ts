@@ -15,6 +15,16 @@
 // the app, or on the team calendar and then handed over — books where the
 // visit lives; the mirror only shows it. Nothing typed into a mirror is read.
 //
+// IN THE REP'S OWN CALENDAR WHEN THEY LET US (Andre, 2026-10-20: "se eu
+// permiti o meu calendar na plataforma ... usar a minha conta pra fazer como
+// eu tivesse criado e não precisar de aceite"). A shared calendar from another
+// domain waits for the rep to accept it. A rep who connected Google gave the
+// app their events permission, so for them the visits are written straight
+// into their PRIMARY calendar — "GMX · " in the title, the app's colour, a
+// private tag on each — and only tagged events are ever listed, touched or
+// removed there. The shared calendar is the fallback for a rep who has not
+// connected, and is deleted the day they do, so a visit never shows twice.
+//
 // One rep failing does not stop the others; errors are named per rep.
 
 import { humanize } from "@/lib/domain/enums";
@@ -25,7 +35,15 @@ export interface MirrorRep {
   membershipId: string;
   email: string;
   fullName: string;
+  /** The rep's own Google refresh token when it can write events; else null. */
+  ownGrant: string | null;
 }
+
+/** The registered id that means "the rep's own primary calendar". */
+export const OWN_CALENDAR = "primary";
+
+/** Opens a port onto a rep's own Google account, from their grant. */
+export type OwnCalendarFactory = (refreshToken: string) => TeamCalendarPort;
 
 export interface MirrorStore {
   /** Active reps with an e-mail — everyone who gets a mirror. */
@@ -39,6 +57,8 @@ export interface MirrorStore {
 
 export interface MirrorReport {
   reps: number;
+  /** Reps written straight into their own primary calendar. */
+  own: number;
   created: number;
   shared: number;
   inserted: number;
@@ -51,15 +71,17 @@ export function mirrorSummary(fullName: string): string {
   return `GMX · ${fullName}`;
 }
 
-/** The rep's own calendar needs no rep label: every event on it is theirs. */
-export function mirrorTitle(v: Pick<VisitRow, "action" | "accountName">): string {
-  return v.accountName ? `${v.action} — ${v.accountName}` : v.action;
+/** The rep's own calendar needs no rep label: every event on it is theirs.
+ *  In their primary calendar it wears "GMX · ", beside their own events. */
+export function mirrorTitle(v: Pick<VisitRow, "action" | "accountName">, own = false): string {
+  const t = v.accountName ? `${v.action} — ${v.accountName}` : v.action;
+  return own ? `GMX · ${t}` : t;
 }
 
-function payloadFor(v: VisitRow): TeamEventPayload {
+function payloadFor(v: VisitRow, own: boolean): TeamEventPayload {
   return {
     date: v.due_date,
-    title: mirrorTitle(v),
+    title: mirrorTitle(v, own),
     description: [
       v.objective ? `Purpose: ${humanize(v.objective)}` : null,
       "Your GMX agenda — changes are made in Commercial OS.",
@@ -80,9 +102,11 @@ export async function syncRepMirrors(
   calendar: TeamCalendarPort,
   store: MirrorStore,
   today: string,
+  ownCalendar?: OwnCalendarFactory,
 ): Promise<MirrorReport> {
   const report: MirrorReport = {
     reps: 0,
+    own: 0,
     created: 0,
     shared: 0,
     inserted: 0,
@@ -102,6 +126,7 @@ export async function syncRepMirrors(
     try {
       await mirrorOne(
         calendar,
+        ownCalendar,
         store,
         rep,
         visits.filter((v) => v.owner_id === rep.membershipId && v.completed_at === null),
@@ -123,6 +148,7 @@ export async function syncRepMirrors(
 
 async function mirrorOne(
   calendar: TeamCalendarPort,
+  ownCalendar: OwnCalendarFactory | undefined,
   store: MirrorStore,
   rep: MirrorRep,
   visits: VisitRow[],
@@ -130,10 +156,28 @@ async function mirrorOne(
   toDate: string,
   report: MirrorReport,
 ): Promise<void> {
-  // ── Ensure the calendar ───────────────────────────────────────────────────
   const saved = await store.getMirror(rep.membershipId);
-  let calendarId = saved?.calendarId ?? null;
-  let sharedWith = saved?.sharedWith ?? null;
+
+  // ── The rep's own calendar, when they gave us their grant ────────────────
+  if (rep.ownGrant && ownCalendar) {
+    // The shared copy goes first: two calendars showing one visit is the
+    // one thing this must never do.
+    if (saved && saved.calendarId !== OWN_CALENDAR) {
+      await calendar.deleteCalendar(saved.calendarId);
+    }
+    if (!saved || saved.calendarId !== OWN_CALENDAR) {
+      await store.saveMirror(rep.membershipId, { calendarId: OWN_CALENDAR, sharedWith: null });
+    }
+    report.own++;
+    await project(ownCalendar(rep.ownGrant), OWN_CALENDAR, true, rep, visits, fromDate, toDate, report);
+    return;
+  }
+
+  // ── Else the shared calendar in the owner's account ─────────────────────
+  // A row left by the own mode names the rep's primary, which in the owner's
+  // account would be the OWNER's primary: it is not ours to reuse.
+  let calendarId = saved && saved.calendarId !== OWN_CALENDAR ? saved.calendarId : null;
+  let sharedWith = calendarId ? (saved?.sharedWith ?? null) : null;
   if (calendarId && !(await calendar.calendarExists(calendarId))) {
     calendarId = null;
     sharedWith = null;
@@ -156,7 +200,20 @@ async function mirrorOne(
     report.shared++;
   }
 
-  // ── Visits → events ───────────────────────────────────────────────────────
+  await project(calendar, calendarId, false, rep, visits, fromDate, toDate, report);
+}
+
+/** Visits → events on one calendar: insert, update, and remove what is ours. */
+async function project(
+  calendar: TeamCalendarPort,
+  calendarId: string,
+  own: boolean,
+  rep: MirrorRep,
+  visits: VisitRow[],
+  fromDate: string,
+  toDate: string,
+  report: MirrorReport,
+): Promise<void> {
   const events = (await calendar.listEvents(calendarId, fromDate, toDate)).filter(
     (e) => !e.cancelled,
   );
@@ -172,7 +229,7 @@ async function mirrorOne(
   for (const v of visits) {
     wanted.add(v.id);
     try {
-      const want = payloadFor(v);
+      const want = payloadFor(v, own);
       const ev = byVisit.get(v.id);
       if (!ev) {
         await calendar.insertEvent(calendarId, want);

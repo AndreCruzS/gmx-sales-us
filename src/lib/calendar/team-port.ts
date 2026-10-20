@@ -31,6 +31,8 @@ export interface TeamCalendarPort {
   findCalendarByName(summary: string): Promise<string | null>;
   createCalendar(summary: string): Promise<string>;
   calendarExists(calendarId: string): Promise<boolean>;
+  /** Gone already is fine. */
+  deleteCalendar(calendarId: string): Promise<void>;
   /** "Make changes to events". Inserting for an existing scope updates it. */
   grantWriter(calendarId: string, email: string): Promise<void>;
   /** "See all event details" — a rep's mirror is read, never edited. */

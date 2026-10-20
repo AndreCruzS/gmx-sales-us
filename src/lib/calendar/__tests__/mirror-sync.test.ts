@@ -11,8 +11,8 @@ const TODAY = "2026-10-20";
 
 class FakeMirrorStore implements MirrorStore {
   reps: MirrorRep[] = [
-    { membershipId: "m-deonn", email: "deonn.deford@gmxgroup.com", fullName: "Deonn Deford" },
-    { membershipId: "m-jason", email: "jason.benford@gmxgroup.com", fullName: "Jason Benford" },
+    { membershipId: "m-deonn", email: "deonn.deford@gmxgroup.com", fullName: "Deonn Deford", ownGrant: null },
+    { membershipId: "m-jason", email: "jason.benford@gmxgroup.com", fullName: "Jason Benford", ownGrant: null },
   ];
   mirrors = new Map<string, { calendarId: string; sharedWith: string | null }>();
   visits: VisitRow[] = [];
@@ -190,5 +190,70 @@ describe("one rep failing", () => {
     expect(store.results.get("m-deonn")).toContain("403");
     expect(store.results.get("m-jason")).toBeNull();
     expect(mirrorOf("m-jason")).toHaveLength(1);
+  });
+});
+
+describe("in the rep's own calendar, when they connected Google (2026-10-20)", () => {
+  let own: FakeCalendar;
+  const ownFactory = () => own;
+
+  beforeEach(() => {
+    own = new FakeCalendar();
+    own.calendars.set("primary", "deonn.deford@gmxgroup.com");
+    own.acls.set("primary", new Map());
+    own.events.set("primary", []);
+    own.handMade("primary", "2026-10-22", "Dentist");
+    store.reps[0].ownGrant = "rt-deonn";
+  });
+
+  it("writes their visits into their primary calendar, marked GMX, with nothing to accept", async () => {
+    const r = await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(r.own).toBe(1);
+    const ours = own.events.get("primary")!.filter((e) => e.nextActionId);
+    expect(ours.map((e) => e.title).sort()).toEqual(["GMX · Ride-along", "GMX · Visit — Ganahl Anaheim"]);
+    expect(store.mirrors.get("m-deonn")!.calendarId).toBe("primary");
+    // No shared calendar made or shared for her; Jason, unconnected, still gets one.
+    expect([...cal.calendars.values()]).toEqual(["GMX · Jason Benford"]);
+  });
+
+  it("never touches the rep's own events", async () => {
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    store.visits = store.visits.filter((v) => v.owner_id !== "m-deonn");
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(own.events.get("primary")!.map((e) => e.title)).toEqual(["Dentist"]);
+  });
+
+  it("follows a moved visit there too", async () => {
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    store.visits[0].due_date = "2026-10-30";
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(own.events.get("primary")!.find((e) => e.nextActionId === "v1")!.date).toBe("2026-10-30");
+  });
+
+  it("the day a rep connects, the shared copy is deleted so nothing shows twice", async () => {
+    store.reps[0].ownGrant = null;
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    const shared = store.mirrors.get("m-deonn")!.calendarId;
+    expect(cal.calendars.has(shared)).toBe(true);
+    store.reps[0].ownGrant = "rt-deonn";
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(cal.calendars.has(shared)).toBe(false);
+    expect(own.events.get("primary")!.filter((e) => e.nextActionId)).toHaveLength(2);
+  });
+
+  it("a rep who disconnects falls back to a fresh shared calendar, never the owner's primary", async () => {
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    store.reps[0].ownGrant = null;
+    const r = await syncRepMirrors(cal, store, TODAY, ownFactory);
+    const id = store.mirrors.get("m-deonn")!.calendarId;
+    expect(id).not.toBe("primary");
+    expect(cal.calendars.get(id)).toBe("GMX · Deonn Deford");
+    expect(r.shared).toBe(1);
+  });
+
+  it("without a factory (no OAuth client) the shared calendar stands", async () => {
+    const r = await syncRepMirrors(cal, store, TODAY);
+    expect(r.own).toBe(0);
+    expect(cal.calendars.get(store.mirrors.get("m-deonn")!.calendarId)).toBe("GMX · Deonn Deford");
   });
 });

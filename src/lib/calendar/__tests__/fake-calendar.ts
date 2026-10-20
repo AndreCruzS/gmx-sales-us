@@ -18,6 +18,10 @@ export class FakeCalendar implements TeamCalendarPort {
     this.events.set(id, []);
     return id;
   }
+  async deleteCalendar(id: string) {
+    this.calendars.delete(id);
+    this.events.delete(id);
+  }
   async calendarExists(id: string) {
     return this.calendars.has(id);
   }

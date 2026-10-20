@@ -31,6 +31,10 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
   constructor(
     private client: OAuthClient,
     private refreshToken: string,
+    /** A REP'S OWN calendar (2026-10-20): list only the events this app
+     *  wrote, so a personal appointment is never even read, and paint ours
+     *  in one colour so they stand apart from the rep's own. */
+    private opts: { onlyOurs?: boolean; colorId?: string } = {},
   ) {}
 
   private async call(method: string, path: string, body?: unknown): Promise<Response> {
@@ -76,6 +80,12 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
     return ((await res.json()) as { id: string }).id;
   }
 
+  async deleteCalendar(calendarId: string): Promise<void> {
+    const res = await this.call("DELETE", cal(calendarId));
+    if (res.status === 404 || res.status === 410) return;
+    await this.ok(res, "calendars.delete");
+  }
+
   async calendarExists(calendarId: string): Promise<boolean> {
     const res = await this.call("GET", cal(calendarId));
     if (res.status === 404 || res.status === 410) return false;
@@ -115,6 +125,7 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
         timeMax: `${toDate}T23:59:59Z`,
         ...(pageToken ? { pageToken } : {}),
       });
+      if (this.opts.onlyOurs) q.append("privateExtendedProperty", `app=${APP}`);
       const res = await this.ok(await this.call("GET", `${cal(calendarId)}/events?${q}`), "events.list");
       const body = (await res.json()) as { items?: GEvent[]; nextPageToken?: string };
       for (const it of body.items ?? []) {
@@ -148,6 +159,7 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
         summary: e.title,
         description: e.description,
         ...allDay(e.date),
+        ...(this.opts.colorId ? { colorId: this.opts.colorId } : {}),
         ...this.props(e),
       }),
       "events.insert",
