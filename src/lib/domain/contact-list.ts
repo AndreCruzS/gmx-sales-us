@@ -14,7 +14,10 @@
 // filed under Southern California, but its Dallas people are Texas. Everyone
 // else takes the account's region. A branch nobody has placed yet yields NO
 // region rather than the house's: a wrong region credits a wrong rep, and an
-// unplaced person is still found under "All regions" and by name.
+// unplaced person is still found under "All regions" and by name. A house's
+// head-office person, in no branch, has no region either (2026-10-20): the
+// house's own filing is an accident of where it was entered, and the database
+// shows that person to every region.
 //
 // THE WALK (Andre, 2026-10-14, same day: "a sort of breadcrumb when
 // distributors or dealers are selected with first stage as collapsed ... so
@@ -76,6 +79,7 @@ function onPath(r: ContactListRow, path: readonly ContactStep[]): boolean {
 
 export function contactRegion(r: ContactListRow): string | null {
   if (r.branchName !== null) return r.branchTerritoryId;
+  if (r.accountType === "DISTRIBUTOR") return null;
   return r.accountTerritoryId;
 }
 

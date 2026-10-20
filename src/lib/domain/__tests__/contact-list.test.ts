@@ -46,10 +46,14 @@ const ROWS: ContactListRow[] = [
 const byId = (rows: readonly ContactListRow[]) => rows.map((r) => r.id);
 
 describe("where a contact sits (Andre, 2026-10-14: the contacts page gets the sales page's filters)", () => {
-  it("a branch's person takes the branch's region; everyone else takes the account's", () => {
+  it("a branch's person takes the branch's region; a dealer's takes the dealer's", () => {
     expect(contactRegion(ROWS[2])).toBe(REG.texas);
-    expect(contactRegion(ROWS[4])).toBe(REG.se);
     expect(contactRegion(ROWS[5])).toBe(REG.socal);
+  });
+
+  it("a house's head-office person, in no branch, has no region (2026-10-20)", () => {
+    // Rugby is filed under the Southeast; its corporate people serve every region.
+    expect(contactRegion(ROWS[4])).toBeNull();
   });
 
   it("a branch nobody has placed yet does not fall back to the house's region", () => {
@@ -94,7 +98,7 @@ describe("narrowing the directory", () => {
   });
 
   it("an unplaced person shows only under all regions", () => {
-    expect(byId(narrowContacts(ROWS, { ...all, regionId: REG.se }))).toEqual(["c5"]);
+    expect(byId(narrowContacts(ROWS, { ...all, regionId: REG.se }))).toEqual([]);
     expect(byId(narrowContacts(ROWS, all))).toContain("c4");
   });
 
@@ -216,8 +220,8 @@ describe("counts for the chips", () => {
     const n = countBy(ROWS, contactRegion);
     expect(n.get(REG.socal)).toBe(3);
     expect(n.get(REG.texas)).toBe(1);
-    expect(n.get(REG.se)).toBe(1);
+    expect(n.has(REG.se)).toBe(false);
     expect(n.has("")).toBe(false);
-    expect([...n.values()].reduce((a, b) => a + b, 0)).toBe(5);
+    expect([...n.values()].reduce((a, b) => a + b, 0)).toBe(4);
   });
 });

@@ -130,8 +130,8 @@ export default function ContactsPage() {
 
   // The cache first — contacts ride the working set with the account names
   // beside them, so the list stands with no signal at all. The cache knows no
-  // branches, so a cached distributor person sits under the house's region
-  // until the network answers.
+  // branches, so a cached distributor person has no region until the network
+  // answers.
   useEffect(() => {
     if (!profile) return;
     void (async () => {
