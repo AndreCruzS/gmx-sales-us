@@ -5794,3 +5794,58 @@ input[type="datetime-local"] {
 .walk .scope-divider {
   display: block;
 }
+
+/* ── Needs your attention, one widget per kind (2026-10-20) ─────────────────
+   Cards side by side on a desk, stacked on a phone; each a flex column so
+   the pager sits on the floor and two cards' arrows line up. */
+.attn-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 400px) {
+  .attn-widgets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.attn-widget {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px 14px;
+}
+.attn-widget[data-danger] {
+  border-color: var(--danger-tint);
+}
+.attn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.attn-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Inside a widget a row is a line, not a card of its own: the widget is the
+   card, and a card of cards reads as noise. */
+.attn-widget .list {
+  gap: 0;
+}
+.attn-widget .row {
+  padding: 10px 2px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  box-shadow: none;
+}
+.attn-widget li:last-child .row {
+  border-bottom: 0;
+}
+.attn-widget a.row:hover {
+  background: var(--surface-page);
+}

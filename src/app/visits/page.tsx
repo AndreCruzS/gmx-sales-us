@@ -18,22 +18,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { AgendaCalendar } from "@/components/agenda-calendar";
+import { AttentionWidgets } from "@/components/attention-widgets";
 import { NewCompanyInline } from "@/components/new-company-inline";
 import { RepsMenu } from "@/components/reps-menu";
 import { manages } from "@/lib/domain/roles";
-import {
-  AlertIcon,
-  CalendarIcon,
-  CheckIcon,
-  ChevronRightIcon,
-} from "@/components/icons";
+import { CalendarIcon, CheckIcon } from "@/components/icons";
 import {
   VISIT_OBJECTIVES,
   humanize,
   type VisitObjective,
 } from "@/lib/domain/enums";
-import { DANGER_EXCEPTIONS, exceptionLabel } from "@/lib/domain/exceptions";
-import { displayAccountName, relativizeDates } from "@/lib/format";
+import { DANGER_EXCEPTIONS } from "@/lib/domain/exceptions";
+import { relativizeDates } from "@/lib/format";
 import {
   getOfflineLayer,
   wipeLocalData,
@@ -398,12 +394,8 @@ function VisitsPageInner() {
             e.exception_type === "OVERDUE_FOLLOW_UP")
         ),
     );
-    // Danger first — the tier order is the read order.
-    return kept.sort(
-      (a, b) =>
-        Number(DANGER_EXCEPTIONS.has(b.exception_type)) -
-        Number(DANGER_EXCEPTIONS.has(a.exception_type)),
-    );
+    // The widgets order themselves: danger first, then the biggest pile.
+    return kept;
   }, [attention, items, calendarView]);
 
   const nothingPlanned = items.length === 0;
@@ -651,52 +643,7 @@ function VisitsPageInner() {
               <span className="t-meta">{flagged.length}</span>
             )}
           </div>
-          <ul className="list">
-            {flagged.map((e) => {
-              const danger = DANGER_EXCEPTIONS.has(e.exception_type);
-              const body = (
-                <>
-                  <span
-                    className="row-lead"
-                    style={
-                      danger ? { background: "var(--danger-tint)" } : undefined
-                    }
-                  >
-                    <AlertIcon
-                      size={18}
-                      style={{
-                        color: danger ? "var(--danger)" : "var(--accent-ink)",
-                      }}
-                    />
-                  </span>
-                  <span className="row-body">
-                    <span className="t-title block truncate">
-                      {e.title ? displayAccountName(e.title) : e.title}
-                    </span>
-                    <span className="t-sub block">
-                      {exceptionLabel(e.exception_type)}
-                      {e.detail ? ` — ${relativizeDates(e.detail)}` : ""}
-                    </span>
-                  </span>
-                </>
-              );
-              return (
-                <li key={`${e.exception_type}-${e.subject_id}`}>
-                  {e.subject_type === "account" ? (
-                    <Link href={`/accounts/${e.subject_id}`} className="row">
-                      {body}
-                      <ChevronRightIcon
-                        size={14}
-                        style={{ color: "var(--ink-muted)" }}
-                      />
-                    </Link>
-                  ) : (
-                    <div className="row">{body}</div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <AttentionWidgets rows={flagged} />
         </section>
       )}
 
