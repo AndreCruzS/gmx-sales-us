@@ -33,8 +33,8 @@ import {
 import { AttentionWidgets, type AttentionItem } from "@/components/attention-widgets";
 import { syncStatusLabel } from "@/components/sync-badge";
 import { HOME_EXCEPTION_TYPES } from "@/lib/domain/exceptions";
-import { ACTIVE_QUOTE_STAGES } from "@/lib/domain/quotes";
-import { displayAccountName, formatMoney } from "@/lib/format";
+import { ACTIVE_QUOTE_STAGES, isOverdue, quoteStageLabel, sortQuotes } from "@/lib/domain/quotes";
+import { displayAccountName, formatDay, formatMoney } from "@/lib/format";
 import {
   getOfflineLayer,
   type CachedAccount,
@@ -53,6 +53,20 @@ import { buildDayTimeline, type TimelineStop } from "@/lib/routine/day-timeline"
 import { useReviewCount } from "@/lib/review/count";
 import { DaySpine } from "./day-spine";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+interface OpenQuote {
+  id: string;
+  name: string;
+  stage: string;
+  estimated_revenue: number | null;
+  expected_close_date: string | null;
+  current_status: string | null;
+  primary_account_id: string;
+  account: { name: string } | null;
+}
+
+/** Five on the home; the rest is one tap away on Quotes. */
+const OPEN_QUOTES_SHOWN = 5;
 
 // Same two alarm tiers as /visits: a broken promise or money on the table is
 // danger, hygiene the system noticed is attention. Home surfaces the danger
@@ -179,6 +193,10 @@ export default function HomeClient() {
   const [settings, setSettings] = useState<RoutineSettings>(DEFAULT_SETTINGS);
   const [attention, setAttention] = useState<number | null>(null);
   const [health, setHealth] = useState<AttentionItem[]>([]);
+  // The quotes themselves, for "Open quotes" (Andre, 2026-10-20): the ones a
+  // rep still has out, chasing first — the Quotes tab's own order.
+  const [openQuotes, setOpenQuotes] = useState<OpenQuote[]>([]);
+  const [quotesToday, setQuotesToday] = useState("");
   const [quotes, setQuotes] = useState<{ count: number; value: number } | null>(
     null,
   );
@@ -276,12 +294,18 @@ export default function HomeClient() {
       try {
         const { data, error } = await getSupabaseBrowserClient()
           .from("opportunities")
-          .select("estimated_revenue")
+          .select(
+            "id, name, stage, estimated_revenue, expected_close_date, current_status, primary_account_id, account:accounts!opportunities_primary_account_id_fkey(name)",
+          )
           .in("stage", ACTIVE_QUOTE_STAGES as unknown as string[])
           .limit(500);
         if (error) throw new Error(error.message);
         if (cancelled) return;
-        const rows = (data ?? []) as { estimated_revenue: number | null }[];
+        const rows = (data ?? []) as unknown as OpenQuote[];
+        const d = new Date();
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        setQuotesToday(iso);
+        setOpenQuotes(sortQuotes(rows, iso));
         setQuotes({
           count: rows.length,
           value: rows.reduce((sum, r) => sum + (r.estimated_revenue ?? 0), 0),
@@ -740,6 +764,57 @@ export default function HomeClient() {
                 <span className="t-meta">{health.length}</span>
               </div>
               <AttentionWidgets rows={health} />
+            </section>
+          )}
+
+          {openQuotes.length > 0 && (
+            <section>
+              <div className="section-head">
+                <h2 className="t-section">Open quotes</h2>
+                <Link href="/quotes" className="t-meta">
+                  {openQuotes.length > OPEN_QUOTES_SHOWN ? `All ${openQuotes.length}` : openQuotes.length}
+                </Link>
+              </div>
+              <ul className="list">
+                {openQuotes.slice(0, OPEN_QUOTES_SHOWN).map((q) => {
+                  const late = isOverdue(q, quotesToday);
+                  return (
+                    <li key={q.id}>
+                      <Link href={`/accounts/${q.primary_account_id}`} className="row">
+                        <span className="row-body">
+                          <span className="t-title block truncate">{q.name}</span>
+                          <span className="t-sub block truncate">
+                            {q.account ? displayAccountName(q.account.name) : "Account"}
+                            {q.current_status ? ` · ${q.current_status}` : ""}
+                          </span>
+                          <span className="t-hint mt-0.5 block">
+                            {quoteStageLabel(q.stage)}
+                            {q.expected_close_date ? (
+                              <>
+                                {" · "}
+                                <span
+                                  style={late ? { color: "var(--danger)", fontWeight: 700 } : undefined}
+                                >
+                                  {late ? "was due " : "closes "}
+                                  {formatDay(q.expected_close_date)}
+                                </span>
+                              </>
+                            ) : (
+                              " · no close date"
+                            )}
+                          </span>
+                        </span>
+                        <span
+                          className="shrink-0 text-right text-[15px] font-bold"
+                          style={{ fontFamily: "var(--font-fig)" }}
+                        >
+                          {formatMoney(q.estimated_revenue)}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             </section>
           )}
 

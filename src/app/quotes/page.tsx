@@ -182,7 +182,7 @@ export default function QuotesPage() {
           <span className="text-right">
             <span
               className="fig fig-lg block"
-              style={{ fontFamily: "var(--font-mono)" }}
+              style={{ fontFamily: "var(--font-fig)" }}
             >
               {formatMoney(totalValue(rows ?? []))}
             </span>
@@ -258,7 +258,7 @@ export default function QuotesPage() {
                     </span>
                     <span
                       className="shrink-0 text-right text-[15px] font-bold"
-                      style={{ fontFamily: "var(--font-mono)" }}
+                      style={{ fontFamily: "var(--font-fig)" }}
                     >
                       {formatMoney(r.estimated_revenue)}
                     </span>
