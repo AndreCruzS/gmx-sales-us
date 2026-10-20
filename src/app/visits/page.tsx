@@ -28,7 +28,7 @@ import {
   humanize,
   type VisitObjective,
 } from "@/lib/domain/enums";
-import { DANGER_EXCEPTIONS } from "@/lib/domain/exceptions";
+import { AGENDA_EXCEPTION_TYPES, DANGER_EXCEPTIONS } from "@/lib/domain/exceptions";
 import { relativizeDates } from "@/lib/format";
 import {
   getOfflineLayer,
@@ -242,8 +242,11 @@ function VisitsPageInner() {
     void getSupabaseBrowserClient()
       .from("exceptions")
       .select("exception_type, subject_type, subject_id, title, detail")
+      // Only what booking or chasing answers; an account's health is read on
+      // the rep's home (2026-10-20). Paged in widgets, so no 20-row cut.
+      .in("exception_type", AGENDA_EXCEPTION_TYPES)
       .order("since", { ascending: true })
-      .limit(20)
+      .limit(1000)
       .then(({ data }) => setAttention((data as ExceptionRow[]) ?? []));
   }, [profile, status.lastPulledAt]);
 
@@ -636,7 +639,7 @@ function VisitsPageInner() {
       {flagged.length > 0 && (
         <section>
           <div className="section-head">
-            <h2 className="t-section">Needs your attention</h2>
+            <h2 className="t-section">To book or chase</h2>
             {flagged.some((e) => DANGER_EXCEPTIONS.has(e.exception_type)) ? (
               <span className="tag tag-danger">{flagged.length}</span>
             ) : (

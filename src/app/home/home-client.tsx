@@ -11,8 +11,12 @@
 // The one exception is "Needs attention": that number is server truth
 // (danger-tier exceptions), so it's fetched here directly and its count is
 // mirrored into meta `attention_count` for the next cold start offline —
-// the same D56 pattern the old Today page used, scoped to the danger tier
-// only (hygiene warnings stay on /visits, not this screen).
+// the same D56 pattern the old Today page used, scoped to the danger tier.
+//
+// YOUR ACCOUNTS (Andre, 2026-10-20): the account-health exceptions — gone
+// quiet, no captain, wall unchecked — moved here from the Agenda, which
+// keeps only what booking or chasing answers. Read live, one widget per
+// kind; with no signal the section is simply not there.
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,7 +30,9 @@ import {
   SearchIcon,
   XIcon,
 } from "@/components/icons";
+import { AttentionWidgets, type AttentionItem } from "@/components/attention-widgets";
 import { syncStatusLabel } from "@/components/sync-badge";
+import { HOME_EXCEPTION_TYPES } from "@/lib/domain/exceptions";
 import { ACTIVE_QUOTE_STAGES } from "@/lib/domain/quotes";
 import { displayAccountName, formatMoney } from "@/lib/format";
 import {
@@ -172,6 +178,7 @@ export default function HomeClient() {
   const [activities, setActivities] = useState<CachedActivity[]>([]);
   const [settings, setSettings] = useState<RoutineSettings>(DEFAULT_SETTINGS);
   const [attention, setAttention] = useState<number | null>(null);
+  const [health, setHealth] = useState<AttentionItem[]>([]);
   const [quotes, setQuotes] = useState<{ count: number; value: number } | null>(
     null,
   );
@@ -239,7 +246,18 @@ export default function HomeClient() {
       }
     }
 
+    async function loadHealth() {
+      const { data, error } = await getSupabaseBrowserClient()
+        .from("exceptions")
+        .select("exception_type, subject_type, subject_id, title, detail")
+        .in("exception_type", HOME_EXCEPTION_TYPES)
+        .order("since", { ascending: true })
+        .limit(1000);
+      if (!cancelled && !error) setHealth((data as AttentionItem[]) ?? []);
+    }
+
     void loadAttention();
+    void loadHealth().catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -714,6 +732,16 @@ export default function HomeClient() {
               </Link>
             </div>
           </section>
+
+          {health.length > 0 && (
+            <section>
+              <div className="section-head">
+                <h2 className="t-section">Your accounts</h2>
+                <span className="t-meta">{health.length}</span>
+              </div>
+              <AttentionWidgets rows={health} />
+            </section>
+          )}
 
           {/* The four ways in, as leadership marked them up on the demo
               (13 Aug): talk, agenda, dealer, quotes. Two of them carry their

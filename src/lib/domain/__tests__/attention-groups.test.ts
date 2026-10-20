@@ -44,3 +44,24 @@ describe("grouping the attention list", () => {
     expect(groupAttention([])).toEqual([]);
   });
 });
+
+describe("which screen reads which kind (2026-10-20)", () => {
+  it("every named kind is read on exactly one screen", async () => {
+    const { AGENDA_EXCEPTION_TYPES, HOME_EXCEPTION_TYPES, EXCEPTION_LABEL } = await import(
+      "@/lib/domain/exceptions"
+    );
+    const agenda = new Set<string>(AGENDA_EXCEPTION_TYPES);
+    for (const t of Object.keys(EXCEPTION_LABEL)) {
+      expect(agenda.has(t) !== HOME_EXCEPTION_TYPES.includes(t)).toBe(true);
+    }
+  });
+
+  it("the agenda keeps what a date answers; the home keeps the account's health", async () => {
+    const { AGENDA_EXCEPTION_TYPES, HOME_EXCEPTION_TYPES } = await import("@/lib/domain/exceptions");
+    expect(AGENDA_EXCEPTION_TYPES).toContain("OVERDUE_FOLLOW_UP");
+    expect(AGENDA_EXCEPTION_TYPES).toContain("NEXT_WEEK_NOT_PLANNED");
+    expect(HOME_EXCEPTION_TYPES).toContain("NO_CHAMPION");
+    expect(HOME_EXCEPTION_TYPES).toContain("DISPLAY_NOT_VERIFIED");
+    expect(HOME_EXCEPTION_TYPES).toContain("STRATEGIC_ACCOUNT_QUIET");
+  });
+});

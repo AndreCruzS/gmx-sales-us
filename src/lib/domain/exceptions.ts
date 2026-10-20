@@ -67,3 +67,22 @@ export function exceptionLabel(type: string): string {
 export function exceptionShort(type: string): string {
   return EXCEPTION_SHORT[type] ?? exceptionLabel(type);
 }
+
+// WHERE EACH KIND IS READ (Andre, 2026-10-20: the attention widgets "não tem a
+// ver com a agenda em si ... home do rep seria melhor"). The Agenda keeps what
+// is answered by putting something ON the agenda — a date, a call, a chase.
+// Everything else is the state of an account, and is read on the rep's home.
+export const AGENDA_EXCEPTION_TYPES = [
+  "OVERDUE_FOLLOW_UP",
+  "NEXT_WEEK_NOT_PLANNED",
+  "NEW_ACCOUNT_NO_FOLLOW_UP",
+  "QUOTE_NO_FOLLOW_UP",
+  "OPPORTUNITY_NO_NEXT_ACTION",
+] as const;
+
+const AGENDA_SET: ReadonlySet<string> = new Set(AGENDA_EXCEPTION_TYPES);
+
+/** The account-health kinds: every named kind that is not the agenda's. */
+export const HOME_EXCEPTION_TYPES: readonly string[] = Object.keys(EXCEPTION_LABEL).filter(
+  (t) => !AGENDA_SET.has(t),
+);
