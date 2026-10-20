@@ -141,6 +141,11 @@ function VisitsPageInner() {
     return () => mq.removeEventListener("change", apply);
   }, []);
   const calendarView = desk && manages(profile?.role);
+  // A rep at a desk gets the wall too (Andre, 2026-10-20: "as we see in
+  // admin, display also the calendar with the appointments") — above their
+  // own list, not instead of it. RLS hands a rep only their own visits, so
+  // the wall is theirs alone; the rail and the hand-over stay a manager's.
+  const showCalendar = desk;
 
   const [planAccount, setPlanAccount] = useState(() => {
     const plan = searchParams.get("plan");
@@ -525,7 +530,7 @@ function VisitsPageInner() {
         )}
       </section>
 
-      {calendarView && <AgendaCalendar bump={calBump} onError={setError} />}
+      {showCalendar && <AgendaCalendar bump={calBump} onError={setError} />}
 
       {/* The week nobody planned, beside the month it is about. Moved from
           the sales Overview (Bianca, 2026-09-08). */}
