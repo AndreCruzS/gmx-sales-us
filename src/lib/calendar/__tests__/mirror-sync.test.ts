@@ -4,7 +4,15 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import type { VisitRow } from "../team-port";
-import { mirrorSummary, mirrorTitle, syncRepMirrors, type MirrorRep, type MirrorStore } from "../mirror-sync";
+import {
+  OWN_AGENDA_SUMMARY,
+  mirrorSummary,
+  mirrorTitle,
+  syncRepMirrors,
+  type MirrorRep,
+  type MirrorStore,
+  type SavedMirror,
+} from "../mirror-sync";
 import { FakeCalendar } from "./fake-calendar";
 
 const TODAY = "2026-10-20";
@@ -14,7 +22,7 @@ class FakeMirrorStore implements MirrorStore {
     { membershipId: "m-deonn", email: "deonn.deford@gmxgroup.com", fullName: "Deonn Deford", ownGrant: null },
     { membershipId: "m-jason", email: "jason.benford@gmxgroup.com", fullName: "Jason Benford", ownGrant: null },
   ];
-  mirrors = new Map<string, { calendarId: string; sharedWith: string | null }>();
+  mirrors = new Map<string, SavedMirror>();
   visits: VisitRow[] = [];
   results = new Map<string, string | null>();
   async listReps() {
@@ -23,7 +31,7 @@ class FakeMirrorStore implements MirrorStore {
   async getMirror(id: string) {
     return this.mirrors.get(id) ?? null;
   }
-  async saveMirror(id: string, m: { calendarId: string; sharedWith: string | null }) {
+  async saveMirror(id: string, m: SavedMirror) {
     this.mirrors.set(id, { ...m });
   }
   async listOpenVisits(from: string, to: string) {
@@ -255,5 +263,80 @@ describe("in the rep's own calendar, when they connected Google (2026-10-20)", (
     const r = await syncRepMirrors(cal, store, TODAY);
     expect(r.own).toBe(0);
     expect(cal.calendars.get(store.mirrors.get("m-deonn")!.calendarId)).toBe("GMX · Deonn Deford");
+  });
+});
+
+describe("a GMX Agenda of its own in the rep's account (calendar.app.created)", () => {
+  let own: FakeCalendar;
+  const ownFactory = () => own;
+
+  beforeEach(() => {
+    own = new FakeCalendar();
+    own.calendars.set("primary", "deonn.deford@gmxgroup.com");
+    own.acls.set("primary", new Map());
+    own.events.set("primary", []);
+    own.handMade("primary", "2026-10-22", "Dentist");
+    store.reps[0].ownGrant = "rt-deonn";
+    store.reps[0].ownMakesCalendar = true;
+  });
+
+  function agendaId() {
+    return store.mirrors.get("m-deonn")!.calendarId;
+  }
+
+  it("is made in the rep's account and holds their visits, without the GMX prefix", async () => {
+    const r = await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(r.own).toBe(1);
+    expect(store.mirrors.get("m-deonn")!.livesIn).toBe("own");
+    expect(own.calendars.get(agendaId())).toBe(OWN_AGENDA_SUMMARY);
+    expect(own.events.get(agendaId())!.map((e) => e.title).sort()).toEqual([
+      "Ride-along",
+      "Visit — Ganahl Anaheim",
+    ]);
+    // Nothing in the primary but the rep's own; nothing shared from the team account for her.
+    expect(own.events.get("primary")!.map((e) => e.title)).toEqual(["Dentist"]);
+    expect([...cal.calendars.values()]).toEqual(["GMX · Jason Benford"]);
+  });
+
+  it("is made once, and a replay changes nothing", async () => {
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    const r = await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect([r.created, r.inserted, r.updated, r.deleted]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("is made again when the rep deleted it", async () => {
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    own.calendars.delete(agendaId());
+    const r = await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(r.created).toBe(1);
+    expect(own.events.get(agendaId())).toHaveLength(2);
+  });
+
+  it("the day the grant gains the scope, our events leave the primary", async () => {
+    store.reps[0].ownMakesCalendar = false;
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(own.events.get("primary")!.filter((e) => e.nextActionId)).toHaveLength(2);
+    store.reps[0].ownMakesCalendar = true;
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(own.events.get("primary")!.map((e) => e.title)).toEqual(["Dentist"]);
+    expect(own.events.get(agendaId())!.filter((e) => e.nextActionId)).toHaveLength(2);
+  });
+
+  it("the shared copy in the team account is deleted the day the rep connects", async () => {
+    store.reps[0].ownGrant = null;
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    const shared = agendaId();
+    store.reps[0].ownGrant = "rt-deonn";
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(cal.calendars.has(shared)).toBe(false);
+    expect(store.mirrors.get("m-deonn")!.livesIn).toBe("own");
+  });
+
+  it("a rep who disconnects gets a shared calendar in the team account again", async () => {
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    store.reps[0].ownGrant = null;
+    await syncRepMirrors(cal, store, TODAY, ownFactory);
+    expect(store.mirrors.get("m-deonn")!.livesIn).toBe("team");
+    expect(cal.calendars.get(agendaId())).toBe("GMX · Deonn Deford");
   });
 });

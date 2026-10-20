@@ -25,6 +25,13 @@
 // removed there. The shared calendar is the fallback for a rep who has not
 // connected, and is deleted the day they do, so a visit never shows twice.
 //
+// A CALENDAR OF ITS OWN IN THE REP'S ACCOUNT (2026-10-20, once Brian added
+// calendar.app.created to the consent screen). A grant holding it gets
+// "GMX · Agenda" made in the rep's own account — no invite, a calendar they
+// can hide or colour, and an app that can touch nothing else they hold. The
+// primary-calendar mode stays only for a grant that holds calendar.events
+// alone; the day it gains the narrower scope, our events leave the primary.
+//
 // One rep failing does not stop the others; errors are named per rep.
 
 import { humanize } from "@/lib/domain/enums";
@@ -37,10 +44,24 @@ export interface MirrorRep {
   fullName: string;
   /** The rep's own Google refresh token when it can write events; else null. */
   ownGrant: string | null;
+  /** The grant may make a calendar of its own (calendar.app.created). */
+  ownMakesCalendar?: boolean;
 }
 
 /** The registered id that means "the rep's own primary calendar". */
 export const OWN_CALENDAR = "primary";
+
+/** The calendar made in a rep's own account — their name is redundant there. */
+export const OWN_AGENDA_SUMMARY = "GMX · Agenda";
+
+/** Whose account a registered calendar is in. */
+export type LivesIn = "team" | "own";
+
+export interface SavedMirror {
+  calendarId: string;
+  sharedWith: string | null;
+  livesIn: LivesIn;
+}
 
 /** Opens a port onto a rep's own Google account, from their grant. */
 export type OwnCalendarFactory = (refreshToken: string) => TeamCalendarPort;
@@ -48,8 +69,8 @@ export type OwnCalendarFactory = (refreshToken: string) => TeamCalendarPort;
 export interface MirrorStore {
   /** Active reps with an e-mail — everyone who gets a mirror. */
   listReps(): Promise<MirrorRep[]>;
-  getMirror(membershipId: string): Promise<{ calendarId: string; sharedWith: string | null } | null>;
-  saveMirror(membershipId: string, m: { calendarId: string; sharedWith: string | null }): Promise<void>;
+  getMirror(membershipId: string): Promise<SavedMirror | null>;
+  saveMirror(membershipId: string, m: SavedMirror): Promise<void>;
   /** Open visits in the window, every owner. */
   listOpenVisits(fromDate: string, toDate: string): Promise<VisitRow[]>;
   recordMirror(membershipId: string, r: { syncedAt: string; error: string | null }): Promise<void>;
@@ -158,25 +179,50 @@ async function mirrorOne(
 ): Promise<void> {
   const saved = await store.getMirror(rep.membershipId);
 
-  // ── The rep's own calendar, when they gave us their grant ────────────────
+  // ── The rep's own account, when they gave us their grant ─────────────────
   if (rep.ownGrant && ownCalendar) {
+    const own = ownCalendar(rep.ownGrant);
     // The shared copy goes first: two calendars showing one visit is the
     // one thing this must never do.
-    if (saved && saved.calendarId !== OWN_CALENDAR) {
+    if (saved && saved.livesIn === "team") {
       await calendar.deleteCalendar(saved.calendarId);
     }
-    if (!saved || saved.calendarId !== OWN_CALENDAR) {
-      await store.saveMirror(rep.membershipId, { calendarId: OWN_CALENDAR, sharedWith: null });
+    const inOwn = saved?.livesIn === "own" ? saved.calendarId : null;
+
+    if (rep.ownMakesCalendar) {
+      let calendarId = inOwn && inOwn !== OWN_CALENDAR ? inOwn : null;
+      if (calendarId && !(await own.calendarExists(calendarId))) calendarId = null;
+      if (!calendarId) {
+        // Leaving the primary: take our events out of it before the agenda
+        // is made, so a failure here leaves nothing shown twice.
+        if (inOwn === OWN_CALENDAR) {
+          await project(own, OWN_CALENDAR, true, rep, [], fromDate, toDate, report);
+        }
+        calendarId = await own.createCalendar(OWN_AGENDA_SUMMARY);
+        report.created++;
+        await store.saveMirror(rep.membershipId, { calendarId, sharedWith: null, livesIn: "own" });
+      }
+      report.own++;
+      await project(own, calendarId, false, rep, visits, fromDate, toDate, report);
+      return;
+    }
+
+    if (inOwn !== OWN_CALENDAR) {
+      await store.saveMirror(rep.membershipId, {
+        calendarId: OWN_CALENDAR,
+        sharedWith: null,
+        livesIn: "own",
+      });
     }
     report.own++;
-    await project(ownCalendar(rep.ownGrant), OWN_CALENDAR, true, rep, visits, fromDate, toDate, report);
+    await project(own, OWN_CALENDAR, true, rep, visits, fromDate, toDate, report);
     return;
   }
 
   // ── Else the shared calendar in the owner's account ─────────────────────
-  // A row left by the own mode names the rep's primary, which in the owner's
-  // account would be the OWNER's primary: it is not ours to reuse.
-  let calendarId = saved && saved.calendarId !== OWN_CALENDAR ? saved.calendarId : null;
+  // A row left by the own mode names a calendar in the REP's account (or
+  // "primary", which here would be the OWNER's): it is not ours to reuse.
+  let calendarId = saved && saved.livesIn === "team" ? saved.calendarId : null;
   let sharedWith = calendarId ? (saved?.sharedWith ?? null) : null;
   if (calendarId && !(await calendar.calendarExists(calendarId))) {
     calendarId = null;
@@ -190,13 +236,13 @@ async function mirrorOne(
       report.created++;
     }
     sharedWith = null;
-    await store.saveMirror(rep.membershipId, { calendarId, sharedWith });
+    await store.saveMirror(rep.membershipId, { calendarId, sharedWith, livesIn: "team" });
   }
 
   // ── Ensure the share, once per address ────────────────────────────────────
   if (sharedWith !== rep.email) {
     await calendar.grantReader(calendarId, rep.email);
-    await store.saveMirror(rep.membershipId, { calendarId, sharedWith: rep.email });
+    await store.saveMirror(rep.membershipId, { calendarId, sharedWith: rep.email, livesIn: "team" });
     report.shared++;
   }
 

@@ -4,7 +4,8 @@
 //
 // The Google login only proved identity. This page asks Google for the two
 // working permissions — send mail as the rep (gmail.send), write their
-// calendar (calendar.events) and, for a rep, read the mail they trade with
+// calendar (an admin: calendar; a rep: calendar.app.created, a "GMX · Agenda"
+// of its own in their account, 2026-10-20) and, for a rep, read the mail they trade with
 // CRM contacts (gmail.readonly, 2026-10-20) — through the SAME account they signed
 // in with. The OAuth round-trip comes back here carrying a provider refresh
 // token; that token is the durable key the server will use to send quotes
@@ -17,7 +18,7 @@
 
 import { useEffect, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { missingScopes, scopesFor } from "@/lib/google/scopes";
+import { CALENDAR_APP_CREATED, GMAIL_READ, missingScopes, scopesFor } from "@/lib/google/scopes";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 // What each role asks for lives in lib/google/scopes, where the banner reads it too.
@@ -152,6 +153,8 @@ export default function GoogleSetupPage() {
     }
   }
 
+  const missing = conn ? missingScopes(profile?.role, conn.scopes) : [];
+
   return (
     <div className="stack pt-2">
       <section className="flex flex-col gap-3">
@@ -173,17 +176,27 @@ export default function GoogleSetupPage() {
           </p>
         )}
 
-        {conn && missingScopes(profile?.role, conn.scopes).length > 0 ? (
+        {conn && missing.length > 0 ? (
           // CONNECTED BEFORE THE ASK GREW (2026-10-20): the grant is whole for
           // what it was, and short of what the role now asks — one tap mends it.
           <div className="card card-pad flex flex-col gap-3">
-            <p className="t-title">One more permission</p>
+            <p className="t-title">
+              {missing.length > 1 ? "Two more permissions" : "One more permission"}
+            </p>
             <ul className="t-sub flex flex-col gap-1">
-              <li>
-                · Read your email with the clients on your accounts — so a
-                conversation, a promise or a quote lands on the client&rsquo;s
-                record by itself
-              </li>
+              {missing.includes(GMAIL_READ) && (
+                <li>
+                  · Read your email with the clients on your accounts — so a
+                  conversation, a promise or a quote lands on the client&rsquo;s
+                  record by itself
+                </li>
+              )}
+              {missing.includes(CALENDAR_APP_CREATED) && (
+                <li>
+                  · A GMX Agenda calendar in your Google account — your visits
+                  apart from your own events, which the app no longer touches
+                </li>
+              )}
             </ul>
             <p className="t-hint">
               Only email exchanged with contacts in the app is kept. Everything
@@ -225,7 +238,11 @@ export default function GoogleSetupPage() {
             </p>
             <ul className="t-sub flex flex-col gap-1">
               <li>· Send email as you — your quotes, from your address</li>
-              <li>· Add events to your calendar — your visits, on your days</li>
+              <li>
+                {profile?.role === "admin"
+                  ? "· Add events to your calendar — your visits, on your days"
+                  : "· A GMX Agenda calendar in your Google account — your visits, on your days"}
+              </li>
               {profile?.role !== "admin" && (
                 <li>
                   · Read your email with the clients on your accounts — only

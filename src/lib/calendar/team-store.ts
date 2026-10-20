@@ -4,12 +4,19 @@
 // them yet, read as a visit, the Agenda's rule).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MirrorRep, MirrorStore } from "./mirror-sync";
+import type { LivesIn, MirrorRep, MirrorStore, SavedMirror } from "./mirror-sync";
 import type { TeamCalendarStore, VisitRow } from "./team-port";
 
 const EVENT_SCOPES: ReadonlySet<string> = new Set([
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.app.created",
+]);
+
+/** Scopes that let the app make a calendar in the grantor's own account. */
+const MAKE_SCOPES: ReadonlySet<string> = new Set([
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.app.created",
 ]);
 
 const OWNER_EMBED = "memberships!next_actions_owner_id_fkey(users(full_name))";
@@ -215,6 +222,7 @@ export class SupabaseMirrorStore implements MirrorStore {
       .select("membership_id, refresh_token, scopes")
       .in("membership_id", reps.map((r) => r.id));
     const grant = new Map<string, string>();
+    const makes = new Set<string>();
     for (const c of (conns ?? []) as {
       membership_id: string;
       refresh_token: string | null;
@@ -222,6 +230,7 @@ export class SupabaseMirrorStore implements MirrorStore {
     }[]) {
       if (c.refresh_token && (c.scopes ?? []).some((x) => EVENT_SCOPES.has(x))) {
         grant.set(c.membership_id, c.refresh_token);
+        if ((c.scopes ?? []).some((x) => MAKE_SCOPES.has(x))) makes.add(c.membership_id);
       }
     }
     return reps.map((r) => ({
@@ -229,29 +238,32 @@ export class SupabaseMirrorStore implements MirrorStore {
       email: r.users!.email as string,
       fullName: (r.users!.full_name ?? "").trim() || (r.users!.email as string),
       ownGrant: grant.get(r.id) ?? null,
+      ownMakesCalendar: makes.has(r.id),
     }));
   }
 
-  async getMirror(membershipId: string) {
+  async getMirror(membershipId: string): Promise<SavedMirror | null> {
     const { data } = await this.service
       .from("rep_mirror_calendars")
-      .select("google_calendar_id, shared_with")
+      .select("google_calendar_id, shared_with, lives_in")
       .eq("membership_id", membershipId)
       .maybeSingle();
     if (!data?.google_calendar_id) return null;
     return {
       calendarId: data.google_calendar_id as string,
       sharedWith: (data.shared_with as string | null) ?? null,
+      livesIn: (data.lives_in as LivesIn | null) ?? "team",
     };
   }
 
-  async saveMirror(membershipId: string, m: { calendarId: string; sharedWith: string | null }) {
+  async saveMirror(membershipId: string, m: SavedMirror) {
     const { error } = await this.service.from("rep_mirror_calendars").upsert(
       {
         membership_id: membershipId,
         org_id: this.orgId,
         google_calendar_id: m.calendarId,
         shared_with: m.sharedWith,
+        lives_in: m.livesIn,
       },
       { onConflict: "membership_id" },
     );
