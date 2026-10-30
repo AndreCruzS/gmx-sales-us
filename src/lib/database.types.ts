@@ -7,13 +7,190 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
+      account_notes: {
+        Row: {
+          account_id: string
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_customer_sales"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_won_monthly"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["dealer_id"]
+          },
+          {
+            foreignKeyName: "account_notes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "account_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "account_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "account_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "account_notes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_relationships: {
         Row: {
           account_a_id: string
@@ -62,6 +239,13 @@ export type Database = {
             foreignKeyName: "account_relationships_account_a_id_fkey"
             columns: ["account_a_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -113,6 +297,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_a_id_fkey"
+            columns: ["account_a_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "account_relationships_account_a_id_fkey"
@@ -132,6 +323,13 @@ export type Database = {
             foreignKeyName: "account_relationships_account_b_id_fkey"
             columns: ["account_b_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -183,6 +381,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_relationships_account_b_id_fkey"
+            columns: ["account_b_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "account_relationships_account_b_id_fkey"
@@ -287,6 +492,13 @@ export type Database = {
             foreignKeyName: "account_rollout_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: true
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -338,6 +550,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "account_rollout_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "account_rollout_account_id_fkey"
@@ -412,6 +631,7 @@ export type Database = {
           org_id: string
           owner_id: string
           parent_account_id: string | null
+          postal_code: string | null
           referring_account_id: string | null
           relationship_status:
             | Database["public"]["Enums"]["relationship_status_value"]
@@ -439,6 +659,7 @@ export type Database = {
           org_id: string
           owner_id: string
           parent_account_id?: string | null
+          postal_code?: string | null
           referring_account_id?: string | null
           relationship_status?:
             | Database["public"]["Enums"]["relationship_status_value"]
@@ -466,6 +687,7 @@ export type Database = {
           org_id?: string
           owner_id?: string
           parent_account_id?: string | null
+          postal_code?: string | null
           referring_account_id?: string | null
           relationship_status?:
             | Database["public"]["Enums"]["relationship_status_value"]
@@ -526,6 +748,13 @@ export type Database = {
             foreignKeyName: "accounts_parent_account_id_fkey"
             columns: ["parent_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -577,6 +806,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "accounts_parent_account_id_fkey"
@@ -596,6 +832,13 @@ export type Database = {
             foreignKeyName: "accounts_referring_account_id_fkey"
             columns: ["referring_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -647,6 +890,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "accounts_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "accounts_referring_account_id_fkey"
@@ -668,6 +918,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dashboard_territory"
             referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "accounts_territory_id_fkey"
@@ -851,6 +1108,13 @@ export type Database = {
             foreignKeyName: "activities_primary_account_id_fkey"
             columns: ["primary_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -902,6 +1166,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "activities_primary_account_id_fkey"
@@ -952,6 +1223,13 @@ export type Database = {
             foreignKeyName: "activity_accounts_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -1003,6 +1281,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "activity_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "activity_accounts_account_id_fkey"
@@ -1180,6 +1465,13 @@ export type Database = {
             foreignKeyName: "contact_candidates_matched_account_id_fkey"
             columns: ["matched_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -1231,6 +1523,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "contact_candidates_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "contact_candidates_matched_account_id_fkey"
@@ -1265,6 +1564,7 @@ export type Database = {
       contacts: {
         Row: {
           account_id: string
+          branch_id: string | null
           created_at: string
           email: string | null
           hubspot_id: string | null
@@ -1282,6 +1582,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          branch_id?: string | null
           created_at?: string
           email?: string | null
           hubspot_id?: string | null
@@ -1301,6 +1602,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          branch_id?: string | null
           created_at?: string
           email?: string | null
           hubspot_id?: string | null
@@ -1319,6 +1621,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "contacts_account_id_fkey"
             columns: ["account_id"]
@@ -1379,6 +1688,13 @@ export type Database = {
             foreignKeyName: "contacts_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["dealer_id"]
           },
@@ -1390,7 +1706,184 @@ export type Database = {
             referencedColumns: ["distributor_id"]
           },
           {
+            foreignKeyName: "contacts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "distributor_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["branch_id"]
+          },
+          {
             foreignKeyName: "contacts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dealer_aliases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dealer_id: string
+          id: string
+          label: string
+          label_key: string | null
+          note: string | null
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dealer_id: string
+          id?: string
+          label: string
+          label_key?: string | null
+          note?: string | null
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dealer_id?: string
+          id?: string
+          label?: string
+          label_key?: string | null
+          note?: string | null
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dealer_aliases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_customer_sales"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_won_monthly"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["dealer_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "dealer_aliases_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1440,6 +1933,13 @@ export type Database = {
             foreignKeyName: "distributor_branches_distributor_id_fkey"
             columns: ["distributor_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "distributor_branches_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -1496,6 +1996,13 @@ export type Database = {
             foreignKeyName: "distributor_branches_distributor_id_fkey"
             columns: ["distributor_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "distributor_branches_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["dealer_id"]
           },
@@ -1524,6 +2031,13 @@ export type Database = {
             foreignKeyName: "distributor_branches_territory_id_fkey"
             columns: ["territory_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "distributor_branches_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["region_id"]
           },
@@ -1532,6 +2046,131 @@ export type Database = {
             columns: ["territory_id"]
             isOneToOne: false
             referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      distributor_house_accounts: {
+        Row: {
+          created_at: string
+          dealer_label: string
+          distributor_id: string
+          id: string
+          kind: string
+          note: string | null
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dealer_label: string
+          distributor_id: string
+          id?: string
+          kind: string
+          note?: string | null
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dealer_label?: string
+          distributor_id?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_customer_sales"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_won_monthly"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["dealer_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "distributor_house_accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1897,6 +2536,13 @@ export type Database = {
             foreignKeyName: "email_threads_matched_account_id_fkey"
             columns: ["matched_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -1948,6 +2594,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "email_threads_matched_account_id_fkey"
+            columns: ["matched_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "email_threads_matched_account_id_fkey"
@@ -2097,6 +2750,72 @@ export type Database = {
             foreignKeyName: "exception_snapshots_owner_membership_id_fkey"
             columns: ["owner_membership_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+        ]
+      }
+      google_connections: {
+        Row: {
+          connected_at: string
+          google_email: string | null
+          membership_id: string
+          org_id: string
+          refresh_token: string | null
+          scopes: string[]
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string
+          google_email?: string | null
+          membership_id: string
+          org_id: string
+          refresh_token?: string | null
+          scopes?: string[]
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string
+          google_email?: string | null
+          membership_id?: string
+          org_id?: string
+          refresh_token?: string | null
+          scopes?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_connections_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "google_connections_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "google_connections_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "google_connections_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_connections_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
             referencedRelation: "sell_through_rows"
             referencedColumns: ["market_owner_id"]
           },
@@ -2322,6 +3041,13 @@ export type Database = {
             foreignKeyName: "memberships_territory_id_fkey"
             columns: ["territory_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "memberships_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["region_id"]
           },
@@ -2347,11 +3073,15 @@ export type Database = {
           action: string
           activity_id: string | null
           calendar_event_id: string | null
+          calendar_origin: string | null
           completed_at: string | null
+          counterparty_account_id: string | null
           created_at: string
           due_date: string
+          entered_by: string | null
           hubspot_id: string | null
           id: string
+          item_type: Database["public"]["Enums"]["next_action_type"] | null
           kind: Database["public"]["Enums"]["next_action_kind"] | null
           objective: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail: string | null
@@ -2359,6 +3089,8 @@ export type Database = {
           org_id: string
           owner_id: string
           project_id: string | null
+          source: Database["public"]["Enums"]["next_action_source"]
+          source_ref: string | null
           updated_at: string
         }
         Insert: {
@@ -2366,11 +3098,15 @@ export type Database = {
           action: string
           activity_id?: string | null
           calendar_event_id?: string | null
+          calendar_origin?: string | null
           completed_at?: string | null
+          counterparty_account_id?: string | null
           created_at?: string
           due_date: string
+          entered_by?: string | null
           hubspot_id?: string | null
           id?: string
+          item_type?: Database["public"]["Enums"]["next_action_type"] | null
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail?: string | null
@@ -2378,6 +3114,8 @@ export type Database = {
           org_id: string
           owner_id: string
           project_id?: string | null
+          source?: Database["public"]["Enums"]["next_action_source"]
+          source_ref?: string | null
           updated_at?: string
         }
         Update: {
@@ -2385,11 +3123,15 @@ export type Database = {
           action?: string
           activity_id?: string | null
           calendar_event_id?: string | null
+          calendar_origin?: string | null
           completed_at?: string | null
+          counterparty_account_id?: string | null
           created_at?: string
           due_date?: string
+          entered_by?: string | null
           hubspot_id?: string | null
           id?: string
+          item_type?: Database["public"]["Enums"]["next_action_type"] | null
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail?: string | null
@@ -2397,9 +3139,18 @@ export type Database = {
           org_id?: string
           owner_id?: string
           project_id?: string | null
+          source?: Database["public"]["Enums"]["next_action_source"]
+          source_ref?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "next_actions_account_id_fkey"
             columns: ["account_id"]
@@ -2460,6 +3211,13 @@ export type Database = {
             foreignKeyName: "next_actions_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["dealer_id"]
           },
@@ -2483,6 +3241,125 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "weekly_review_recent_activity"
             referencedColumns: ["activity_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_customer_sales"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_won_monthly"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["dealer_id"]
+          },
+          {
+            foreignKeyName: "next_actions_counterparty_account_id_fkey"
+            columns: ["counterparty_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "next_actions_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
           },
           {
             foreignKeyName: "next_actions_opportunity_id_fkey"
@@ -2577,6 +3454,7 @@ export type Database = {
           architect_id: string | null
           builder_id: string | null
           competitor: string | null
+          contact_id: string | null
           contractor_id: string | null
           created_at: string
           current_blocker: string | null
@@ -2589,7 +3467,7 @@ export type Database = {
           expected_close_date: string | null
           hubspot_id: string | null
           id: string
-          lead_source: string
+          lead_source: string | null
           name: string
           org_id: string
           owner_id: string
@@ -2611,6 +3489,7 @@ export type Database = {
           architect_id?: string | null
           builder_id?: string | null
           competitor?: string | null
+          contact_id?: string | null
           contractor_id?: string | null
           created_at?: string
           current_blocker?: string | null
@@ -2623,7 +3502,7 @@ export type Database = {
           expected_close_date?: string | null
           hubspot_id?: string | null
           id?: string
-          lead_source: string
+          lead_source?: string | null
           name: string
           org_id: string
           owner_id: string
@@ -2645,6 +3524,7 @@ export type Database = {
           architect_id?: string | null
           builder_id?: string | null
           competitor?: string | null
+          contact_id?: string | null
           contractor_id?: string | null
           created_at?: string
           current_blocker?: string | null
@@ -2657,7 +3537,7 @@ export type Database = {
           expected_close_date?: string | null
           hubspot_id?: string | null
           id?: string
-          lead_source?: string
+          lead_source?: string | null
           name?: string
           org_id?: string
           owner_id?: string
@@ -2678,6 +3558,13 @@ export type Database = {
             foreignKeyName: "opportunities_architect_id_fkey"
             columns: ["architect_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -2729,6 +3616,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_architect_id_fkey"
+            columns: ["architect_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_architect_id_fkey"
@@ -2748,6 +3642,13 @@ export type Database = {
             foreignKeyName: "opportunities_builder_id_fkey"
             columns: ["builder_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -2799,6 +3700,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_builder_id_fkey"
+            columns: ["builder_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_builder_id_fkey"
@@ -2815,6 +3723,20 @@ export type Database = {
             referencedColumns: ["distributor_id"]
           },
           {
+            foreignKeyName: "opportunities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
             foreignKeyName: "opportunities_contractor_id_fkey"
             columns: ["contractor_id"]
             isOneToOne: false
@@ -2869,6 +3791,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_contractor_id_fkey"
@@ -2888,6 +3817,13 @@ export type Database = {
             foreignKeyName: "opportunities_dealer_id_fkey"
             columns: ["dealer_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -2939,6 +3875,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_dealer_id_fkey"
@@ -2958,6 +3901,13 @@ export type Database = {
             foreignKeyName: "opportunities_developer_id_fkey"
             columns: ["developer_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -3009,6 +3959,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_developer_id_fkey"
+            columns: ["developer_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_developer_id_fkey"
@@ -3028,6 +3985,13 @@ export type Database = {
             foreignKeyName: "opportunities_distributor_id_fkey"
             columns: ["distributor_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -3079,6 +4043,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_distributor_id_fkey"
@@ -3140,6 +4111,13 @@ export type Database = {
             foreignKeyName: "opportunities_primary_account_id_fkey"
             columns: ["primary_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -3191,6 +4169,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "opportunities_primary_account_id_fkey"
+            columns: ["primary_account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "opportunities_primary_account_id_fkey"
@@ -3224,6 +4209,13 @@ export type Database = {
             foreignKeyName: "opportunities_referring_account_id_fkey"
             columns: ["referring_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -3280,6 +4272,13 @@ export type Database = {
             foreignKeyName: "opportunities_referring_account_id_fkey"
             columns: ["referring_account_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "opportunities_referring_account_id_fkey"
+            columns: ["referring_account_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["dealer_id"]
           },
@@ -3296,6 +4295,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dashboard_territory"
             referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "opportunities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "opportunities_territory_id_fkey"
@@ -3413,6 +4419,240 @@ export type Database = {
           },
           {
             foreignKeyName: "opportunity_stage_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_customer_links: {
+        Row: {
+          account_id: string
+          created_at: string
+          customer_id: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          customer_id: string
+          org_id?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          customer_id?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_customer_sales"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_won_monthly"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["dealer_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "order_customer_links_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_customers_mirror: {
+        Row: {
+          account_number: string | null
+          id: string
+          name: string
+          org_id: string
+          synced_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          account_number?: string | null
+          id: string
+          name: string
+          org_id?: string
+          synced_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          account_number?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          synced_at?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_customers_mirror_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders_mirror: {
+        Row: {
+          archived_at: string | null
+          buyer_name: string | null
+          created_at: string | null
+          customer_branch: string | null
+          customer_id: string | null
+          customer_name: string
+          delivered_at: string | null
+          estimated_delivery: string | null
+          id: string
+          items: Json | null
+          order_date_po: string | null
+          order_number: string
+          order_type: string | null
+          org_id: string
+          po_number: string | null
+          priority: string | null
+          ship_to_city: string | null
+          ship_to_state: string | null
+          status: string
+          synced_at: string
+          total_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          buyer_name?: string | null
+          created_at?: string | null
+          customer_branch?: string | null
+          customer_id?: string | null
+          customer_name: string
+          delivered_at?: string | null
+          estimated_delivery?: string | null
+          id: string
+          items?: Json | null
+          order_date_po?: string | null
+          order_number: string
+          order_type?: string | null
+          org_id?: string
+          po_number?: string | null
+          priority?: string | null
+          ship_to_city?: string | null
+          ship_to_state?: string | null
+          status: string
+          synced_at?: string
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          buyer_name?: string | null
+          created_at?: string | null
+          customer_branch?: string | null
+          customer_id?: string | null
+          customer_name?: string
+          delivered_at?: string | null
+          estimated_delivery?: string | null
+          id?: string
+          items?: Json | null
+          order_date_po?: string | null
+          order_number?: string
+          order_type?: string | null
+          org_id?: string
+          po_number?: string | null
+          priority?: string | null
+          ship_to_city?: string | null
+          ship_to_state?: string | null
+          status?: string
+          synced_at?: string
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_mirror_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -3565,6 +4805,13 @@ export type Database = {
             foreignKeyName: "project_stakeholders_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -3616,6 +4863,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "project_stakeholders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "project_stakeholders_account_id_fkey"
@@ -3745,72 +4999,293 @@ export type Database = {
           },
         ]
       }
-      rep_calendars: {
+      quote_items: {
         Row: {
+          account_id: string
           created_at: string
-          google_calendar_id: string
+          created_by: string | null
+          description: string
           id: string
-          membership_id: string
+          input_uom: string
+          lf: number
+          lf_per_piece: number | null
+          nominal_size: string | null
+          opportunity_id: string
           org_id: string
-          status: string
+          price_per_lf: number | null
+          profile: string | null
+          qty_input: number
+          sku: string
+          species: string | null
           updated_at: string
         }
         Insert: {
+          account_id: string
           created_at?: string
-          google_calendar_id: string
+          created_by?: string | null
+          description: string
           id?: string
-          membership_id: string
+          input_uom: string
+          lf: number
+          lf_per_piece?: number | null
+          nominal_size?: string | null
+          opportunity_id: string
           org_id: string
-          status?: string
+          price_per_lf?: number | null
+          profile?: string | null
+          qty_input: number
+          sku: string
+          species?: string | null
           updated_at?: string
         }
         Update: {
+          account_id?: string
           created_at?: string
-          google_calendar_id?: string
+          created_by?: string | null
+          description?: string
           id?: string
-          membership_id?: string
+          input_uom?: string
+          lf?: number
+          lf_per_piece?: number | null
+          nominal_size?: string | null
+          opportunity_id?: string
           org_id?: string
-          status?: string
+          price_per_lf?: number | null
+          profile?: string | null
+          qty_input?: number
+          sku?: string
+          species?: string | null
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "rep_calendars_membership_id_fkey"
-            columns: ["membership_id"]
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_rollout_status"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_customer_sales"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_won_monthly"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_display_not_verified"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_new_account_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_no_champion"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "exception_strategic_account_quiet"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["dealer_id"]
+          },
+          {
+            foreignKeyName: "quote_items_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "quote_items_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "dashboard_rep_scorecard"
             referencedColumns: ["membership_id"]
           },
           {
-            foreignKeyName: "rep_calendars_membership_id_fkey"
-            columns: ["membership_id"]
+            foreignKeyName: "quote_items_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "exception_next_week_not_planned"
             referencedColumns: ["owner_membership_id"]
           },
           {
-            foreignKeyName: "rep_calendars_membership_id_fkey"
-            columns: ["membership_id"]
+            foreignKeyName: "quote_items_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "exception_next_week_not_planned"
             referencedColumns: ["subject_id"]
           },
           {
-            foreignKeyName: "rep_calendars_membership_id_fkey"
-            columns: ["membership_id"]
+            foreignKeyName: "quote_items_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "rep_calendars_membership_id_fkey"
-            columns: ["membership_id"]
+            foreignKeyName: "quote_items_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["market_owner_id"]
           },
           {
-            foreignKeyName: "rep_calendars_org_id_fkey"
+            foreignKeyName: "quote_items_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_no_next_action"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_opportunity_stale"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "exception_quote_no_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "quote_items_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rep_mirror_calendars: {
+        Row: {
+          created_at: string
+          google_calendar_id: string
+          last_error: string | null
+          last_synced_at: string | null
+          lives_in: string
+          membership_id: string
+          org_id: string
+          shared_with: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          google_calendar_id: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          lives_in?: string
+          membership_id: string
+          org_id: string
+          shared_with?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          google_calendar_id?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          lives_in?: string
+          membership_id?: string
+          org_id?: string
+          shared_with?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rep_mirror_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "rep_mirror_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "rep_mirror_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "rep_mirror_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rep_mirror_calendars_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: true
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "rep_mirror_calendars_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -3823,12 +5298,13 @@ export type Database = {
           branch_id: string
           created_at: string
           dealer_id: string | null
-          dealer_label: string
+          dealer_label: string | null
           id: string
           ly_quantity: number | null
           org_id: string
           period: string
           product: string | null
+          product_line: string | null
           quantity: number
           source_quantity: number | null
           source_unit: string | null
@@ -3841,12 +5317,13 @@ export type Database = {
           branch_id: string
           created_at?: string
           dealer_id?: string | null
-          dealer_label: string
+          dealer_label?: string | null
           id?: string
           ly_quantity?: number | null
           org_id: string
           period: string
           product?: string | null
+          product_line?: string | null
           quantity?: number
           source_quantity?: number | null
           source_unit?: string | null
@@ -3859,12 +5336,13 @@ export type Database = {
           branch_id?: string
           created_at?: string
           dealer_id?: string | null
-          dealer_label?: string
+          dealer_label?: string | null
           id?: string
           ly_quantity?: number | null
           org_id?: string
           period?: string
           product?: string | null
+          product_line?: string | null
           quantity?: number
           source_quantity?: number | null
           source_unit?: string | null
@@ -3887,6 +5365,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "sell_through_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
           },
           {
             foreignKeyName: "sell_through_dealer_id_fkey"
@@ -3943,6 +5428,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "sell_through_dealer_id_fkey"
+            columns: ["dealer_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "sell_through_dealer_id_fkey"
@@ -3976,6 +5468,8 @@ export type Database = {
       }
       sell_through_uploads: {
         Row: {
+          branch_id: string | null
+          detail: string
           distributor_id: string
           filename: string | null
           id: string
@@ -3991,6 +5485,8 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          branch_id?: string | null
+          detail?: string
           distributor_id: string
           filename?: string | null
           id?: string
@@ -4006,6 +5502,8 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          branch_id?: string | null
+          detail?: string
           distributor_id?: string
           filename?: string | null
           id?: string
@@ -4021,6 +5519,27 @@ export type Database = {
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sell_through_uploads_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "distributor_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sell_through_uploads_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "sell_through_uploads_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "sell_through_uploads_distributor_id_fkey"
             columns: ["distributor_id"]
@@ -4076,6 +5595,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "sell_through_uploads_distributor_id_fkey"
+            columns: ["distributor_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "sell_through_uploads_distributor_id_fkey"
@@ -4240,6 +5766,85 @@ export type Database = {
           },
         ]
       }
+      team_calendars: {
+        Row: {
+          created_at: string
+          google_calendar_id: string | null
+          last_error: string | null
+          last_synced_at: string | null
+          org_id: string
+          owner_membership_id: string
+          summary: string
+          sync_lease_until: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          google_calendar_id?: string | null
+          last_error?: string | null
+          last_synced_at?: string | null
+          org_id: string
+          owner_membership_id: string
+          summary?: string
+          sync_lease_until?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          google_calendar_id?: string | null
+          last_error?: string | null
+          last_synced_at?: string | null
+          org_id?: string
+          owner_membership_id?: string
+          summary?: string
+          sync_lease_until?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_calendars_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_calendars_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "team_calendars_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "team_calendars_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "team_calendars_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_calendars_owner_membership_id_fkey"
+            columns: ["owner_membership_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+        ]
+      }
       territories: {
         Row: {
           created_at: string
@@ -4271,6 +5876,72 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      territory_cities: {
+        Row: {
+          city: string
+          county: string | null
+          created_at: string
+          org_id: string
+          state: string
+          territory_id: string
+          updated_at: string
+        }
+        Insert: {
+          city: string
+          county?: string | null
+          created_at?: string
+          org_id: string
+          state: string
+          territory_id: string
+          updated_at?: string
+        }
+        Update: {
+          city?: string
+          county?: string | null
+          created_at?: string
+          org_id?: string
+          state?: string
+          territory_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "territory_cities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "territory_cities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "territory_cities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "territory_cities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "territory_cities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "territories"
             referencedColumns: ["id"]
           },
         ]
@@ -4316,11 +5987,78 @@ export type Database = {
             foreignKeyName: "territory_states_territory_id_fkey"
             columns: ["territory_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "territory_states_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "territory_states_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "territories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      territory_targets: {
+        Row: {
+          created_at: string
+          monthly_lf: number
+          org_id: string
+          territory_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          monthly_lf: number
+          org_id: string
+          territory_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          monthly_lf?: number
+          org_id?: string
+          territory_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "territory_targets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "territory_targets_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_territory"
+            referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "territory_targets_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "territory_targets_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "territory_targets_territory_id_fkey"
             columns: ["territory_id"]
             isOneToOne: false
             referencedRelation: "territories"
@@ -4534,6 +6272,13 @@ export type Database = {
             foreignKeyName: "voice_captures_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -4585,6 +6330,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "voice_captures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "voice_captures_account_id_fkey"
@@ -4681,6 +6433,14 @@ export type Database = {
       }
     }
     Views: {
+      account_material_evidence: {
+        Row: {
+          account_id: string | null
+          lf: number | null
+          period: string | null
+        }
+        Relationships: []
+      }
       account_rollout_status: {
         Row: {
           account_id: string | null
@@ -4788,6 +6548,13 @@ export type Database = {
             foreignKeyName: "accounts_parent_account_id_fkey"
             columns: ["parent_account_id"]
             isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
             referencedRelation: "account_rollout_status"
             referencedColumns: ["account_id"]
           },
@@ -4844,6 +6611,13 @@ export type Database = {
             foreignKeyName: "accounts_parent_account_id_fkey"
             columns: ["parent_account_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
+          },
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["dealer_id"]
           },
@@ -4860,6 +6634,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dashboard_territory"
             referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "accounts_territory_id_fkey"
@@ -4894,6 +6675,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dashboard_territory"
             referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "accounts_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "accounts_territory_id_fkey"
@@ -5095,6 +6883,13 @@ export type Database = {
             foreignKeyName: "opportunities_territory_id_fkey"
             columns: ["territory_id"]
             isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "opportunities_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["region_id"]
           },
@@ -5124,6 +6919,13 @@ export type Database = {
           week_start: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "account_material_evidence"
+            referencedColumns: ["account_id"]
+          },
           {
             foreignKeyName: "next_actions_account_id_fkey"
             columns: ["account_id"]
@@ -5179,6 +6981,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exception_strategic_account_quiet"
             referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_house_periods"
+            referencedColumns: ["distributor_id"]
           },
           {
             foreignKeyName: "next_actions_account_id_fkey"
@@ -5298,6 +7107,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dashboard_territory"
             referencedColumns: ["territory_id"]
+          },
+          {
+            foreignKeyName: "memberships_territory_id_fkey"
+            columns: ["territory_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_periods"
+            referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "memberships_territory_id_fkey"
@@ -6172,6 +7988,16 @@ export type Database = {
         }
         Relationships: []
       }
+      rep_effort: {
+        Row: {
+          account_id: string | null
+          happened_at: string | null
+          kind: string | null
+          membership_id: string | null
+          org_id: string | null
+        }
+        Relationships: []
+      }
       routine_items: {
         Row: {
           account_id: string | null
@@ -6186,10 +8012,52 @@ export type Database = {
         }
         Relationships: []
       }
+      sell_through_house_periods: {
+        Row: {
+          distributor_id: string | null
+          distributor_name: string | null
+          org_id: string | null
+          period: string | null
+          period_kind: Database["public"]["Enums"]["sell_period_kind"] | null
+          quantity: number | null
+          unit: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sell_through_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sell_through_latest_period: {
         Row: {
           org_id: string | null
           period: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sell_through_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sell_through_periods: {
+        Row: {
+          org_id: string | null
+          period: string | null
+          period_kind: Database["public"]["Enums"]["sell_period_kind"] | null
+          product_line: string | null
+          quantity: number | null
+          region_id: string | null
+          region_name: string | null
+          row_count: number | null
+          unit: string | null
         }
         Relationships: [
           {
@@ -6210,8 +8078,11 @@ export type Database = {
           dealer_id: string | null
           dealer_label: string | null
           dealer_name: string | null
+          detail: string | null
           distributor_id: string | null
           distributor_name: string | null
+          house_account_kind: string | null
+          is_house_account: boolean | null
           ly_quantity: number | null
           market_owner_id: string | null
           market_owner_name: string | null
@@ -6219,11 +8090,13 @@ export type Database = {
           period: string | null
           period_kind: Database["public"]["Enums"]["sell_period_kind"] | null
           product: string | null
+          product_line: string | null
           quantity: number | null
           region_id: string | null
           region_name: string | null
           rep_id: string | null
           rep_name: string | null
+          row_id: string | null
           unit: string | null
           value: number | null
         }
@@ -6384,6 +8257,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      load_branch_sheet: {
+        Args: { p_rows: Json; p_upload: Json }
+        Returns: string
+      }
       set_active_org: { Args: { p_org_id: string }; Returns: undefined }
       territory_for_state: {
         Args: { p_org: string; p_state: string }
@@ -6446,6 +8323,18 @@ export type Database = {
         | "QUOTE_FOLLOW_UP"
         | "DISPLAY_CHECK"
         | "OTHER"
+      next_action_source:
+        | "MANUAL"
+        | "VOICE"
+        | "VISIT_CAPTURE"
+        | "EMAIL_AI"
+        | "EMAIL_BACKFILL"
+      next_action_type:
+        | "ACTION"
+        | "COORDINATE"
+        | "FOLLOW_UP"
+        | "PROMISE"
+        | "DEADLINE"
       opportunity_stage:
         | "IDENTIFIED"
         | "QUALIFIED"
@@ -6638,6 +8527,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       account_type: [
@@ -6700,6 +8592,20 @@ export const Constants = {
         "QUOTE_FOLLOW_UP",
         "DISPLAY_CHECK",
         "OTHER",
+      ],
+      next_action_source: [
+        "MANUAL",
+        "VOICE",
+        "VISIT_CAPTURE",
+        "EMAIL_AI",
+        "EMAIL_BACKFILL",
+      ],
+      next_action_type: [
+        "ACTION",
+        "COORDINATE",
+        "FOLLOW_UP",
+        "PROMISE",
+        "DEADLINE",
       ],
       opportunity_stage: [
         "IDENTIFIED",
@@ -6778,3 +8684,4 @@ export const Constants = {
     },
   },
 } as const
+
