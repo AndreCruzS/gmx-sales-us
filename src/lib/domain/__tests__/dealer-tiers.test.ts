@@ -84,7 +84,39 @@ describe("tierDealers", () => {
       row({ dealer_label: "AAA", quantity: 10 }),
       row({ dealer_label: "COUNTER", is_house_account: true, quantity: 500 }),
     ];
-    expect(tierDealers(rows, AS_OF).map((d) => d.name)).toHaveLength(1);
+    const t = tierDealers(rows, AS_OF);
+    expect(t.map((d) => d.name)).toHaveLength(1);
+    expect(t[0].lf).toBe(10);
+    expect(t[0].share).toBe(1);
+  });
+
+  it("a dealer with months from one distributor and YTD from another counts both", () => {
+    const rows = [
+      row({ dealer_label: "MIXED", distributor_id: "boise", period: "2026-07-01", quantity: 100 }),
+      row({ dealer_label: "MIXED", distributor_id: "other", period: "2026-08-01", period_kind: "YTD", quantity: 400 }),
+    ];
+    const d = tierDealers(rows, AS_OF)[0];
+    expect(d.lf).toBe(500);
+    expect(d.purchaseMonths).toBe(2);
+  });
+
+  it("YTD from two distributors counts two purchase months", () => {
+    const rows = [
+      row({ dealer_label: "TWOYTD", distributor_id: "boise", period: "2026-08-01", period_kind: "YTD", quantity: 300 }),
+      row({ dealer_label: "TWOYTD", distributor_id: "other", period: "2026-08-01", period_kind: "YTD", quantity: 200 }),
+    ];
+    const d = tierDealers(rows, AS_OF)[0];
+    expect(d.lf).toBe(500);
+    expect(d.purchaseMonths).toBe(2);
+  });
+
+  it("a dealer at exactly 80% cumulative ahead of it is not T1", () => {
+    const rows = [
+      row({ dealer_label: "AAA", quantity: 60 }),
+      row({ dealer_label: "BBB", quantity: 20 }),
+      row({ dealer_label: "CCC", quantity: 20 }),
+    ];
+    expect(tierDealers(rows, AS_OF).map((d) => d.tier)).toEqual(["T1", "T1", "T3"]);
   });
 
   it("rows outside the 12-month window are ignored", () => {

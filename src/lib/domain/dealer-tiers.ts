@@ -58,8 +58,6 @@ function shiftMonth(period: string, by: number): string {
 
 interface Acc {
   rows: SellThroughRow[];
-  months: Set<string>;
-  ytd: SellThroughRow[];
 }
 
 export function tierDealers(rows: readonly SellThroughRow[], asOf: string): DealerTier[] {
@@ -76,13 +74,8 @@ export function tierDealers(rows: readonly SellThroughRow[], asOf: string): Deal
     if (period < start || period >= end) continue;
     const key = dealerKey(r);
     if (key.startsWith(UNDISCLOSED_PREFIX)) continue;
-    const acc = byDealer.get(key) ?? { rows: [], months: new Set<string>(), ytd: [] };
-    if (r.period_kind === "YTD") {
-      acc.ytd.push(r);
-    } else {
-      acc.rows.push(r);
-      acc.months.add(period);
-    }
+    const acc = byDealer.get(key) ?? { rows: [] };
+    acc.rows.push(r);
     byDealer.set(key, acc);
   }
 
@@ -97,23 +90,36 @@ export function tierDealers(rows: readonly SellThroughRow[], asOf: string): Deal
   }
   const measured: Measured[] = [];
   for (const [key, acc] of byDealer) {
-    // YTD rows overlap the monthly ones, so a dealer with any month in the
-    // window is read from months alone. Otherwise each distributor's LATEST
-    // year file stands in for it, as one purchase month.
-    let counted: SellThroughRow[];
-    let purchaseMonths: number;
-    if (acc.rows.length > 0) {
-      counted = acc.rows;
-      purchaseMonths = acc.months.size;
-    } else {
-      const latest = new Map<string, string>();
-      for (const r of acc.ytd) {
-        const seen = latest.get(r.distributor_id);
-        const p = r.period.slice(0, 10);
-        if (seen === undefined || p > seen) latest.set(r.distributor_id, p);
+    // YTD rows overlap the monthly ones, so the rule is per (dealer,
+    // distributor): where that dealer has MONTH rows from a distributor in the
+    // window they are read; otherwise that distributor's LATEST year file
+    // stands in for it, as one purchase month.
+    const monthRows = new Map<string, SellThroughRow[]>();
+    const ytdRows = new Map<string, SellThroughRow[]>();
+    for (const r of acc.rows) {
+      const into = r.period_kind === "YTD" ? ytdRows : monthRows;
+      const list = into.get(r.distributor_id);
+      if (list) list.push(r);
+      else into.set(r.distributor_id, [r]);
+    }
+    const counted: SellThroughRow[] = [];
+    const months = new Set<string>();
+    for (const list of monthRows.values()) {
+      for (const r of list) {
+        counted.push(r);
+        months.add(r.period.slice(0, 10));
       }
-      counted = acc.ytd.filter((r) => r.period.slice(0, 10) === latest.get(r.distributor_id));
-      purchaseMonths = latest.size;
+    }
+    let purchaseMonths = months.size;
+    for (const [distributor, list] of ytdRows) {
+      if (monthRows.has(distributor)) continue;
+      let latest = "";
+      for (const r of list) {
+        const p = r.period.slice(0, 10);
+        if (p > latest) latest = p;
+      }
+      for (const r of list) if (r.period.slice(0, 10) === latest) counted.push(r);
+      purchaseMonths += 1;
     }
 
     let lf = 0;
