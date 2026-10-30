@@ -387,7 +387,7 @@ export function DealerSheet({
                   onAdded?.(item);
                   // Show it in the sheet before the server has it.
                   setLoaded((l) =>
-                    l.state === "ready"
+                    l.state === "ready" && item.account_id === accountId
                       ? {
                           ...l,
                           items: [

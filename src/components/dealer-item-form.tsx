@@ -168,8 +168,10 @@ export function DealerItemForm({
       .slice(0, 8);
   }, [dealerQuery, opts]);
 
+  // The sheet's label only stands for the dealer the sheet is ON; with no
+  // accountId the reader picks one, and that pick names the row.
   const pickedDealerName =
-    accountName ??
+    (accountId ? accountName : undefined) ??
     (dealerId && opts?.dealers.find((d) => d.id === dealerId)
       ? displayAccountName(opts.dealers.find((d) => d.id === dealerId)!.name)
       : null);

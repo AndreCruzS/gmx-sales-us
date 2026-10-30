@@ -227,13 +227,17 @@ export function TabBar() {
 
   const [today, agenda, quotes, accounts, contacts] = TABS;
   const desk = manages(profile?.role);
+  // An assistant keeps the rep's bar, with Dealers where Quotes sat — five
+  // slots is all the phone has, and Quotes is still in the Add menu. The
+  // desk's bar is untouched.
+  const assistant = profile?.role === "support";
   // The desk's bar: Sales · Dealers · Reps · Add · Accounts. The Agenda and
   // the Quotes are reached from the Reps board, and the Reps tab stays lit
   // while the reader is on either of them — they are that board's readings.
   // Contacts is reached from the Accounts board the same way, so on the desk
   // the Accounts tab stays lit on /contacts.
   const repTabs = desk ? [] : [agenda];
-  const moneyTabs = desk ? [accounts] : [quotes, accounts, contacts];
+  const moneyTabs = desk ? [accounts] : assistant ? [DEALERS_TAB, accounts, contacts] : [quotes, accounts, contacts];
   const tabActive = (href: string) =>
     isActive(href) || (desk && href === "/accounts" && pathname.startsWith("/contacts"));
   const deskOnly = (label: string) => !desk && label === "Contacts";

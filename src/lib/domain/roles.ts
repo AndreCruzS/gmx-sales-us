@@ -30,3 +30,17 @@ export function manages(role: string | null | undefined): boolean {
 export function isAdmin(role: string | null | undefined): boolean {
   return role === "admin";
 }
+
+/**
+ * Who is OFFERED the Dealers board: the desk, and the assistants who write
+ * to-dos up for an executive (spec §7). An assistant's membership role is
+ * "support"; the board is where they enter an item "for" the person who
+ * delegated to them.
+ *
+ * Offering is not permission. RLS still decides which rows an assistant reads
+ * and which owners they may insert for (admin, or a support_assignments row).
+ * This is only whether the screen and its tab are worth showing.
+ */
+export function seesDealersBoard(role: string | null | undefined): boolean {
+  return manages(role) || role === "support";
+}

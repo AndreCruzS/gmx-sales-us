@@ -39,7 +39,7 @@ import {
   type DealerTier,
   type Tier,
 } from "@/lib/domain/dealer-tiers";
-import { manages } from "@/lib/domain/roles";
+import { seesDealersBoard } from "@/lib/domain/roles";
 import { isBranchLevel, type BranchRef, type SellThroughRow } from "@/lib/domain/sell-through";
 import { displayAccountName } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -116,7 +116,7 @@ function shiftMonth(period: string, by: number): string {
 
 export default function DealersPage() {
   const { profile } = useOffline();
-  const desk = manages(profile?.role);
+  const desk = seesDealersBoard(profile?.role);
 
   const [rows, setRows] = useState<SellThroughRow[]>([]);
   const [accounts, setAccounts] = useState<DealerAccount[]>([]);
@@ -248,7 +248,7 @@ export default function DealersPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!profile || !manages(profile.role)) return;
+    if (!profile || !seesDealersBoard(profile.role)) return;
     const timer = setTimeout(() => void attempt(), 0);
     return () => clearTimeout(timer);
   }, [profile, attempt]);
@@ -427,7 +427,7 @@ export default function DealersPage() {
       <div className="stack pt-2">
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Dealers</h1>
-          <p className="t-sub mt-1">This page is for the sales desk.</p>
+          <p className="t-sub mt-1">This page is for the sales desk and the assistants who work with it.</p>
         </section>
       </div>
     );
