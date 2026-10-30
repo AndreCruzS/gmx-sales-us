@@ -157,7 +157,7 @@ export function AgendaCalendar({
         supabase
           .from("next_actions")
           .select(
-            "id, action, due_date, completed_at, account_id, objective, kind, owner_id, updated_at, accounts(name)",
+            "id, action, due_date, completed_at, account_id, objective, kind, owner_id, updated_at, accounts!next_actions_account_id_fkey(name)",
           )
           .gte("due_date", monthStart)
           .lte("due_date", monthEnd)

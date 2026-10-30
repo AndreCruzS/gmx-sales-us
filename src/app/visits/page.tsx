@@ -181,7 +181,7 @@ function VisitsPageInner() {
       const { data, error } = await getSupabaseBrowserClient()
         .from("next_actions")
         .select(
-          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, updated_at, accounts(name)",
+          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, updated_at, accounts!next_actions_account_id_fkey(name)",
         )
         .is("completed_at", null)
         .lte("due_date", visitHorizon)
