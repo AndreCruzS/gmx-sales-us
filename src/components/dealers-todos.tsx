@@ -132,7 +132,7 @@ export function DealersTodos({
         </button>
         <span className="t-hint">
           {items.length === 0
-            ? "nothing open on a dealer"
+            ? "nothing open"
             : `${QTY.format(scoped.length)} open${late > 0 ? ` · ${QTY.format(late)} late` : ""}`}
         </span>
         </span>
@@ -193,7 +193,7 @@ export function DealersTodos({
       {total === 0 ? (
         <p className="t-sub dl-todos-empty">
           {items.length === 0
-            ? "No to-do is open on any dealer. They appear here when a visit note or Say it sets one."
+            ? "No to-do is open on any account. They appear here when a visit note or Say it sets one."
             : `Nothing under ${BUCKET_LABEL[bucket].toLowerCase()}${who ? " for this person" : ""}.`}
         </p>
       ) : (
