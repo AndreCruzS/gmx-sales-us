@@ -245,7 +245,12 @@ export function DealerSheet({
     closeRef.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       // The dealer module opens over the sheet and takes the first Escape.
-      if (e.key === "Escape" && !document.querySelector(".dmod")) onClose();
+      if (e.key !== "Escape" || document.querySelector(".dmod")) return;
+      // Escape inside the + Add form is the typist's, not the sheet's: closing
+      // here would throw away what they were writing.
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
