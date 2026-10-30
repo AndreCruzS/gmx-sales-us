@@ -64,6 +64,11 @@ interface DealerAccount {
   territory_id: string | null;
 }
 
+interface MemberName {
+  id: string;
+  users: { full_name: string | null } | null;
+}
+
 interface VisitRow {
   primary_account_id: string;
   occurred_at: string;
@@ -174,30 +179,33 @@ export default function DealersPage() {
       ),
       // Names for owners and for whoever typed a to-do — memberships, not the
       // rep scorecard, because an admin who enters one is not a rep.
-      supabase.from("memberships").select("id, users(full_name)").limit(1000),
-      supabase.from("territories").select("id, name").limit(1000),
+      fetchAllPages<MemberName>((from, to) =>
+        supabase
+          .from("memberships")
+          .select("id, users(full_name)")
+          .order("id")
+          .range(from, to)
+          .then((r) => ({ data: r.data as unknown as MemberName[] | null, error: r.error })),
+      ),
+      fetchAllPages<{ id: string; name: string }>((from, to) =>
+        supabase.from("territories").select("id, name").order("id").range(from, to),
+      ),
       // Every yard, the quiet ones too — the map pins them hollow.
-      supabase
-        .from("distributor_branches")
-        .select("id, distributor_id, name, city, state")
-        .limit(500),
+      fetchAllPages<BranchRef>((from, to) =>
+        supabase
+          .from("distributor_branches")
+          .select("id, distributor_id, name, city, state")
+          .order("id")
+          .range(from, to),
+      ),
     ]);
-    if (ms.error) throw new Error(ms.error.message);
-    if (tr.error) throw new Error(tr.error.message);
     setRows(st);
     setAccounts(ac);
     setItems(na);
     setVisits(vs);
-    setNames(
-      new Map(
-        ((ms.data as unknown as { id: string; users: { full_name: string | null } | null }[]) ??
-          []).map((m) => [m.id, m.users?.full_name ?? "Someone"] as const),
-      ),
-    );
-    setMarketNames(
-      new Map(((tr.data as { id: string; name: string }[]) ?? []).map((t) => [t.id, t.name])),
-    );
-    setBranches(br.error ? [] : ((br.data as BranchRef[]) ?? []));
+    setNames(new Map(ms.map((m) => [m.id, m.users?.full_name ?? "Someone"] as const)));
+    setMarketNames(new Map(tr.map((t) => [t.id, t.name])));
+    setBranches(br);
     setAsOf(first);
     setTodayIso(isoOf(now));
     setLoadedAt(Date.now());
