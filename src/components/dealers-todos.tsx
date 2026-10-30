@@ -17,6 +17,7 @@
 // a rep's promise for them after a joint visit.
 
 import { useMemo, useState } from "react";
+import { DealerItemForm } from "@/components/dealer-item-form";
 import { Pager, usePaged, usePageSize } from "@/components/pager";
 import type { Tier } from "@/lib/domain/dealer-tiers";
 import {
@@ -68,6 +69,7 @@ export function DealersTodos({
   names,
   tierOf,
   onOpen,
+  onAdded,
   span,
 }: {
   items: readonly DealerItem[];
@@ -77,11 +79,14 @@ export function DealersTodos({
   /** The dealer's tier by account id, when the files give it one. */
   tierOf: (accountId: string | null) => Tier | null;
   onOpen: (accountId: string, name: string) => void;
+  /** A to-do was just added from this card; the board shows it at once. */
+  onAdded: (item: DealerItem) => void;
   span: string;
 }) {
   const [bucket, setBucket] = useState<Bucket>("action");
   // null = Everyone; otherwise a membership id ("Mine" is the reader's own).
   const [who, setWho] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const people = useMemo(() => {
     const ids = [...new Set(items.map((i) => i.owner_id))].filter((id) => id !== myId);
@@ -121,12 +126,21 @@ export function DealersTodos({
     <section className="adapt card dl-todos" data-desk="todos" data-span={span}>
       <div className="quiet-head">
         <span className="t-title">To-dos</span>
+        <span className="flex items-baseline gap-3">
+        <button type="button" className="t-action" onClick={() => setAdding((a) => !a)}>
+          {adding ? "Close" : "+ Add"}
+        </button>
         <span className="t-hint">
           {items.length === 0
             ? "nothing open on a dealer"
             : `${QTY.format(scoped.length)} open${late > 0 ? ` · ${QTY.format(late)} late` : ""}`}
         </span>
+        </span>
       </div>
+
+      {adding && (
+        <DealerItemForm onDone={() => setAdding(false)} onSaved={onAdded} />
+      )}
 
       <div className="dl-todos-controls">
         <div className="chip-row" role="group" aria-label="Kind of to-do">

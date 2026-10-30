@@ -23,6 +23,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDealerModule } from "@/components/dealer-module";
+import { DealerItemForm } from "@/components/dealer-item-form";
+import type { DealerItem } from "@/components/dealers-todos";
 import { AlertIcon } from "@/components/icons";
 import type { OpenDealer } from "@/app/dealers/page";
 import {
@@ -202,6 +204,7 @@ export function DealerSheet({
   onClose,
   teamPerVisit = null,
   names,
+  onAdded,
 }: {
   dealer: OpenDealer;
   tier: DealerTier | null;
@@ -210,6 +213,8 @@ export function DealerSheet({
   teamPerVisit?: number | null;
   /** Membership id → full name, the board's own map. */
   names?: ReadonlyMap<string, string>;
+  /** A to-do was added here; the board lists it too. */
+  onAdded?: (item: DealerItem) => void;
 }) {
   const dealerModule = useDealerModule();
   const accountId = dealer.accountId;
@@ -218,6 +223,7 @@ export function DealerSheet({
   );
   const [attempt, setAttempt] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!accountId) return;
@@ -371,6 +377,42 @@ export function DealerSheet({
           </p>
         ) : (
           <>
+            {/* ── ADD a to-do on this dealer ───────────────────────────── */}
+            {adding ? (
+              <DealerItemForm
+                accountId={accountId ?? undefined}
+                accountName={name}
+                onDone={() => setAdding(false)}
+                onSaved={(item) => {
+                  onAdded?.(item);
+                  // Show it in the sheet before the server has it.
+                  setLoaded((l) =>
+                    l.state === "ready"
+                      ? {
+                          ...l,
+                          items: [
+                            ...l.items,
+                            {
+                              id: item.id,
+                              action: item.action,
+                              due_date: item.due_date,
+                              completed_at: null,
+                              account_id: item.account_id,
+                              activity_id: null,
+                              item_type: item.item_type,
+                            },
+                          ],
+                        }
+                      : l,
+                  );
+                }}
+              />
+            ) : (
+              <button type="button" className="t-action dsh-more" onClick={() => setAdding(true)}>
+                + Add
+              </button>
+            )}
+
             {/* ── LAST VISIT, and what is still pending from it ─────────── */}
             <section className="dmod-card">
               {last ? (

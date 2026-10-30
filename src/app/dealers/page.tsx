@@ -137,6 +137,12 @@ export default function DealersPage() {
   const [selected, setSelected] = useState<OpenDealer | null>(null);
   const onOpenDealer = useCallback((d: OpenDealer) => setSelected(d), []);
   const onCloseDealer = useCallback(() => setSelected(null), []);
+  // A to-do added from the board is shown at once (and counted in the dealer's
+  // open/late figures); the outbox sends it, the next load confirms it.
+  const onAdded = useCallback(
+    (item: DealerItem) => setItems((list) => [...list, item]),
+    [],
+  );
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -571,6 +577,7 @@ export default function DealersPage() {
             name,
           })
         }
+        onAdded={onAdded}
         span={span("todos")}
       />
 
@@ -593,6 +600,7 @@ export default function DealersPage() {
         onClose={onCloseDealer}
         teamPerVisit={teamPerVisit}
         names={names}
+        onAdded={onAdded}
       />
     )}
     </div>
