@@ -7,7 +7,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(10);
 
 select has_type('public', 'next_action_type', 'item type enum exists');
 select has_column('public', 'next_actions', 'item_type', 'next_actions has item_type');
@@ -47,6 +47,21 @@ select throws_ok(
      values ('11111111-1111-1111-1111-111111111111', 'Call back',
              'c0000000-0000-0000-0000-000000000003', current_date + 3, 'ACTION') $$,
   '42501', null, 'a rep cannot enter an item for a peer');
+-- Forged provenance: Deon claims João entered his own item.
+insert into next_actions (id, org_id, action, owner_id, due_date, item_type, entered_by)
+values ('e0000000-0000-0000-0000-0000000000a2', '11111111-1111-1111-1111-111111111111',
+        'Own item', 'c0000000-0000-0000-0000-000000000004', current_date + 3, 'ACTION',
+        'c0000000-0000-0000-0000-000000000002');
+select is(
+  (select entered_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000a2'),
+  'c0000000-0000-0000-0000-000000000004'::uuid,
+  'a forged entered_by is replaced by the signed-in member');
+update next_actions set entered_by = 'c0000000-0000-0000-0000-000000000002'
+ where id = 'e0000000-0000-0000-0000-0000000000a2';
+select is(
+  (select entered_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000a2'),
+  'c0000000-0000-0000-0000-000000000004'::uuid,
+  'an update cannot change entered_by');
 reset role;
 
 select * from finish();

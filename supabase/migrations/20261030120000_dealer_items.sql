@@ -33,7 +33,10 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  if new.entered_by is null then
+  -- A signed-in member is always the one who entered it: whatever the client
+  -- sent is ignored. Without a membership (service role, server jobs such as
+  -- the email import) the supplied value stands.
+  if private.active_membership_id() is not null then
     new.entered_by := private.active_membership_id();
   end if;
   if new.item_type is null and new.kind is distinct from 'VISIT' then
@@ -46,6 +49,22 @@ $$;
 create trigger zz_stamp_next_action_item
   before insert on next_actions
   for each row execute function private.stamp_next_action_item();
+
+-- entered_by is provenance: set once on insert, never changed afterwards.
+create or replace function private.keep_next_action_entered_by()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.entered_by := old.entered_by;
+  return new;
+end;
+$$;
+
+create trigger keep_next_action_entered_by
+  before update on next_actions
+  for each row execute function private.keep_next_action_entered_by();
 
 -- Insert: own/visible rows as before, plus an item for someone else only when
 -- the member entered it themselves and is an admin or assigned to that owner.
