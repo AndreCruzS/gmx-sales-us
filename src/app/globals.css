@@ -6101,3 +6101,221 @@ button.dl-todo:hover {
     padding-inline: 5px;
   }
 }
+
+/* ── The dealer sheet (2026-10-30, mockup v3 screen 2) ──────────────────────
+   A dealer opened from the board. Below the desk it is a sheet over the page —
+   the whole width on a phone, a right-hand panel on a tablet — under the
+   dealer module (z 70), which opens on top of it from "Sales facts". On the
+   desk (>=1280) it stops floating: the board and the sheet share the row, the
+   sheet sticks under the top bar, and the list keeps its place. */
+.dsh {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-page);
+}
+@media (min-width: 640px) and (max-width: 1279px) {
+  .dsh {
+    left: auto;
+    width: min(520px, 100%);
+    box-shadow: var(--shadow-2);
+  }
+}
+.dsh-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--rule);
+}
+.dsh-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dsh-back-desk {
+  display: none;
+}
+.dsh-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 24px;
+}
+.dsh-note {
+  padding: 2px 2px 0;
+}
+.dsh-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+}
+.dsh-eyebrow {
+  margin: 0;
+}
+.dsh-eyebrow + .dsh-items,
+.dsh-items + .dsh-eyebrow,
+.dsh-visit-note + .dsh-eyebrow,
+.t-hint + .dsh-eyebrow {
+  margin-top: 6px;
+}
+.dsh-visit-who {
+  margin: -4px 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+.dsh-visit-note {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.4;
+  color: var(--ink-primary);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.dsh-items {
+  display: flex;
+  flex-direction: column;
+}
+.dsh-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+}
+.dsh-item:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+.dsh-item-what {
+  min-width: 0;
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  overflow-wrap: anywhere;
+}
+.dsh-stats {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--ink-secondary);
+}
+.dsh-stats .fig {
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.dsh-stats .fig.dl-late-text {
+  color: var(--danger);
+}
+.dsh-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--danger);
+}
+.dsh-warn svg {
+  margin-top: 1px;
+}
+.dsh-timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 0 5px;
+  padding: 0 0 0 14px;
+  border-left: 2px solid var(--rule);
+  list-style: none;
+}
+.dsh-tl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0 9px;
+}
+.dsh-tl::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface-card));
+}
+.dsh-tl:first-child::before {
+  background: var(--accent-deep);
+}
+.dsh-tl-head {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.dsh-tl-head b {
+  color: var(--ink-primary);
+}
+.dsh-tl-note {
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  overflow-wrap: anywhere;
+}
+.dsh-more {
+  align-self: flex-start;
+  min-height: 36px;
+}
+.dsh-facts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+.dsh-facts:hover span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (min-width: 1280px) {
+  .dl-layout[data-open] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 20px;
+    align-items: start;
+  }
+  .dl-layout[data-open] .dsh {
+    position: sticky;
+    inset: auto;
+    top: calc(var(--topbar-h) + 12px);
+    z-index: 1;
+    max-height: calc(100dvh - var(--topbar-h) - 24px);
+    margin-top: 8px;
+    border-radius: var(--r-card);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow-1);
+  }
+  .dsh-head {
+    border-radius: var(--r-card) var(--r-card) 0 0;
+  }
+  .dsh-back-phone {
+    display: none;
+  }
+  .dsh-back-desk {
+    display: inline;
+  }
+}

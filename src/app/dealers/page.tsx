@@ -18,11 +18,14 @@
 // The tier is a fact of the files (dealer-tiers.ts), not a label somebody
 // types, so the page never asks anyone to set one.
 //
-// A row opens the dealer. The dealer sheet is the next piece of work; until
-// it lands, opening only marks the row (`selected`), which is the hook the
-// sheet will read.
+// A row — or a to-do — opens the dealer sheet (dealer-sheet.tsx): beside the
+// board on the desk, so the list stays where the reader left it; a full-width
+// sheet on a phone. Its "Sales facts" open the dealer module, so the board
+// sits inside a DealerModuleProvider with the rows it already holds.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DealerModuleProvider } from "@/components/dealer-module";
+import { DealerSheet } from "@/components/dealer-sheet";
 import { DealerTable, TierTile, type DealerLine } from "@/components/dealers-table";
 import { DealersTodos, type DealerItem } from "@/components/dealers-todos";
 import { useOffline } from "@/components/offline-provider";
@@ -69,6 +72,12 @@ interface MemberName {
   users: { full_name: string | null } | null;
 }
 
+/** A promise on an account, open or closed — for the team's promises per visit. */
+interface PromiseRow {
+  id: string;
+  account_id: string | null;
+}
+
 interface VisitRow {
   primary_account_id: string;
   occurred_at: string;
@@ -113,6 +122,7 @@ export default function DealersPage() {
   const [accounts, setAccounts] = useState<DealerAccount[]>([]);
   const [items, setItems] = useState<DealerItem[]>([]);
   const [visits, setVisits] = useState<VisitRow[]>([]);
+  const [promises, setPromises] = useState<PromiseRow[]>([]);
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [marketNames, setMarketNames] = useState<Map<string, string>>(new Map());
   const [branches, setBranches] = useState<BranchRef[]>([]);
@@ -123,10 +133,10 @@ export default function DealersPage() {
   const [loadFailed, setLoadFailed] = useState(false);
 
   const [picked, setPicked] = useState<string | null>(null);
-  // THE HOOK FOR THE DEALER SHEET (Task 7): which dealer is open. Today it
-  // only marks the row; the sheet will read it.
+  // Which dealer the sheet shows; it also marks the row in the table.
   const [selected, setSelected] = useState<OpenDealer | null>(null);
   const onOpenDealer = useCallback((d: OpenDealer) => setSelected(d), []);
+  const onCloseDealer = useCallback(() => setSelected(null), []);
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -136,7 +146,7 @@ export default function DealersPage() {
     // behind), so that is all the page fetches — paged, because PostgREST
     // caps every answer at 1,000 rows without saying so.
     const start = shiftMonth(first, -12);
-    const [st, ac, na, vs, ms, tr, br] = await Promise.all([
+    const [st, ac, na, vs, ms, tr, br, pr] = await Promise.all([
       fetchAllPages<SellThroughRow>((from, to) =>
         supabase
           .from("sell_through_rows")
@@ -198,11 +208,22 @@ export default function DealersPage() {
           .order("id")
           .range(from, to),
       ),
+      // Every promise ever made, kept ones too — the team's promises per
+      // visit, which the dealer sheet weighs one dealer against.
+      fetchAllPages<PromiseRow>((from, to) =>
+        supabase
+          .from("next_actions")
+          .select("id, account_id")
+          .eq("item_type", "PROMISE")
+          .order("id")
+          .range(from, to),
+      ),
     ]);
     setRows(st);
     setAccounts(ac);
     setItems(na);
     setVisits(vs);
+    setPromises(pr);
     setNames(new Map(ms.map((m) => [m.id, m.users?.full_name ?? "Someone"] as const)));
     setMarketNames(new Map(tr.map((t) => [t.id, t.name])));
     setBranches(br);
@@ -295,6 +316,15 @@ export default function DealersPage() {
     return m;
   }, [items, todayIso]);
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+
+  // The team's promises per visit, over dealer accounts only — the yardstick
+  // the sheet's warning line reads one dealer against.
+  const teamPerVisit = useMemo(() => {
+    const v = visits.filter((x) => accountById.has(x.primary_account_id)).length;
+    const p = promises.filter((x) => x.account_id && accountById.has(x.account_id)).length;
+    return v > 0 ? p / v : null;
+  }, [visits, promises, accountById]);
+  const tierByKey = useMemo(() => new Map(tiers.map((t) => [t.key, t] as const)), [tiers]);
 
   const lines = useMemo<DealerLine[]>(() => {
     const out: DealerLine[] = [];
@@ -444,6 +474,8 @@ export default function DealersPage() {
   const hasBlindRows = mapRows.some(isBranchLevel);
 
   return (
+    <DealerModuleProvider rows={rows}>
+    <div className="dl-layout" data-open={selected ? "" : undefined}>
     <div className="stack pt-2 mgr-home dealers-board">
       <section data-desk="hero" data-span="full">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Dealers</h1>
@@ -553,5 +585,17 @@ export default function DealersPage() {
         span={span("table")}
       />
     </div>
+    {selected && (
+      <DealerSheet
+        key={selected.key}
+        dealer={selected}
+        tier={tierByKey.get(selected.key) ?? null}
+        onClose={onCloseDealer}
+        teamPerVisit={teamPerVisit}
+        names={names}
+      />
+    )}
+    </div>
+    </DealerModuleProvider>
   );
 }
