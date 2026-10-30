@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  nextActionCreateSchema,
   nextActionUpdateSchema,
   accountCreateSchema,
   accountNoteCreateSchema,
@@ -265,5 +266,38 @@ describe("nextActionUpdateSchema — handing a visit to a rep (team calendar, 20
       owner_id: "22222222-2222-4222-8222-222222222222",
     });
     expect(out.owner_id).toBe("22222222-2222-4222-8222-222222222222");
+  });
+});
+
+describe("nextActionCreateSchema dealer fields", () => {
+  it("a next_action create keeps item_type, source and entered_by", () => {
+    const parsed = nextActionCreateSchema.parse({
+      id: PLANNED_ACTION,
+      org_id: ORG,
+      action: "Send the price list",
+      owner_id: OWNER,
+      due_date: "2026-11-02",
+      item_type: "PROMISE",
+      source: "VOICE",
+      entered_by: OWNER,
+      counterparty_account_id: ACCOUNT,
+    });
+    expect(parsed.item_type).toBe("PROMISE");
+    expect(parsed.source).toBe("VOICE");
+    expect(parsed.entered_by).toBe(OWNER);
+    expect(parsed.counterparty_account_id).toBe(ACCOUNT);
+  });
+
+  it("rejects an unknown item_type", () => {
+    expect(
+      nextActionCreateSchema.safeParse({
+        id: PLANNED_ACTION,
+        org_id: ORG,
+        action: "x",
+        owner_id: OWNER,
+        due_date: "2026-11-02",
+        item_type: "NOPE",
+      }).success,
+    ).toBe(false);
   });
 });

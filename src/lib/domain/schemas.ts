@@ -13,6 +13,7 @@ import {
   RELATIONSHIP_TYPES,
   VISIT_OBJECTIVES,
 } from "./enums";
+import { ITEM_TYPES } from "./dealer-items";
 
 // Postgres accepts any 8-4-4-4-12 hex uuid (our seed fixtures use stylized
 // ones); Zod's z.uuid() enforces RFC version/variant nibbles — too strict.
@@ -87,6 +88,15 @@ export const nextActionCreateSchema = z.object({
   // (src/lib/voice/draft.ts) — DISPLAY_CHECK is deliberately excluded, since
   // that kind is only ever derived from an account, never created directly.
   kind: z.enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"]).nullish(),
+
+  // Dealers page (2026-10-30): the to-do's type and where it came from. Zod
+  // strips unknown keys, so a field not listed here vanishes in the outbox.
+  // entered_by is advisory — the database overwrites it with the signed-in
+  // member on insert. EMAIL_AI / EMAIL_BACKFILL are written server-side only.
+  item_type: z.enum(ITEM_TYPES).nullish(),
+  source: z.enum(["MANUAL", "VOICE", "VISIT_CAPTURE"]).nullish(),
+  entered_by: uuid.nullish(),
+  counterparty_account_id: uuid.nullish(),
 });
 export type NextActionCreate = z.infer<typeof nextActionCreateSchema>;
 
