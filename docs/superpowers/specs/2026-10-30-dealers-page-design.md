@@ -44,10 +44,10 @@ Nav: **Sales · Dealers · Reps · Accounts** (agreed in the meeting).
 ### Reused
 - **`activities`** = visits. `what_happened` holds the summary; the timeline and "last visit" read from it.
 - **`next_actions`** = every to-do. New columns:
-  - `kind` enum: `action`, `coordinate`, `follow_up`, `promise`, `deadline`. The overview tabs are Action items (`action`, `promise`, `deadline`), To coordinate, Follow-ups.
+  - `item_type` enum `next_action_type`: `ACTION`, `COORDINATE`, `FOLLOW_UP`, `PROMISE`, `DEADLINE` (shipped as a new column because `kind` already serves the routine list; visits keep it null, older follow-ups were backfilled as `FOLLOW_UP`). The overview tabs are Action items (`ACTION`, `PROMISE`, `DEADLINE`), To coordinate, Follow-ups.
   - `source` enum: `manual`, `voice`, `visit_capture`, `email_ai`, `email_backfill`; `source_ref` text (message id or voice capture id).
   - `entered_by` → memberships. `owner_id` stays as whose item it is.
-  - `status` enum: `proposed`, `open`, `dismissed`. Only `open` items count anywhere. `completed_at` still marks done.
+  - `status` enum (phase 4, with the email AI): `proposed`, `open`, `dismissed`. Only `open` items count anywhere. `completed_at` still marks done.
   - `counterparty_account_id` → accounts, for deadlines with a distributor ("Boise: paint finish").
 - **`sell_through`**: volume and actuals, always in LF.
 - Territory and branch region give the **market**, same rule as the sales map.
@@ -59,7 +59,7 @@ Nav: **Sales · Dealers · Reps · Accounts** (agreed in the meeting).
 - `rep_estimates` (rep_id, account_id, month, estimated_lf, timestamps; unique per rep, account, month).
 
 ### Computed
-- **Tier view**, trailing 12 months of dealer-level sell-through:
+- **Tiers** (shipped as `tierDealers` in `src/lib/domain/dealer-tiers.ts`, not a database view, because most dealers are keyed by their file label), trailing 12 months of dealer-level sell-through. Year files count per distributor only where that distributor sent no months. Shown to admins only: non-admins read a subset of sell-through under RLS.
   - T1: dealers that together make up 80% of LF, ranked by LF.
   - T3: fewer than 3 purchase months in the window.
   - T2: the rest.
@@ -95,7 +95,8 @@ AI rules:
 
 ## 7. Permissions
 
-- Admins: read all; write goals, stars, potential.
+- Admins: read all, including tiers; write goals, stars, potential.
+- Managers and support (assistants) open the board without tier figures.
 - Reps: write visits, items and estimates for their own accounts.
 - Assistants: write items "for" the executive who delegated to them (`entered_by` ≠ `owner_id`).
 
