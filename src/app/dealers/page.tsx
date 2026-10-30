@@ -39,7 +39,7 @@ import {
   type DealerTier,
   type Tier,
 } from "@/lib/domain/dealer-tiers";
-import { seesDealersBoard } from "@/lib/domain/roles";
+import { isAdmin, seesDealersBoard } from "@/lib/domain/roles";
 import { isBranchLevel, type BranchRef, type SellThroughRow } from "@/lib/domain/sell-through";
 import { displayAccountName } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -117,6 +117,10 @@ function shiftMonth(period: string, by: number): string {
 export default function DealersPage() {
   const { profile } = useOffline();
   const desk = seesDealersBoard(profile?.role);
+  // Tiers are worked out from EVERY dealer's sales. Only an admin reads every
+  // row (the sell_through policy hands the rest only the dealers they can see),
+  // so only an admin is shown a tier.
+  const showTiers = isAdmin(profile?.role);
 
   const [rows, setRows] = useState<SellThroughRow[]>([]);
   const [accounts, setAccounts] = useState<DealerAccount[]>([]);
@@ -267,8 +271,8 @@ export default function DealersPage() {
     return m;
   }, [tiers]);
   const tierOf = useCallback(
-    (id: string | null) => (id ? (tierByAccount.get(id)?.tier ?? null) : null),
-    [tierByAccount],
+    (id: string | null) => (showTiers && id ? (tierByAccount.get(id)?.tier ?? null) : null),
+    [tierByAccount, showTiers],
   );
 
   // ── THE MAP: monthly LF rows only — a year file overlaps the months it
@@ -365,13 +369,15 @@ export default function DealersPage() {
         late: o?.late ?? 0,
       });
     }
-    return out.sort(
-      (a, b) =>
-        (a.tier ? TIER_ORDER[a.tier] : 3) - (b.tier ? TIER_ORDER[b.tier] : 3) ||
-        b.lf - a.lf ||
-        a.name.localeCompare(b.name),
+    // Tier order and LF order both give the tiers away; without them, by name.
+    return out.sort((a, b) =>
+      showTiers
+        ? (a.tier ? TIER_ORDER[a.tier] : 3) - (b.tier ? TIER_ORDER[b.tier] : 3) ||
+          b.lf - a.lf ||
+          a.name.localeCompare(b.name)
+        : a.name.localeCompare(b.name),
     );
-  }, [tiers, untiered, accountById, openBy, lastVisit]);
+  }, [tiers, untiered, accountById, openBy, lastVisit, showTiers]);
 
   // ── THE MARKETS ──────────────────────────────────────────────────────────
   const marketName = useCallback(
@@ -397,11 +403,12 @@ export default function DealersPage() {
       m.set(l.market, mk);
     }
     // Most Tier 1 first — the order of where the volume is.
-    return [...m.values()].sort(
-      (a, b) =>
-        b.t1 - a.t1 || b.t2 - a.t2 || b.t3 - a.t3 || a.name.localeCompare(b.name),
+    return [...m.values()].sort((a, b) =>
+      showTiers
+        ? b.t1 - a.t1 || b.t2 - a.t2 || b.t3 - a.t3 || a.name.localeCompare(b.name)
+        : a.name.localeCompare(b.name),
     );
-  }, [lines, marketName]);
+  }, [lines, marketName, showTiers]);
 
   const shown = useMemo(
     () => (picked ? lines.filter((l) => l.market === picked) : lines),
@@ -491,7 +498,9 @@ export default function DealersPage() {
         </p>
       </section>
 
-      {/* THE FOUR FIGURES — the tiers, and the dealers with no sales on file. */}
+      {/* THE FOUR FIGURES — the tiers, and the dealers with no sales on file.
+          Admins only: a tier is worked out from every dealer's sales. */}
+      {showTiers ? (
       <section className="adapt" data-desk="tiles" data-span="full">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <TierTile
@@ -514,10 +523,17 @@ export default function DealersPage() {
           />
         </div>
       </section>
+      ) : (
+        <section data-desk="tiles" data-span="full">
+          <p className="t-hint">
+            Tiers are shown to admins: they are worked out from every dealer&rsquo;s sales.
+          </p>
+        </section>
+      )}
 
       {/* THE MAP, then one card per market. Picking either narrows the table. */}
       <section className="adapt card card-pad dl-map" data-desk="map" data-span={span("map")}>
-        <p className="sales-eyebrow dl-eyebrow">Tier map · by market</p>
+        <p className="sales-eyebrow dl-eyebrow">{showTiers ? "Tier map · by market" : "Map · by market"}</p>
         <SalesMap
           rows={mapRows}
           branches={branches}
@@ -544,13 +560,17 @@ export default function DealersPage() {
                 onClick={() => pick(picked === m.key ? null : m.key)}
               >
                 <span className="dl-market-name">{m.name}</span>
-                <span className="dl-market-tiers">
-                  T1 {m.t1} · T2 {m.t2} · T3 {m.t3}
-                </span>
+                {showTiers && (
+                  <span className="dl-market-tiers">
+                    T1 {m.t1} · T2 {m.t2} · T3 {m.t3}
+                  </span>
+                )}
                 <span className="t-hint">
-                  {m.untiered > 0
-                    ? `${m.untiered} with no history`
-                    : "every dealer has history"}
+                  {!showTiers
+                    ? `${m.t1 + m.t2 + m.t3 + m.untiered} dealers`
+                    : m.untiered > 0
+                      ? `${m.untiered} with no history`
+                      : "every dealer has history"}
                   {m.late > 0 && (
                     <>
                       {" · "}
@@ -587,6 +607,7 @@ export default function DealersPage() {
         names={names}
         todayIso={todayIso}
         selectedKey={selected?.key ?? null}
+        showTiers={showTiers}
         onOpen={(l) => onOpenDealer({ key: l.key, accountId: l.accountId, name: l.name })}
         onClear={picked ? () => pick(null) : null}
         span={span("table")}
@@ -597,6 +618,7 @@ export default function DealersPage() {
         key={selected.key}
         dealer={selected}
         tier={tierByKey.get(selected.key) ?? null}
+        showTier={showTiers}
         onClose={onCloseDealer}
         teamPerVisit={teamPerVisit}
         names={names}

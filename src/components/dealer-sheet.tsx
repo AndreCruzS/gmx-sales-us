@@ -201,6 +201,7 @@ function ItemRow({ item, today }: { item: SheetItem; today: string }) {
 export function DealerSheet({
   dealer,
   tier,
+  showTier = true,
   onClose,
   teamPerVisit = null,
   names,
@@ -208,6 +209,8 @@ export function DealerSheet({
 }: {
   dealer: OpenDealer;
   tier: DealerTier | null;
+  /** Admins only: a tier is worked out from every dealer's sales. */
+  showTier?: boolean;
   onClose: () => void;
   /** Promises per visit across every dealer on the board, for the ⚠ line. */
   teamPerVisit?: number | null;
@@ -318,15 +321,17 @@ export function DealerSheet({
           )}
         </div>
         <div className="dmod-tags">
-          {tier ? (
+          {showTier && tier ? (
             <span className="dl-tier" data-tier={tier.tier}>
               {TIER_WORDS[tier.tier]}
             </span>
           ) : notDealer ? (
-            <span className="dmod-tag dmod-tag-warn">Not a tiered dealer</span>
-          ) : (
+            <span className="dmod-tag dmod-tag-warn">
+              {showTier ? "Not a tiered dealer" : "Not a dealer"}
+            </span>
+          ) : showTier ? (
             <span className="dl-tier">No history</span>
-          )}
+          ) : null}
           {!accountId && <span className="dmod-tag dmod-tag-warn">No account yet</span>}
         </div>
         <h2 className="dmod-name">{name}</h2>

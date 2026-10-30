@@ -59,6 +59,7 @@ export function DealerTable({
   names,
   todayIso,
   selectedKey,
+  showTiers,
   onOpen,
   onClear,
   span,
@@ -68,6 +69,8 @@ export function DealerTable({
   names: ReadonlyMap<string, string>;
   todayIso: string;
   selectedKey: string | null;
+  /** Admins only: a tier is worked out from every dealer's sales. */
+  showTiers: boolean;
   onOpen: (l: DealerLine) => void;
   onClear: (() => void) | null;
   span: string;
@@ -103,7 +106,7 @@ export function DealerTable({
             <thead>
               <tr>
                 <th scope="col">Dealer</th>
-                <th scope="col">Tier</th>
+                {showTiers && <th scope="col">Tier</th>}
                 <th scope="col">Last visit</th>
                 <th scope="col">Open</th>
                 <th scope="col">Rep</th>
@@ -131,15 +134,17 @@ export function DealerTable({
                         {l.name}
                       </button>
                     </td>
-                    <td>
-                      {l.tier ? (
-                        <span className="dl-tier" data-tier={l.tier}>
-                          {l.tier}
-                        </span>
-                      ) : (
-                        <span className="t-hint">no sales</span>
-                      )}
-                    </td>
+                    {showTiers && (
+                      <td>
+                        {l.tier ? (
+                          <span className="dl-tier" data-tier={l.tier}>
+                            {l.tier}
+                          </span>
+                        ) : (
+                          <span className="t-hint">no sales</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       <span className="dl-when" data-stale={stale || undefined}>
                         {l.lastVisit === null
