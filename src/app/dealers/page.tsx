@@ -567,7 +567,7 @@ export default function DealersPage() {
                 )}
                 <span className="t-hint">
                   {!showTiers
-                    ? `${m.t1 + m.t2 + m.t3 + m.untiered} dealers`
+                    ? `${m.t1 + m.t2 + m.t3 + m.untiered} ${m.t1 + m.t2 + m.t3 + m.untiered === 1 ? "dealer" : "dealers"}`
                     : m.untiered > 0
                       ? `${m.untiered} with no history`
                       : "every dealer has history"}
