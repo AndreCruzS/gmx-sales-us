@@ -16,6 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CheckIcon, FileIcon, MicrophoneIcon } from "@/components/icons";
+import { sectionItems } from "@/lib/domain/visit-sections";
 import { NewCompanyInline } from "@/components/new-company-inline";
 import {
   ACTIVITY_OUTCOMES,
@@ -84,6 +85,10 @@ function RecordPageInner() {
   const [objectiveDetail, setObjectiveDetail] = useState("");
   const [outcomes, setOutcomes] = useState<ActivityOutcome[]>([]);
   const [keyInfo, setKeyInfo] = useState("");
+  // Bia's sections: the note is the Summary; each line below becomes a to-do.
+  const [actionsText, setActionsText] = useState("");
+  const [coordinateText, setCoordinateText] = useState("");
+  const [followUpsText, setFollowUpsText] = useState("");
 
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -344,6 +349,28 @@ function RecordPageInner() {
         baseVersion: null,
         blobRef: null,
       });
+      // One to-do per line of the three section boxes, linked to this visit.
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      for (const item of sectionItems({
+        activityId: id,
+        orgId: profile.orgId,
+        ownerId: profile.membershipId,
+        accountId: selected.id,
+        today,
+        actions: actionsText,
+        coordinate: coordinateText,
+        followUps: followUpsText,
+      })) {
+        await layer.sync.enqueue({
+          clientId: item.id,
+          entityType: "next_action",
+          op: "create",
+          payload: item,
+          baseVersion: null,
+          blobRef: null,
+        });
+      }
       // Recording the planned visit completes its agenda item.
       if (linked) {
         await layer.sync.enqueue({
@@ -571,6 +598,31 @@ function RecordPageInner() {
           />
           <span className="t-title">Needs a follow-up</span>
         </label>
+
+        {selected && (
+          <div className="flex flex-col gap-3">
+            {(
+              [
+                ["Action items", actionsText, setActionsText],
+                ["To coordinate", coordinateText, setCoordinateText],
+                ["Follow-ups", followUpsText, setFollowUpsText],
+              ] as const
+            ).map(([label, value, set]) => (
+              <label key={label} className="flex flex-col gap-1">
+                <span className="t-hint">
+                  {label} · One per line
+                </span>
+                <textarea
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  rows={2}
+                  className="field"
+                  style={{ background: "var(--surface-page)" }}
+                />
+              </label>
+            ))}
+          </div>
+        )}
 
         {selected && (
           <button

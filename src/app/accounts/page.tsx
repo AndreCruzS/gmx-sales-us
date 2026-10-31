@@ -23,13 +23,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
-import { ChevronRightIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { ChevronRightIcon, PlusIcon, SearchIcon, UsersIcon } from "@/components/icons";
 import { Pager, usePaged, usePageSize } from "@/components/pager";
 import { ACCOUNT_TYPES, humanize, type AccountType } from "@/lib/domain/enums";
 import {
   ACCOUNT_EXCEPTION_TYPES,
   exceptionShort,
 } from "@/lib/domain/exceptions";
+import { manages } from "@/lib/domain/roles";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -352,6 +353,16 @@ function AccountsView() {
             aria-label="Find an account"
           />
         </label>
+        {/* CONTACTS LEFT THE DESK'S BAR (Andre, 2026-10-30) to make room for
+            Dealers; the people behind the accounts are one tap from here,
+            and the Accounts tab stays lit while on them. A rep's bar still
+            carries Contacts, so the link is the desk's only. */}
+        {manages(profile?.role) && (
+          <Link href="/contacts" className="btn-secondary shrink-0">
+            <UsersIcon size={18} style={{ color: "var(--ink-secondary)" }} />
+            Contacts
+          </Link>
+        )}
         <Link
           href="/accounts/new"
           className="btn-secondary shrink-0"

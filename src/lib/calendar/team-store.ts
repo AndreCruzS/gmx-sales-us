@@ -20,7 +20,7 @@ const MAKE_SCOPES: ReadonlySet<string> = new Set([
 ]);
 
 const OWNER_EMBED = "memberships!next_actions_owner_id_fkey(users(full_name))";
-const VISIT_COLS = `id, action, due_date, completed_at, owner_id, objective, calendar_event_id, calendar_origin, accounts(name), ${OWNER_EMBED}`;
+const VISIT_COLS = `id, action, due_date, completed_at, owner_id, objective, calendar_event_id, calendar_origin, accounts!next_actions_account_id_fkey(name), ${OWNER_EMBED}`;
 
 interface Raw {
   id: string;

@@ -188,7 +188,7 @@ export default function RepsPage() {
       // their own without a second sort.
       supabase
         .from("next_actions")
-        .select("id, action, due_date, owner_id, account_id, kind, objective, accounts(name)")
+        .select("id, action, due_date, owner_id, account_id, kind, objective, accounts!next_actions_account_id_fkey(name)")
         .is("completed_at", null)
         .order("due_date")
         .limit(1000),

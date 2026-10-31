@@ -68,6 +68,14 @@ const TABS = [
 // untouched: Home · Agenda · Add · Quotes · Accounts, Contacts on the desk.
 const REPS_TAB = { href: "/reps", label: "Reps", Icon: UsersIcon } as const;
 
+// DEALERS (Andre, 2026-10-30): the desk's bar became SALES · DEALERS · REPS ·
+// ACCOUNTS, Add where it always sat. Dealers is the action board Bianca and
+// João asked for on 2026-10-27 — tiers, markets, the to-dos. It wears the
+// sheet: Quotes, the only other tab with that icon, is not on the desk's bar.
+// Contacts left the desk's bar to make the room: /contacts is reached from a
+// link on the Accounts board, and the Accounts tab stays lit while on it.
+const DEALERS_TAB = { href: "/dealers", label: "Dealers", Icon: FileIcon } as const;
+
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
 // up closest to the button that opened it. The order is how often a rep
 // actually reaches for each — notes daily, visits weekly, quotes when the
@@ -219,11 +227,19 @@ export function TabBar() {
 
   const [today, agenda, quotes, accounts, contacts] = TABS;
   const desk = manages(profile?.role);
-  // The desk's bar: Sales · Reps · Add · Accounts · Contacts. The two that
-  // left it are reached from the Reps board, and the Reps tab stays lit while
-  // the reader is on either of them — they are that board's readings.
+  // An assistant keeps the rep's bar, with Dealers where Quotes sat — five
+  // slots is all the phone has, and Quotes is still in the Add menu. The
+  // desk's bar is untouched.
+  const assistant = profile?.role === "support";
+  // The desk's bar: Sales · Dealers · Reps · Add · Accounts. The Agenda and
+  // the Quotes are reached from the Reps board, and the Reps tab stays lit
+  // while the reader is on either of them — they are that board's readings.
+  // Contacts is reached from the Accounts board the same way, so on the desk
+  // the Accounts tab stays lit on /contacts.
   const repTabs = desk ? [] : [agenda];
-  const moneyTabs = desk ? [accounts, contacts] : [quotes, accounts, contacts];
+  const moneyTabs = desk ? [accounts] : assistant ? [DEALERS_TAB, accounts, contacts] : [quotes, accounts, contacts];
+  const tabActive = (href: string) =>
+    isActive(href) || (desk && href === "/accounts" && pathname.startsWith("/contacts"));
   const deskOnly = (label: string) => !desk && label === "Contacts";
   // For the desk's roles every destination IS a dashboard, and every tab
   // OPENS on its own overview — so the first tab is named for its subject,
@@ -291,9 +307,22 @@ export function TabBar() {
           );
         })}
 
-        {/* Second in the bar, straight after Sales — his order. Lit on the
-            Agenda and the Quotes too, because for a desk role those are
-            this board's readings, not destinations of their own. */}
+        {/* Second in the bar, straight after Sales (Andre, 2026-10-30). */}
+        {desk && (
+          <Link
+            href={DEALERS_TAB.href}
+            className="tab"
+            data-active={isActive(DEALERS_TAB.href)}
+            aria-current={isActive(DEALERS_TAB.href) ? "page" : undefined}
+          >
+            <DEALERS_TAB.Icon size={21} />
+            {DEALERS_TAB.label}
+          </Link>
+        )}
+
+        {/* Then Reps. Lit on the Agenda and the Quotes too, because for a
+            desk role those are this board's readings, not destinations of
+            their own. */}
         {desk && (
           <Link
             href={REPS_TAB.href}
@@ -342,8 +371,8 @@ export function TabBar() {
             key={href}
             href={href}
             className={deskOnly(label) ? "tab tab-desk" : "tab"}
-            data-active={isActive(href)}
-            aria-current={isActive(href) ? "page" : undefined}
+            data-active={tabActive(href)}
+            aria-current={tabActive(href) ? "page" : undefined}
           >
             <Icon size={21} />
             {labelOf(label)}
