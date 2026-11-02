@@ -3206,6 +3206,194 @@ export type Database = {
           },
         ]
       }
+      next_action_reads: {
+        Row: {
+          last_read_at: string
+          membership_id: string
+          next_action_id: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          last_read_at?: string
+          membership_id: string
+          next_action_id: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          last_read_at?: string
+          membership_id?: string
+          next_action_id?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "next_action_reads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "exception_overdue_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "next_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_upcoming"
+            referencedColumns: ["next_action_id"]
+          },
+          {
+            foreignKeyName: "next_action_reads_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      next_action_subtasks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          done_at: string | null
+          id: string
+          next_action_id: string
+          org_id: string
+          position: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          id?: string
+          next_action_id: string
+          org_id: string
+          position?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          id?: string
+          next_action_id?: string
+          org_id?: string
+          position?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "next_action_subtasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "exception_overdue_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "next_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_upcoming"
+            referencedColumns: ["next_action_id"]
+          },
+          {
+            foreignKeyName: "next_action_subtasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       next_actions: {
         Row: {
           account_id: string | null
