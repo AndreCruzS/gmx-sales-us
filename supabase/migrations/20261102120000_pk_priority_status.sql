@@ -57,40 +57,50 @@ begin
       new.completed_at := coalesce(new.completed_at, now());
     end if;
   elsif prio_changed and tg_op = 'UPDATE' and old.priority = 'ELIMINATE'
-        and new.progress <> 'DONE' then
+        and new.progress <> 'DONE' and not comp_changed then
+    -- Leaving Eliminate reopens the item, unless it is Done.
     new.completed_at := null;
   end if;
 
-  if prog_changed then
-    if new.progress = 'DONE' then
-      new.completed_at := coalesce(new.completed_at, now());
-    elsif tg_op = 'UPDATE' and old.progress = 'DONE'
-          and new.priority is distinct from 'ELIMINATE' then
-      new.completed_at := null;
-    end if;
-  elsif comp_changed and not prio_changed and new.priority is distinct from 'ELIMINATE' then
-    -- Closed or reopened from another screen (home "done").
-    if old_completed is null and new.completed_at is not null and new.progress <> 'DONE' then
+  if new.priority is distinct from 'ELIMINATE' then
+    if comp_changed and old_completed is null and new.completed_at is not null
+       and new.progress <> 'DONE' then
+      -- Closed by timestamp (home "done", or a row inserted closed). When the
+      -- same write also moved progress, the timestamp wins: it is the more
+      -- specific statement that the item is finished.
       new.progress := 'DONE';
-    elsif old_completed is not null and new.completed_at is null and new.progress = 'DONE' then
+    elsif prog_changed then
+      if new.progress = 'DONE' then
+        new.completed_at := coalesce(new.completed_at, now());
+      elsif tg_op = 'UPDATE' and old.progress = 'DONE' then
+        new.completed_at := null;
+      end if;
+    elsif comp_changed and old_completed is not null and new.completed_at is null
+          and new.progress = 'DONE' then
+      -- Reopened from another screen.
       new.progress := 'NOT_STARTED';
     end if;
+  elsif prog_changed and new.progress = 'DONE' then
+    new.completed_at := coalesce(new.completed_at, now());
   end if;
+  -- An Eliminate item whose completed_at is cleared directly stays Eliminate
+  -- with progress untouched: it is open again, and the board shows it dimmed
+  -- until the priority is changed. Leaving DONE while eliminated keeps
+  -- completed_at, because Eliminate alone keeps the item closed.
 
   -- Who moved a status or the priority, and when. Without a membership
-  -- (service role, server jobs) a supplied value stands.
-  if tg_op = 'INSERT' then
-    if new.priority is not null or new.priority_days is not null
-       or new.action_required <> 'NONE' or new.progress <> 'NOT_STARTED' then
-      new.last_changed_by := coalesce(private.active_membership_id(), new.last_changed_by);
+  -- (service role, server jobs) a supplied last_changed_by stands; the time is
+  -- stamped only when there is someone to stamp it for.
+  if (tg_op = 'INSERT' and (new.priority is not null or new.priority_days is not null
+        or new.action_required <> 'NONE' or new.progress <> 'NOT_STARTED'))
+     or (tg_op = 'UPDATE' and (new.priority is distinct from old.priority
+        or new.priority_days is distinct from old.priority_days
+        or new.action_required is distinct from old.action_required
+        or new.progress is distinct from old.progress)) then
+    new.last_changed_by := coalesce(private.active_membership_id(), new.last_changed_by);
+    if new.last_changed_by is not null then
       new.last_changed_at := now();
     end if;
-  elsif new.priority is distinct from old.priority
-     or new.priority_days is distinct from old.priority_days
-     or new.action_required is distinct from old.action_required
-     or new.progress is distinct from old.progress then
-    new.last_changed_by := coalesce(private.active_membership_id(), new.last_changed_by);
-    new.last_changed_at := now();
   end if;
 
   return new;

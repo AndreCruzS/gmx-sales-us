@@ -6,7 +6,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(28);
 
 select has_type('public', 'next_action_priority', 'priority enum exists');
 select has_type('public', 'next_action_required', 'action-required enum exists');
@@ -78,10 +78,53 @@ select isnt(
   (select completed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b3'),
   null, 'leaving ELIMINATE keeps completed_at when progress is DONE');
 
+-- Two fields moving together: the closing timestamp wins.
+insert into next_actions (id, org_id, action, owner_id, due_date, priority, completed_at) values
+  ('e0000000-0000-0000-0000-0000000000b4', '11111111-1111-1111-1111-111111111111',
+   'Item four', 'c0000000-0000-0000-0000-000000000001', current_date + 3, 'PLAN', now());
+select is(
+  (select progress from next_actions where id = 'e0000000-0000-0000-0000-0000000000b4'),
+  'DONE'::next_action_progress, 'insert with priority and completed_at reads DONE');
+
+insert into next_actions (id, org_id, action, owner_id, due_date) values
+  ('e0000000-0000-0000-0000-0000000000b5', '11111111-1111-1111-1111-111111111111',
+   'Item five', 'c0000000-0000-0000-0000-000000000001', current_date + 3),
+  ('e0000000-0000-0000-0000-0000000000b6', '11111111-1111-1111-1111-111111111111',
+   'Item six', 'c0000000-0000-0000-0000-000000000001', current_date + 3);
+update next_actions set completed_at = now(), priority = 'DO_NOW'
+ where id = 'e0000000-0000-0000-0000-0000000000b5';
+select is(
+  (select progress from next_actions where id = 'e0000000-0000-0000-0000-0000000000b5'),
+  'DONE'::next_action_progress, 'completed_at and priority in one update read DONE');
+update next_actions set completed_at = now(), progress = 'WORKING_ON_IT'
+ where id = 'e0000000-0000-0000-0000-0000000000b6';
+select is(
+  (select progress from next_actions where id = 'e0000000-0000-0000-0000-0000000000b6'),
+  'DONE'::next_action_progress, 'completed_at wins over a progress set in the same update');
+
+-- Eliminated items: leaving DONE keeps them closed; a direct reopen leaves progress alone.
+insert into next_actions (id, org_id, action, owner_id, due_date, priority, progress) values
+  ('e0000000-0000-0000-0000-0000000000b7', '11111111-1111-1111-1111-111111111111',
+   'Item seven', 'c0000000-0000-0000-0000-000000000001', current_date + 3, 'ELIMINATE', 'DONE');
+update next_actions set progress = 'STUCK' where id = 'e0000000-0000-0000-0000-0000000000b7';
+select isnt(
+  (select completed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b7'),
+  null, 'leaving DONE while eliminated keeps completed_at');
+update next_actions set completed_at = null where id = 'e0000000-0000-0000-0000-0000000000b7';
+select is(
+  (select completed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b7'),
+  null, 'an eliminated item can be reopened by clearing completed_at');
+select is(
+  (select progress from next_actions where id = 'e0000000-0000-0000-0000-0000000000b7'),
+  'STUCK'::next_action_progress, 'reopening an eliminated item leaves progress alone');
+
 -- Service role leaves no stamp.
 select is(
   (select last_changed_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000b2'),
   null, 'no signed-in member, no stamp');
+select is(
+  (select last_changed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b2'),
+  null, 'no signed-in member, no stamp time either');
 
 -- A signed-in admin changing action_required is stamped.
 select tests.set_claims('bianca@gmxgroup.com', 'gmx-us');
@@ -94,6 +137,12 @@ select is(
 select isnt(
   (select last_changed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b2'),
   null, 'a status change stamps last_changed_at');
+insert into next_actions (id, org_id, action, owner_id, due_date, priority) values
+  ('e0000000-0000-0000-0000-0000000000b8', '11111111-1111-1111-1111-111111111111',
+   'Item eight', 'c0000000-0000-0000-0000-000000000001', current_date + 3, 'PLAN');
+select is(
+  (select last_changed_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000b8'),
+  'c0000000-0000-0000-0000-000000000001'::uuid, 'a row inserted with a priority is stamped');
 reset role;
 
 select throws_ok(
