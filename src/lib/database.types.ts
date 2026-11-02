@@ -3067,6 +3067,145 @@ export type Database = {
           },
         ]
       }
+      next_action_note_versions: {
+        Row: {
+          body: string
+          id: string
+          note_id: string
+          org_id: string
+          replaced_at: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          id?: string
+          note_id: string
+          org_id: string
+          replaced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          id?: string
+          note_id?: string
+          org_id?: string
+          replaced_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "next_action_note_versions_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "next_action_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_note_versions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      next_action_notes: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          edited_at: string | null
+          id: string
+          next_action_id: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          next_action_id: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          next_action_id?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "next_action_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "exception_overdue_follow_up"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "next_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_next_action_id_fkey"
+            columns: ["next_action_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_review_upcoming"
+            referencedColumns: ["next_action_id"]
+          },
+          {
+            foreignKeyName: "next_action_notes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       next_actions: {
         Row: {
           account_id: string | null
