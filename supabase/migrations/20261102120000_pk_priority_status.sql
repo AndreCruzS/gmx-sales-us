@@ -63,8 +63,7 @@ begin
   end if;
 
   if new.priority is distinct from 'ELIMINATE' then
-    if comp_changed and old_completed is null and new.completed_at is not null
-       and new.progress <> 'DONE' then
+    if comp_changed and new.completed_at is not null and new.progress <> 'DONE' then
       -- Closed by timestamp (home "done", or a row inserted closed). When the
       -- same write also moved progress, the timestamp wins: it is the more
       -- specific statement that the item is finished.
@@ -88,17 +87,17 @@ begin
   -- until the priority is changed. Leaving DONE while eliminated keeps
   -- completed_at, because Eliminate alone keeps the item closed.
 
-  -- Who moved a status or the priority, and when. Without a membership
-  -- (service role, server jobs) a supplied last_changed_by stands; the time is
-  -- stamped only when there is someone to stamp it for.
+  -- Who moved a status or the priority, and when. Only a signed-in member
+  -- stamps. Without one (service role, server jobs) both columns stay exactly
+  -- as supplied, so a server write never re-attributes a member's change.
   if (tg_op = 'INSERT' and (new.priority is not null or new.priority_days is not null
         or new.action_required <> 'NONE' or new.progress <> 'NOT_STARTED'))
      or (tg_op = 'UPDATE' and (new.priority is distinct from old.priority
         or new.priority_days is distinct from old.priority_days
         or new.action_required is distinct from old.action_required
         or new.progress is distinct from old.progress)) then
-    new.last_changed_by := coalesce(private.active_membership_id(), new.last_changed_by);
-    if new.last_changed_by is not null then
+    if private.active_membership_id() is not null then
+      new.last_changed_by := private.active_membership_id();
       new.last_changed_at := now();
     end if;
   end if;

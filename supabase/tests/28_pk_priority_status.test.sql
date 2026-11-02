@@ -6,7 +6,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(31);
 
 select has_type('public', 'next_action_priority', 'priority enum exists');
 select has_type('public', 'next_action_required', 'action-required enum exists');
@@ -19,7 +19,8 @@ select col_is_null('public', 'next_actions', 'priority', 'priority is optional')
 
 -- A completed row always reads DONE (the backfill, and the same rule on insert).
 select is(
-  (select count(*) from next_actions where completed_at is not null and progress <> 'DONE'),
+  (select count(*) from next_actions where completed_at is not null and progress <> 'DONE'
+      and priority is distinct from 'ELIMINATE'),
   0::bigint, 'every completed row reads DONE');
 
 -- Fixtures, written as the service role (no membership, so no stamping).
@@ -118,6 +119,19 @@ select is(
   (select progress from next_actions where id = 'e0000000-0000-0000-0000-0000000000b7'),
   'STUCK'::next_action_progress, 'reopening an eliminated item leaves progress alone');
 
+-- One write leaving Eliminate and setting a new completed_at: the row is closed and Done.
+insert into next_actions (id, org_id, action, owner_id, due_date, priority) values
+  ('e0000000-0000-0000-0000-0000000000b9', '11111111-1111-1111-1111-111111111111',
+   'Item nine', 'c0000000-0000-0000-0000-000000000001', current_date + 3, 'ELIMINATE');
+update next_actions set priority = 'PLAN', completed_at = now() + interval '1 minute'
+ where id = 'e0000000-0000-0000-0000-0000000000b9';
+select is(
+  (select progress from next_actions where id = 'e0000000-0000-0000-0000-0000000000b9'),
+  'DONE'::next_action_progress, 'leaving ELIMINATE with a new completed_at reads DONE');
+select isnt(
+  (select completed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b9'),
+  null, 'leaving ELIMINATE with a new completed_at stays closed');
+
 -- Service role leaves no stamp.
 select is(
   (select last_changed_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000b2'),
@@ -144,6 +158,18 @@ select is(
   (select last_changed_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000b8'),
   'c0000000-0000-0000-0000-000000000001'::uuid, 'a row inserted with a priority is stamped');
 reset role;
+
+-- A server write (no member) on a member-stamped row leaves both stamps alone.
+select tests.clear_auth();
+create temp table stamp_before as
+  select last_changed_by, last_changed_at from next_actions
+   where id = 'e0000000-0000-0000-0000-0000000000b2';
+update next_actions set progress = 'STUCK' where id = 'e0000000-0000-0000-0000-0000000000b2';
+select is(
+  (select (last_changed_by, last_changed_at) from next_actions
+    where id = 'e0000000-0000-0000-0000-0000000000b2'),
+  (select (last_changed_by, last_changed_at) from stamp_before),
+  'a server write leaves last_changed_by and last_changed_at unchanged');
 
 select throws_ok(
   $$ update next_actions set priority_days = -1
