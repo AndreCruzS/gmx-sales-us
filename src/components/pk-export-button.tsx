@@ -55,7 +55,8 @@ export function PkExportButton({
           stickyRowsCount: 1,
         },
       ]).toFile(pkExportFileName(todayIso));
-    } catch {
+    } catch (e) {
+      console.error(e);
       setFailed(true);
     } finally {
       setBusy(false);

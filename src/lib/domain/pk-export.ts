@@ -155,7 +155,7 @@ export function pkExportSheets(
       const lines = (notesBy.get(i.id) ?? []).map((n) => noteLine(n, names));
       followUps.push([
         text(i.action),
-        i.action_required === "NONE" ? null : text(REQUIRED_LABEL[i.action_required]),
+        text(REQUIRED_LABEL[i.action_required]),
         text(PROGRESS_LABEL[i.progress]),
         i.priority ? text(PRIORITY_LABEL[i.priority]) : null,
         hasAlert(i) && i.priority_days !== null ? { value: i.priority_days } : null,

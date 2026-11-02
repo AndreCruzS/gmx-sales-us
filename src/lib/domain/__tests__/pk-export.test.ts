@@ -76,6 +76,11 @@ describe("pkExportSheets", () => {
     expect(row.slice(0, 7)).toEqual(["Send the price list", "Pending action", "Working on it", "Delegate", "2", "2026-10-22", "Bianca"]);
   });
 
+  it("writes an unset Action required as the board does", () => {
+    const { followUps } = pkExportSheets([band([item({ id: "i1", action_required: "NONE" })])], [], [], names);
+    expect(text(followUps[2]![1]!)).toBe("—");
+  });
+
   it("writes the alert as a real date", () => {
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [], [], names);
     const cell = followUps[2]![5] as Exclude<Cell, null>;
