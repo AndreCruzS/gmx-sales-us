@@ -41,19 +41,21 @@ create trigger set_updated_at
   before update on next_action_note_versions
   for each row execute function private.set_updated_at();
 
--- On the way in: the author is the signed-in member (server jobs without a
--- membership supply their own), the clock is ours, nothing is edited yet.
+-- On the way in: a signed-in member is the author, the clock is ours, nothing
+-- is edited yet.
 create or replace function private.stamp_next_action_note()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
+  -- Without a membership (service role: a one-off import, a server job) the
+  -- supplied author, created_at and edited_at stand.
   if private.active_membership_id() is not null then
     new.author_id := private.active_membership_id();
+    new.created_at := now();
+    new.edited_at := null;
   end if;
-  new.created_at := now();
-  new.edited_at := null;
   return new;
 end;
 $$;

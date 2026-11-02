@@ -6,7 +6,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(25);
 
 select has_table('public', 'next_action_notes', 'notes table exists');
 select has_table('public', 'next_action_note_versions', 'versions table exists');
@@ -15,6 +15,21 @@ select has_table('public', 'next_action_note_versions', 'versions table exists')
 insert into next_actions (id, org_id, action, owner_id, due_date) values
   ('e0000000-0000-0000-0000-0000000000c1', '11111111-1111-1111-1111-111111111111',
    'Item with notes', 'c0000000-0000-0000-0000-000000000004', current_date + 3);
+
+-- Service role (no member): supplied author, created_at and edited_at stand.
+insert into next_action_notes (id, org_id, next_action_id, author_id, body, created_at, edited_at) values
+  ('e1000000-0000-0000-0000-0000000000c2', '11111111-1111-1111-1111-111111111111',
+   'e0000000-0000-0000-0000-0000000000c1', 'c0000000-0000-0000-0000-000000000001',
+   'Imported note', '2026-01-05 10:00+00', '2026-01-06 10:00+00');
+select is(
+  (select author_id from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c2'),
+  'c0000000-0000-0000-0000-000000000001'::uuid, 'service role keeps the supplied author');
+select is(
+  (select created_at from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c2'),
+  '2026-01-05 10:00+00'::timestamptz, 'service role keeps the supplied created_at');
+select is(
+  (select edited_at from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c2'),
+  '2026-01-06 10:00+00'::timestamptz, 'service role keeps the supplied edited_at');
 
 -- Deon adds a note and claims Bianca wrote it: the claim is ignored.
 select tests.set_claims('deon@gmxgroup.com', 'gmx-us');
@@ -29,6 +44,32 @@ select is(
 select is(
   (select edited_at from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c1'),
   null, 'a new note is not edited');
+
+-- A member cannot back-date or pre-edit a note.
+insert into next_action_notes (id, org_id, next_action_id, author_id, body, created_at, edited_at) values
+  ('e1000000-0000-0000-0000-0000000000c3', '11111111-1111-1111-1111-111111111111',
+   'e0000000-0000-0000-0000-0000000000c1', 'c0000000-0000-0000-0000-000000000004',
+   'Back-dated?', '2020-01-01 00:00+00', '2020-01-02 00:00+00');
+select cmp_ok(
+  (select created_at from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c3'),
+  '>', now() - interval '1 minute', 'a member insert gets created_at now()');
+select is(
+  (select edited_at from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c3'),
+  null, 'a member insert gets edited_at null');
+
+-- Unchanged body: no version, no edited_at. A moved next_action_id is ignored.
+update next_action_notes set body = body, next_action_id = 'e0000000-0000-0000-0000-0000000000c9'
+ where id = 'e1000000-0000-0000-0000-0000000000c3';
+select is(
+  (select count(*) from next_action_note_versions
+    where note_id = 'e1000000-0000-0000-0000-0000000000c3'),
+  0::bigint, 'an update with the same body creates no version');
+select is(
+  (select edited_at from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c3'),
+  null, 'an update with the same body leaves edited_at null');
+select is(
+  (select next_action_id from next_action_notes where id = 'e1000000-0000-0000-0000-0000000000c3'),
+  'e0000000-0000-0000-0000-0000000000c1'::uuid, 'an update cannot move the note to another item');
 
 -- Empty body is refused.
 select throws_ok(
