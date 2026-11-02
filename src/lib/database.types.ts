@@ -3071,6 +3071,7 @@ export type Database = {
         Row: {
           account_id: string | null
           action: string
+          action_required: Database["public"]["Enums"]["next_action_required"]
           activity_id: string | null
           calendar_event_id: string | null
           calendar_origin: string | null
@@ -3083,11 +3084,16 @@ export type Database = {
           id: string
           item_type: Database["public"]["Enums"]["next_action_type"] | null
           kind: Database["public"]["Enums"]["next_action_kind"] | null
+          last_changed_at: string | null
+          last_changed_by: string | null
           objective: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail: string | null
           opportunity_id: string | null
           org_id: string
           owner_id: string
+          priority: Database["public"]["Enums"]["next_action_priority"] | null
+          priority_days: number | null
+          progress: Database["public"]["Enums"]["next_action_progress"]
           project_id: string | null
           source: Database["public"]["Enums"]["next_action_source"]
           source_ref: string | null
@@ -3096,6 +3102,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           action: string
+          action_required?: Database["public"]["Enums"]["next_action_required"]
           activity_id?: string | null
           calendar_event_id?: string | null
           calendar_origin?: string | null
@@ -3108,11 +3115,16 @@ export type Database = {
           id?: string
           item_type?: Database["public"]["Enums"]["next_action_type"] | null
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
+          last_changed_at?: string | null
+          last_changed_by?: string | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail?: string | null
           opportunity_id?: string | null
           org_id: string
           owner_id: string
+          priority?: Database["public"]["Enums"]["next_action_priority"] | null
+          priority_days?: number | null
+          progress?: Database["public"]["Enums"]["next_action_progress"]
           project_id?: string | null
           source?: Database["public"]["Enums"]["next_action_source"]
           source_ref?: string | null
@@ -3121,6 +3133,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           action?: string
+          action_required?: Database["public"]["Enums"]["next_action_required"]
           activity_id?: string | null
           calendar_event_id?: string | null
           calendar_origin?: string | null
@@ -3133,11 +3146,16 @@ export type Database = {
           id?: string
           item_type?: Database["public"]["Enums"]["next_action_type"] | null
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
+          last_changed_at?: string | null
+          last_changed_by?: string | null
           objective?: Database["public"]["Enums"]["visit_objective"] | null
           objective_detail?: string | null
           opportunity_id?: string | null
           org_id?: string
           owner_id?: string
+          priority?: Database["public"]["Enums"]["next_action_priority"] | null
+          priority_days?: number | null
+          progress?: Database["public"]["Enums"]["next_action_progress"]
           project_id?: string | null
           source?: Database["public"]["Enums"]["next_action_source"]
           source_ref?: string | null
@@ -3357,6 +3375,41 @@ export type Database = {
           {
             foreignKeyName: "next_actions_entered_by_fkey"
             columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "sell_through_rows"
+            referencedColumns: ["market_owner_id"]
+          },
+          {
+            foreignKeyName: "next_actions_last_changed_by_fkey"
+            columns: ["last_changed_by"]
+            isOneToOne: false
+            referencedRelation: "dashboard_rep_scorecard"
+            referencedColumns: ["membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_last_changed_by_fkey"
+            columns: ["last_changed_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["owner_membership_id"]
+          },
+          {
+            foreignKeyName: "next_actions_last_changed_by_fkey"
+            columns: ["last_changed_by"]
+            isOneToOne: false
+            referencedRelation: "exception_next_week_not_planned"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "next_actions_last_changed_by_fkey"
+            columns: ["last_changed_by"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "next_actions_last_changed_by_fkey"
+            columns: ["last_changed_by"]
             isOneToOne: false
             referencedRelation: "sell_through_rows"
             referencedColumns: ["market_owner_id"]
@@ -8323,6 +8376,9 @@ export type Database = {
         | "QUOTE_FOLLOW_UP"
         | "DISPLAY_CHECK"
         | "OTHER"
+      next_action_priority: "DO_NOW" | "PLAN" | "DELEGATE" | "ELIMINATE"
+      next_action_progress: "NOT_STARTED" | "WORKING_ON_IT" | "STUCK" | "DONE"
+      next_action_required: "PENDING_ACTION" | "AWAITING_RESPONSE" | "NONE"
       next_action_source:
         | "MANUAL"
         | "VOICE"
@@ -8593,6 +8649,9 @@ export const Constants = {
         "DISPLAY_CHECK",
         "OTHER",
       ],
+      next_action_priority: ["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"],
+      next_action_progress: ["NOT_STARTED", "WORKING_ON_IT", "STUCK", "DONE"],
+      next_action_required: ["PENDING_ACTION", "AWAITING_RESPONSE", "NONE"],
       next_action_source: [
         "MANUAL",
         "VOICE",

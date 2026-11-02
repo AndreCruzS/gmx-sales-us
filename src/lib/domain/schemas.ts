@@ -110,6 +110,12 @@ export const nextActionUpdateSchema = z.object({
   owner_id: uuid.optional(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   action: z.string().min(1).optional(),
+  // PK follow-up (2026-11-02): priority, the days that set the alert date, and
+  // the two statuses. Listed here or Zod strips them in the outbox.
+  priority: z.enum(["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"]).nullish(),
+  priority_days: z.number().int().min(0).nullish(),
+  action_required: z.enum(["PENDING_ACTION", "AWAITING_RESPONSE", "NONE"]).optional(),
+  progress: z.enum(["NOT_STARTED", "WORKING_ON_IT", "STUCK", "DONE"]).optional(),
 });
 export type NextActionUpdate = z.infer<typeof nextActionUpdateSchema>;
 
