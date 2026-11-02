@@ -6705,6 +6705,12 @@ button.dl-todo:hover {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.pk-edited {
+  flex: none;
+  color: var(--warn-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
 .pk-quiet {
   font-size: var(--text-sm);
   color: var(--ink-muted);

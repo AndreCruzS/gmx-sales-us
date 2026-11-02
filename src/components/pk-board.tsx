@@ -229,7 +229,8 @@ export function PkBoard({
                   facts={{
                     progress: bandProgress(b.items, b.items.flatMap((i) => subsBy.get(i.id) ?? [])),
                     alertsPassed: b.items.filter((i) => isAlertPassed(i, todayIso)).length,
-                    unread: b.items.filter((i) => unreadIds.has(i.id)).length,
+                    // Open items only, as the summary's "New for you" counts them.
+                    unread: b.items.filter((i) => i.completed_at === null && unreadIds.has(i.id)).length,
                   }}
                   rows={rows}
                   rowFacts={(id) => ({
@@ -240,7 +241,7 @@ export function PkBoard({
                   names={names}
                   todayIso={todayIso}
                   folded={folded.has(b.activityId)}
-                  filtered={narrowed || (!showDone && b.items.some((i) => i.completed_at !== null))}
+                  filtered={narrowed}
                   onToggle={() => toggle(b.activityId)}
                   onOpen={onOpen}
                   onAdd={onAdd}

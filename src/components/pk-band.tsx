@@ -77,7 +77,7 @@ export function PkBandView({
   names: Map<string, string>;
   todayIso: string;
   folded: boolean;
-  /** True when a filter is hiding some of this band's items. */
+  /** True when search, owner, Action required or "Unread only" is narrowing the list. */
   filtered: boolean;
   onToggle: () => void;
   onOpen: (itemId: string) => void;
@@ -85,7 +85,8 @@ export function PkBandView({
 }) {
   const [draft, setDraft] = useState("");
   const pct = facts.progress === null ? null : Math.round(facts.progress * 100);
-  const total = band.items.length;
+  // Eliminate is on the board but out of the count, as it is out of the %.
+  const total = band.items.filter((i) => i.priority !== "ELIMINATE").length;
 
   function add() {
     const text = draft.trim();
@@ -145,11 +146,11 @@ export function PkBandView({
           ))}
           {rows.length === 0 && (
             <p className="pk-foot pk-empty">
-              {total === 0
+              {band.items.length === 0
                 ? "No follow-ups from this PK yet."
                 : filtered
                   ? "No actions here match the filters."
-                  : "Everything here is done."}
+                  : "Everything here is done · tick Show done to see it."}
             </p>
           )}
           <form
@@ -223,11 +224,14 @@ function PkRow({
           data-unread={facts.unread || undefined}
           title={facts.unread ? "Changed since you last opened it" : "Seen"}
         />
+        {facts.unread && <span className="sr-only">Unread.</span>}
         {latest ? (
           <span className="pk-note-text">{latest.body}</span>
         ) : (
           <span className="pk-note-text pk-quiet">No notes yet</span>
         )}
+        {/* Beside the count, not in the text: the two-line clamp would cut it. */}
+        {latest && latest.edited_at !== null && <span className="pk-edited">edited</span>}
         {facts.notes.length > 0 && (
           <span className="pk-count" title="Notes">
             {facts.notes.length}
