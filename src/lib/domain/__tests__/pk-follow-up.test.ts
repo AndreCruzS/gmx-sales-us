@@ -215,6 +215,33 @@ describe("mirrorUpdate", () => {
     expect(n.last_changed_by).toBe("me");
   });
 
+  it("leaving Done while eliminated keeps it closed", () => {
+    const n = mirrorUpdate(
+      item({ priority: "ELIMINATE", priority_days: null, progress: "DONE", completed_at: "2026-10-30T00:00:00Z" }),
+      { progress: "WORKING_ON_IT" },
+      "me",
+      NOW,
+    );
+    expect(n.completed_at).toBe("2026-10-30T00:00:00Z");
+  });
+
+  it("a priority change on an open item leaves it open", () => {
+    const n = mirrorUpdate(item(), priorityPatch("2026-10-20", "PLAN"), "me", NOW);
+    expect(n.completed_at).toBeNull();
+    expect(n.due_date).toBe("2026-10-27");
+  });
+
+  it("sending Eliminate again does not restamp the close", () => {
+    const n = mirrorUpdate(
+      item({ priority: "ELIMINATE", priority_days: null, completed_at: "2026-10-30T00:00:00Z" }),
+      priorityPatch("2026-10-20", "ELIMINATE"),
+      "me",
+      NOW,
+    );
+    expect(n.completed_at).toBe("2026-10-30T00:00:00Z");
+    expect(n.last_changed_by).toBeNull();
+  });
+
   it("no change stamps nobody", () => {
     const n = mirrorUpdate(item(), { progress: "NOT_STARTED" }, "me", NOW);
     expect(n.last_changed_by).toBeNull();

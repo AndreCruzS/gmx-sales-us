@@ -12,24 +12,22 @@
 // Opening it marks it read for me. The statuses and the priority go through
 // the outbox like every other to-do edit, one at a time — each waits for the
 // one before to land, so it carries the row's newest updated_at (D61) — and
-// the board moves at once: mirrorUpdate plays the database's trigger locally
-// (Done and Eliminate close the item), then the saved row replaces it.
+// the board moves at once (use-pk-item-writes.ts).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PkNotesLog, stampOf, type NoteVersion } from "@/components/pk-notes-log";
 import { PkSubtasks } from "@/components/pk-subtasks";
 import { shortDate } from "@/components/pk-band";
 import { useOffline } from "@/components/offline-provider";
+import { usePkItemWrites } from "@/components/use-pk-item-writes";
 import {
   PRIORITIES,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   alertDate,
-  mirrorUpdate,
   priorityPatch,
   type PkBand,
   type PkItem,
-  type PkItemPatch,
   type PkNote,
   type PkRead,
   type PkSubtask,
@@ -37,7 +35,6 @@ import {
   type Progress,
   type Required,
 } from "@/lib/domain/pk-follow-up";
-import { getOfflineLayer } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Update<T> = (fn: (list: T[]) => T[]) => void;
@@ -55,6 +52,18 @@ const PROGRESS_TONE = {
   STUCK: "stuck",
   DONE: "done",
 } as const;
+
+// Below the desk breakpoint the drawer floats over the board (globals.css,
+// .pkd): then it is a modal dialog and gives focus back on close.
+const OVERLAY = "(max-width: 1279px)";
+function isOverlay(): boolean {
+  return typeof window !== "undefined" && window.matchMedia(OVERLAY).matches;
+}
+function subscribeOverlay(cb: () => void): () => void {
+  const mq = window.matchMedia(OVERLAY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
 
 function daysBetween(from: string, to: string): number {
   const t = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
@@ -124,19 +133,26 @@ export function PkItemDrawer({
 }) {
   const { profile } = useOffline();
   const orgId = profile?.orgId ?? "";
+  const [readFailed, setReadFailed] = useState(false);
+  const overlay = useSyncExternalStore(subscribeOverlay, isOverlay, () => false);
 
   // ── OPENING IT IS READING IT ─────────────────────────────────────────────
   useEffect(() => {
     if (!me || !orgId) return;
     const row = { membership_id: me, next_action_id: item.id, last_read_at: new Date().toISOString() };
-    // The dot goes at once; the server row follows.
-    onReads((list) => [...list.filter((r) => !(r.membership_id === me && r.next_action_id === item.id)), row]);
-    // A builder only runs when it is awaited or then'd. A failed read costs
-    // nothing but the dot coming back on the next load.
+    const mineOf = (r: PkRead) => r.membership_id === me && r.next_action_id === item.id;
+    const prior = reads.find(mineOf);
+    // The dot goes at once; the server row follows. If it does not land, the
+    // dot comes back and the reader is told.
+    onReads((list) => [...list.filter((r) => !mineOf(r)), row]);
     void getSupabaseBrowserClient()
       .from("next_action_reads")
       .upsert({ org_id: orgId, ...row }, { onConflict: "membership_id,next_action_id" })
-      .then(() => undefined);
+      .then(({ error }) => {
+        if (!error) return;
+        onReads((list) => [...list.filter((r) => !mineOf(r)), ...(prior ? [prior] : [])]);
+        setReadFailed(true);
+      });
     // Once per opening: the item's id, not its every edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, me, orgId]);
@@ -144,7 +160,14 @@ export function PkItemDrawer({
   // ── ESCAPE, AND FOCUS ON OPEN ────────────────────────────────────────────
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
+    // Over the page, closing hands focus back to the row that opened it.
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (isOverlay() && opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // Escape in a box is the typist's, not the drawer's (as in the dealer sheet).
@@ -156,57 +179,8 @@ export function PkItemDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // ── STATUS AND PRIORITY, THROUGH THE OUTBOX ──────────────────────────────
-  // The newest item and the newest saved updated_at, for writes queued behind
-  // one another.
-  const itemRef = useRef(item);
-  const baseRef = useRef(item.updated_at);
-  const chain = useRef<Promise<void>>(Promise.resolve());
-  const inFlight = useRef(0);
-  useEffect(() => {
-    itemRef.current = item;
-    if (inFlight.current === 0) baseRef.current = item.updated_at;
-  }, [item]);
-  const [writeNote, setWriteNote] = useState<string | null>(null);
-
-  function write(patch: PkItemPatch) {
-    const next = mirrorUpdate(itemRef.current, patch, me, new Date().toISOString());
-    itemRef.current = next;
-    onItem(next);
-    inFlight.current += 1;
-    chain.current = chain.current.then(async () => {
-      try {
-        const layer = getOfflineLayer();
-        const seq = await layer.sync.enqueue({
-          clientId: item.id,
-          entityType: "next_action",
-          op: "update",
-          payload: { id: item.id, ...patch },
-          baseVersion: baseRef.current, // D61
-          blobRef: null,
-        });
-        await layer.sync.drain();
-        const rejected = (await layer.local.listRejected()).some((r) => r.seq === seq);
-        const saved = await onChanged();
-        if (saved) {
-          baseRef.current = saved.updated_at;
-          itemRef.current = saved;
-        }
-        setWriteNote(
-          rejected
-            ? "That change was not saved — someone moved this item at the same time. It shows what is saved now."
-            : saved === null
-              ? "Saved on this device. It reaches the others when the connection is back."
-              : null,
-        );
-      } catch {
-        setWriteNote("That change could not be saved on this device. Try again.");
-        void onChanged();
-      } finally {
-        inFlight.current -= 1;
-      }
-    });
-  }
+  // ── STATUS AND PRIORITY, THROUGH THE OUTBOX (use-pk-item-writes.ts) ──────
+  const { write, refreshInTurn, writeNote } = usePkItemWrites({ item, me, onItem, onChanged });
 
   // The days box: the typed value drives the alert line; it is written when
   // the reader leaves the box or presses Enter.
@@ -236,7 +210,12 @@ export function PkItemDrawer({
   const who = (id: string) => `${names.get(id) ?? "Someone"}${id === me ? " (you)" : ""}`;
 
   return (
-    <aside className="pkd" aria-label={item.action}>
+    <aside
+      className="pkd"
+      aria-label={item.action}
+      role={overlay ? "dialog" : undefined}
+      aria-modal={overlay || undefined}
+    >
       <header className="pkd-head">
         <div className="pkd-head-text">
           <p className="pkd-crumb">
@@ -332,6 +311,11 @@ export function PkItemDrawer({
           </p>
         </div>
 
+        {readFailed && (
+          <p className="pkd-error" role="alert">
+            This item was not marked as read — it will show as new again next time.
+          </p>
+        )}
         {writeNote && (
           <p className="pkd-error" role="alert">
             {writeNote}
@@ -348,7 +332,7 @@ export function PkItemDrawer({
           names={names}
           me={me}
           onNotes={onNotes}
-          onEdited={() => void onChanged()}
+          onEdited={refreshInTurn}
         />
 
         <section>

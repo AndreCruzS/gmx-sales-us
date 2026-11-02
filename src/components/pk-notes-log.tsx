@@ -67,7 +67,8 @@ export function PkNotesLog({
     }
     setFailed(null);
     setDraft("");
-    onNotes((list) => [...list, data as PkNote]);
+    // A re-read may have brought it in already: one row per id.
+    onNotes((list) => [...list.filter((n) => n.id !== data.id), data as PkNote]);
   }
 
   async function save() {
