@@ -207,3 +207,53 @@ export function summarize(
   }
   return s;
 }
+
+/** The fields a PK item's drawer writes. */
+export type PkItemPatch = Partial<
+  Pick<PkItem, "priority" | "priority_days" | "due_date" | "action_required" | "progress" | "completed_at">
+>;
+
+/**
+ * The item as the database will hold it after `patch` — what the trigger
+ * private.sync_next_action_progress does, mirrored so the board moves at once
+ * (Done and Eliminate close the item, Eliminate drops the days, leaving them
+ * reopens it, and the change is stamped as mine). The server's row replaces
+ * this as soon as the write lands.
+ */
+export function mirrorUpdate(old: PkItem, patch: PkItemPatch, me: string, now: string): PkItem {
+  const n: PkItem = { ...old, ...patch };
+  const prioChanged = n.priority !== old.priority;
+  const progChanged = n.progress !== old.progress;
+  const compChanged = n.completed_at !== old.completed_at;
+
+  if (n.priority === "ELIMINATE") {
+    n.priority_days = null;
+    if (prioChanged) n.completed_at = n.completed_at ?? now;
+  } else if (prioChanged && old.priority === "ELIMINATE" && n.progress !== "DONE" && !compChanged) {
+    n.completed_at = null;
+  }
+
+  if (n.priority !== "ELIMINATE") {
+    if (compChanged && n.completed_at !== null && n.progress !== "DONE") {
+      n.progress = "DONE";
+    } else if (progChanged) {
+      if (n.progress === "DONE") n.completed_at = n.completed_at ?? now;
+      else if (old.progress === "DONE") n.completed_at = null;
+    } else if (compChanged && old.completed_at !== null && n.completed_at === null && n.progress === "DONE") {
+      n.progress = "NOT_STARTED";
+    }
+  } else if (progChanged && n.progress === "DONE") {
+    n.completed_at = n.completed_at ?? now;
+  }
+
+  if (
+    n.priority !== old.priority ||
+    n.priority_days !== old.priority_days ||
+    n.action_required !== old.action_required ||
+    n.progress !== old.progress
+  ) {
+    n.last_changed_by = me;
+    n.last_changed_at = now;
+  }
+  return n;
+}

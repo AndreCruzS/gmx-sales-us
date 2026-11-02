@@ -16,13 +16,17 @@
 // that point at it. The alert is written into due_date when the priority is
 // picked (pk-follow-up.ts), so the home page and the agenda read the same day.
 //
-// A row opens the item (Task 6's drawer, beside the board): the page holds the
-// open item's id and nothing else yet.
+// A row opens the item in the drawer (pk-item-drawer.tsx), beside the board on
+// the desk. The page keeps every list; the drawer edits them through the
+// updaters below, and after a write it asks the page to read the one item
+// back (refreshItem) so the board shows what the database saved.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DealersTabs } from "@/components/dealers-tabs";
 import { useOffline } from "@/components/offline-provider";
 import { PkBoard } from "@/components/pk-board";
+import { PkItemDrawer } from "@/components/pk-item-drawer";
+import type { NoteVersion } from "@/components/pk-notes-log";
 import {
   pkDateOf,
   type PkBand,
@@ -56,8 +60,14 @@ type ItemRow = PkItem & { account_id: string | null; activity_id: string };
 
 interface MemberName {
   id: string;
+  role: string;
+  status: string;
   users: { full_name: string | null } | null;
 }
+
+const NOTE_COLS = "id, next_action_id, author_id, body, created_at, edited_at";
+const SUB_COLS = "id, next_action_id, title, done_at, position";
+const READ_COLS = "membership_id, next_action_id, last_read_at";
 
 function isoOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -98,15 +108,19 @@ export default function PkFollowUpPage() {
   const [subtasks, setSubtasks] = useState<PkSubtask[]>([]);
   const [reads, setReads] = useState<PkRead[]>([]);
   const [names, setNames] = useState<Map<string, string>>(new Map());
+  // The desk's members: "Seen" lists them even before they open an item.
+  const [deskIds, setDeskIds] = useState<string[]>([]);
+  const [versions, setVersions] = useState<Map<string, NoteVersion[]>>(new Map());
   // Stamped when the data lands, never read from the clock during a render.
   const [todayIso, setTodayIso] = useState("");
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [addFailed, setAddFailed] = useState(false);
 
-  // The open item. Task 6 hangs the drawer on this.
+  // The open item: the drawer hangs on this.
   const [openId, setOpenId] = useState<string | null>(null);
   const onOpen = useCallback((id: string) => setOpenId(id), []);
+  const onClose = useCallback(() => setOpenId(null), []);
 
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -128,7 +142,7 @@ export default function PkFollowUpPage() {
       fetchAllPages<MemberName>((from, to) =>
         supabase
           .from("memberships")
-          .select("id, users(full_name)")
+          .select("id, role, status, users(full_name)")
           .order("id")
           .range(from, to)
           .then((r) => ({ data: r.data as unknown as MemberName[] | null, error: r.error })),
@@ -156,7 +170,7 @@ export default function PkFollowUpPage() {
         fetchAllPages<PkNote>((from, to) =>
           supabase
             .from("next_action_notes")
-            .select("id, next_action_id, author_id, body, created_at, edited_at")
+            .select(NOTE_COLS)
             .in("next_action_id", chunk)
             .order("created_at")
             .order("id")
@@ -167,7 +181,7 @@ export default function PkFollowUpPage() {
         fetchAllPages<PkSubtask>((from, to) =>
           supabase
             .from("next_action_subtasks")
-            .select("id, next_action_id, title, done_at, position")
+            .select(SUB_COLS)
             .in("next_action_id", chunk)
             .order("position")
             .order("id")
@@ -178,7 +192,7 @@ export default function PkFollowUpPage() {
         fetchAllPages<PkRead>((from, to) =>
           supabase
             .from("next_action_reads")
-            .select("membership_id, next_action_id, last_read_at")
+            .select(READ_COLS)
             .in("next_action_id", chunk)
             .order("next_action_id")
             .order("membership_id")
@@ -193,6 +207,7 @@ export default function PkFollowUpPage() {
     setSubtasks(st);
     setReads(rd);
     setNames(new Map(ms.map((m) => [m.id, m.users?.full_name ?? "Someone"] as const)));
+    setDeskIds(ms.filter((m) => m.status === "active" && seesDealersBoard(m.role)).map((m) => m.id));
     setTodayIso(isoOf(new Date()));
     setLoadedAt(Date.now());
   }, []);
@@ -228,6 +243,88 @@ export default function PkFollowUpPage() {
       items: byVisit.get(v.id) ?? [],
     }));
   }, [visits, items]);
+
+  // ── THE OPEN ITEM ────────────────────────────────────────────────────────
+  const openItem = openId ? (items.find((i) => i.id === openId) ?? null) : null;
+  const openBand = openItem ? (bands.find((b) => b.activityId === openItem.activity_id) ?? null) : null;
+
+  // The earlier texts of its edited notes, read when it opens (and after an edit).
+  const editedNoteIds = useMemo(
+    () =>
+      openId
+        ? notes
+            .filter((n) => n.next_action_id === openId && n.edited_at !== null)
+            .map((n) => `${n.id}@${n.edited_at}`)
+            .sort()
+            .join(",")
+        : "",
+    [notes, openId],
+  );
+  useEffect(() => {
+    if (!editedNoteIds) return;
+    const noteIds = editedNoteIds.split(",").map((k) => k.split("@")[0]);
+    let stale = false;
+    fetchAllPages<NoteVersion & { note_id: string }>((from, to) =>
+      getSupabaseBrowserClient()
+        .from("next_action_note_versions")
+        .select("note_id, body, replaced_at")
+        .in("note_id", noteIds)
+        .order("replaced_at")
+        .order("id")
+        .range(from, to),
+    )
+      .then((rows) => {
+        if (stale) return;
+        setVersions((old) => {
+          const next = new Map(old);
+          for (const id of noteIds) next.delete(id);
+          for (const r of rows) {
+            const list = next.get(r.note_id) ?? [];
+            list.push({ body: r.body, replaced_at: r.replaced_at });
+            next.set(r.note_id, list);
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // The "edited" mark still shows; the earlier text waits for the next open.
+      });
+    return () => {
+      stale = true;
+    };
+  }, [editedNoteIds]);
+
+  // One item read back after a write: its row, notes, subtasks and reads.
+  // Resolves with the saved row, or null when the server cannot be reached.
+  const refreshItem = useCallback(async (id: string): Promise<PkItem | null> => {
+    const supabase = getSupabaseBrowserClient();
+    try {
+      const [row, nt, st, rd] = await Promise.all([
+        supabase.from("next_actions").select(ITEM_COLS).eq("id", id).maybeSingle(),
+        supabase.from("next_action_notes").select(NOTE_COLS).eq("next_action_id", id).order("created_at").order("id"),
+        supabase.from("next_action_subtasks").select(SUB_COLS).eq("next_action_id", id).order("position").order("id"),
+        supabase.from("next_action_reads").select(READ_COLS).eq("next_action_id", id).order("membership_id"),
+      ]);
+      if (row.error || nt.error || st.error || rd.error || !row.data) return null;
+      const saved = row.data as unknown as ItemRow;
+      setItems((list) => list.map((i) => (i.id === id ? saved : i)));
+      setNotes((list) => [...list.filter((n) => n.next_action_id !== id), ...(nt.data as PkNote[])]);
+      setSubtasks((list) => [...list.filter((x) => x.next_action_id !== id), ...(st.data as PkSubtask[])]);
+      setReads((list) => [...list.filter((r) => r.next_action_id !== id), ...(rd.data as PkRead[])]);
+      return saved;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // The drawer edits one item's lists; the rest of each list stays as it is.
+  function only<T extends { next_action_id: string }>(
+    set: (fn: (list: T[]) => T[]) => void,
+    id: string,
+  ) {
+    return (fn: (mine: T[]) => T[]) =>
+      set((list) => [...list.filter((x) => x.next_action_id !== id), ...fn(list.filter((x) => x.next_action_id === id))]);
+  }
 
   // "+ Add action": through the outbox like every other to-do, so a flaky
   // connection never loses it, and shown at once. Due a week out; no priority
@@ -344,6 +441,7 @@ export default function PkFollowUpPage() {
   }
 
   return (
+    <div className="pk-layout" data-open={openItem && openBand ? "" : undefined}>
     <div className="stack pt-2 pk-page" data-open-item={openId ?? undefined}>
       <section>
         <Title />
@@ -370,6 +468,32 @@ export default function PkFollowUpPage() {
         onOpen={onOpen}
         onAdd={(activityId, action) => void onAdd(activityId, action)}
       />
+    </div>
+    {openItem && openBand && (
+      <PkItemDrawer
+        key={openItem.id}
+        item={openItem}
+        band={openBand}
+        notes={notes
+          .filter((n) => n.next_action_id === openItem.id)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))}
+        versionsByNote={versions}
+        subtasks={subtasks
+          .filter((x) => x.next_action_id === openItem.id)
+          .sort((a, b) => a.position - b.position)}
+        reads={reads.filter((r) => r.next_action_id === openItem.id)}
+        names={names}
+        desk={deskIds}
+        me={me}
+        todayIso={todayIso}
+        onItem={(next) => setItems((list) => list.map((i) => (i.id === next.id ? { ...i, ...next } : i)))}
+        onNotes={only(setNotes, openItem.id)}
+        onSubtasks={only(setSubtasks, openItem.id)}
+        onReads={only(setReads, openItem.id)}
+        onChanged={() => refreshItem(openItem.id)}
+        onClose={onClose}
+      />
+    )}
     </div>
   );
 }

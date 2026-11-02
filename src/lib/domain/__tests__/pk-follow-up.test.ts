@@ -5,6 +5,7 @@ import {
   daysToAlert,
   isAlertPassed,
   isUnread,
+  mirrorUpdate,
   pkDateOf,
   priorityPatch,
   summarize,
@@ -154,5 +155,68 @@ describe("summarize", () => {
     expect(summarize(bands, (i) => i.id === "2" || i.id === "4", "2026-11-02")).toEqual({
       pksOpen: 1, followUps: 2, alertPassed: 1, onUs: 1, waiting: 1, newForMe: 1,
     });
+  });
+});
+
+describe("mirrorUpdate", () => {
+  const NOW = "2026-11-02T15:00:00.000Z";
+
+  it("Done closes the item and stamps me", () => {
+    const n = mirrorUpdate(item(), { progress: "DONE" }, "me", NOW);
+    expect(n.completed_at).toBe(NOW);
+    expect(n.last_changed_by).toBe("me");
+    expect(n.last_changed_at).toBe(NOW);
+  });
+
+  it("leaving Done reopens it", () => {
+    const n = mirrorUpdate(item({ progress: "DONE", completed_at: "2026-10-30T00:00:00Z" }), { progress: "STUCK" }, "me", NOW);
+    expect(n.completed_at).toBeNull();
+  });
+
+  it("Eliminate closes it and drops the days; the due date stays", () => {
+    const n = mirrorUpdate(item(), priorityPatch("2026-10-20", "ELIMINATE"), "me", NOW);
+    expect(n.completed_at).toBe(NOW);
+    expect(n.priority_days).toBeNull();
+    expect(n.due_date).toBe("2026-10-22");
+  });
+
+  it("leaving Eliminate reopens it unless it is Done", () => {
+    const open = mirrorUpdate(
+      item({ priority: "ELIMINATE", priority_days: null, completed_at: "2026-10-30T00:00:00Z" }),
+      priorityPatch("2026-10-20", "PLAN"),
+      "me",
+      NOW,
+    );
+    expect(open.completed_at).toBeNull();
+    expect(open.due_date).toBe("2026-10-27");
+    const done = mirrorUpdate(
+      item({ priority: "ELIMINATE", priority_days: null, progress: "DONE", completed_at: "2026-10-30T00:00:00Z" }),
+      priorityPatch("2026-10-20", "PLAN"),
+      "me",
+      NOW,
+    );
+    expect(done.completed_at).toBe("2026-10-30T00:00:00Z");
+  });
+
+  it("Done on an Eliminate item keeps it closed", () => {
+    const n = mirrorUpdate(
+      item({ priority: "ELIMINATE", priority_days: null, completed_at: "2026-10-30T00:00:00Z" }),
+      { progress: "DONE" },
+      "me",
+      NOW,
+    );
+    expect(n.completed_at).toBe("2026-10-30T00:00:00Z");
+    expect(n.progress).toBe("DONE");
+  });
+
+  it("Action required alone stamps me and closes nothing", () => {
+    const n = mirrorUpdate(item(), { action_required: "AWAITING_RESPONSE" }, "me", NOW);
+    expect(n.completed_at).toBeNull();
+    expect(n.last_changed_by).toBe("me");
+  });
+
+  it("no change stamps nobody", () => {
+    const n = mirrorUpdate(item(), { progress: "NOT_STARTED" }, "me", NOW);
+    expect(n.last_changed_by).toBeNull();
   });
 });
