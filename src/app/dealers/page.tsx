@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DealerModuleProvider } from "@/components/dealer-module";
 import { DealerSheet } from "@/components/dealer-sheet";
+import { DealersTabs } from "@/components/dealers-tabs";
 import { DealerTable, TierTile, type DealerLine } from "@/components/dealers-table";
 import { DealersTodos, type DealerItem } from "@/components/dealers-todos";
 import { useOffline } from "@/components/offline-provider";
@@ -434,6 +435,7 @@ export default function DealersPage() {
       <div className="stack pt-2">
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Dealers</h1>
+          <DealersTabs current="overview" />
           <p className="t-sub mt-1">This page is for the sales desk and the assistants who work with it.</p>
         </section>
       </div>
@@ -446,6 +448,7 @@ export default function DealersPage() {
       <div className="stack pt-2" aria-busy="true">
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Dealers</h1>
+          <DealersTabs current="overview" />
           <span className="skel mt-2" style={{ width: "60%", height: 13 }} />
         </section>
         <section>
@@ -471,6 +474,7 @@ export default function DealersPage() {
       <div className="stack pt-2">
         <section>
           <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Dealers</h1>
+          <DealersTabs current="overview" />
           <p className="t-sub mt-1" style={{ maxWidth: "52ch" }}>
             The dealers live on the server and this device can&rsquo;t reach it right now.
             Nothing is lost &mdash; try again when you&rsquo;re back online.
@@ -492,7 +496,8 @@ export default function DealersPage() {
     <div className="stack pt-2 mgr-home dealers-board">
       <section data-desk="hero" data-span="full">
         <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Dealers</h1>
-        <p className="t-sub mt-1" style={{ maxWidth: "62ch" }}>
+        <DealersTabs current="overview" />
+        <p className="t-sub mt-2" style={{ maxWidth: "62ch" }}>
           Every dealer by what they bought over the last twelve months ({windowLabel}), where
           they are, and what the team still owes them. Pick a market to read its dealers.
         </p>

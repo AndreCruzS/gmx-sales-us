@@ -1,0 +1,262 @@
+"use client";
+
+// ONE PK ON THE BOARD: the band (dealer, PK date, place, how far along, what
+// is late, what is new) and, unfolded, its follow-up rows — then a one-line
+// "+ Add action" for something that came up after the visit.
+//
+// A row reads left to right the way the PK Control board did (spec §3):
+// the action and its subtasks · Action required · Status · the latest note ·
+// priority and days · the alert · the owner. Both statuses fill their whole
+// cell, which is the look the client asked to keep. A row opens the item
+// (onOpen); this file never writes.
+
+import { useState } from "react";
+import { ChevronDownIcon } from "@/components/icons";
+import {
+  PRIORITY_LABEL,
+  PROGRESS_LABEL,
+  REQUIRED_LABEL,
+  daysToAlert,
+  isAlertPassed,
+  type PkBand,
+  type PkItem,
+  type PkNote,
+  type PkSubtask,
+} from "@/lib/domain/pk-follow-up";
+
+/** 'YYYY-MM-DD' → "Oct 22". Calendar only; the clock is never read here. */
+export function shortDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+const REQUIRED_TONE = { PENDING_ACTION: "pending", AWAITING_RESPONSE: "awaiting", NONE: "none" } as const;
+const PROGRESS_TONE = {
+  NOT_STARTED: "not-started",
+  WORKING_ON_IT: "working",
+  STUCK: "stuck",
+  DONE: "done",
+} as const;
+
+export interface BandFacts {
+  /** 0..1, or null when nothing in the band counts (all Eliminate, or empty). */
+  progress: number | null;
+  alertsPassed: number;
+  unread: number;
+}
+
+export interface RowFacts {
+  notes: PkNote[];
+  subtasks: PkSubtask[];
+  unread: boolean;
+}
+
+export function PkBandView({
+  band,
+  hue,
+  facts,
+  rows,
+  rowFacts,
+  names,
+  todayIso,
+  folded,
+  filtered,
+  onToggle,
+  onOpen,
+  onAdd,
+}: {
+  band: PkBand;
+  /** 1..3 — the band colour, by position, as in the mockup. */
+  hue: number;
+  facts: BandFacts;
+  /** The items the filters let through, in reading order. */
+  rows: PkItem[];
+  rowFacts: (id: string) => RowFacts;
+  names: Map<string, string>;
+  todayIso: string;
+  folded: boolean;
+  /** True when a filter is hiding some of this band's items. */
+  filtered: boolean;
+  onToggle: () => void;
+  onOpen: (itemId: string) => void;
+  onAdd: (activityId: string, action: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const pct = facts.progress === null ? null : Math.round(facts.progress * 100);
+  const total = band.items.length;
+
+  function add() {
+    const text = draft.trim();
+    if (!text) return;
+    onAdd(band.activityId, text);
+    setDraft("");
+  }
+
+  return (
+    <div className="pk-band" data-hue={hue}>
+      <button
+        type="button"
+        className="pk-band-head"
+        aria-expanded={!folded}
+        onClick={onToggle}
+      >
+        <ChevronDownIcon size={12} className="pk-chev" />
+        <span className="pk-band-name">{band.dealer}</span>
+        <span className="pk-band-pk">
+          PK {shortDate(band.pkDate)}
+          {band.location ? ` · ${band.location}` : ""}
+        </span>
+        <span className="pk-band-meta">
+          {total} {total === 1 ? "action" : "actions"}
+        </span>
+        {pct !== null && (
+          <>
+            <span className="pk-meter" aria-hidden="true">
+              <i style={{ width: `${pct}%` }} />
+            </span>
+            <span className="pk-band-meta">{pct}% done</span>
+          </>
+        )}
+        {facts.alertsPassed > 0 && (
+          <span className="pk-flag" data-tone="late">
+            {facts.alertsPassed} {facts.alertsPassed === 1 ? "alert" : "alerts"} passed
+          </span>
+        )}
+        {facts.unread > 0 && (
+          <span className="pk-flag" data-tone="new">
+            {facts.unread} new
+          </span>
+        )}
+      </button>
+
+      {!folded && (
+        <>
+          {rows.map((i) => (
+            <PkRow
+              key={i.id}
+              item={i}
+              facts={rowFacts(i.id)}
+              owner={names.get(i.owner_id) ?? "Someone"}
+              todayIso={todayIso}
+              onOpen={onOpen}
+            />
+          ))}
+          {rows.length === 0 && (
+            <p className="pk-foot pk-empty">
+              {total === 0
+                ? "No follow-ups from this PK yet."
+                : filtered
+                  ? "No actions here match the filters."
+                  : "Everything here is done."}
+            </p>
+          )}
+          <form
+            className="pk-foot pk-add"
+            onSubmit={(e) => {
+              e.preventDefault();
+              add();
+            }}
+          >
+            <input
+              className="pk-add-input"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="+ Add action"
+              aria-label={`Add an action to the PK at ${band.dealer}`}
+            />
+            {draft.trim() && (
+              <button type="submit" className="pk-btn">
+                Add
+              </button>
+            )}
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PkRow({
+  item,
+  facts,
+  owner,
+  todayIso,
+  onOpen,
+}: {
+  item: PkItem;
+  facts: RowFacts;
+  owner: string;
+  todayIso: string;
+  onOpen: (itemId: string) => void;
+}) {
+  const subsDone = facts.subtasks.filter((s) => s.done_at !== null).length;
+  const latest = facts.notes[facts.notes.length - 1];
+  const passed = isAlertPassed(item, todayIso);
+  const days = daysToAlert(item, todayIso);
+
+  return (
+    <button
+      type="button"
+      className="pk-row"
+      data-eliminated={item.priority === "ELIMINATE" || undefined}
+      onClick={() => onOpen(item.id)}
+    >
+      <span className="pk-c pk-task">
+        <span className="pk-task-text">{item.action}</span>
+        {facts.subtasks.length > 0 && (
+          <span className="pk-sub" title="Subtasks done">
+            {subsDone}/{facts.subtasks.length}
+          </span>
+        )}
+      </span>
+      <span className="pk-cell" data-required={REQUIRED_TONE[item.action_required]}>
+        {item.action_required === "NONE" ? "No action required" : REQUIRED_LABEL[item.action_required]}
+      </span>
+      <span className="pk-cell" data-progress={PROGRESS_TONE[item.progress]}>
+        {PROGRESS_LABEL[item.progress]}
+      </span>
+      <span className="pk-c pk-note">
+        <span
+          className="pk-dot"
+          data-unread={facts.unread || undefined}
+          title={facts.unread ? "Changed since you last opened it" : "Seen"}
+        />
+        {latest ? (
+          <span className="pk-note-text">{latest.body}</span>
+        ) : (
+          <span className="pk-note-text pk-quiet">No notes yet</span>
+        )}
+        {facts.notes.length > 0 && (
+          <span className="pk-count" title="Notes">
+            {facts.notes.length}
+          </span>
+        )}
+      </span>
+      <span className="pk-c">
+        {item.priority ? (
+          <>
+            <span className="pk-prio" data-priority={item.priority}>
+              {PRIORITY_LABEL[item.priority]}
+            </span>
+            {item.priority_days !== null && <span className="pk-days">{item.priority_days}d</span>}
+          </>
+        ) : (
+          <span className="pk-quiet">Set priority</span>
+        )}
+      </span>
+      <span className="pk-c pk-alert" data-passed={passed || undefined}>
+        {days === null ? (
+          <small>No alert</small>
+        ) : (
+          <>
+            <b>{shortDate(item.due_date)}</b>
+            <small>{days < 0 ? `${-days}d passed` : days === 0 ? "today" : `in ${days}d`}</small>
+          </>
+        )}
+      </span>
+      <span className="pk-c pk-owner">{owner}</span>
+    </button>
+  );
+}

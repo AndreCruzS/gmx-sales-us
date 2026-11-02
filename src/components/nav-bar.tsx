@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   "/visits": "Agenda",
   "/reps": "Reps",
   "/dealers": "Dealers",
+  "/dealers/pk": "Dealers",
   "/routine": "Routine",
   "/accounts": "Accounts",
   "/accounts/new": "New account",
@@ -40,8 +41,9 @@ const TITLES: Record<string, string> = {
 // The tab-bar destinations — these are roots, so they carry no back button.
 // Kept in step with TABS in tab-bar.tsx: /record, /review and /dashboard are
 // reached from somewhere now rather than tapped into, so they need the way
-// back that a root does not.
-const ROOTS = new Set(["/", "/visits", "/dealers", "/reps", "/accounts", "/quotes", "/contacts"]);
+// back that a root does not. /dealers/pk is Dealers' second tab, not a
+// place you drill into, so it is a root too.
+const ROOTS = new Set(["/", "/visits", "/dealers", "/dealers/pk", "/reps", "/accounts", "/quotes", "/contacts"]);
 
 /** "deon@gmxgroup.com" → "Deon". The cache never holds a display name. */
 function nameFromEmail(email: string): string {

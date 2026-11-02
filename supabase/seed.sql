@@ -525,6 +525,61 @@ insert into activity_contacts (org_id, activity_id, contact_id) values
   ('11111111-1111-1111-1111-111111111111', 'ac000000-0000-0000-0000-000000000002',
    'd1000000-0000-0000-0000-000000000001');
 
+-- PK follow-up (2026-11-02): three follow-ups on the seed's one PK (TJ's class
+-- at Buffalo Lumber yesterday), so /dealers/pk has a band to read locally. It
+-- hangs off the existing PK rather than a new one because the visibility and
+-- weekly-review tests count the org's activities exactly. Each row says
+-- something different: one on us with its alert passed (Do now, 0 days), one
+-- waiting on them that João last moved (new for Bianca), one Eliminate (closed
+-- by the trigger, shown dimmed). item_type is set because no non-visit row may
+-- leave it null (tests/27); the ids share the f1000000- prefix that tests/09
+-- clears before its exact count. The writes carry no member, so the triggers
+-- keep the authors and the last_changed_* given here.
+
+update activities set location = 'Buffalo, NY'
+ where id = 'ac000000-0000-0000-0000-000000000001';
+
+insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
+                          activity_id, item_type, source, priority, priority_days,
+                          action_required, progress, last_changed_by, last_changed_at) values
+  ('f1000000-0000-0000-0000-0000000000a1', '11111111-1111-1111-1111-111111111111',
+   'Send Maximo commercial and technical materials',
+   'c0000000-0000-0000-0000-000000000001', current_date - 1,
+   'd0000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001',
+   'ACTION', 'VISIT_CAPTURE', 'DO_NOW', 0, 'PENDING_ACTION', 'WORKING_ON_IT',
+   'c0000000-0000-0000-0000-000000000001', now() - interval '20 hours'),
+  ('f1000000-0000-0000-0000-0000000000a2', '11111111-1111-1111-1111-111111111111',
+   'Propose three weeks for dealer visits',
+   'c0000000-0000-0000-0000-000000000002', current_date + 6,
+   'd0000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001',
+   'ACTION', 'VISIT_CAPTURE', 'PLAN', 7, 'AWAITING_RESPONSE', 'NOT_STARTED',
+   'c0000000-0000-0000-0000-000000000002', now() - interval '2 hours'),
+  ('f1000000-0000-0000-0000-0000000000a3', '11111111-1111-1111-1111-111111111111',
+   'Architect market development',
+   'c0000000-0000-0000-0000-000000000001', current_date + 2,
+   'd0000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001',
+   'ACTION', 'VISIT_CAPTURE', 'ELIMINATE', null, 'NONE', 'NOT_STARTED',
+   'c0000000-0000-0000-0000-000000000001', now() - interval '18 hours');
+
+insert into next_action_notes (id, org_id, next_action_id, author_id, body, created_at) values
+  ('f1b00000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
+   'f1000000-0000-0000-0000-0000000000a1', 'c0000000-0000-0000-0000-000000000001',
+   'Send the Maximo commercial and technical literature, as agreed at the PK.',
+   now() - interval '20 hours'),
+  ('f1b00000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
+   'f1000000-0000-0000-0000-0000000000a2', 'c0000000-0000-0000-0000-000000000002',
+   'Three candidate weeks sent; they will confirm after their planning meeting.',
+   now() - interval '2 hours');
+
+insert into next_action_subtasks (id, org_id, next_action_id, title, done_at, position) values
+  ('f1c00000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111',
+   'f1000000-0000-0000-0000-0000000000a1', 'Commercial literature PDF',
+   now() - interval '10 hours', 0),
+  ('f1c00000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
+   'f1000000-0000-0000-0000-0000000000a1', 'Technical data sheets', null, 1),
+  ('f1c00000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111',
+   'f1000000-0000-0000-0000-0000000000a1', 'Mail the printed samples book', null, 2);
+
 -- Capture pipelines -----------------------------------------------------------
 
 insert into voice_captures (id, org_id, owner_id, audio_path, status, language) values
