@@ -65,8 +65,12 @@ export function PkBoard({
   todayIso: string;
   onOpen: (itemId: string) => void;
   onAdd: (activityId: string, action: string) => void;
-  /** The toolbar's right end (the Excel export goes here). */
-  actions?: ReactNode;
+  /**
+   * The toolbar's right end (the Excel export goes here). A function gets the
+   * bands as the filters leave them: only the PKs with a row showing, and in
+   * each only the rows showing.
+   */
+  actions?: ReactNode | ((visible: PkBand[]) => ReactNode);
 }) {
   const [query, setQuery] = useState("");
   const [owner, setOwner] = useState("");
@@ -129,6 +133,12 @@ export function PkBoard({
     }
     return true;
   };
+
+  // What the filters leave, for the export: each PK with the rows showing.
+  // A PK with no row left drops out once a filter is on.
+  const visible = bands
+    .map((b) => ({ ...b, items: b.items.filter((i) => passes(b, i)).sort(rowOrder) }))
+    .filter((b) => b.items.length > 0 || !narrowed);
 
   const toggle = (id: string) =>
     setFolded((s) => {
@@ -200,7 +210,9 @@ export function PkBoard({
           <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
           Show done
         </label>
-        {actions && <span className="pk-tools-end">{actions}</span>}
+        {actions && (
+          <span className="pk-tools-end">{typeof actions === "function" ? actions(visible) : actions}</span>
+        )}
       </section>
 
       {bands.length === 0 ? (

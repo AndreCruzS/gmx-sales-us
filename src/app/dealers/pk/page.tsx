@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DealersTabs } from "@/components/dealers-tabs";
 import { useOffline } from "@/components/offline-provider";
 import { PkBoard } from "@/components/pk-board";
+import { PkExportButton } from "@/components/pk-export-button";
 import { PkItemDrawer } from "@/components/pk-item-drawer";
 import type { NoteVersion } from "@/components/pk-notes-log";
 import {
@@ -467,6 +468,16 @@ export default function PkFollowUpPage() {
         todayIso={todayIso}
         onOpen={onOpen}
         onAdd={(activityId, action) => void onAdd(activityId, action)}
+        actions={(visible) => (
+          <PkExportButton
+            visible={visible}
+            all={bands}
+            notes={notes}
+            subtasks={subtasks}
+            names={names}
+            todayIso={todayIso}
+          />
+        )}
       />
     </div>
     {openItem && openBand && (
