@@ -18,6 +18,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { AgendaCalendar } from "@/components/agenda-calendar";
+import { AgendaTabs } from "@/components/agenda-tabs";
 import { AttentionWidgets } from "@/components/attention-widgets";
 import { NewCompanyInline } from "@/components/new-company-inline";
 import { RepsMenu } from "@/components/reps-menu";
@@ -406,6 +407,7 @@ function VisitsPageInner() {
   return (
     <div className="stack pt-2">
       <RepsMenu />
+      <AgendaTabs current="day" />
       <section>
         {/* planning is occasional; the day is the screen. The action sits
             quiet on the right instead of pushing the day below the fold. */}

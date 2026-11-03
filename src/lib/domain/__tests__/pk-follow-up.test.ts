@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   isOnUs,
+  canEditItem,
+  firstNameOf,
   trapTarget,
   alertDate,
   bandProgress,
@@ -276,5 +278,19 @@ describe("isOnUs", () => {
     expect(isOnUs("STUCK")).toBe(true);
     expect(isOnUs("WAITING")).toBe(false);
     expect(isOnUs("DONE")).toBe(false);
+  });
+});
+
+describe("PK follow-up for reps (spec 2026-11-03)", () => {
+  it("the owner and the desk move an item; a rep reads someone else's", () => {
+    expect(canEditItem("tj", "tj", false)).toBe(true);
+    expect(canEditItem("joao", "tj", false)).toBe(false);
+    expect(canEditItem("joao", "bianca", true)).toBe(true);
+  });
+
+  it("names a PK by its runner's first name", () => {
+    expect(firstNameOf("Joao Manager")).toBe("Joao");
+    expect(firstNameOf("  Deonn  Deford ")).toBe("Deonn");
+    expect(firstNameOf(undefined)).toBe("Someone");
   });
 });

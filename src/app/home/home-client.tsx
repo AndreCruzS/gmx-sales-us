@@ -52,6 +52,7 @@ import {
 import { buildDayTimeline, type TimelineStop } from "@/lib/routine/day-timeline";
 import { useReviewCount } from "@/lib/review/count";
 import { DaySpine } from "./day-spine";
+import { YourPksCard } from "@/components/your-pks-card";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface OpenQuote {
@@ -709,6 +710,10 @@ export default function HomeClient() {
               </Link>
             </section>
           )}
+
+          {/* What is still open after his PKs, under the day: it is the next
+              thing he owes a dealer (spec 2026-11-03 §4). Hidden when nothing is. */}
+          <YourPksCard />
 
           {/* Two counts, not four. Leadership asked for "needs attention" and
               "waiting your OK" to come off (14 Aug): the greeting above

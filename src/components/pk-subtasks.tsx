@@ -14,11 +14,14 @@ export function PkSubtasks({
   orgId,
   subtasks,
   onSubtasks,
+  readOnly = false,
 }: {
   itemId: string;
   orgId: string;
   subtasks: PkSubtask[];
   onSubtasks: (fn: (list: PkSubtask[]) => PkSubtask[]) => void;
+  /** Someone else's item: the list shows, nothing ticks, nothing is added. */
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [failed, setFailed] = useState<string | null>(null);
@@ -80,7 +83,23 @@ export function PkSubtasks({
           </>
         )}
       </h3>
-      {subtasks.length > 0 && (
+      {readOnly && subtasks.length === 0 && <p className="pkd-quiet">No subtasks.</p>}
+      {readOnly && subtasks.length > 0 && (
+        <ul className="pkd-checks pkd-checks-ro">
+          {subtasks.map((s) => (
+            <li key={s.id}>
+              <span className="pkd-tick" data-done={s.done_at !== null || undefined} aria-hidden="true">
+                {s.done_at !== null ? "✓" : ""}
+              </span>
+              <span data-done={s.done_at !== null || undefined}>
+                {s.title}
+                <span className="sr-only">{s.done_at !== null ? " (done)" : " (not done)"}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!readOnly && subtasks.length > 0 && (
         <ul className="pkd-checks">
           {subtasks.map((s) => (
             <li key={s.id}>
@@ -100,6 +119,7 @@ export function PkSubtasks({
           ))}
         </ul>
       )}
+      {!readOnly && (
       <form
         className="pkd-addsub"
         onSubmit={(e) => {
@@ -120,6 +140,7 @@ export function PkSubtasks({
           </button>
         )}
       </form>
+      )}
       {failed && (
         <p className="pkd-error" role="alert">
           {failed}

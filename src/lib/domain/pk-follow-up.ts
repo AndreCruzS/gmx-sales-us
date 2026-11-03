@@ -91,6 +91,23 @@ export interface PkBand {
   pkDate: string;
   location: string | null;
   items: PkItem[];
+  /** Who ran the PK (the visit's owner), when known. */
+  ranBy?: string | null;
+}
+
+/**
+ * May this reader move the item (status, priority, days, subtasks)? Its owner
+ * may, and so may the desk (spec 2026-11-03 §2). A rep reading someone else's
+ * item in his PK sees it read-only, but can still note on it. This mirrors the
+ * update policy closely enough to offer the right controls; RLS still decides.
+ */
+export function canEditItem(ownerId: string, me: string, desk: boolean): boolean {
+  return desk || ownerId === me;
+}
+
+/** "Joao Manager" → "Joao". */
+export function firstNameOf(full: string | undefined): string {
+  return (full ?? "").trim().split(/\s+/)[0] || "Someone";
 }
 
 function pad(n: number): string {

@@ -101,6 +101,7 @@ export function PkItemDrawer({
   desk,
   me,
   todayIso,
+  readOnly = false,
   onItem,
   onNotes,
   onSubtasks,
@@ -123,6 +124,11 @@ export function PkItemDrawer({
   /** My membership id. */
   me: string;
   todayIso: string;
+  /**
+   * Someone else's item in my PK (spec 2026-11-03 §2): status, priority and
+   * days show as text, subtasks without boxes; notes and "Seen" work as usual.
+   */
+  readOnly?: boolean;
   /** The item as it now stands (an optimistic edit, or the saved row). */
   onItem: (next: PkItem) => void;
   onNotes: Update<PkNote>;
@@ -303,6 +309,36 @@ export function PkItemDrawer({
         </header>
 
         <div className="pkd-body">
+          {readOnly ? (
+            <>
+              <p className="pkd-owned">
+                Owned by <b>{names.get(item.owner_id) ?? "someone else"}</b>. Only they or the desk
+                move it on; you can add a note.
+              </p>
+              <dl className="pkd-ro">
+                <div>
+                  <dt className="pkd-lbl">Status</dt>
+                  <dd>
+                    <span className="pkd-ro-chip" data-progress={PROGRESS_TONE[item.progress]}>
+                      {PROGRESS_LABEL[item.progress]}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="pkd-lbl">Priority</dt>
+                  <dd>{item.priority ? PRIORITY_LABEL[item.priority] : "Not set"}</dd>
+                </div>
+                <div>
+                  <dt className="pkd-lbl">Days after the PK</dt>
+                  <dd>{item.priority_days ?? "—"}</dd>
+                </div>
+              </dl>
+              <p className="pkd-calc" data-passed={alert.passed || undefined}>
+                {alert.text}
+              </p>
+            </>
+          ) : (
+          <>
           <label className="pkd-field">
             <span className="pkd-lbl">Status</span>
             <select
@@ -373,6 +409,8 @@ export function PkItemDrawer({
               {alert.text}
             </p>
           </div>
+          </>
+          )}
 
           {readFailed && (
             <p className="pkd-error" role="alert">
@@ -391,6 +429,7 @@ export function PkItemDrawer({
             orgId={orgId}
             subtasks={subtasks}
             onSubtasks={onSubtasks}
+            readOnly={readOnly}
           />
 
           <PkNotesLog

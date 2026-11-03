@@ -18,6 +18,7 @@ import {
   isOnUs,
   isAlertPassed,
   isUnread,
+  firstNameOf,
   summarize,
   type PkBand,
   type PkItem,
@@ -52,6 +53,7 @@ export function PkBoard({
   reads,
   names,
   me,
+  desk = true,
   todayIso,
   onOpen,
   onAdd,
@@ -64,6 +66,12 @@ export function PkBoard({
   names: Map<string, string>;
   /** My membership id. */
   me: string;
+  /**
+   * The desk (admin, manager, assistant) filters by any owner and adds to any
+   * PK. A rep filters "Everyone · Mine" and adds only to a PK he ran
+   * (spec 2026-11-03 §5).
+   */
+  desk?: boolean;
   todayIso: string;
   onOpen: (itemId: string) => void;
   onAdd: (activityId: string, action: string) => void;
@@ -187,11 +195,15 @@ export function PkBoard({
           onChange={(e) => setOwner(e.target.value)}
         >
           <option value="">Everyone</option>
-          {owners.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
+          {desk ? (
+            owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))
+          ) : (
+            <option value={me}>Mine</option>
+          )}
         </select>
         <select
           className="pk-input"
@@ -221,7 +233,9 @@ export function PkBoard({
 
       {bands.length === 0 ? (
         <p className="t-sub">
-          No PKs yet. A PK logged as a visit shows up here with the follow-ups taken on the day.
+          {desk
+            ? "No PKs yet. A PK logged as a visit shows up here with the follow-ups taken on the day."
+            : "No PKs yet. A PK you log as a visit shows up here with its follow-ups."}
         </p>
       ) : (
         <div className="pk-board-wrap">
@@ -257,6 +271,12 @@ export function PkBoard({
                   todayIso={todayIso}
                   folded={folded.has(b.activityId)}
                   filtered={narrowed}
+                  canAdd={desk || b.ranBy === me}
+                  scopeNote={
+                    !desk && b.ranBy && b.ranBy !== me
+                      ? `${firstNameOf(names.get(b.ranBy))}'s PK · only your follow-ups show here`
+                      : null
+                  }
                   onToggle={() => toggle(b.activityId)}
                   onOpen={onOpen}
                   onAdd={onAdd}

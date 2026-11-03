@@ -62,6 +62,8 @@ export function PkBandView({
   todayIso,
   folded,
   filtered,
+  canAdd = true,
+  scopeNote = null,
   onToggle,
   onOpen,
   onAdd,
@@ -78,6 +80,10 @@ export function PkBandView({
   folded: boolean;
   /** True when search, owner, status or "Unread only" is narrowing the list. */
   filtered: boolean;
+  /** "+ Add action" at the foot: the desk, or the rep who ran the PK. */
+  canAdd?: boolean;
+  /** Under the head when the reader sees only part of the PK. */
+  scopeNote?: string | null;
   onToggle: () => void;
   onOpen: (itemId: string) => void;
   onAdd: (activityId: string, action: string) => void;
@@ -133,6 +139,7 @@ export function PkBandView({
 
       {!folded && (
         <>
+          {scopeNote && <p className="pk-foot pk-scope">{scopeNote}</p>}
           {rows.map((i) => (
             <PkRow
               key={i.id}
@@ -152,6 +159,7 @@ export function PkBandView({
                   : "Everything here is done · tick Show done to see it."}
             </p>
           )}
+          {canAdd && (
           <form
             className="pk-foot pk-add"
             onSubmit={(e) => {
@@ -172,6 +180,7 @@ export function PkBandView({
               </button>
             )}
           </form>
+          )}
         </>
       )}
     </div>
