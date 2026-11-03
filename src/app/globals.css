@@ -7748,3 +7748,22 @@ textarea.pkd-select {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
+
+/* ONE MICROPHONE (2026-11-04): a booking inside the check-and-save sheet is
+   ticked to be written on Save; unticked, it fades and stays editable. */
+.say-include {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.say-include input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+.say-card[data-off] {
+  opacity: 0.6;
+}

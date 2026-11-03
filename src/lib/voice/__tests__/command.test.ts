@@ -149,7 +149,7 @@ describe("what comes back", () => {
     expect(c.objective).toBeNull(); // only a visit has a purpose
   });
 
-  it("never more than three, and nothing without an action", () => {
+  it("never more than five, and nothing without an action", () => {
     const one = {
       kind: "FOLLOW_UP" as const,
       account_id: null,
@@ -162,7 +162,7 @@ describe("what comes back", () => {
       owner_membership_id: null,
       teammate_membership_id: null,
     };
-    expect(sanitizeCommands({ commands: [one, one, one, one] }, shown, reps)).toHaveLength(3);
+    expect(sanitizeCommands({ commands: [one, one, one, one, one, one] }, shown, reps)).toHaveLength(5);
     expect(sanitizeCommands({ commands: [{ ...one, action: "  " }] }, shown, reps)).toEqual([]);
   });
 });

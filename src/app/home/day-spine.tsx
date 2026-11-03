@@ -93,10 +93,10 @@ function Debrief({
           aria-label={`What happened at ${account ? displayAccountName(account.name) : "this stop"}`}
           enterKeyHint="done"
         />
-        {/* Talking is the other way in, and that one does belong on /record —
-            it is a recorder, not a form. */}
+        {/* Talking is the other way in: Say it, tied to this stop (the one
+            microphone, 2026-11-04). */}
         <Link
-          href={`/record?visit=${stop.id}`}
+          href={`/say?visit=${stop.id}`}
           className="debrief-mic"
           aria-label="Talk instead of typing"
         >

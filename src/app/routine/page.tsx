@@ -139,8 +139,9 @@ function rowAction(item: RoutineItem): { label: string; href: string } {
   }
   const params = new URLSearchParams();
   if (item.accountId) params.set("account", item.accountId);
-  params.set("item", item.itemId);
-  return { label: "Record call", href: `/record?${params.toString()}` };
+  // Say it, tied to this item, so logging it closes it (one-mic, 2026-11-04).
+  params.set("visit", item.itemId);
+  return { label: "Record call", href: `/say?${params.toString()}` };
 }
 
 export default function RoutinePage() {

@@ -706,7 +706,7 @@ export default function AccountPage() {
         </div>
         {visitChoice && (
           <div className="acct-visit-choice">
-            <Link href={`/record?account=${id}`} className="btn-secondary">
+            <Link href={`/say?account=${id}`} className="btn-secondary">
               It happened — log it
             </Link>
             <Link href={`/visits?plan=${id}`} className="btn-secondary">

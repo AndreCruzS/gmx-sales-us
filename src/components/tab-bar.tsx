@@ -90,23 +90,15 @@ interface AddItem {
 
 // Bottom to top: the menu rises from the + button (column-reverse), so the
 // first entry sits nearest the thumb and the last at the top. Read from the
-// top, it is Say it, Quote, Plan a visit, Log a visit, Company (Andre,
-// 2026-11-04: "o say it tinha que estar no topo, depois quote, depois plan a
-// visit e por ultimo company").
+// top, it is Say it, Quote, Plan a visit, Company (Andre, 2026-11-04: "o say
+// it tinha que estar no topo, depois quote, depois plan a visit e por ultimo
+// company"). Log a visit is gone: Say it logs what happened too (one-mic spec).
 const ADD_ITEMS: readonly AddItem[] = [
   {
     href: "/accounts/new",
     label: "Company",
     hint: "A new door in the patch",
     Icon: BuildingIcon,
-  },
-  // Was "Voice note": named for what it is for, logging what happened at a
-  // visit — by voice or typed, offline too (/record).
-  {
-    href: "/record",
-    label: "Log a visit",
-    hint: "What happened, in 20 seconds",
-    Icon: CheckIcon,
   },
   {
     href: "/visits?plan=new",

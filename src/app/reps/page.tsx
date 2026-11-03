@@ -933,8 +933,8 @@ function PromiseList({
                       <Link
                         href={
                           r.account_id
-                            ? `/record?account=${r.account_id}&item=${r.id}`
-                            : `/record?item=${r.id}`
+                            ? `/say?account=${r.account_id}&visit=${r.id}`
+                            : `/say?visit=${r.id}`
                         }
                         className="fu-act"
                         title="Record what happened — that is what clears it"

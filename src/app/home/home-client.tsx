@@ -26,6 +26,7 @@ import {
   CalendarIcon,
   FileIcon,
   CheckIcon,
+  MicrophoneIcon,
   PlusIcon,
   SearchIcon,
   XIcon,
@@ -832,11 +833,11 @@ export default function HomeClient() {
             <div className="grid grid-cols-2 gap-2.5">
               {[
                 {
-                  href: "/record",
-                  // The microphone is Say it's (2026-11-04); this door logs.
-                  Icon: CheckIcon,
-                  title: "Log a visit",
-                  sub: "What happened, in 20 seconds",
+                  href: "/say",
+                  // The one microphone (2026-11-04): log what happened, or book what's next.
+                  Icon: MicrophoneIcon,
+                  title: "Say it",
+                  sub: "Log a visit or book what's next",
                 },
                 {
                   href: "/visits",
@@ -940,7 +941,7 @@ export default function HomeClient() {
                   {waiting.slice(0, 3).map((item) => (
                     <li key={item.id}>
                       <Link
-                        href={`/record?visit=${item.id}`}
+                        href={`/say?visit=${item.id}`}
                         className="flex items-center justify-between gap-2 py-1.5"
                       >
                         <span className="t-title truncate" style={{ fontSize: 13 }}>

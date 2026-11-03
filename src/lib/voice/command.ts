@@ -150,15 +150,18 @@ export function candidateAccounts(
 
 const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export function commandPrompt(
+/**
+ * The booking rules, shared by Say it's own reading and the one-mic reading
+ * (lib/voice/say.ts): the kinds, dates and times, and GMX's own people. The
+ * account list is printed by the caller.
+ */
+export function bookingRules(
   today: string,
-  accounts: readonly CommandAccount[],
   reps: readonly CommandRep[],
   team: readonly CommandTeammate[] = [],
-): string {
+): string[] {
   const weekday = DOW[new Date(`${today}T12:00:00Z`).getUTCDay()];
   return [
-    `You turn a wood-products sales rep's spoken request into commands for their CRM.`,
     `Today is ${weekday} ${today}. Resolve "Thursday", "next week", "amanhã", "dia 30" to a YYYY-MM-DD on or after today; "next <weekday>" is the first one after today. No day said → null.`,
     ``,
     `Kinds:`,
@@ -167,8 +170,8 @@ export function commandPrompt(
     `- QUOTE: the rep wants a quote drafted now (products, sizes, quantities). The action is the products as said.`,
     ``,
     `Rules:`,
-    `- Only what was asked. Small talk, or nothing actionable → an empty commands list.`,
-    `- account_id ONLY from the list below, when the name clearly matches; otherwise null with account_heard set.`,
+    `- Only what was asked. Small talk, or nothing actionable → no commands.`,
+    `- account_id ONLY from the accounts list, when the name clearly matches; otherwise null with account_heard set.`,
     `- action: short and concrete, in the language spoken (e.g. "Collect the decking quote", "Ligar ao comprador sobre a amostra").`,
     `- time: only when a time of day was said; read "at 2" in working hours as 14:00. A call or a meeting with a time goes on the agenda; without one it is a reminder.`,
     // GMX'S OWN PEOPLE, one list (Andre, 2026-11-03: "Bia and João should be
@@ -186,12 +189,27 @@ export function commandPrompt(
             : `  · The speaker cannot hand work to others: owner_membership_id is always null; someone else doing it is still WITH them.`,
         ].join("\n")
       : `- owner_membership_id and teammate_membership_id: always null.`,
+  ];
+}
+
+export function commandPrompt(
+  today: string,
+  accounts: readonly CommandAccount[],
+  reps: readonly CommandRep[],
+  team: readonly CommandTeammate[] = [],
+): string {
+  return [
+    `You turn a wood-products sales rep's spoken request into commands for their CRM.`,
+    ...bookingRules(today, reps, team),
     ``,
     accounts.length > 0
       ? `Accounts (id: name · city):\n${accounts.map((a) => `${a.id}: ${a.name}${a.city ? ` · ${a.city}` : ""}`).join("\n")}`
       : `Accounts: none matched what was said — account_id is null.`,
   ].join("\n");
 }
+
+/** A debrief often carries four follow-ups; the one-mic reading allows five. */
+export const MAX_COMMANDS = 5;
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -236,7 +254,7 @@ export function sanitizeCommands(
   const repIds = new Set(reps.map((r) => r.membershipId));
   const teamIds = new Set(team.map((t) => t.membershipId));
   return raw.commands
-    .slice(0, 3)
+    .slice(0, MAX_COMMANDS)
     .map((c) => ({
       kind: c.kind,
       accountId: c.account_id && accountIds.has(c.account_id) ? c.account_id : null,

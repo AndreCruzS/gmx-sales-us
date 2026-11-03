@@ -31,7 +31,7 @@ const TITLES: Record<string, string> = {
   "/quotes/new": "New quote",
   "/contacts": "Contacts",
   "/orders": "Orders",
-  "/record": "Log a visit",
+  "/say": "Say it",
   "/review": "Review",
   "/dashboard": "Insights",
   "/dashboard/rep": "Rep",
