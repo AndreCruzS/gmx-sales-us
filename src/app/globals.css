@@ -5965,59 +5965,245 @@ input[type="datetime-local"] {
 .dl-todos {
   min-width: 0;
 }
-.dl-todos-controls {
+/* WHAT WE OWE DEALERS (2026-11-03): one list by urgency. On the desk a row
+   is a line of five — when · dealer · what · kind · whose; on a phone it
+   stacks. The kinds are a tag, Promise and Deadline tinted because those are
+   the two a manager is asked about. */
+.dl-owe-head {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 16px 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px 16px 6px;
 }
-/* The three kinds and the people wrap inside the card rather than scroll:
-   a chip cut by the card's edge reads as broken, not as "more". */
-.dl-todos-controls .chip-row {
+.dl-owe-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-right: auto;
+}
+.dl-owe-head .chip-row,
+.dl-owe-kinds {
   flex-wrap: wrap;
   overflow-x: visible;
 }
-.dl-who .chip {
+.dl-who .chip,
+.dl-owe-kinds .chip {
   min-height: 30px;
   padding: 5px 11px;
   font-size: var(--text-xs);
 }
+.dl-owe-kinds {
+  padding: 4px 16px 10px;
+}
 .dl-todos-empty {
   padding: 4px 16px 16px;
 }
-.dl-todos .list {
-  gap: 0;
+.dl-owe-group + .dl-owe-group {
+  margin-top: 4px;
 }
-.dl-todo {
+.dl-owe-label {
+  padding: 10px 16px 6px;
+  font-family: var(--font-fig);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--rule);
+}
+.dl-owe-label span {
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.dl-owe-group[data-group="late"] .dl-owe-label {
+  color: var(--danger);
+}
+.dl-owe-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+}
+.dl-owe-row {
+  display: grid;
+  grid-template-columns: 92px minmax(170px, 1.1fr) minmax(0, 2fr) 116px minmax(110px, 0.7fr);
+  align-items: center;
+  gap: 4px 14px;
   width: 100%;
   padding: 9px 16px;
   text-align: left;
   border-top: 1px solid var(--rule);
   background: none;
+  color: var(--ink-primary);
 }
-button.dl-todo {
+.dl-owe-list li:first-child .dl-owe-row {
+  border-top: 0;
+}
+button.dl-owe-row {
   cursor: pointer;
 }
-button.dl-todo:hover {
+button.dl-owe-row:hover {
   background: var(--surface-page);
 }
-.dl-todo-line {
+.dl-owe-when {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
+  flex-direction: column;
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
 }
-.dl-todo-what {
-  font-size: var(--text-md);
-  color: var(--ink-primary);
+.dl-owe-when small {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.dl-owe-when[data-late] b,
+.dl-owe-when[data-late] small {
+  color: var(--danger);
+}
+.dl-owe-dealer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  font-size: var(--text-md);
+}
+.dl-owe-dealer b {
   overflow-wrap: anywhere;
 }
-.dl-todo-sub {
-  display: block;
+.dl-owe-what {
+  min-width: 0;
+  font-size: var(--text-md);
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+.dl-owe-kind {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-fig);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+}
+.dl-owe-kind[data-kind="PROMISE"] {
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+}
+.dl-owe-kind[data-kind="DEADLINE"] {
+  background: var(--warn-tint);
+  color: var(--ink-primary);
+}
+.dl-owe-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.dl-owe-who small {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.dl-owe-more {
+  margin: 2px 16px 10px;
+}
+.dl-owe-pk {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--rule);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.dl-owe-pk b {
+  color: var(--danger);
+  font-weight: 600;
+}
+.dl-owe-pk span:last-child {
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.dl-owe-pk:hover {
+  background: var(--surface-page);
+}
+@media (max-width: 767px) {
+  .dl-owe-title {
+    order: 1;
+    flex: 1 1 0;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+  .dl-owe-add {
+    order: 2;
+  }
+  .dl-owe-head .dl-who {
+    order: 3;
+    width: 100%;
+  }
+  .dl-owe-row {
+    grid-template-columns: 64px auto minmax(0, 1fr);
+    grid-template-areas:
+      "when dealer dealer"
+      "when what what"
+      "when kind who";
+    gap: 4px 12px;
+    align-items: start;
+  }
+  .dl-owe-when {
+    grid-area: when;
+  }
+  .dl-owe-dealer {
+    grid-area: dealer;
+  }
+  .dl-owe-what {
+    grid-area: what;
+  }
+  .dl-owe-kind {
+    grid-area: kind;
+    margin-top: 3px;
+  }
+  .dl-owe-who {
+    grid-area: who;
+    justify-self: end;
+    text-align: right;
+    margin-top: 3px;
+  }
+}
+
+/* The map card on the desk, full width: the map on the left, the market
+   cards in a column beside it (2026-11-03), so no hole opens under a short
+   card next to it. */
+@media (min-width: 1280px) {
+  .dl-map {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-areas:
+      "eye eye"
+      "map list"
+      "hint list";
+    column-gap: 24px;
+    align-items: start;
+  }
+  .dl-map > .dl-eyebrow {
+    grid-area: eye;
+  }
+  .dl-map > .salesmap {
+    grid-area: map;
+  }
+  .dl-map > .t-hint {
+    grid-area: hint;
+  }
+  .dl-map > .dl-markets {
+    grid-area: list;
+    grid-template-columns: 1fr 1fr;
+    align-content: start;
+    margin-top: 8px;
+  }
 }
 .dl-table-card {
   min-width: 0;

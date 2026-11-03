@@ -13,7 +13,8 @@
 //     many of its to-dos are late — picking a market (on the map or its card)
 //     narrows the dealer table under it;
 //   · the market's dealers: tier, last visit, what is open, whose patch;
-//   · the to-dos, split the way Bianca's visit reports split them.
+//   · what we owe dealers, by urgency, the PK follow-ups as one line that
+//     leads to their own board.
 //
 // The tier is a fact of the files (dealer-tiers.ts), not a label somebody
 // types, so the page never asks anyone to set one.
@@ -51,7 +52,7 @@ const SELL_COLS =
   "period, rep_id, rep_name, region_id, region_name, market_owner_name, distributor_id, distributor_name, branch_id, branch_name, branch_city, branch_state, dealer_id, dealer_name, dealer_label, product, quantity, unit, value, ly_quantity, period_kind, is_house_account, detail";
 
 const ITEM_COLS =
-  "id, action, due_date, owner_id, account_id, item_type, source, entered_by, completed_at, account:accounts!next_actions_account_id_fkey(name)";
+  "id, action, due_date, owner_id, account_id, item_type, source, entered_by, completed_at, priority, account:accounts!next_actions_account_id_fkey(name), activity:activities!next_actions_activity_id_fkey(activity_type)";
 
 /** A visit is somebody standing in front of the account; a call is not. */
 const VISIT_TYPES = ["DEALER_VISIT", "DISTRIBUTOR_VISIT", "JOBSITE_VISIT", "PK_TRAINING"];
@@ -421,8 +422,8 @@ export default function DealersPage() {
     () =>
       spanner(
         packDesk([
-          { k: "map", w: "wide" },
-          { k: "todos", w: "narrow" },
+          { k: "map", w: "full" },
+          { k: "todos", w: "full" },
           { k: "table", w: "full" },
         ]),
       ),

@@ -1,34 +1,31 @@
 "use client";
 
-// THE DEALERS BOARD'S TO-DOS (Bianca, meeting 2026-10-27): split the way her
-// visit reports split them — Action items, To coordinate, Follow-ups — so the
-// desk reads the team's open work in the shape it is written in. A promise and
-// a deadline are things to DO, so they sit with the actions (bucketOf).
+// WHAT WE OWE DEALERS (Bianca, meeting 2026-10-27; reshaped 2026-11-03).
+// Everything the team still owes a dealer, on one list read by urgency —
+// Late, This week, Later — so nothing hides behind a tab. The kinds of her
+// visit reports (Action, To coordinate, Follow-up, Promise, Deadline) are a
+// tag on each row and a filter with its count, not a page each.
+//
+// A PK's follow-ups have their own board (/dealers/pk); here they are one
+// line at the foot that leads there, so the same item is never told twice in
+// two vocabularies.
 //
 // Visits are not to-dos: a row with no item_type is on the agenda, not here,
 // and the page never hands one in.
 //
 // Whose: Everyone, Mine, or one person — the same chip row the Reps board
-// uses, never a dropdown. The tab counts answer for the person picked.
+// uses, never a dropdown. The counts answer for the person picked.
 //
-// The order is the one a manager reads in: what is late first, then by the
-// date it is due. A row says who owns it and, when somebody else typed it,
-// who did — "entered by André for Bianca" — because the desk often writes up
-// a rep's promise for them after a joint visit.
+// A row says when, which dealer (and its tier), what, which kind and whose
+// — and, when somebody else typed it, who did ("entered by André"), because
+// the desk often writes up a rep's promise for them after a joint visit.
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DealerItemForm } from "@/components/dealer-item-form";
-import { Pager, usePaged, usePageSize } from "@/components/pager";
 import type { Tier } from "@/lib/domain/dealer-tiers";
-import {
-  BUCKET_LABEL,
-  ITEM_TYPE_LABEL,
-  bucketOf,
-  isLate,
-  type Bucket,
-  type ItemType,
-} from "@/lib/domain/dealer-items";
-import { displayAccountName, formatDay } from "@/lib/format";
+import { ITEM_TYPES, ITEM_TYPE_LABEL, isLate, type ItemType } from "@/lib/domain/dealer-items";
+import { displayAccountName } from "@/lib/format";
 
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
@@ -42,18 +39,16 @@ export interface DealerItem {
   source: string | null;
   entered_by: string | null;
   completed_at: string | null;
+  priority?: string | null;
   account: { name: string } | null;
+  /** The activity the item was taken at; PK_TRAINING means a PK follow-up. */
+  activity?: { activity_type: string } | null;
 }
 
-const BUCKETS: readonly Bucket[] = ["action", "coordinate", "follow_up"];
-
-/** Where the row came from, in words — MANUAL says nothing, it is the norm. */
-const SOURCE_WORDS: Record<string, string> = {
-  VISIT_CAPTURE: "from a visit note",
-  VOICE: "from Say it",
-  EMAIL_AI: "found in email",
-  EMAIL_BACKFILL: "from email history",
-};
+/** A follow-up taken at a PK: it lives on the PK follow-up board. */
+export function isPkItem(i: Pick<DealerItem, "activity">): boolean {
+  return i.activity?.activity_type === "PK_TRAINING";
+}
 
 /** Whole days between two YYYY-MM-DD dates, as calendar labels. */
 function daysBetween(from: string, to: string): number {
@@ -61,6 +56,24 @@ function daysBetween(from: string, to: string): number {
   const b = Date.UTC(+to.slice(0, 4), +to.slice(5, 7) - 1, +to.slice(8, 10));
   return Math.round((b - a) / 86_400_000);
 }
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** 'Nov 1' from 'YYYY-MM-DD': the date itself; the line under it says how far. */
+function monthDay(iso: string): string {
+  return `${MONTHS[+iso.slice(5, 7) - 1]} ${+iso.slice(8, 10)}`;
+}
+
+/** YYYY-MM-DD plus n days. */
+function addDays(iso: string, n: number): string {
+  const d = new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10) + n));
+  return d.toISOString().slice(0, 10);
+}
+
+type Group = "late" | "week" | "later";
+const GROUPS: readonly Group[] = ["late", "week", "later"];
+const GROUP_LABEL: Record<Group, string> = { late: "Late", week: "This week", later: "Later" };
+/** Later can be long; it opens with this many and a "show the rest". */
+const LATER_SHOWN = 8;
 
 export function DealersTodos({
   items,
@@ -83,96 +96,114 @@ export function DealersTodos({
   onAdded: (item: DealerItem) => void;
   span: string;
 }) {
-  const [bucket, setBucket] = useState<Bucket>("action");
+  const [kind, setKind] = useState<ItemType | null>(null);
   // null = Everyone; otherwise a membership id ("Mine" is the reader's own).
   const [who, setWho] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [allLater, setAllLater] = useState(false);
+
+  const pk = useMemo(() => items.filter(isPkItem), [items]);
+  const owed = useMemo(() => items.filter((i) => !isPkItem(i)), [items]);
 
   const people = useMemo(() => {
-    const ids = [...new Set(items.map((i) => i.owner_id))].filter((id) => id !== myId);
+    const ids = [...new Set(owed.map((i) => i.owner_id))].filter((id) => id !== myId);
     return ids
       .map((id) => ({ id, name: names.get(id) ?? "Someone" }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [items, names, myId]);
+  }, [owed, names, myId]);
 
-  const scoped = useMemo(
-    () => (who ? items.filter((i) => i.owner_id === who) : items),
-    [items, who],
-  );
+  const scoped = useMemo(() => (who ? owed.filter((i) => i.owner_id === who) : owed), [owed, who]);
 
   const counts = useMemo(() => {
-    const c: Record<Bucket, number> = { action: 0, coordinate: 0, follow_up: 0 };
-    for (const i of scoped) c[bucketOf(i.item_type)] += 1;
+    const c = new Map<ItemType, number>();
+    for (const i of scoped) c.set(i.item_type, (c.get(i.item_type) ?? 0) + 1);
     return c;
   }, [scoped]);
 
-  const rows = useMemo(
-    () =>
-      scoped
-        .filter((i) => bucketOf(i.item_type) === bucket)
-        .sort((a, b) => {
-          const la = isLate(a, todayIso) ? 0 : 1;
-          const lb = isLate(b, todayIso) ? 0 : 1;
-          return la - lb || a.due_date.localeCompare(b.due_date) || a.id.localeCompare(b.id);
-        }),
-    [scoped, bucket, todayIso],
-  );
-  const late = useMemo(() => scoped.filter((i) => isLate(i, todayIso)).length, [scoped, todayIso]);
+  const groups = useMemo(() => {
+    const weekEnd = addDays(todayIso, 6);
+    const g: Record<Group, DealerItem[]> = { late: [], week: [], later: [] };
+    const rows = scoped
+      .filter((i) => kind === null || i.item_type === kind)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.id.localeCompare(b.id));
+    for (const i of rows) {
+      if (isLate(i, todayIso)) g.late.push(i);
+      else if (i.due_date <= weekEnd) g.week.push(i);
+      else g.later.push(i);
+    }
+    return g;
+  }, [scoped, kind, todayIso]);
+  const shownTotal = groups.late.length + groups.week.length + groups.later.length;
+  const lateAll = useMemo(() => scoped.filter((i) => isLate(i, todayIso)).length, [scoped, todayIso]);
 
-  const size = usePageSize(8, 5);
-  const { slice, page, pages, from, setPage, total } = usePaged(rows, size);
+  const pkLate = pk.filter((i) => i.priority != null && i.due_date < todayIso).length;
+
+  function row(i: DealerItem) {
+    const late = isLate(i, todayIso);
+    const tier = tierOf(i.account_id);
+    const owner = names.get(i.owner_id) ?? "Someone";
+    const enteredBy =
+      i.entered_by && i.entered_by !== i.owner_id ? (names.get(i.entered_by) ?? "someone") : null;
+    const name = i.account ? displayAccountName(i.account.name) : null;
+    const gap = daysBetween(todayIso, i.due_date);
+    const body = (
+      <>
+        <span className="dl-owe-when" data-late={late || undefined}>
+          <b>{monthDay(i.due_date)}</b>
+          <small>{late ? `${-gap}d late` : gap === 0 ? "today" : `in ${gap}d`}</small>
+        </span>
+        <span className="dl-owe-dealer">
+          <b>{name ?? "No dealer"}</b>
+          {tier && (
+            <span className="dl-tier" data-tier={tier}>
+              {tier}
+            </span>
+          )}
+        </span>
+        <span className="dl-owe-what">{i.action}</span>
+        <span className="dl-owe-kind" data-kind={i.item_type}>
+          {ITEM_TYPE_LABEL[i.item_type]}
+        </span>
+        <span className="dl-owe-who">
+          {owner}
+          {enteredBy && <small>entered by {enteredBy}</small>}
+        </span>
+      </>
+    );
+    return (
+      <li key={i.id}>
+        {i.account_id ? (
+          <button
+            type="button"
+            className="dl-owe-row"
+            onClick={() => onOpen(i.account_id as string, name ?? "")}
+          >
+            {body}
+          </button>
+        ) : (
+          <div className="dl-owe-row">{body}</div>
+        )}
+      </li>
+    );
+  }
 
   return (
     <section className="adapt card dl-todos" data-desk="todos" data-span={span}>
-      <div className="quiet-head">
-        <span className="t-title">To-dos</span>
-        <span className="flex items-baseline gap-3">
-        <button type="button" className="t-action" onClick={() => setAdding((a) => !a)}>
-          {adding ? "Close" : "+ Add"}
-        </button>
-        <span className="t-hint">
-          {items.length === 0
-            ? "nothing open"
-            : `${QTY.format(scoped.length)} open${late > 0 ? ` · ${QTY.format(late)} late` : ""}`}
-        </span>
-        </span>
-      </div>
-
-      {adding && (
-        <DealerItemForm onDone={() => setAdding(false)} onSaved={onAdded} />
-      )}
-
-      <div className="dl-todos-controls">
-        <div className="chip-row" role="group" aria-label="Kind of to-do">
-          {BUCKETS.map((b) => (
-            <button
-              key={b}
-              type="button"
-              className="chip"
-              aria-pressed={bucket === b}
-              onClick={() => setBucket(b)}
-            >
-              {BUCKET_LABEL[b]}
-              <span className="chip-count">{QTY.format(counts[b])}</span>
-            </button>
-          ))}
+      <div className="dl-owe-head">
+        <div className="dl-owe-title">
+          <span className="t-title">What we owe dealers</span>
+          <span className="t-hint">
+            {owed.length === 0
+              ? "nothing open"
+              : `${QTY.format(scoped.length)} open${lateAll > 0 ? ` · ${QTY.format(lateAll)} late` : ""}`}
+          </span>
         </div>
-        <div className="chip-row dl-who" role="group" aria-label="Whose to-dos">
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={who === null}
-            onClick={() => setWho(null)}
-          >
+        <div className="chip-row dl-who" role="group" aria-label="Whose">
+          <button type="button" className="chip" aria-pressed={who === null} onClick={() => setWho(null)}>
             Everyone
           </button>
           {myId && (
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={who === myId}
-              onClick={() => setWho(myId)}
-            >
+            <button type="button" className="chip" aria-pressed={who === myId} onClick={() => setWho(myId)}>
               Mine
             </button>
           )}
@@ -188,88 +219,76 @@ export function DealersTodos({
             </button>
           ))}
         </div>
+        <button type="button" className="pk-btn dl-owe-add" onClick={() => setAdding((a) => !a)}>
+          {adding ? "Close" : "+ Add"}
+        </button>
       </div>
 
-      {total === 0 ? (
-        <p className="t-sub dl-todos-empty">
-          {items.length === 0
-            ? "No to-do is open on any account. They appear here when a visit note or Say it sets one."
-            : `Nothing under ${BUCKET_LABEL[bucket].toLowerCase()}${who ? " for this person" : ""}.`}
-        </p>
-      ) : (
-        <ul className="list">
-          {slice.map((i) => {
-            const isLateRow = isLate(i, todayIso);
-            const tier = tierOf(i.account_id);
-            const owner = names.get(i.owner_id) ?? "Someone";
-            const enteredBy =
-              i.entered_by && i.entered_by !== i.owner_id
-                ? (names.get(i.entered_by) ?? "someone")
-                : null;
-            const source = i.source ? SOURCE_WORDS[i.source] : undefined;
-            const name = i.account ? displayAccountName(i.account.name) : null;
-            const body = (
-              <>
-                <span className="dl-todo-line">
-                  {isLateRow ? (
-                    <span className="dl-pill" data-tone="late">
-                      {daysBetween(i.due_date, todayIso)}d late
-                    </span>
-                  ) : (
-                    <span className="dl-pill">{formatDay(i.due_date)}</span>
-                  )}
-                  {tier && (
-                    <span className="dl-tier" data-tier={tier}>
-                      {tier}
-                    </span>
-                  )}
-                  <span className="dl-todo-what">
-                    {name && <b>{name}</b>}
-                    {name ? " — " : ""}
-                    {i.action}
-                  </span>
-                </span>
-                <span className="t-hint dl-todo-sub">
-                  {[
-                    ITEM_TYPE_LABEL[i.item_type],
-                    owner,
-                    enteredBy ? `entered by ${enteredBy} for ${owner}` : null,
-                    source ?? null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </>
-            );
-            return (
-              <li key={i.id}>
-                {i.account_id ? (
-                  <button
-                    type="button"
-                    className="dl-todo"
-                    onClick={() => onOpen(i.account_id as string, name ?? "")}
-                  >
-                    {body}
-                  </button>
-                ) : (
-                  <div className="dl-todo">{body}</div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+      {adding && <DealerItemForm onDone={() => setAdding(false)} onSaved={onAdded} />}
+
+      {owed.length > 0 && (
+        <div className="chip-row dl-owe-kinds" role="group" aria-label="Kind">
+          <button type="button" className="chip" aria-pressed={kind === null} onClick={() => setKind(null)}>
+            All
+            <span className="chip-count">{QTY.format(scoped.length)}</span>
+          </button>
+          {ITEM_TYPES.filter((t) => (counts.get(t) ?? 0) > 0 || kind === t).map((t) => (
+            <button
+              key={t}
+              type="button"
+              className="chip"
+              aria-pressed={kind === t}
+              onClick={() => setKind(kind === t ? null : t)}
+            >
+              {ITEM_TYPE_LABEL[t]}
+              <span className="chip-count">{QTY.format(counts.get(t) ?? 0)}</span>
+            </button>
+          ))}
+        </div>
       )}
 
-      {pages > 1 && (
-        <Pager
-          page={page}
-          pages={pages}
-          from={from}
-          shown={slice.length}
-          total={total}
-          onPage={setPage}
-          className="fu-pager"
-        />
+      {shownTotal === 0 ? (
+        <p className="t-sub dl-todos-empty">
+          {owed.length === 0
+            ? "Nothing is owed to any dealer. A to-do lands here when a visit note, Say it or + Add sets one."
+            : "Nothing matches these filters."}
+        </p>
+      ) : (
+        GROUPS.map((g) => {
+          const list = groups[g];
+          if (list.length === 0) return null;
+          const cut = g === "later" && !allLater ? list.slice(0, LATER_SHOWN) : list;
+          return (
+            <div key={g} className="dl-owe-group" data-group={g}>
+              <p className="dl-owe-label">
+                {GROUP_LABEL[g]} <span>{QTY.format(list.length)}</span>
+              </p>
+              <ul className="dl-owe-list">{cut.map(row)}</ul>
+              {cut.length < list.length && (
+                <button type="button" className="t-action dl-owe-more" onClick={() => setAllLater(true)}>
+                  Show the other {QTY.format(list.length - cut.length)}
+                </button>
+              )}
+            </div>
+          );
+        })
+      )}
+
+      {pk.length > 0 && (
+        <Link href="/dealers/pk" className="dl-owe-pk">
+          <span>
+            {QTY.format(pk.length)} PK {pk.length === 1 ? "follow-up" : "follow-ups"}
+            {pkLate > 0 && (
+              <>
+                {" · "}
+                <b>
+                  {QTY.format(pkLate)} {pkLate === 1 ? "alert" : "alerts"} passed
+                </b>
+              </>
+            )}
+          </span>
+          <span>Open PK follow-up →</span>
+        </Link>
       )}
     </section>
   );
