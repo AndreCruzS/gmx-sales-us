@@ -9,7 +9,6 @@
 import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
-  REQUIRED_LABEL,
   bandProgress,
   pkDateOf,
   type PkBand,
@@ -40,7 +39,6 @@ export interface PkExportSheets {
 const DATE_FORMAT = "mmm d, yyyy";
 const FOLLOW_UP_HEADS = [
   "Action",
-  "Action required",
   "Status",
   "Priority",
   "Days",
@@ -155,7 +153,6 @@ export function pkExportSheets(
       const lines = (notesBy.get(i.id) ?? []).map((n) => noteLine(n, names));
       followUps.push([
         text(i.action),
-        text(REQUIRED_LABEL[i.action_required]),
         text(PROGRESS_LABEL[i.progress]),
         i.priority ? text(PRIORITY_LABEL[i.priority]) : null,
         hasAlert(i) && i.priority_days !== null ? { value: i.priority_days } : null,

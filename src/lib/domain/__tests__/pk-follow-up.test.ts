@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isOnUs,
   trapTarget,
   alertDate,
   bandProgress,
@@ -26,7 +27,6 @@ function item(over: Partial<PkItem> = {}): PkItem {
     completed_at: null,
     priority: "DELEGATE",
     priority_days: 2,
-    action_required: "NONE",
     progress: "NOT_STARTED",
     last_changed_by: null,
     last_changed_at: null,
@@ -147,8 +147,8 @@ describe("summarize", () => {
     const closed = "2026-10-25T10:00:00Z";
     const bands = [
       band("b1", [
-        item({ id: "1", action_required: "PENDING_ACTION" }),
-        item({ id: "2", action_required: "AWAITING_RESPONSE", due_date: "2026-11-09" }),
+        item({ id: "1", progress: "STUCK" }),
+        item({ id: "2", progress: "WAITING", due_date: "2026-11-09" }),
         item({ id: "3", completed_at: closed }),
       ]),
       band("b2", [item({ id: "4", completed_at: closed }), item({ id: "5", priority: "ELIMINATE", completed_at: closed })]),
@@ -210,8 +210,8 @@ describe("mirrorUpdate", () => {
     expect(n.progress).toBe("DONE");
   });
 
-  it("Action required alone stamps me and closes nothing", () => {
-    const n = mirrorUpdate(item(), { action_required: "AWAITING_RESPONSE" }, "me", NOW);
+  it("Waiting on dealer stamps me and closes nothing", () => {
+    const n = mirrorUpdate(item(), { progress: "WAITING" }, "me", NOW);
     expect(n.completed_at).toBeNull();
     expect(n.last_changed_by).toBe("me");
   });
@@ -266,5 +266,15 @@ describe("trapTarget", () => {
   });
   it("does nothing when there is nothing to focus", () => {
     expect(trapTarget(0, -1, false)).toBeNull();
+  });
+});
+
+describe("isOnUs", () => {
+  it("is ours unless it waits on the dealer or is done", () => {
+    expect(isOnUs("NOT_STARTED")).toBe(true);
+    expect(isOnUs("WORKING_ON_IT")).toBe(true);
+    expect(isOnUs("STUCK")).toBe(true);
+    expect(isOnUs("WAITING")).toBe(false);
+    expect(isOnUs("DONE")).toBe(false);
   });
 });

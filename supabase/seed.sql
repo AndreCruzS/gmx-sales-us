@@ -541,24 +541,24 @@ update activities set location = 'Buffalo, NY'
 
 insert into next_actions (id, org_id, action, owner_id, due_date, account_id,
                           activity_id, item_type, source, priority, priority_days,
-                          action_required, progress, last_changed_by, last_changed_at) values
+                          progress, last_changed_by, last_changed_at) values
   ('f1000000-0000-0000-0000-0000000000a1', '11111111-1111-1111-1111-111111111111',
    'Send Maximo commercial and technical materials',
    'c0000000-0000-0000-0000-000000000001', current_date - 1,
    'd0000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001',
-   'ACTION', 'VISIT_CAPTURE', 'DO_NOW', 0, 'PENDING_ACTION', 'WORKING_ON_IT',
+   'ACTION', 'VISIT_CAPTURE', 'DO_NOW', 0, 'WORKING_ON_IT',
    'c0000000-0000-0000-0000-000000000001', now() - interval '20 hours'),
   ('f1000000-0000-0000-0000-0000000000a2', '11111111-1111-1111-1111-111111111111',
    'Propose three weeks for dealer visits',
    'c0000000-0000-0000-0000-000000000002', current_date + 6,
    'd0000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001',
-   'ACTION', 'VISIT_CAPTURE', 'PLAN', 7, 'AWAITING_RESPONSE', 'NOT_STARTED',
+   'ACTION', 'VISIT_CAPTURE', 'PLAN', 7, 'WAITING',
    'c0000000-0000-0000-0000-000000000002', now() - interval '2 hours'),
   ('f1000000-0000-0000-0000-0000000000a3', '11111111-1111-1111-1111-111111111111',
    'Architect market development',
    'c0000000-0000-0000-0000-000000000001', current_date + 2,
    'd0000000-0000-0000-0000-000000000003', 'ac000000-0000-0000-0000-000000000001',
-   'ACTION', 'VISIT_CAPTURE', 'ELIMINATE', null, 'NONE', 'NOT_STARTED',
+   'ACTION', 'VISIT_CAPTURE', 'ELIMINATE', null, 'NOT_STARTED',
    'c0000000-0000-0000-0000-000000000001', now() - interval '18 hours');
 
 insert into next_action_notes (id, org_id, next_action_id, author_id, body, created_at) values

@@ -114,8 +114,7 @@ export const nextActionUpdateSchema = z.object({
   // the two statuses. Listed here or Zod strips them in the outbox.
   priority: z.enum(["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"]).nullish(),
   priority_days: z.number().int().min(0).nullish(),
-  action_required: z.enum(["PENDING_ACTION", "AWAITING_RESPONSE", "NONE"]).optional(),
-  progress: z.enum(["NOT_STARTED", "WORKING_ON_IT", "STUCK", "DONE"]).optional(),
+  progress: z.enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"]).optional(),
 });
 export type NextActionUpdate = z.infer<typeof nextActionUpdateSchema>;
 

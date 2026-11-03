@@ -1,6 +1,7 @@
 -- PK follow-up · tests 28 (20261102120000_pk_priority_status.sql).
 --
--- 1. next_actions carry a priority, an action-required and a progress.
+-- 1. next_actions carry a priority and one progress (the action-required
+--    column went in 20261103130000; tests/31).
 -- 2. Done and Eliminate both close the item through completed_at, kept in sync.
 -- 3. A member who moves a status or the priority is stamped on the row.
 
@@ -9,10 +10,9 @@ create extension if not exists pgtap with schema extensions;
 select plan(31);
 
 select has_type('public', 'next_action_priority', 'priority enum exists');
-select has_type('public', 'next_action_required', 'action-required enum exists');
+select hasnt_type('public', 'next_action_required', 'the action-required enum is gone');
 select has_type('public', 'next_action_progress', 'progress enum exists');
-select col_default_is('public', 'next_actions', 'action_required', 'NONE'::next_action_required,
-  'action_required defaults to NONE');
+select hasnt_column('public', 'next_actions', 'action_required', 'action_required is gone');
 select col_default_is('public', 'next_actions', 'progress', 'NOT_STARTED'::next_action_progress,
   'progress defaults to NOT_STARTED');
 select col_is_null('public', 'next_actions', 'priority', 'priority is optional');
@@ -140,10 +140,10 @@ select is(
   (select last_changed_at from next_actions where id = 'e0000000-0000-0000-0000-0000000000b2'),
   null, 'no signed-in member, no stamp time either');
 
--- A signed-in admin changing action_required is stamped.
+-- A signed-in admin changing the progress is stamped.
 select tests.set_claims('bianca@gmxgroup.com', 'gmx-us');
 set local role authenticated;
-update next_actions set action_required = 'AWAITING_RESPONSE'
+update next_actions set progress = 'WAITING'
  where id = 'e0000000-0000-0000-0000-0000000000b2';
 select is(
   (select last_changed_by from next_actions where id = 'e0000000-0000-0000-0000-0000000000b2'),

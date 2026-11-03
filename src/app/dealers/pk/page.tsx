@@ -44,7 +44,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAllPages } from "@/lib/supabase/page";
 
 const ITEM_COLS =
-  "id, action, owner_id, due_date, completed_at, priority, priority_days, action_required, progress, last_changed_by, last_changed_at, updated_at, account_id, activity_id";
+  "id, action, owner_id, due_date, completed_at, priority, priority_days, progress, last_changed_by, last_changed_at, updated_at, account_id, activity_id";
 
 /** Ids per `.in()` request — enough to be few trips, short enough for a URL. */
 const CHUNK = 200;
@@ -374,7 +374,6 @@ export default function PkFollowUpPage() {
             completed_at: null,
             priority: null,
             priority_days: null,
-            action_required: "NONE",
             progress: "NOT_STARTED",
             last_changed_by: null,
             last_changed_at: null,

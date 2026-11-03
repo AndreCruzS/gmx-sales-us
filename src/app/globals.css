@@ -6360,11 +6360,8 @@ button.dl-todo:hover {
    teal is "done", ink is "on us". The three band colours take turns down the
    board so neighbouring PKs never share one. */
 :root {
-  --pk-pending-fill: var(--fill-ink);
-  --pk-pending-ink: var(--on-ink);
-  --pk-awaiting-fill: var(--surface-sunken);
-  --pk-awaiting-ink: var(--ink-primary);
-  --pk-none-ink: var(--ink-muted);
+  --pk-waiting-fill: #3d6aa8;     /* blue: the ball is with the dealer */
+  --pk-waiting-ink: #fbfcfc;      /* 5.5:1 */
   --pk-not-started-fill: var(--surface-sunken);
   --pk-not-started-ink: var(--ink-secondary);
   --pk-working-fill: var(--warn);
@@ -6379,11 +6376,8 @@ button.dl-todo:hover {
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --pk-pending-fill: var(--fill-ink);
-    --pk-pending-ink: var(--on-ink);
-    --pk-awaiting-fill: #2b343e;  /* a step above the dark sunken, so it reads as a fill */
-    --pk-awaiting-ink: var(--ink-primary);
-    --pk-none-ink: var(--ink-muted);
+    --pk-waiting-fill: #86a9dc;
+    --pk-waiting-ink: #171c22;
     --pk-not-started-fill: #2b343e;
     --pk-not-started-ink: var(--ink-secondary);
     --pk-working-fill: var(--warn);
@@ -6515,13 +6509,13 @@ button.dl-todo:hover {
   border-radius: 14px;
 }
 .pk-board {
-  min-width: 1080px;
+  min-width: 1020px;
 }
 .pk-cols,
 .pk-row {
   display: grid;
   grid-template-columns:
-    minmax(230px, 2.1fr) 150px 136px minmax(240px, 2.4fr) 124px 104px minmax(96px, 0.8fr);
+    minmax(260px, 2.3fr) 168px minmax(260px, 2.6fr) 124px 104px minmax(96px, 0.8fr);
   align-items: stretch;
   gap: 0;
 }
@@ -6662,18 +6656,6 @@ button.dl-todo:hover {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.pk-cell[data-required="pending"] {
-  background: var(--pk-pending-fill);
-  color: var(--pk-pending-ink);
-}
-.pk-cell[data-required="awaiting"] {
-  background: var(--pk-awaiting-fill);
-  color: var(--pk-awaiting-ink);
-}
-.pk-cell[data-required="none"] {
-  color: var(--pk-none-ink);
-  box-shadow: inset 0 0 0 1px var(--rule);
-}
 .pk-cell[data-progress="not-started"] {
   background: var(--pk-not-started-fill);
   color: var(--pk-not-started-ink);
@@ -6681,6 +6663,10 @@ button.dl-todo:hover {
 .pk-cell[data-progress="working"] {
   background: var(--pk-working-fill);
   color: var(--pk-working-ink);
+}
+.pk-cell[data-progress="waiting"] {
+  background: var(--pk-waiting-fill);
+  color: var(--pk-waiting-ink);
 }
 .pk-cell[data-progress="stuck"] {
   background: var(--pk-stuck-fill);
@@ -6975,25 +6961,12 @@ textarea.pkd-select {
     font-size: var(--text-sm);
   }
 }
-.pkd-select[data-required],
 .pkd-select[data-progress] {
   font-family: var(--font-fig);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   border-color: transparent;
-}
-.pkd-select[data-required="pending"] {
-  background: var(--pk-pending-fill);
-  color: var(--pk-pending-ink);
-}
-.pkd-select[data-required="awaiting"] {
-  background: var(--pk-awaiting-fill);
-  color: var(--pk-awaiting-ink);
-}
-.pkd-select[data-required="none"] {
-  color: var(--pk-none-ink);
-  border-color: var(--rule);
 }
 .pkd-select[data-progress="not-started"] {
   background: var(--pk-not-started-fill);
@@ -7002,6 +6975,10 @@ textarea.pkd-select {
 .pkd-select[data-progress="working"] {
   background: var(--pk-working-fill);
   color: var(--pk-working-ink);
+}
+.pkd-select[data-progress="waiting"] {
+  background: var(--pk-waiting-fill);
+  color: var(--pk-waiting-ink);
 }
 .pkd-select[data-progress="stuck"] {
   background: var(--pk-stuck-fill);

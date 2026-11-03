@@ -4,7 +4,7 @@
 // desk owes after each PK, one band per PK, newest first.
 //
 // Top to bottom: the six figures (summarize), the toolbar (search, owner,
-// Action required, "Unread only", "Show done"), then the bands. "Show done"
+// status, "Unread only", "Show done"), then the bands. "Show done"
 // off hides closed items (done, and Eliminate, which the database closes) —
 // they still count in the band's %, which is worked out over the whole band,
 // never over what the filters leave. Everything here is read-only: a row
@@ -13,7 +13,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { PkBandView } from "@/components/pk-band";
 import {
+  PROGRESS_LABEL,
   bandProgress,
+  isOnUs,
   isAlertPassed,
   isUnread,
   summarize,
@@ -22,7 +24,7 @@ import {
   type PkNote,
   type PkRead,
   type PkSubtask,
-  type Required,
+  type Progress,
 } from "@/lib/domain/pk-follow-up";
 
 function groupBy<T>(rows: readonly T[], key: (r: T) => string): Map<string, T[]> {
@@ -74,7 +76,7 @@ export function PkBoard({
 }) {
   const [query, setQuery] = useState("");
   const [owner, setOwner] = useState("");
-  const [required, setRequired] = useState<Required | "">("");
+  const [status, setStatus] = useState<Progress | "ON_US" | "">("");
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [folded, setFolded] = useState<Set<string>>(() => new Set());
@@ -119,11 +121,11 @@ export function PkBoard({
 
   // ── THE FILTERS ─────────────────────────────────────────────────────────
   const q = query.trim().toLowerCase();
-  const narrowed = q !== "" || owner !== "" || required !== "" || unreadOnly;
+  const narrowed = q !== "" || owner !== "" || status !== "" || unreadOnly;
   const passes = (b: PkBand, i: PkItem): boolean => {
     if (!showDone && i.completed_at !== null) return false;
     if (owner && i.owner_id !== owner) return false;
-    if (required && i.action_required !== required) return false;
+    if (status === "ON_US" ? !isOnUs(i.progress) : status && i.progress !== status) return false;
     if (unreadOnly && !unreadIds.has(i.id)) return false;
     if (q) {
       const hay = [i.action, b.dealer, ...(notesBy.get(i.id) ?? []).map((n) => n.body)]
@@ -152,8 +154,8 @@ export function PkBoard({
     { k: "PKs open", v: summary.pksOpen, s: "with something open" },
     { k: "Follow-ups", v: summary.followUps, s: "not done" },
     { k: "Alert passed", v: summary.alertPassed, s: "past PK date + days", bad: true },
-    { k: "On us", v: summary.onUs, s: "pending action" },
-    { k: "Waiting on them", v: summary.waiting, s: "awaiting response" },
+    { k: "On us", v: summary.onUs, s: "to do, in progress or stuck" },
+    { k: "Waiting on them", v: summary.waiting, s: "waiting on the dealer" },
     { k: "New for you", v: summary.newForMe, s: "since you last looked" },
   ];
 
@@ -193,14 +195,16 @@ export function PkBoard({
         </select>
         <select
           className="pk-input"
-          aria-label="Action required"
-          value={required}
-          onChange={(e) => setRequired(e.target.value as Required | "")}
+          aria-label="Status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as Progress | "ON_US" | "")}
         >
-          <option value="">Any action required</option>
-          <option value="PENDING_ACTION">Pending action</option>
-          <option value="AWAITING_RESPONSE">Awaiting response</option>
-          <option value="NONE">No action required</option>
+          <option value="">Any status</option>
+          <option value="ON_US">On us</option>
+          <option value="NOT_STARTED">{PROGRESS_LABEL.NOT_STARTED}</option>
+          <option value="WORKING_ON_IT">{PROGRESS_LABEL.WORKING_ON_IT}</option>
+          <option value="WAITING">{PROGRESS_LABEL.WAITING}</option>
+          <option value="STUCK">{PROGRESS_LABEL.STUCK}</option>
         </select>
         <label className="pk-toggle">
           <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
@@ -224,7 +228,6 @@ export function PkBoard({
           <div className="pk-board" role="group" aria-label="Follow-ups by PK">
             <div className="pk-cols" aria-hidden="true">
               <span>Action</span>
-              <span>Action required</span>
               <span>Status</span>
               <span>Latest note</span>
               <span>Priority</span>

@@ -271,14 +271,13 @@ describe("nextActionUpdateSchema — handing a visit to a rep (team calendar, 20
 
 describe("nextActionUpdateSchema — PK follow-up fields", () => {
   const base = { id: "11111111-1111-4111-8111-111111111111" };
-  it("keeps priority, days, due date, action required and progress", () => {
+  it("keeps priority, days, due date and progress", () => {
     const patch = {
       ...base,
       priority: "DELEGATE",
       priority_days: 2,
       due_date: "2026-11-04",
-      action_required: "AWAITING_RESPONSE",
-      progress: "STUCK",
+      progress: "WAITING",
     };
     expect(nextActionUpdateSchema.parse(patch)).toEqual(patch);
   });

@@ -5,7 +5,7 @@
 // "+ Add action" for something that came up after the visit.
 //
 // A row reads left to right the way the PK Control board did (spec §3):
-// the action and its subtasks · Action required · Status · the latest note ·
+// the action and its subtasks · Status · the latest note ·
 // priority and days · the alert · the owner. Both statuses fill their whole
 // cell, which is the look the client asked to keep. A row opens the item
 // (onOpen); this file never writes.
@@ -15,7 +15,6 @@ import { ChevronDownIcon } from "@/components/icons";
 import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
-  REQUIRED_LABEL,
   daysToAlert,
   isAlertPassed,
   type PkBand,
@@ -32,10 +31,10 @@ export function shortDate(iso: string): string {
   });
 }
 
-const REQUIRED_TONE = { PENDING_ACTION: "pending", AWAITING_RESPONSE: "awaiting", NONE: "none" } as const;
 const PROGRESS_TONE = {
   NOT_STARTED: "not-started",
   WORKING_ON_IT: "working",
+  WAITING: "waiting",
   STUCK: "stuck",
   DONE: "done",
 } as const;
@@ -77,7 +76,7 @@ export function PkBandView({
   names: Map<string, string>;
   todayIso: string;
   folded: boolean;
-  /** True when search, owner, Action required or "Unread only" is narrowing the list. */
+  /** True when search, owner, status or "Unread only" is narrowing the list. */
   filtered: boolean;
   onToggle: () => void;
   onOpen: (itemId: string) => void;
@@ -211,9 +210,6 @@ function PkRow({
             {subsDone}/{facts.subtasks.length}
           </span>
         )}
-      </span>
-      <span className="pk-cell" data-required={REQUIRED_TONE[item.action_required]}>
-        {item.action_required === "NONE" ? "No action required" : REQUIRED_LABEL[item.action_required]}
       </span>
       <span className="pk-cell" data-progress={PROGRESS_TONE[item.progress]}>
         {PROGRESS_LABEL[item.progress]}

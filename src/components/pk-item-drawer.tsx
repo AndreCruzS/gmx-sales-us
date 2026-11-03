@@ -38,26 +38,16 @@ import {
   type PkSubtask,
   type Priority,
   type Progress,
-  type Required,
 } from "@/lib/domain/pk-follow-up";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Update<T> = (fn: (list: T[]) => T[]) => void;
 
-const REQUIRED_OPTIONS: { v: Required; label: string }[] = [
-  { v: "PENDING_ACTION", label: "Pending action" },
-  { v: "AWAITING_RESPONSE", label: "Awaiting response" },
-  { v: "NONE", label: "No action required" },
-];
 const PROGRESS_OPTIONS = Object.keys(PROGRESS_LABEL) as Progress[];
-const REQUIRED_TONE = {
-  PENDING_ACTION: "pending",
-  AWAITING_RESPONSE: "awaiting",
-  NONE: "none",
-} as const;
 const PROGRESS_TONE = {
   NOT_STARTED: "not-started",
   WORKING_ON_IT: "working",
+  WAITING: "waiting",
   STUCK: "stuck",
   DONE: "done",
 } as const;
@@ -313,42 +303,21 @@ export function PkItemDrawer({
         </header>
 
         <div className="pkd-body">
-          <div className="pkd-two">
-            <label className="pkd-field">
-              <span className="pkd-lbl">Action required</span>
-              <select
-                className="pkd-select"
-                data-required={REQUIRED_TONE[item.action_required]}
-                value={item.action_required}
-                onChange={(e) =>
-                  write({ action_required: e.target.value as Required })
-                }
-              >
-                {REQUIRED_OPTIONS.map((o) => (
-                  <option key={o.v} value={o.v}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="pkd-field">
-              <span className="pkd-lbl">Status</span>
-              <select
-                className="pkd-select"
-                data-progress={PROGRESS_TONE[item.progress]}
-                value={item.progress}
-                onChange={(e) =>
-                  write({ progress: e.target.value as Progress })
-                }
-              >
-                {PROGRESS_OPTIONS.map((p) => (
-                  <option key={p} value={p}>
-                    {PROGRESS_LABEL[p]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="pkd-field">
+            <span className="pkd-lbl">Status</span>
+            <select
+              className="pkd-select"
+              data-progress={PROGRESS_TONE[item.progress]}
+              value={item.progress}
+              onChange={(e) => write({ progress: e.target.value as Progress })}
+            >
+              {PROGRESS_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {PROGRESS_LABEL[p]}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <div>
             <div className="pkd-two">

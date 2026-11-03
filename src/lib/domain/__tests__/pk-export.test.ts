@@ -21,7 +21,6 @@ function item(over: Partial<PkItem> & { id: string }): PkItem {
     completed_at: null,
     priority: "DELEGATE",
     priority_days: 2,
-    action_required: "PENDING_ACTION",
     progress: "WORKING_ON_IT",
     last_changed_by: null,
     last_changed_at: null,
@@ -70,20 +69,20 @@ describe("pkExportSheets", () => {
   it("heads each PK with a bold row, then one row per follow-up", () => {
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [], [], names);
     const head = followUps[1]!;
-    expect(head[0]).toMatchObject({ fontWeight: "bold", columnSpan: 9 });
+    expect(head[0]).toMatchObject({ fontWeight: "bold", columnSpan: 8 });
     expect(text(head[0])).toBe("BFS Heber · PK Oct 20 · Heber, UT · 0%");
     const row = followUps[2]!.map(text);
-    expect(row.slice(0, 7)).toEqual(["Send the price list", "Pending action", "Working on it", "Delegate", "2", "2026-10-22", "Bianca"]);
+    expect(row.slice(0, 6)).toEqual(["Send the price list", "In progress", "Delegate", "2", "2026-10-22", "Bianca"]);
   });
 
-  it("writes an unset Action required as the board does", () => {
-    const { followUps } = pkExportSheets([band([item({ id: "i1", action_required: "NONE" })])], [], [], names);
-    expect(text(followUps[2]![1]!)).toBe("—");
+  it("writes the one status in the board's words", () => {
+    const { followUps } = pkExportSheets([band([item({ id: "i1", progress: "WAITING" })])], [], [], names);
+    expect(text(followUps[2]![1]!)).toBe("Waiting on dealer");
   });
 
   it("writes the alert as a real date", () => {
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [], [], names);
-    const cell = followUps[2]![5] as Exclude<Cell, null>;
+    const cell = followUps[2]![4] as Exclude<Cell, null>;
     expect(cell.value).toBeInstanceOf(Date);
     expect(cell.format).toBe("mmm d, yyyy");
   });
@@ -101,8 +100,8 @@ describe("pkExportSheets", () => {
       names,
     );
     for (const r of [followUps[2]!, followUps[3]!]) {
+      expect(r[3]).toBeNull();
       expect(r[4]).toBeNull();
-      expect(r[5]).toBeNull();
     }
   });
 
@@ -110,7 +109,7 @@ describe("pkExportSheets", () => {
     const later = note("n2", { body: "Sent it", created_at: new Date(2026, 9, 22, 9, 30).toISOString() });
     const first = note("n1", { edited_at: new Date(2026, 9, 21, 15, 0).toISOString() });
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [later, first], [], names);
-    expect(text(followUps[2]![8]!)).toBe(
+    expect(text(followUps[2]![7]!)).toBe(
       "Joao · Oct 21, 2:05 PM: Called them (edited)\nJoao · Oct 22, 9:30 AM: Sent it",
     );
   });
@@ -121,7 +120,7 @@ describe("pkExportSheets", () => {
       { id: "s2", next_action_id: "i1", title: "Mail it", done_at: null, position: 2 },
     ];
     const out = pkExportSheets([band([item({ id: "i1" })])], [], subs, names);
-    expect(text(out.followUps[2]![7]!)).toBe("1/2");
+    expect(text(out.followUps[2]![6]!)).toBe("1/2");
     // Column labels, then one row per subtask.
     expect(out.subtasks.map((r) => r.map(text))).toEqual([
       ["PK", "Action", "Subtask", "Done"],
@@ -153,7 +152,7 @@ describe("pkExportSheets", () => {
     const [fu, st] = sheets.map((s) => s.data);
     expect(fu![0]![0]).toBe("Action");
     expect(fu![2]![0]).toBe("Send the price list");
-    expect((fu![2]![5] as unknown as Date).toISOString().slice(0, 10)).toBe("2026-10-22");
+    expect((fu![2]![4] as unknown as Date).toISOString().slice(0, 10)).toBe("2026-10-22");
     expect(st![1]![2]).toBe("Mail it");
   });
 });

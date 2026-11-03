@@ -3398,7 +3398,6 @@ export type Database = {
         Row: {
           account_id: string | null
           action: string
-          action_required: Database["public"]["Enums"]["next_action_required"]
           activity_id: string | null
           calendar_event_id: string | null
           calendar_origin: string | null
@@ -3429,7 +3428,6 @@ export type Database = {
         Insert: {
           account_id?: string | null
           action: string
-          action_required?: Database["public"]["Enums"]["next_action_required"]
           activity_id?: string | null
           calendar_event_id?: string | null
           calendar_origin?: string | null
@@ -3460,7 +3458,6 @@ export type Database = {
         Update: {
           account_id?: string | null
           action?: string
-          action_required?: Database["public"]["Enums"]["next_action_required"]
           activity_id?: string | null
           calendar_event_id?: string | null
           calendar_origin?: string | null
@@ -8704,8 +8701,12 @@ export type Database = {
         | "DISPLAY_CHECK"
         | "OTHER"
       next_action_priority: "DO_NOW" | "PLAN" | "DELEGATE" | "ELIMINATE"
-      next_action_progress: "NOT_STARTED" | "WORKING_ON_IT" | "STUCK" | "DONE"
-      next_action_required: "PENDING_ACTION" | "AWAITING_RESPONSE" | "NONE"
+      next_action_progress:
+        | "NOT_STARTED"
+        | "WORKING_ON_IT"
+        | "WAITING"
+        | "STUCK"
+        | "DONE"
       next_action_source:
         | "MANUAL"
         | "VOICE"
@@ -8977,8 +8978,13 @@ export const Constants = {
         "OTHER",
       ],
       next_action_priority: ["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"],
-      next_action_progress: ["NOT_STARTED", "WORKING_ON_IT", "STUCK", "DONE"],
-      next_action_required: ["PENDING_ACTION", "AWAITING_RESPONSE", "NONE"],
+      next_action_progress: [
+        "NOT_STARTED",
+        "WORKING_ON_IT",
+        "WAITING",
+        "STUCK",
+        "DONE",
+      ],
       next_action_source: [
         "MANUAL",
         "VOICE",

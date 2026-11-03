@@ -14,7 +14,6 @@ export type Priority = (typeof PRIORITIES)[number];
 // Compile-time check that the list matches the DB enum, both ways.
 const _same: Priority extends Enums["next_action_priority"] ? (Enums["next_action_priority"] extends Priority ? true : never) : never = true;
 void _same;
-export type Required = Enums["next_action_required"];
 export type Progress = Enums["next_action_progress"];
 
 /** Days from the PK date to the alert, per priority. Eliminate has none. */
@@ -32,18 +31,20 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
   ELIMINATE: "Eliminate",
 };
 
-export const REQUIRED_LABEL: Record<Required, string> = {
-  PENDING_ACTION: "Pending action",
-  AWAITING_RESPONSE: "Awaiting response",
-  NONE: "—",
-};
-
+/** One status says where the item stands and whose move it is (2026-11-03:
+ *  it replaced the Action required + Status pair, which said it twice). */
 export const PROGRESS_LABEL: Record<Progress, string> = {
-  NOT_STARTED: "Not started",
-  WORKING_ON_IT: "Working on it",
+  NOT_STARTED: "To do",
+  WORKING_ON_IT: "In progress",
+  WAITING: "Waiting on dealer",
   STUCK: "Stuck",
   DONE: "Done",
 };
+
+/** Whose move it is: everything open is ours except what waits on the dealer. */
+export function isOnUs(p: Progress): boolean {
+  return p === "NOT_STARTED" || p === "WORKING_ON_IT" || p === "STUCK";
+}
 
 export interface PkItem {
   id: string;
@@ -53,7 +54,6 @@ export interface PkItem {
   completed_at: string | null;
   priority: Priority | null;
   priority_days: number | null;
-  action_required: Required;
   progress: Progress;
   last_changed_by: string | null;
   last_changed_at: string | null;
@@ -200,8 +200,8 @@ export function summarize(
     for (const i of open) {
       s.followUps += 1;
       if (isAlertPassed(i, today)) s.alertPassed += 1;
-      if (i.action_required === "PENDING_ACTION") s.onUs += 1;
-      if (i.action_required === "AWAITING_RESPONSE") s.waiting += 1;
+      if (isOnUs(i.progress)) s.onUs += 1;
+      if (i.progress === "WAITING") s.waiting += 1;
       if (unread(i)) s.newForMe += 1;
     }
   }
@@ -210,7 +210,7 @@ export function summarize(
 
 /** The fields a PK item's drawer writes. */
 export type PkItemPatch = Partial<
-  Pick<PkItem, "priority" | "priority_days" | "due_date" | "action_required" | "progress" | "completed_at">
+  Pick<PkItem, "priority" | "priority_days" | "due_date" | "progress" | "completed_at">
 >;
 
 /**
@@ -249,7 +249,6 @@ export function mirrorUpdate(old: PkItem, patch: PkItemPatch, me: string, now: s
   if (
     n.priority !== old.priority ||
     n.priority_days !== old.priority_days ||
-    n.action_required !== old.action_required ||
     n.progress !== old.progress
   ) {
     n.last_changed_by = me;
