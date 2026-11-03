@@ -6827,6 +6827,9 @@ button.dl-todo:hover {
     justify-content: flex-end;
     text-align: right;
   }
+  .pk-band-head {
+    border-left: 0;
+  }
   .pk-band-name {
     flex: 1 1 calc(100% - 30px);
     min-width: 0;
