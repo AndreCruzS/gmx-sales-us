@@ -6529,6 +6529,10 @@ button.dl-todo:hover {
   color: var(--ink-muted);
   border-bottom: 1px solid var(--rule);
 }
+/* The Status head sits over its centred cells. */
+.pk-cols span:nth-child(2) {
+  text-align: center;
+}
 
 .pk-band {
   --bc: var(--pk-band-1);
@@ -6648,6 +6652,8 @@ button.dl-todo:hover {
 .pk-cell {
   display: flex;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   min-height: 44px;
   padding: 0 10px;
   font-family: var(--font-fig);
