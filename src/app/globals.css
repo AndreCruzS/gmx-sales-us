@@ -7677,5 +7677,45 @@ textarea.pkd-select {
   }
   .pkd-ro > div:first-child {
     grid-column: 1 / -1;
+/* SAY IT's cards (2026-11-03): stacked on a phone; on the desk two to a row,
+   the fields sharing lines, the button its own width at the end. */
+.say-cards {
+  display: grid;
+  gap: 12px;
+}
+.say-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.say-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.say-mate {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent-ink);
+}
+.say-fields {
+  display: grid;
+  gap: 8px;
+}
+@media (min-width: 1024px) {
+  .say-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .say-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .say-go {
+    align-self: flex-end;
+    width: auto;
+    min-width: 160px;
+    padding-inline: 28px;
   }
 }

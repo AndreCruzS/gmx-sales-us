@@ -18,6 +18,7 @@ import {
   sanitizeCommands,
   type CommandAccount,
   type CommandRep,
+  type CommandTeammate,
 } from "@/lib/voice/command";
 
 export const maxDuration = 60;
@@ -103,31 +104,41 @@ export async function POST(req: NextRequest) {
     .limit(1000);
   const shown = candidateAccounts(transcript, (rows ?? []) as CommandAccount[]);
 
-  let reps: CommandRep[] = [];
-  if (me.role !== "rep") {
-    const { data } = await supabase
-      .from("memberships")
-      .select("id, users(full_name)")
-      .eq("org_id", orgId)
-      .eq("role", "rep")
-      .eq("status", "active");
-    reps = ((data ?? []) as unknown as { id: string; users: { full_name: string | null } | null }[])
-      .filter((r) => r.users?.full_name)
-      .map((r) => ({ membershipId: r.id, name: r.users!.full_name as string }));
-  }
+  // GMX's own people, as the caller may see them: who a follow-up can be
+  // WITH ("call Bia"), and — for a desk role — who it can be booked FOR.
+  const { data: people } = await supabase
+    .from("memberships")
+    .select("id, role, users(full_name)")
+    .eq("org_id", orgId)
+    .eq("status", "active");
+  const team: CommandTeammate[] = (
+    (people ?? []) as unknown as { id: string; role: string; users: { full_name: string | null } | null }[]
+  )
+    .filter((r) => r.users?.full_name)
+    .map((r) => ({
+      membershipId: r.id,
+      name: r.users!.full_name as string,
+      // The speaker is on the list too, so "Bia" is never read as a business.
+      role: r.id === me.id ? `${r.role}, the speaker` : r.role,
+    }));
+  const reps: CommandRep[] =
+    me.role === "rep"
+      ? []
+      : team.filter((t) => t.membershipId !== me.id).map((t) => ({ membershipId: t.membershipId, name: t.name }));
 
   try {
     const { object } = await generateObject({
       model: EXTRACT_MODEL,
       schema: commandSchema,
-      system: commandPrompt(todayPacific(), shown, reps),
+      system: commandPrompt(todayPacific(), shown, reps, team),
       prompt: transcript,
     });
     return NextResponse.json({
       transcript,
-      commands: sanitizeCommands(object, shown, reps),
+      commands: sanitizeCommands(object, shown, reps, team),
       accounts: shown,
       reps,
+      team,
     });
   } catch (err) {
     return NextResponse.json(

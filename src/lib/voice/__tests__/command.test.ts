@@ -31,11 +31,47 @@ describe("the prompt", () => {
     expect(commandPrompt("2026-10-20", [], [])).toContain("Today is Tuesday 2026-10-20");
   });
 
-  it("offers reps only to someone who books for them", () => {
+  it("lists GMX's own people once, and lets only a desk role hand work out", () => {
+    const team = [
+      { membershipId: "m-bia", name: "Bianca Souza", role: "admin" },
+      { membershipId: "m-joao", name: "João Lima", role: "admin" },
+      { membershipId: "m-jason", name: "Jason Benford", role: "rep" },
+    ];
     expect(commandPrompt("2026-10-20", [], [])).toContain("always null");
-    expect(commandPrompt("2026-10-20", [], [{ membershipId: "m-jason", name: "Jason Benford" }])).toContain(
-      "m-jason: Jason Benford",
-    );
+    const desk = commandPrompt("2026-10-20", [], [{ membershipId: "m-jason", name: "Jason Benford" }], team);
+    expect(desk).toContain("m-joao: João Lima · admin");
+    expect(desk).toContain("Bia is Bianca, John is João");
+    expect(desk).toContain("owner_membership_id = them");
+    const rep = commandPrompt("2026-10-20", [], [], team);
+    expect(rep).toContain("cannot hand work to others");
+  });
+});
+
+describe("a follow-up with a teammate", () => {
+  const team = [{ membershipId: "m-bia", name: "Bianca Souza", role: "admin" }];
+  const raw = (over: Record<string, unknown>) => ({
+    commands: [
+      {
+        kind: "FOLLOW_UP" as const,
+        account_id: null,
+        account_heard: "Bia",
+        due_date: "2026-11-04",
+        action: "Call Bianca Souza at 9",
+        objective: null,
+        owner_membership_id: null,
+        teammate_membership_id: "m-bia",
+        ...over,
+      },
+    ],
+  });
+  it("keeps the teammate and drops the name heard as a business", () => {
+    const [c] = sanitizeCommands(raw({}), [], [], team);
+    expect(c.teammateId).toBe("m-bia");
+    expect(c.accountHeard).toBeNull();
+  });
+  it("refuses a teammate it was not shown, and one on a visit", () => {
+    expect(sanitizeCommands(raw({ teammate_membership_id: "m-x" }), [], [], team)[0].teammateId).toBeNull();
+    expect(sanitizeCommands(raw({ kind: "VISIT" }), [], [], team)[0].teammateId).toBeNull();
   });
 });
 
@@ -55,6 +91,7 @@ describe("what comes back", () => {
             action: "Collect the decking quote",
             objective: "COLLECT_QUOTE",
             owner_membership_id: "m-jason",
+            teammate_membership_id: null,
           },
         ],
       },
@@ -69,6 +106,7 @@ describe("what comes back", () => {
       action: "Collect the decking quote",
       objective: "COLLECT_QUOTE",
       ownerId: "m-jason",
+      teammateId: null,
     });
   });
 
@@ -84,6 +122,7 @@ describe("what comes back", () => {
             action: "Call the buyer",
             objective: "COLLECT_QUOTE",
             owner_membership_id: "m-nobody",
+            teammate_membership_id: null,
           },
         ],
       },
@@ -106,6 +145,7 @@ describe("what comes back", () => {
       action: "x",
       objective: null,
       owner_membership_id: null,
+      teammate_membership_id: null,
     };
     expect(sanitizeCommands({ commands: [one, one, one, one] }, shown, reps)).toHaveLength(3);
     expect(sanitizeCommands({ commands: [{ ...one, action: "  " }] }, shown, reps)).toEqual([]);

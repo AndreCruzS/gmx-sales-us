@@ -43,7 +43,14 @@ export const commandSchema = z.object({
         owner_membership_id: z
           .string()
           .nullable()
-          .describe("Only when the speaker books FOR a named rep in the rep list; else null."),
+          .describe("Only when the speaker books FOR a named person in the owner list; else null."),
+        teammate_membership_id: z
+          .string()
+          .nullable()
+          .describe(
+            "When the follow-up is WITH one of GMX's own people (the team list) — call Bia, " +
+              "email João — that person's id. account_id and account_heard are then null. Else null.",
+          ),
       }),
     )
     .max(3),
@@ -61,6 +68,13 @@ export interface CommandRep {
   name: string;
 }
 
+/** One of GMX's own people: never an account, and the one a follow-up may be WITH. */
+export interface CommandTeammate {
+  membershipId: string;
+  name: string;
+  role: string;
+}
+
 export interface Command {
   kind: CommandKind;
   accountId: string | null;
@@ -70,6 +84,8 @@ export interface Command {
   objective: (typeof VISIT_OBJECTIVES)[number] | null;
   /** null = the speaker themselves. */
   ownerId: string | null;
+  /** The teammate the follow-up is with; set means no account is needed. */
+  teammateId: string | null;
 }
 
 const STOP = new Set([
@@ -117,6 +133,7 @@ export function commandPrompt(
   today: string,
   accounts: readonly CommandAccount[],
   reps: readonly CommandRep[],
+  team: readonly CommandTeammate[] = [],
 ): string {
   const weekday = DOW[new Date(`${today}T12:00:00Z`).getUTCDay()];
   return [
@@ -132,9 +149,21 @@ export function commandPrompt(
     `- Only what was asked. Small talk, or nothing actionable → an empty commands list.`,
     `- account_id ONLY from the list below, when the name clearly matches; otherwise null with account_heard set.`,
     `- action: short and concrete, in the language spoken (e.g. "Collect the decking quote", "Ligar ao comprador sobre a amostra").`,
-    reps.length > 0
-      ? `- owner_membership_id: only when the speaker books it FOR one of these reps by name; else null.\n${reps.map((r) => `  ${r.membershipId}: ${r.name}`).join("\n")}`
-      : `- owner_membership_id: always null.`,
+    // GMX'S OWN PEOPLE, one list (Andre, 2026-11-03: "Bia and João should be
+    // recognizable as our admins"). A teammate is never a business: "call Bia"
+    // is a follow-up WITH Bianca and needs no account; "ask John to send…" is
+    // work FOR João. One list, because two (owners and teammates) let the
+    // model read "John" as Jason.
+    team.length > 0
+      ? [
+          `- GMX's own people (id: name · role) — never an account, never account_heard. People are often called by a short or English form of their name: Bia is Bianca, John is João (Joao), Tony is Anthony. Match the name said to the person it is a form of, never to a different person whose name merely looks alike. In action, write their name as listed.`,
+          ...team.map((t) => `  ${t.membershipId}: ${t.name} · ${t.role}`),
+          `  · The speaker does it WITH one of them (call Bia, email João, meet Deonn): teammate_membership_id = them, owner_membership_id null.`,
+          reps.length > 0
+            ? `  · One of them is to DO it (ask John to send…, João will…, tell Deonn to…, book it for Jason): owner_membership_id = them, teammate_membership_id null; the account is the business named, if any.`
+            : `  · The speaker cannot hand work to others: owner_membership_id is always null; someone else doing it is still WITH them.`,
+        ].join("\n")
+      : `- owner_membership_id and teammate_membership_id: always null.`,
     ``,
     accounts.length > 0
       ? `Accounts (id: name · city):\n${accounts.map((a) => `${a.id}: ${a.name}${a.city ? ` · ${a.city}` : ""}`).join("\n")}`
@@ -155,9 +184,11 @@ export function sanitizeCommands(
   raw: RawCommands,
   shownAccounts: readonly CommandAccount[],
   reps: readonly CommandRep[],
+  team: readonly CommandTeammate[] = [],
 ): Command[] {
   const accountIds = new Set(shownAccounts.map((a) => a.id));
   const repIds = new Set(reps.map((r) => r.membershipId));
+  const teamIds = new Set(team.map((t) => t.membershipId));
   return raw.commands
     .slice(0, 3)
     .map((c) => ({
@@ -169,6 +200,12 @@ export function sanitizeCommands(
       // OTHER needs a word on what (D48); the card asks rather than guess it.
       objective: c.kind === "VISIT" && c.objective !== "OTHER" ? c.objective : null,
       ownerId: c.owner_membership_id && repIds.has(c.owner_membership_id) ? c.owner_membership_id : null,
+      teammateId:
+        c.kind === "FOLLOW_UP" && c.teammate_membership_id && teamIds.has(c.teammate_membership_id)
+          ? c.teammate_membership_id
+          : null,
     }))
+    // A teammate heard as a business name is not a business to pick.
+    .map((c) => (c.teammateId && !c.accountId ? { ...c, accountHeard: null } : c))
     .filter((c) => c.action.length > 0);
 }

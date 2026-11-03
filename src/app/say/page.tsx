@@ -15,7 +15,7 @@ import { CheckIcon } from "@/components/icons";
 import { VISIT_OBJECTIVES, humanize, type VisitObjective } from "@/lib/domain/enums";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
-import type { Command, CommandAccount, CommandRep } from "@/lib/voice/command";
+import type { Command, CommandAccount, CommandRep, CommandTeammate } from "@/lib/voice/command";
 
 type Phase = "idle" | "recording" | "working";
 
@@ -41,6 +41,7 @@ export default function SayPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [shown, setShown] = useState<CommandAccount[]>([]);
   const [reps, setReps] = useState<CommandRep[]>([]);
+  const [team, setTeam] = useState<CommandTeammate[]>([]);
   const [cached, setCached] = useState<CachedAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -103,12 +104,14 @@ export default function SayPage() {
         commands?: Command[];
         accounts?: CommandAccount[];
         reps?: CommandRep[];
+        team?: CommandTeammate[];
         error?: string;
       };
       if (body.transcript) setTranscript(body.transcript);
       if (!res.ok) throw new Error(body.error ?? String(res.status));
       setShown(body.accounts ?? []);
       setReps(body.reps ?? []);
+      setTeam(body.team ?? []);
       const list = (body.commands ?? []).map((c, i) => ({ ...c, key: `${Date.now()}-${i}`, done: false }));
       setCards(list);
       if (list.length === 0) setError("Nothing to book or chase in that — try again.");
@@ -140,7 +143,9 @@ export default function SayPage() {
       router.push(`/accounts/${card.accountId}/new-deal?stage=QUOTE&say=${say}`);
       return;
     }
-    if (!card.accountId) return setError("Pick the account first.");
+    // A follow-up WITH a teammate ("call Bia") needs no account.
+    const internal = card.kind === "FOLLOW_UP" && card.teammateId !== null;
+    if (!card.accountId && !internal) return setError("Pick the account first.");
     if (!card.dueDate) return setError("Pick the day.");
     if (card.kind === "VISIT" && !card.objective) return setError("Every visit has a purpose — pick it.");
     const id = crypto.randomUUID();
@@ -235,88 +240,111 @@ export default function SayPage() {
         </p>
       )}
 
-      {cards.map((c) => (
-        <section key={c.key} className="card card-pad flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="t-meta uppercase tracking-wide">{KIND_LABEL[c.kind]}</p>
-            {c.dueDate && <p className="t-meta">{DAY.format(new Date(`${c.dueDate}T12:00:00`))}</p>}
-          </div>
-          {c.done ? (
-            <p className="t-sub flex items-center gap-1.5">
-              <CheckIcon size={16} /> {c.kind === "VISIT" ? "On the agenda" : "Added"} — {c.action}
-            </p>
-          ) : (
-            <>
-              <select
-                className="field"
-                style={{ background: "var(--surface-page)" }}
-                value={c.accountId ?? ""}
-                onChange={(e) => patch(c.key, { accountId: e.target.value || null })}
-              >
-                <option value="">
-                  {c.accountHeard ? `Which account? (heard “${c.accountHeard}”)` : "Which account?"}
-                </option>
-                {choices.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="field"
-                style={{ background: "var(--surface-page)" }}
-                value={c.action}
-                onChange={(e) => patch(c.key, { action: e.target.value })}
-                aria-label={c.kind === "QUOTE" ? "What they want" : "What to do"}
-              />
-              {c.kind !== "QUOTE" && (
-                <input
-                  type="date"
-                  className="field"
-                  style={{ background: "var(--surface-page)" }}
-                  value={c.dueDate ?? ""}
-                  onChange={(e) => patch(c.key, { dueDate: e.target.value || null })}
-                  aria-label="Which day"
-                />
-              )}
-              {c.kind === "VISIT" && (
-                <select
-                  className="field"
-                  style={{ background: "var(--surface-page)" }}
-                  value={c.objective ?? ""}
-                  onChange={(e) => patch(c.key, { objective: (e.target.value || null) as VisitObjective | null })}
-                >
-                  <option value="">Why are you going?</option>
-                  {VISIT_OBJECTIVES.filter((o) => o !== "OTHER").map((o) => (
-                    <option key={o} value={o}>
-                      {humanize(o)}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {reps.length > 0 && c.kind !== "QUOTE" && (
-                <select
-                  className="field"
-                  style={{ background: "var(--surface-page)" }}
-                  value={c.ownerId ?? ""}
-                  onChange={(e) => patch(c.key, { ownerId: e.target.value || null })}
-                  aria-label="Whose is it"
-                >
-                  <option value="">For me</option>
-                  {reps.map((r) => (
-                    <option key={r.membershipId} value={r.membershipId}>
-                      For {r.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <button type="button" className="btn-primary mt-1" onClick={() => void confirm(c)}>
-                {c.kind === "VISIT" ? "Book it" : c.kind === "QUOTE" ? "Draft the quote" : "Add it"}
-              </button>
-            </>
-          )}
-        </section>
-      ))}
+      {/* One card per thing asked. On a phone they stack; on the desk they sit
+          two to a row, and inside each the fields share a line instead of
+          each taking the full width (Andre, 2026-11-03). */}
+      {cards.length > 0 && (
+        <div className="say-cards">
+          {cards.map((c) => {
+            const mate = c.teammateId ? team.find((t) => t.membershipId === c.teammateId) : undefined;
+            return (
+              <section key={c.key} className="card card-pad say-card">
+                <div className="say-card-head">
+                  <p className="t-meta uppercase tracking-wide">
+                    {KIND_LABEL[c.kind]}
+                    {mate && <span className="say-mate"> · with {mate.name}</span>}
+                  </p>
+                  {c.dueDate && <p className="t-meta">{DAY.format(new Date(`${c.dueDate}T12:00:00`))}</p>}
+                </div>
+                {c.done ? (
+                  <p className="t-sub flex items-center gap-1.5">
+                    <CheckIcon size={16} /> {c.kind === "VISIT" ? "On the agenda" : "Added"} — {c.action}
+                  </p>
+                ) : (
+                  <>
+                    <input
+                      className="field say-action"
+                      style={{ background: "var(--surface-page)" }}
+                      value={c.action}
+                      onChange={(e) => patch(c.key, { action: e.target.value })}
+                      aria-label={c.kind === "QUOTE" ? "What they want" : "What to do"}
+                    />
+                    <div className="say-fields">
+                      <select
+                        className="field"
+                        style={{ background: "var(--surface-page)" }}
+                        value={c.accountId ?? ""}
+                        onChange={(e) => patch(c.key, { accountId: e.target.value || null })}
+                        aria-label="Which account"
+                      >
+                        <option value="">
+                          {mate
+                            ? `No account · with ${mate.name}`
+                            : c.accountHeard
+                              ? `Which account? (heard “${c.accountHeard}”)`
+                              : "Which account?"}
+                        </option>
+                        {choices.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                      {c.kind !== "QUOTE" && (
+                        <input
+                          type="date"
+                          className="field"
+                          style={{ background: "var(--surface-page)" }}
+                          value={c.dueDate ?? ""}
+                          onChange={(e) => patch(c.key, { dueDate: e.target.value || null })}
+                          aria-label="Which day"
+                        />
+                      )}
+                      {c.kind === "VISIT" && (
+                        <select
+                          className="field"
+                          style={{ background: "var(--surface-page)" }}
+                          value={c.objective ?? ""}
+                          onChange={(e) =>
+                            patch(c.key, { objective: (e.target.value || null) as VisitObjective | null })
+                          }
+                          aria-label="Why are you going"
+                        >
+                          <option value="">Why are you going?</option>
+                          {VISIT_OBJECTIVES.filter((o) => o !== "OTHER").map((o) => (
+                            <option key={o} value={o}>
+                              {humanize(o)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {reps.length > 0 && c.kind !== "QUOTE" && (
+                        <select
+                          className="field"
+                          style={{ background: "var(--surface-page)" }}
+                          value={c.ownerId ?? ""}
+                          onChange={(e) => patch(c.key, { ownerId: e.target.value || null })}
+                          aria-label="Whose is it"
+                        >
+                          <option value="">For me</option>
+                          {reps.map((r) => (
+                            <option key={r.membershipId} value={r.membershipId}>
+                              For {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <button type="button" className="btn-primary say-go" onClick={() => void confirm(c)}>
+                      {c.kind === "VISIT" ? "Book it" : c.kind === "QUOTE" ? "Draft the quote" : "Add it"}
+                    </button>
+                  </>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
 
       {error && (
         <p className="t-sub px-1" style={{ color: "var(--danger)" }}>
