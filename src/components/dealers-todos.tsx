@@ -13,8 +13,9 @@
 // Visits are not to-dos: a row with no item_type is on the agenda, not here,
 // and the page never hands one in.
 //
-// Whose: Everyone, Mine, or one person — the same chip row the Reps board
-// uses, never a dropdown. The counts answer for the person picked.
+// Kind and Whose are two menus of checkboxes (Andre, 2026-11-03: the chip
+// rows read as labels, not as filters); several can be ticked in each, and
+// nothing ticked means all. The kind counts answer for the people picked.
 //
 // A row says when, which dealer (and its tier), what, which kind and whose
 // — and, when somebody else typed it, who did ("entered by André"), because
@@ -22,6 +23,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { CheckMenu } from "@/components/check-menu";
 import { DealerItemForm } from "@/components/dealer-item-form";
 import type { Tier } from "@/lib/domain/dealer-tiers";
 import { ITEM_TYPES, ITEM_TYPE_LABEL, isLate, type ItemType } from "@/lib/domain/dealer-items";
@@ -96,9 +98,9 @@ export function DealersTodos({
   onAdded: (item: DealerItem) => void;
   span: string;
 }) {
-  const [kind, setKind] = useState<ItemType | null>(null);
-  // null = Everyone; otherwise a membership id ("Mine" is the reader's own).
-  const [who, setWho] = useState<string | null>(null);
+  // Empty = all kinds / everyone.
+  const [kinds, setKinds] = useState<Set<ItemType>>(() => new Set());
+  const [whos, setWhos] = useState<Set<string>>(() => new Set());
   const [adding, setAdding] = useState(false);
   const [allLater, setAllLater] = useState(false);
 
@@ -112,7 +114,10 @@ export function DealersTodos({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [owed, names, myId]);
 
-  const scoped = useMemo(() => (who ? owed.filter((i) => i.owner_id === who) : owed), [owed, who]);
+  const scoped = useMemo(
+    () => (whos.size > 0 ? owed.filter((i) => whos.has(i.owner_id)) : owed),
+    [owed, whos],
+  );
 
   const counts = useMemo(() => {
     const c = new Map<ItemType, number>();
@@ -124,7 +129,7 @@ export function DealersTodos({
     const weekEnd = addDays(todayIso, 6);
     const g: Record<Group, DealerItem[]> = { late: [], week: [], later: [] };
     const rows = scoped
-      .filter((i) => kind === null || i.item_type === kind)
+      .filter((i) => kinds.size === 0 || kinds.has(i.item_type))
       .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.id.localeCompare(b.id));
     for (const i of rows) {
       if (isLate(i, todayIso)) g.late.push(i);
@@ -132,7 +137,7 @@ export function DealersTodos({
       else g.later.push(i);
     }
     return g;
-  }, [scoped, kind, todayIso]);
+  }, [scoped, kinds, todayIso]);
   const shownTotal = groups.late.length + groups.week.length + groups.later.length;
   const lateAll = useMemo(() => scoped.filter((i) => isLate(i, todayIso)).length, [scoped, todayIso]);
 
@@ -198,27 +203,6 @@ export function DealersTodos({
               : `${QTY.format(scoped.length)} open${lateAll > 0 ? ` · ${QTY.format(lateAll)} late` : ""}`}
           </span>
         </div>
-        <div className="chip-row dl-who" role="group" aria-label="Whose">
-          <button type="button" className="chip" aria-pressed={who === null} onClick={() => setWho(null)}>
-            Everyone
-          </button>
-          {myId && (
-            <button type="button" className="chip" aria-pressed={who === myId} onClick={() => setWho(myId)}>
-              Mine
-            </button>
-          )}
-          {people.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className="chip"
-              aria-pressed={who === p.id}
-              onClick={() => setWho(p.id)}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
         <button type="button" className="pk-btn dl-owe-add" onClick={() => setAdding((a) => !a)}>
           {adding ? "Close" : "+ Add"}
         </button>
@@ -227,23 +211,30 @@ export function DealersTodos({
       {adding && <DealerItemForm onDone={() => setAdding(false)} onSaved={onAdded} />}
 
       {owed.length > 0 && (
-        <div className="chip-row dl-owe-kinds" role="group" aria-label="Kind">
-          <button type="button" className="chip" aria-pressed={kind === null} onClick={() => setKind(null)}>
-            All
-            <span className="chip-count">{QTY.format(scoped.length)}</span>
-          </button>
-          {ITEM_TYPES.filter((t) => (counts.get(t) ?? 0) > 0 || kind === t).map((t) => (
-            <button
-              key={t}
-              type="button"
-              className="chip"
-              aria-pressed={kind === t}
-              onClick={() => setKind(kind === t ? null : t)}
-            >
-              {ITEM_TYPE_LABEL[t]}
-              <span className="chip-count">{QTY.format(counts.get(t) ?? 0)}</span>
-            </button>
-          ))}
+        <div className="dl-owe-filters">
+          <CheckMenu
+            label="Kind"
+            allLabel="All kinds"
+            manyLabel={(n) => `${n} kinds`}
+            options={ITEM_TYPES.filter((t) => (counts.get(t) ?? 0) > 0 || kinds.has(t)).map((t) => ({
+              value: t,
+              label: ITEM_TYPE_LABEL[t],
+              count: counts.get(t) ?? 0,
+            }))}
+            picked={kinds}
+            onChange={setKinds}
+          />
+          <CheckMenu
+            label="Whose"
+            allLabel="Everyone"
+            manyLabel={(n) => `${n} people`}
+            options={[
+              ...(myId ? [{ value: myId, label: "Mine" }] : []),
+              ...people.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+            picked={whos}
+            onChange={setWhos}
+          />
         </div>
       )}
 

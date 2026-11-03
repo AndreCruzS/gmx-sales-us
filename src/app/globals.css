@@ -5982,19 +5982,84 @@ input[type="datetime-local"] {
   gap: 10px;
   margin-right: auto;
 }
-.dl-owe-head .chip-row,
-.dl-owe-kinds {
-  flex-wrap: wrap;
-  overflow-x: visible;
+/* The checkbox menu (check-menu.tsx): a quiet button, a short list. */
+.ckm {
+  position: relative;
 }
-.dl-who .chip,
-.dl-owe-kinds .chip {
-  min-height: 30px;
-  padding: 5px 11px;
+.ckm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--surface-card);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.ckm-btn[data-on] {
+  border-color: var(--accent);
+  background: var(--surface-accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.ckm-btn svg {
+  width: 12px;
+  height: 12px;
+  color: var(--ink-muted);
+}
+.ckm-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-2);
+}
+.ckm-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: var(--r-control);
+  font-size: var(--text-sm);
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+.ckm-opt:hover {
+  background: var(--surface-page);
+}
+.ckm-opt input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+.ckm-count {
+  margin-left: auto;
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.ckm-clear {
+  align-self: flex-start;
+  margin: 4px 8px 2px;
   font-size: var(--text-xs);
 }
-.dl-owe-kinds {
-  padding: 4px 16px 10px;
+.dl-owe-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 16px 12px;
 }
 .dl-todos-empty {
   padding: 4px 16px 16px;
@@ -6140,10 +6205,6 @@ button.dl-owe-row:hover {
   }
   .dl-owe-add {
     order: 2;
-  }
-  .dl-owe-head .dl-who {
-    order: 3;
-    width: 100%;
   }
   .dl-owe-row {
     grid-template-columns: 64px auto minmax(0, 1fr);
