@@ -236,12 +236,11 @@ function PkRow({
       </span>
       <span className="pk-c">
         {item.priority ? (
-          <>
-            <span className="pk-prio" data-priority={item.priority}>
-              {PRIORITY_LABEL[item.priority]}
-            </span>
-            {item.priority_days !== null && <span className="pk-days">{item.priority_days}d</span>}
-          </>
+          // Only the chip: the days live in the drawer and the alert column
+          // already says the date and how far off it is.
+          <span className="pk-prio" data-priority={item.priority}>
+            {PRIORITY_LABEL[item.priority]}
+          </span>
         ) : (
           <span className="pk-quiet">Set priority</span>
         )}
