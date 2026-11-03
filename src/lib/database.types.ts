@@ -8638,6 +8638,22 @@ export type Database = {
         Args: { p_rows: Json; p_upload: Json }
         Returns: string
       }
+      pk_dealer_names: {
+        Args: { p_activity_ids: string[] }
+        Returns: {
+          activity_id: string
+          dealer_name: string
+        }[]
+      }
+      pk_member_names: {
+        Args: never
+        Returns: {
+          full_name: string
+          id: string
+          role: string
+          status: string
+        }[]
+      }
       set_active_org: { Args: { p_org_id: string }; Returns: undefined }
       territory_for_state: {
         Args: { p_org: string; p_state: string }

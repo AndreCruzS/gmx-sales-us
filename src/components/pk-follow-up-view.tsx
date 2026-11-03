@@ -64,9 +64,9 @@ type ItemRow = PkItem & { account_id: string | null; activity_id: string };
 
 interface MemberName {
   id: string;
+  full_name: string | null;
   role: string;
   status: string;
-  users: { full_name: string | null } | null;
 }
 
 const NOTE_COLS = "id, next_action_id, author_id, body, created_at, edited_at";
@@ -137,16 +137,29 @@ export function PkFollowUpView({ title }: { title: ReactNode }) {
           .range(from, to)
           .then((r) => ({ data: r.data as unknown as PkVisit[] | null, error: r.error })),
       ),
-      // Owners and note authors — memberships, as on /dealers.
+      // Owners and note authors. Through pk_member_names (20261103150000):
+      // a rep reads no colleague's membership, but must see whose item it is.
       fetchAllPages<MemberName>((from, to) =>
         supabase
-          .from("memberships")
-          .select("id, role, status, users(full_name)")
+          .rpc("pk_member_names")
           .order("id")
           .range(from, to)
-          .then((r) => ({ data: r.data as unknown as MemberName[] | null, error: r.error })),
+          .then((r) => ({ data: r.data as MemberName[] | null, error: r.error })),
       ),
     ]);
+
+    // The dealer of a PK whose account the reader cannot open (a band handed
+    // to a rep from a colleague's PK) comes by name only (pk_dealer_names).
+    const nameless = vs.filter((v) => v.account === null).map((v) => v.id);
+    if (nameless.length > 0) {
+      const { data: dn } = await supabase.rpc("pk_dealer_names", { p_activity_ids: nameless });
+      const rows = (dn ?? []) as { activity_id: string; dealer_name: string }[];
+      const byId = new Map(rows.map((d) => [d.activity_id, d.dealer_name] as const));
+      for (const v of vs) {
+        const name = byId.get(v.id);
+        if (v.account === null && name) v.account = { name };
+      }
+    }
 
     const na = await inChunks(
       vs.map((v) => v.id),
@@ -205,7 +218,7 @@ export function PkFollowUpView({ title }: { title: ReactNode }) {
     setNotes(nt);
     setSubtasks(st);
     setReads(rd);
-    setNames(new Map(ms.map((m) => [m.id, m.users?.full_name ?? "Someone"] as const)));
+    setNames(new Map(ms.map((m) => [m.id, m.full_name ?? "Someone"] as const)));
     setDeskIds(ms.filter((m) => m.status === "active" && seesDealersBoard(m.role)).map((m) => m.id));
     setTodayIso(isoOf(new Date()));
     setLoadedAt(Date.now());
