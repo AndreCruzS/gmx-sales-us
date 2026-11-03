@@ -127,7 +127,7 @@ export function PkFollowUpView({ title }: { title: ReactNode }) {
       // Newest PK first: the board's order.
       fetchAllPages<PkVisit>((from, to) =>
         supabase
-          .from("activities")
+          .rpc("pk_board_visits")
           .select(
             "id, owner_id, occurred_at, location, primary_account_id, account:accounts!activities_primary_account_id_fkey(name)",
           )
@@ -166,7 +166,7 @@ export function PkFollowUpView({ title }: { title: ReactNode }) {
       (chunk) =>
         fetchAllPages<ItemRow>((from, to) =>
           supabase
-            .from("next_actions")
+            .rpc("pk_board_items")
             .select(ITEM_COLS)
             .in("activity_id", chunk)
             .order("due_date")
@@ -313,7 +313,7 @@ export function PkFollowUpView({ title }: { title: ReactNode }) {
     const supabase = getSupabaseBrowserClient();
     try {
       const [row, nt, st, rd] = await Promise.all([
-        supabase.from("next_actions").select(ITEM_COLS).eq("id", id).maybeSingle(),
+        supabase.rpc("pk_board_items").select(ITEM_COLS).eq("id", id).maybeSingle(),
         supabase.from("next_action_notes").select(NOTE_COLS).eq("next_action_id", id).order("created_at").order("id"),
         supabase.from("next_action_subtasks").select(SUB_COLS).eq("next_action_id", id).order("position").order("id"),
         supabase.from("next_action_reads").select(READ_COLS).eq("next_action_id", id).order("membership_id"),

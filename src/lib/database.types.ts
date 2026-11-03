@@ -8638,6 +8638,77 @@ export type Database = {
         Args: { p_rows: Json; p_upload: Json }
         Returns: string
       }
+      pk_board_items: {
+        Args: never
+        Returns: {
+          account_id: string | null
+          action: string
+          activity_id: string | null
+          calendar_event_id: string | null
+          calendar_origin: string | null
+          completed_at: string | null
+          counterparty_account_id: string | null
+          created_at: string
+          due_date: string
+          entered_by: string | null
+          hubspot_id: string | null
+          id: string
+          item_type: Database["public"]["Enums"]["next_action_type"] | null
+          kind: Database["public"]["Enums"]["next_action_kind"] | null
+          last_changed_at: string | null
+          last_changed_by: string | null
+          objective: Database["public"]["Enums"]["visit_objective"] | null
+          objective_detail: string | null
+          opportunity_id: string | null
+          org_id: string
+          owner_id: string
+          priority: Database["public"]["Enums"]["next_action_priority"] | null
+          priority_days: number | null
+          progress: Database["public"]["Enums"]["next_action_progress"]
+          project_id: string | null
+          source: Database["public"]["Enums"]["next_action_source"]
+          source_ref: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "next_actions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      pk_board_visits: {
+        Args: never
+        Returns: {
+          activity_type: Database["public"]["Enums"]["activity_type"]
+          commercial_potential: string | null
+          created_at: string
+          follow_up_required: boolean
+          hubspot_id: string | null
+          id: string
+          key_information: string | null
+          location: string | null
+          objective: Database["public"]["Enums"]["visit_objective"] | null
+          objective_detail: string | null
+          occurred_at: string
+          opportunity_id: string | null
+          org_id: string
+          outcomes: Database["public"]["Enums"]["activity_outcome"][]
+          owner_id: string
+          planned_action_id: string | null
+          primary_account_id: string
+          purpose: string | null
+          updated_at: string
+          was_planned: boolean
+          what_happened: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "activities"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       pk_dealer_names: {
         Args: { p_activity_ids: string[] }
         Returns: {

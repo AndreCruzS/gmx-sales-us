@@ -14,7 +14,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(19);
 
 select has_function('private', 'pk_ids_run_by_visible', 'the PK items helper exists');
 
@@ -53,30 +53,42 @@ select tests.set_claims('tj@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 
 select is(
-  (select count(*) from next_actions where activity_id = 'ac320000-0000-0000-0000-000000000001'),
+  (select count(*) from public.pk_board_items() where activity_id = 'ac320000-0000-0000-0000-000000000001'),
   3::bigint, 'TJ reads every item of his PK, João''s and Deon''s included');
 
 select is(
-  (select count(*) from activities where id = 'ac320000-0000-0000-0000-000000000002'),
+  (select count(*) from public.pk_board_visits() where id = 'ac320000-0000-0000-0000-000000000002'),
   1::bigint, 'TJ reads the band of a PK that holds an item handed to him');
 
 select results_eq(
-  $$ select id from next_actions where activity_id = 'ac320000-0000-0000-0000-000000000002' $$,
+  $$ select id from public.pk_board_items() where activity_id = 'ac320000-0000-0000-0000-000000000002' $$,
   $$ values ('e3200000-0000-0000-0000-000000000004'::uuid) $$,
   'in Deon''s PK, TJ reads only the item that is his');
 
 select is(
-  (select count(*) from activities where id = 'ac320000-0000-0000-0000-000000000003'),
+  (select count(*) from public.pk_board_visits() where id = 'ac320000-0000-0000-0000-000000000003') + (select count(*) from activities where id = 'ac320000-0000-0000-0000-000000000003'),
   0::bigint, 'TJ still cannot read Deon''s store visit');
 
 select is(
-  (select count(*) from next_actions where id = 'e3200000-0000-0000-0000-000000000006'),
+  (select count(*) from public.pk_board_items() where id = 'e3200000-0000-0000-0000-000000000006') + (select count(*) from next_actions where id = 'e3200000-0000-0000-0000-000000000006'),
   0::bigint, 'TJ still cannot read the to-do from Deon''s store visit');
+
+-- The tables themselves are as before: the rep's day reads them, and João's
+-- and Deon's PK work must not land on TJ's routine list or visit history.
+select is(
+  (select count(*) from next_actions where activity_id = 'ac320000-0000-0000-0000-000000000001'),
+  1::bigint, 'the next_actions table still shows TJ only his own item');
+select is(
+  (select count(*) from activities where id = 'ac320000-0000-0000-0000-000000000002'),
+  0::bigint, 'the activities table still hides Deon''s PK from TJ');
+select is(
+  (select count(*) from next_action_notes where next_action_id = 'f1000000-0000-0000-0000-0000000000a2'),
+  1::bigint, 'TJ reads João''s note in his own seeded PK');
 
 -- His view of João's item is read-only.
 update next_actions set progress = 'WORKING_ON_IT' where id = 'e3200000-0000-0000-0000-000000000002';
 select is(
-  (select progress::text from next_actions where id = 'e3200000-0000-0000-0000-000000000002'),
+  (select progress::text from public.pk_board_items() where id = 'e3200000-0000-0000-0000-000000000002'),
   'NOT_STARTED', 'TJ cannot change João''s item');
 
 insert into next_action_notes (org_id, next_action_id, body) values
@@ -120,7 +132,7 @@ reset role;
 select tests.set_claims('deon@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 select results_eq(
-  $$ select id from next_actions where activity_id = 'ac320000-0000-0000-0000-000000000001' order by id $$,
+  $$ select id from public.pk_board_items() where activity_id = 'ac320000-0000-0000-0000-000000000001' order by id $$,
   $$ values ('e3200000-0000-0000-0000-000000000003'::uuid) $$,
   'in TJ''s PK, Deon reads only his own item');
 reset role;
@@ -129,7 +141,7 @@ reset role;
 select tests.set_claims('joao@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 select is(
-  (select count(*) from next_actions where activity_id in
+  (select count(*) from public.pk_board_items() where activity_id in
      ('ac320000-0000-0000-0000-000000000001', 'ac320000-0000-0000-0000-000000000002')),
   5::bigint, 'João sees every item of his team''s PKs');
 reset role;
@@ -137,7 +149,7 @@ reset role;
 select tests.set_claims('bianca@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 select is(
-  (select count(*) from next_actions where activity_id::text like 'ac32%'),
+  (select count(*) from public.pk_board_items() where activity_id::text like 'ac32%'),
   6::bigint, 'Bianca sees every item');
 reset role;
 

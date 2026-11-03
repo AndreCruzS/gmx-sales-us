@@ -63,18 +63,19 @@ export function YourPksCard() {
     (async () => {
       const pks = await fetchAllPages<{ id: string }>((from, to) =>
         supabase
-          .from("activities")
+          .rpc("pk_board_visits")
           .select("id")
           .eq("activity_type", "PK_TRAINING")
           .order("id")
-          .range(from, to),
+          .range(from, to)
+          .then((r) => ({ data: r.data as unknown as { id: string }[] | null, error: r.error })),
       );
       const items = await inChunks(
         pks.map((p) => p.id),
         (chunk) =>
           fetchAllPages<Row>((from, to) =>
             supabase
-              .from("next_actions")
+              .rpc("pk_board_items")
               .select(ITEM_COLS)
               .in("activity_id", chunk)
               .is("completed_at", null)
