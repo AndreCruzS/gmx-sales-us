@@ -7677,6 +7677,8 @@ textarea.pkd-select {
   }
   .pkd-ro > div:first-child {
     grid-column: 1 / -1;
+  }
+}
 /* SAY IT's cards (2026-11-03): stacked on a phone; on the desk two to a row,
    the fields sharing lines, the button its own width at the end. */
 .say-cards {
