@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LivesIn, MirrorRep, MirrorStore, SavedMirror } from "./mirror-sync";
 import type { TeamCalendarStore, VisitRow } from "./team-port";
+import { AGENDA_KIND_FILTER } from "@/lib/domain/commitments";
 
 const EVENT_SCOPES: ReadonlySet<string> = new Set([
   "https://www.googleapis.com/auth/calendar.events",
@@ -20,7 +21,7 @@ const MAKE_SCOPES: ReadonlySet<string> = new Set([
 ]);
 
 const OWNER_EMBED = "memberships!next_actions_owner_id_fkey(users(full_name))";
-const VISIT_COLS = `id, action, due_date, completed_at, owner_id, objective, calendar_event_id, calendar_origin, accounts!next_actions_account_id_fkey(name), ${OWNER_EMBED}`;
+const VISIT_COLS = `id, action, due_date, completed_at, owner_id, objective, kind, due_time, time_zone, duration_minutes, calendar_event_id, calendar_origin, accounts!next_actions_account_id_fkey(name), ${OWNER_EMBED}`;
 
 interface Raw {
   id: string;
@@ -31,6 +32,10 @@ interface Raw {
   objective: string | null;
   calendar_event_id: string | null;
   calendar_origin: "app" | "google" | null;
+  kind: string | null;
+  due_time: string | null;
+  time_zone: string | null;
+  duration_minutes: number | null;
   accounts: { name: string } | null;
   memberships: { users: { full_name: string | null } | null } | null;
 }
@@ -51,6 +56,10 @@ function toVisit(r: Raw): VisitRow {
     calendar_origin: r.calendar_origin,
     accountName: r.accounts?.name ?? null,
     ownerFirstName: firstName(r.memberships?.users?.full_name),
+    kind: r.kind,
+    due_time: r.due_time,
+    time_zone: r.time_zone,
+    duration_minutes: r.duration_minutes,
   };
 }
 
@@ -123,7 +132,7 @@ export class SupabaseTeamCalendarStore implements TeamCalendarStore {
       .from("next_actions")
       .select(VISIT_COLS)
       .eq("org_id", this.orgId)
-      .or("kind.eq.VISIT,kind.is.null")
+      .or(AGENDA_KIND_FILTER)
       .gte("due_date", fromDate)
       .lte("due_date", toDate)
       .or("completed_at.is.null,calendar_event_id.not.is.null")
@@ -275,7 +284,7 @@ export class SupabaseMirrorStore implements MirrorStore {
       .from("next_actions")
       .select(VISIT_COLS)
       .eq("org_id", this.orgId)
-      .or("kind.eq.VISIT,kind.is.null")
+      .or(AGENDA_KIND_FILTER)
       .is("completed_at", null)
       .gte("due_date", fromDate)
       .lte("due_date", toDate)

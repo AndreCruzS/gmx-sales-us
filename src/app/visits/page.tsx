@@ -32,6 +32,14 @@ import {
 import { AGENDA_EXCEPTION_TYPES, DANGER_EXCEPTIONS } from "@/lib/domain/exceptions";
 import { relativizeDates } from "@/lib/format";
 import {
+  AGENDA_KIND_FILTER,
+  KIND_LABEL,
+  formatTime,
+  isAgendaKind,
+  timeOrder,
+  timedFields,
+} from "@/lib/domain/commitments";
+import {
   getOfflineLayer,
   wipeLocalData,
   type CachedAccount,
@@ -47,8 +55,29 @@ interface AgendaRow {
   account_id: string | null;
   opportunity_id: string | null;
   objective: string | null;
+  kind?: string | null;
+  /** Timed commitments (2026-11-04): the clock, or null for all day. */
+  due_time?: string | null;
   updated_at: string;
   accountName?: string;
+}
+
+/** A day's rows: timed first by clock, then the all-day ones. */
+function byDayAndTime(a: AgendaRow, b: AgendaRow): number {
+  return a.due_date.localeCompare(b.due_date) || timeOrder(a.due_time, b.due_time);
+}
+
+/** "10:00 AM", and "Call" or "Meeting" when it is not a visit. */
+function When({ row }: { row: AgendaRow }) {
+  const time = formatTime(row.due_time);
+  const kind = row.kind === "CALL" || row.kind === "MEETING" ? KIND_LABEL[row.kind] : null;
+  if (!time && !kind) return null;
+  return (
+    <span className="agenda-when">
+      {time && <b>{time}</b>}
+      {kind && <span className="tag">{kind}</span>}
+    </span>
+  );
 }
 
 interface ExceptionRow {
@@ -153,6 +182,7 @@ function VisitsPageInner() {
   // the plan and the plan carries on with it (João, 2026-09-16).
   const [planCreating, setPlanCreating] = useState(false);
   const [planDate, setPlanDate] = useState(isoDate(new Date()));
+  const [planTime, setPlanTime] = useState("");
   const [planObjective, setPlanObjective] = useState<VisitObjective | "">(
     () => {
       const objective = searchParams.get("objective");
@@ -182,7 +212,7 @@ function VisitsPageInner() {
       const { data, error } = await getSupabaseBrowserClient()
         .from("next_actions")
         .select(
-          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, updated_at, accounts!next_actions_account_id_fkey(name)",
+          "id, action, due_date, due_time, completed_at, account_id, opportunity_id, objective, kind, updated_at, accounts!next_actions_account_id_fkey(name)",
         )
         .is("completed_at", null)
         .lte("due_date", visitHorizon)
@@ -191,7 +221,8 @@ function VisitsPageInner() {
         // so they're excluded here the same way the offline filter excludes them
         // below. `kind` is null for rows the DB trigger hasn't classified yet
         // (pre-D-routine rows, or a race with the trigger) — treated as a visit.
-        .or("kind.eq.VISIT,kind.is.null")
+        // Calls and meetings with a time are agenda commitments too (2026-11-04).
+        .or(AGENDA_KIND_FILTER)
         .order("due_date");
       if (error) throw new Error(error.message);
       setOfflineView(false);
@@ -202,7 +233,9 @@ function VisitsPageInner() {
           data as unknown as (AgendaRow & {
             accounts: { name: string } | null;
           })[]
-        ).map((r) => ({ ...r, accountName: r.accounts?.name })),
+        )
+          .map((r) => ({ ...r, accountName: r.accounts?.name }))
+          .sort(byDayAndTime),
       );
     } catch {
       // Offline: the cache holds every open next_action (cap 200, D-routine),
@@ -220,14 +253,15 @@ function VisitsPageInner() {
           .filter(
             (c) =>
               !c.completed_at &&
-              (c.kind === "VISIT" || c.kind === null) &&
+              isAgendaKind(c.kind) &&
               c.due_date <= visitHorizon,
           )
           .map((c) => ({
             ...c,
             updated_at: c.updated_at,
             accountName: c.account_id ? byId.get(c.account_id) : undefined,
-          })),
+          }))
+          .sort(byDayAndTime),
       );
     }
   }, []);
@@ -302,6 +336,9 @@ function VisitsPageInner() {
         account_id: planAccount,
         objective: planObjective,
         objective_detail: planObjectiveDetail.trim() || null,
+        kind: "VISIT",
+        // A time is optional: without one the visit is all day, as before.
+        ...timedFields(planTime, "VISIT"),
       },
       baseVersion: null,
       blobRef: null,
@@ -318,12 +355,15 @@ function VisitsPageInner() {
           account_id: planAccount,
           opportunity_id: null,
           objective: planObjective,
+          kind: "VISIT",
+          due_time: planTime || null,
           updated_at: new Date().toISOString(),
           accountName: acctName,
         },
-      ].sort((a, b) => a.due_date.localeCompare(b.due_date)),
+      ].sort(byDayAndTime),
     );
     setShowPlan(false);
+    setPlanTime("");
     setPlanAction("");
     setPlanObjective("");
     setPlanObjectiveDetail("");
@@ -476,13 +516,26 @@ function VisitsPageInner() {
               className="field"
               style={{ background: "var(--surface-page)" }}
             />
-            <input
-              type="date"
-              value={planDate}
-              onChange={(e) => setPlanDate(e.target.value)}
-              className="field"
-              style={{ background: "var(--surface-page)" }}
-            />
+            <div className="plan-when">
+              <input
+                type="date"
+                value={planDate}
+                onChange={(e) => setPlanDate(e.target.value)}
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+                aria-label="Which day"
+              />
+              {/* Optional: with a time it is a timed event on the calendar;
+                  without, all day (2026-11-04). */}
+              <input
+                type="time"
+                value={planTime}
+                onChange={(e) => setPlanTime(e.target.value)}
+                className="field"
+                style={{ background: "var(--surface-page)" }}
+                aria-label="What time (optional)"
+              />
+            </div>
             <select
               value={planObjective}
               onChange={(e) =>
@@ -604,6 +657,7 @@ function VisitsPageInner() {
                     >
                       <span className="t-title block truncate">{i.action}</span>
                       <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <When row={i} />
                         {i.accountName && (
                           <span className="t-sub">{i.accountName}</span>
                         )}
@@ -617,6 +671,7 @@ function VisitsPageInner() {
                   ) : (
                     <span className="row-body min-w-0">
                       <span className="t-title block truncate">{i.action}</span>
+                      <When row={i} />
                       {i.objective && (
                         <span className="tag tag-accent mt-1">
                           {humanize(i.objective)}
@@ -664,9 +719,10 @@ function VisitsPageInner() {
                 <DateChip date={i.due_date} />
                 <span className="row-body min-w-0">
                   <span className="t-title block truncate">{i.action}</span>
-                  {i.accountName && (
-                    <span className="t-sub block">{i.accountName}</span>
-                  )}
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <When row={i} />
+                    {i.accountName && <span className="t-sub">{i.accountName}</span>}
+                  </span>
                 </span>
                 <button
                   onClick={() => markDone(i)}

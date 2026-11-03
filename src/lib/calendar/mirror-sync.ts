@@ -36,7 +36,7 @@
 
 import { humanize } from "@/lib/domain/enums";
 import { syncWindow } from "./team-sync";
-import type { TeamCalendarPort, TeamEvent, TeamEventPayload, VisitRow } from "./team-port";
+import { slotKeyOf, slotOf, type TeamCalendarPort, type TeamEvent, type TeamEventPayload, type VisitRow } from "./team-port";
 
 export interface MirrorRep {
   membershipId: string;
@@ -112,6 +112,7 @@ function payloadFor(v: VisitRow, own: boolean): TeamEventPayload {
     nextActionId: v.id,
     membershipId: v.owner_id,
     pinDate: true,
+    slot: slotOf(v),
   };
 }
 
@@ -280,7 +281,11 @@ async function project(
       if (!ev) {
         await calendar.insertEvent(calendarId, want);
         report.inserted++;
-      } else if (ev.date !== want.date || ev.title !== want.title) {
+      } else if (
+        ev.date !== want.date ||
+        ev.title !== want.title ||
+        (ev.slot ?? "") !== slotKeyOf(want.slot)
+      ) {
         await calendar.updateEvent(calendarId, ev.eventId, want);
         report.updated++;
       }

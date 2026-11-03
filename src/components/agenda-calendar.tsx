@@ -34,6 +34,7 @@ import { CheckIcon } from "@/components/icons";
 import { useOffline } from "@/components/offline-provider";
 import { isAdmin } from "@/lib/domain/roles";
 import { humanize } from "@/lib/domain/enums";
+import { AGENDA_KIND_FILTER, KIND_LABEL, formatTime, timeOrder } from "@/lib/domain/commitments";
 import { getOfflineLayer } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -44,6 +45,8 @@ interface CalRow {
   completed_at: string | null;
   account_id: string | null;
   objective: string | null;
+  kind?: string | null;
+  due_time?: string | null;
   owner_id: string | null;
   updated_at: string;
   accountName?: string;
@@ -157,11 +160,11 @@ export function AgendaCalendar({
         supabase
           .from("next_actions")
           .select(
-            "id, action, due_date, completed_at, account_id, objective, kind, owner_id, updated_at, accounts!next_actions_account_id_fkey(name)",
+            "id, action, due_date, due_time, completed_at, account_id, objective, kind, owner_id, updated_at, accounts!next_actions_account_id_fkey(name)",
           )
           .gte("due_date", monthStart)
           .lte("due_date", monthEnd)
-          .or("kind.eq.VISIT,kind.is.null")
+          .or(AGENDA_KIND_FILTER)
           .order("due_date"),
         // Who each row belongs to, by name — memberships rather than the rep
         // scorecard, because the wall is EVERYBODY's: an admin who plans a
@@ -206,6 +209,7 @@ export function AgendaCalendar({
       if (list) list.push(r);
       else map.set(r.due_date, [r]);
     }
+    for (const list of map.values()) list.sort((a, b) => timeOrder(a.due_time, b.due_time));
     return map;
   }, [rows]);
 
@@ -494,6 +498,7 @@ export function AgendaCalendar({
                         {initialsOf(repNames.get(r.owner_id)!)}
                       </i>
                     )}
+                    {r.due_time && <b className="agcal-time">{formatTime(r.due_time)}</b>}
                     {r.accountName ?? r.action}
                   </span>
                 ))}
@@ -529,6 +534,10 @@ export function AgendaCalendar({
                     >
                       <span className="t-title block truncate">{r.action}</span>
                       <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {r.due_time && <b className="agcal-time">{formatTime(r.due_time)}</b>}
+                        {(r.kind === "CALL" || r.kind === "MEETING") && (
+                          <span className="tag">{KIND_LABEL[r.kind]}</span>
+                        )}
                         {r.owner_id && repNames.has(r.owner_id) && (
                           <span className="flex items-center gap-1 t-sub">
                             <i

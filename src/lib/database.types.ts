@@ -3405,6 +3405,8 @@ export type Database = {
           counterparty_account_id: string | null
           created_at: string
           due_date: string
+          due_time: string | null
+          duration_minutes: number | null
           entered_by: string | null
           hubspot_id: string | null
           id: string
@@ -3423,6 +3425,7 @@ export type Database = {
           project_id: string | null
           source: Database["public"]["Enums"]["next_action_source"]
           source_ref: string | null
+          time_zone: string | null
           updated_at: string
         }
         Insert: {
@@ -3435,6 +3438,8 @@ export type Database = {
           counterparty_account_id?: string | null
           created_at?: string
           due_date: string
+          due_time?: string | null
+          duration_minutes?: number | null
           entered_by?: string | null
           hubspot_id?: string | null
           id?: string
@@ -3453,6 +3458,7 @@ export type Database = {
           project_id?: string | null
           source?: Database["public"]["Enums"]["next_action_source"]
           source_ref?: string | null
+          time_zone?: string | null
           updated_at?: string
         }
         Update: {
@@ -3465,6 +3471,8 @@ export type Database = {
           counterparty_account_id?: string | null
           created_at?: string
           due_date?: string
+          due_time?: string | null
+          duration_minutes?: number | null
           entered_by?: string | null
           hubspot_id?: string | null
           id?: string
@@ -3483,6 +3491,7 @@ export type Database = {
           project_id?: string | null
           source?: Database["public"]["Enums"]["next_action_source"]
           source_ref?: string | null
+          time_zone?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -8650,6 +8659,8 @@ export type Database = {
           counterparty_account_id: string | null
           created_at: string
           due_date: string
+          due_time: string | null
+          duration_minutes: number | null
           entered_by: string | null
           hubspot_id: string | null
           id: string
@@ -8668,6 +8679,7 @@ export type Database = {
           project_id: string | null
           source: Database["public"]["Enums"]["next_action_source"]
           source_ref: string | null
+          time_zone: string | null
           updated_at: string
         }[]
         SetofOptions: {
@@ -8783,6 +8795,8 @@ export type Database = {
       membership_status: "active" | "suspended"
       next_action_kind:
         | "VISIT"
+        | "CALL"
+        | "MEETING"
         | "SAMPLE_FOLLOW_UP"
         | "QUOTE_FOLLOW_UP"
         | "DISPLAY_CHECK"
@@ -9059,6 +9073,8 @@ export const Constants = {
       membership_status: ["active", "suspended"],
       next_action_kind: [
         "VISIT",
+        "CALL",
+        "MEETING",
         "SAMPLE_FOLLOW_UP",
         "QUOTE_FOLLOW_UP",
         "DISPLAY_CHECK",

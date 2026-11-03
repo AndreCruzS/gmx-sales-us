@@ -11,10 +11,15 @@
 // that holds every id and date it returns against what it was actually shown.
 
 import { z } from "zod";
+import { normalizeTime } from "@/lib/domain/commitments";
 import { VISIT_OBJECTIVES } from "@/lib/domain/enums";
 
 export const COMMAND_KINDS = ["VISIT", "FOLLOW_UP", "QUOTE"] as const;
 export type CommandKind = (typeof COMMAND_KINDS)[number];
+
+/** What a follow-up is (2026-11-04): a call or a meeting with a time goes on the agenda. */
+export const FOLLOW_UP_TYPES = ["CALL", "MEETING", "TASK"] as const;
+export type FollowUpType = (typeof FOLLOW_UP_TYPES)[number];
 
 export const commandSchema = z.object({
   commands: z
@@ -33,6 +38,18 @@ export const commandSchema = z.object({
           .string()
           .nullable()
           .describe("YYYY-MM-DD, resolved from what was said against today; null if no day was said."),
+        time: z
+          .string()
+          .nullable()
+          .describe(
+            "HH:MM on a 24-hour clock when a time of day was said (at 2 → 14:00, 9am → 09:00, às 10h → 10:00, de manhã with no hour → null); null if no time was said.",
+          ),
+        follow_up_type: z
+          .enum(FOLLOW_UP_TYPES)
+          .nullable()
+          .describe(
+            "FOLLOW_UP only: CALL for a phone call; MEETING for a meeting, lunch or video call; TASK for anything else (email, send, sample, reminder). VISIT and QUOTE: null.",
+          ),
         action: z
           .string()
           .describe("A short imperative line for the agenda, in the language spoken."),
@@ -80,6 +97,10 @@ export interface Command {
   accountId: string | null;
   accountHeard: string | null;
   dueDate: string | null;
+  /** "HH:MM", or null when no time was said. */
+  time: string | null;
+  /** FOLLOW_UP only; null for a visit or a quote. */
+  followUpType: FollowUpType | null;
   action: string;
   objective: (typeof VISIT_OBJECTIVES)[number] | null;
   /** null = the speaker themselves. */
@@ -149,6 +170,7 @@ export function commandPrompt(
     `- Only what was asked. Small talk, or nothing actionable → an empty commands list.`,
     `- account_id ONLY from the list below, when the name clearly matches; otherwise null with account_heard set.`,
     `- action: short and concrete, in the language spoken (e.g. "Collect the decking quote", "Ligar ao comprador sobre a amostra").`,
+    `- time: only when a time of day was said; read "at 2" in working hours as 14:00. A call or a meeting with a time goes on the agenda; without one it is a reminder.`,
     // GMX'S OWN PEOPLE, one list (Andre, 2026-11-03: "Bia and João should be
     // recognizable as our admins"). A teammate is never a business: "call Bia"
     // is a follow-up WITH Bianca and needs no account; "ask John to send…" is
@@ -196,6 +218,13 @@ export function sanitizeCommands(
       accountId: c.account_id && accountIds.has(c.account_id) ? c.account_id : null,
       accountHeard: c.account_heard?.trim() || null,
       dueDate: realDate(c.due_date),
+      time: c.kind === "QUOTE" ? null : normalizeTime(c.time),
+      followUpType:
+        c.kind === "FOLLOW_UP"
+          ? c.follow_up_type && (FOLLOW_UP_TYPES as readonly string[]).includes(c.follow_up_type)
+            ? c.follow_up_type
+            : "TASK"
+          : null,
       action: c.action.trim().slice(0, 200),
       // OTHER needs a word on what (D48); the card asks rather than guess it.
       objective: c.kind === "VISIT" && c.objective !== "OTHER" ? c.objective : null,

@@ -3,6 +3,8 @@
 // flow both ways. The core (team-sync.ts) only knows these interfaces, so
 // it is proven with fakes and the adapters stay thin.
 
+import { DEFAULT_MINUTES, normalizeTime, slotKey, type AgendaKind } from "@/lib/domain/commitments";
+
 export const TEAM_CALENDAR_SUMMARY = "GMX Sales Team";
 
 /** An event as the calendar holds it. Private properties ride back as ids. */
@@ -14,6 +16,15 @@ export interface TeamEvent {
   nextActionId: string | null;
   membershipId: string | null;
   cancelled: boolean;
+  /** Ours only: the slot we last wrote ("10:00@America/New_York/60"), "" = all day. */
+  slot?: string;
+}
+
+/** A clock time on the event; null = all day. */
+export interface EventSlot {
+  time: string;
+  zone: string;
+  minutes: number;
 }
 
 export interface TeamEventPayload {
@@ -25,6 +36,8 @@ export interface TeamEventPayload {
   /** App-born: the event is all-day on the visit's day and the app sets it.
    *  Google-born: the admin's own date and clock are left alone. */
   pinDate: boolean;
+  /** App-born with a time (2026-11-04): a timed event instead of all-day. */
+  slot?: EventSlot | null;
 }
 
 export interface TeamCalendarPort {
@@ -56,6 +69,24 @@ export interface VisitRow {
   calendar_origin: "app" | "google" | null;
   accountName: string | null;
   ownerFirstName: string;
+  /** Timed commitments (2026-11-04). Absent on rows read before them. */
+  kind?: string | null;
+  due_time?: string | null;
+  time_zone?: string | null;
+  duration_minutes?: number | null;
+}
+
+/** The slot a row asks for, or null when it is all day. */
+export function slotOf(v: Pick<VisitRow, "kind" | "due_time" | "time_zone" | "duration_minutes">): EventSlot | null {
+  const time = normalizeTime(v.due_time);
+  if (!time || !v.time_zone) return null;
+  const kind = (v.kind ?? "VISIT") as AgendaKind;
+  return { time, zone: v.time_zone, minutes: v.duration_minutes ?? DEFAULT_MINUTES[kind] ?? 60 };
+}
+
+/** What a payload's slot reads as on the event, to compare with TeamEvent.slot. */
+export function slotKeyOf(s: EventSlot | null | undefined): string {
+  return s ? slotKey(s.time, s.zone, s.minutes) : "";
 }
 
 export interface TeamCalendarStore {

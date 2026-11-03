@@ -13,9 +13,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { CheckIcon } from "@/components/icons";
 import { VISIT_OBJECTIVES, humanize, type VisitObjective } from "@/lib/domain/enums";
+import { formatTime, timedFields } from "@/lib/domain/commitments";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
-import type { Command, CommandAccount, CommandRep, CommandTeammate } from "@/lib/voice/command";
+import type {
+  Command,
+  CommandAccount,
+  CommandRep,
+  CommandTeammate,
+  FollowUpType,
+} from "@/lib/voice/command";
 
 type Phase = "idle" | "recording" | "working";
 
@@ -29,6 +36,27 @@ const KIND_LABEL: Record<Command["kind"], string> = {
   FOLLOW_UP: "Follow-up",
   QUOTE: "Quote",
 };
+
+const FOLLOW_UP_LABEL: Record<FollowUpType, string> = {
+  CALL: "Call",
+  MEETING: "Meeting",
+  TASK: "To-do",
+};
+
+/**
+ * Where a card lands (2026-11-04): a visit always on the agenda; a call or a
+ * meeting on the agenda when it has a time, else on the routine list as a
+ * to-do — the rep's rule, "sem hora, continua como pendência".
+ */
+function lands(c: Pick<Card, "kind" | "followUpType" | "time">): "agenda" | "routine" | "quote" {
+  if (c.kind === "QUOTE") return "quote";
+  if (c.kind === "VISIT") return "agenda";
+  return c.followUpType !== "TASK" && c.followUpType !== null && c.time ? "agenda" : "routine";
+}
+
+function headLabel(c: Card): string {
+  return c.kind === "FOLLOW_UP" && c.followUpType ? FOLLOW_UP_LABEL[c.followUpType] : KIND_LABEL[c.kind];
+}
 
 const DAY = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -162,7 +190,14 @@ export default function SayPage() {
           owner_id: card.ownerId ?? profile.membershipId,
           due_date: card.dueDate,
           account_id: card.accountId,
-          ...(card.kind === "VISIT" ? { objective: card.objective, kind: "VISIT" } : {}),
+          ...(card.kind === "VISIT"
+            ? { objective: card.objective, kind: "VISIT" as const, ...timedFields(card.time, "VISIT") }
+            : {}),
+          // A timed call or meeting is an agenda commitment; without a time it
+          // stays a to-do and the database files it on the routine list.
+          ...(card.kind === "FOLLOW_UP" && lands(card) === "agenda" && card.followUpType !== "TASK" && card.followUpType
+            ? { kind: card.followUpType, ...timedFields(card.time, card.followUpType) }
+            : {}),
         },
         baseVersion: null,
         blobRef: null,
@@ -251,14 +286,20 @@ export default function SayPage() {
               <section key={c.key} className="card card-pad say-card">
                 <div className="say-card-head">
                   <p className="t-meta uppercase tracking-wide">
-                    {KIND_LABEL[c.kind]}
+                    {headLabel(c)}
                     {mate && <span className="say-mate"> · with {mate.name}</span>}
                   </p>
-                  {c.dueDate && <p className="t-meta">{DAY.format(new Date(`${c.dueDate}T12:00:00`))}</p>}
+                  {c.dueDate && (
+                    <p className="t-meta">
+                      {DAY.format(new Date(`${c.dueDate}T12:00:00`))}
+                      {c.time && lands(c) === "agenda" ? ` · ${formatTime(c.time)}` : ""}
+                    </p>
+                  )}
                 </div>
                 {c.done ? (
                   <p className="t-sub flex items-center gap-1.5">
-                    <CheckIcon size={16} /> {c.kind === "VISIT" ? "On the agenda" : "Added"} — {c.action}
+                    <CheckIcon size={16} />{" "}
+                    {lands(c) === "agenda" ? "On the agenda" : "On your routine list"} — {c.action}
                   </p>
                 ) : (
                   <>
@@ -300,6 +341,29 @@ export default function SayPage() {
                           aria-label="Which day"
                         />
                       )}
+                      {c.kind === "FOLLOW_UP" && (
+                        <select
+                          className="field"
+                          style={{ background: "var(--surface-page)" }}
+                          value={c.followUpType ?? "TASK"}
+                          onChange={(e) => patch(c.key, { followUpType: e.target.value as FollowUpType })}
+                          aria-label="What it is"
+                        >
+                          <option value="CALL">Call</option>
+                          <option value="MEETING">Meeting</option>
+                          <option value="TASK">To-do</option>
+                        </select>
+                      )}
+                      {(c.kind === "VISIT" || (c.kind === "FOLLOW_UP" && c.followUpType !== "TASK")) && (
+                        <input
+                          type="time"
+                          className="field"
+                          style={{ background: "var(--surface-page)" }}
+                          value={c.time ?? ""}
+                          onChange={(e) => patch(c.key, { time: e.target.value || null })}
+                          aria-label={c.kind === "VISIT" ? "What time (optional)" : "What time"}
+                        />
+                      )}
                       {c.kind === "VISIT" && (
                         <select
                           className="field"
@@ -336,7 +400,13 @@ export default function SayPage() {
                       )}
                     </div>
                     <button type="button" className="btn-primary say-go" onClick={() => void confirm(c)}>
-                      {c.kind === "VISIT" ? "Book it" : c.kind === "QUOTE" ? "Draft the quote" : "Add it"}
+                      {c.kind === "VISIT"
+                        ? "Book it"
+                        : c.kind === "QUOTE"
+                          ? "Draft the quote"
+                          : lands(c) === "agenda"
+                            ? "Put it on the agenda"
+                            : "Add it"}
                     </button>
                   </>
                 )}

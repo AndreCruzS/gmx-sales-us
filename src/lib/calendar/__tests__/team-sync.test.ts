@@ -396,3 +396,49 @@ describe("the review's findings (2026-10-12)", () => {
     expect(store.results[0].error).toBe("na-1: events.insert 400: bad");
   });
 });
+
+describe("timed commitments (2026-11-04)", () => {
+  it("writes a visit with a time as a timed event in its zone", async () => {
+    store.planned("na-t1", "2026-10-15", {
+      kind: "VISIT",
+      due_time: "10:00:00",
+      time_zone: "America/Los_Angeles",
+      duration_minutes: null,
+    });
+    const r = await syncTeamCalendar(cal, store, TODAY);
+    const ev = cal.events.get(r.calendarId)!.find((e) => e.nextActionId === "na-t1")!;
+    expect(cal.payloads.get(ev.eventId)!.slot).toEqual({
+      time: "10:00",
+      zone: "America/Los_Angeles",
+      minutes: 60,
+    });
+  });
+
+  it("a call defaults to half an hour, and a moved clock updates the event once", async () => {
+    const v = store.planned("na-t2", "2026-10-16", {
+      kind: "CALL",
+      action: "Call the buyer",
+      due_time: "14:00",
+      time_zone: "America/New_York",
+    });
+    const first = await syncTeamCalendar(cal, store, TODAY);
+    const ev = cal.events.get(first.calendarId)!.find((e) => e.nextActionId === "na-t2")!;
+    expect(cal.payloads.get(ev.eventId)!.slot?.minutes).toBe(30);
+
+    v.due_time = "15:30";
+    const moved = await syncTeamCalendar(cal, store, TODAY);
+    expect(moved.updated).toBe(1);
+    expect(cal.payloads.get(ev.eventId)!.slot?.time).toBe("15:30");
+
+    const replay = await syncTeamCalendar(cal, store, TODAY);
+    expect(replay.updated).toBe(0);
+    expect(replay.inserted).toBe(0);
+  });
+
+  it("a visit with no time stays all day", async () => {
+    store.planned("na-t3", "2026-10-17");
+    const r = await syncTeamCalendar(cal, store, TODAY);
+    const ev = cal.events.get(r.calendarId)!.find((e) => e.nextActionId === "na-t3")!;
+    expect(cal.payloads.get(ev.eventId)!.slot).toBeNull();
+  });
+});

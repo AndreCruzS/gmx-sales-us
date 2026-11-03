@@ -7719,3 +7719,30 @@ textarea.pkd-select {
     padding-inline: 28px;
   }
 }
+
+/* TIMED COMMITMENTS (2026-11-04): the clock and, for a call or a meeting,
+   its kind, at the head of the row's second line; the plan form's day and
+   time share a line. */
+.agenda-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+}
+.agenda-when b {
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.plan-when {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 9rem);
+  gap: 8px;
+}
+.agcal-time {
+  margin-right: 4px;
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}

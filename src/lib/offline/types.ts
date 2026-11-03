@@ -56,6 +56,7 @@ export interface CachedAgendaItem {
   opportunity_id: string | null;
   objective: string | null;
   kind: string | null; // next_action_kind (D-routine): null until the DB trigger infers it
+  due_time?: string | null; // timed commitments (2026-11-04): null = all day
   created_at: string; // routine's contextDate source (D-routine) — never edited, unlike updated_at
   updated_at: string; // baseVersion source for edits
 }

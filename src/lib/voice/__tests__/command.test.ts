@@ -56,6 +56,8 @@ describe("a follow-up with a teammate", () => {
         account_id: null,
         account_heard: "Bia",
         due_date: "2026-11-04",
+        time: null,
+        follow_up_type: null,
         action: "Call Bianca Souza at 9",
         objective: null,
         owner_membership_id: null,
@@ -88,6 +90,8 @@ describe("what comes back", () => {
             account_id: "a-ganahl-ana",
             account_heard: "Ganahl Anaheim",
             due_date: "2026-10-22",
+            time: null,
+            follow_up_type: null,
             action: "Collect the decking quote",
             objective: "COLLECT_QUOTE",
             owner_membership_id: "m-jason",
@@ -103,6 +107,8 @@ describe("what comes back", () => {
       accountId: "a-ganahl-ana",
       accountHeard: "Ganahl Anaheim",
       dueDate: "2026-10-22",
+      time: null,
+      followUpType: null,
       action: "Collect the decking quote",
       objective: "COLLECT_QUOTE",
       ownerId: "m-jason",
@@ -119,6 +125,8 @@ describe("what comes back", () => {
             account_id: "a-truckee",
             account_heard: "Truckee",
             due_date: "2026-02-30",
+            time: null,
+            follow_up_type: null,
             action: "Call the buyer",
             objective: "COLLECT_QUOTE",
             owner_membership_id: "m-nobody",
@@ -142,6 +150,8 @@ describe("what comes back", () => {
       account_id: null,
       account_heard: null,
       due_date: null,
+      time: null,
+      follow_up_type: null,
       action: "x",
       objective: null,
       owner_membership_id: null,
@@ -149,5 +159,57 @@ describe("what comes back", () => {
     };
     expect(sanitizeCommands({ commands: [one, one, one, one] }, shown, reps)).toHaveLength(3);
     expect(sanitizeCommands({ commands: [{ ...one, action: "  " }] }, shown, reps)).toEqual([]);
+  });
+});
+
+describe("times and follow-up types (2026-11-04)", () => {
+  const base = {
+    account_id: null,
+    account_heard: null,
+    due_date: "2026-11-09",
+    objective: null,
+    owner_membership_id: null,
+    teammate_membership_id: null,
+  };
+
+  it("keeps a call's time and type", () => {
+    const [c] = sanitizeCommands(
+      { commands: [{ ...base, kind: "FOLLOW_UP", time: "14:00", follow_up_type: "CALL", action: "Call Truckee" }] },
+      [],
+      [],
+    );
+    expect(c.time).toBe("14:00");
+    expect(c.followUpType).toBe("CALL");
+  });
+
+  it("drops a time that is not one, and any time on a quote", () => {
+    const [bad, quote] = sanitizeCommands(
+      {
+        commands: [
+          { ...base, kind: "VISIT", time: "25:00", follow_up_type: null, action: "Visit" },
+          { ...base, kind: "QUOTE", time: "10:00", follow_up_type: null, action: "Ipe 1x6" },
+        ],
+      },
+      [],
+      [],
+    );
+    expect(bad.time).toBeNull();
+    expect(quote.time).toBeNull();
+  });
+
+  it("reads a follow-up with no type as a to-do, and a visit as having none", () => {
+    const [f, v] = sanitizeCommands(
+      {
+        commands: [
+          { ...base, kind: "FOLLOW_UP", time: null, follow_up_type: null, action: "Send the samples" },
+          { ...base, kind: "VISIT", time: "9:30", follow_up_type: "CALL", action: "Visit" },
+        ],
+      },
+      [],
+      [],
+    );
+    expect(f.followUpType).toBe("TASK");
+    expect(v.followUpType).toBeNull();
+    expect(v.time).toBe("09:30");
   });
 });

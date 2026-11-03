@@ -26,6 +26,8 @@
 import { humanize } from "@/lib/domain/enums";
 import {
   TEAM_CALENDAR_SUMMARY,
+  slotKeyOf,
+  slotOf,
   type TeamCalendarPort,
   type TeamCalendarStore,
   type TeamEvent,
@@ -83,6 +85,7 @@ function payloadFor(v: VisitRow): TeamEventPayload {
     nextActionId: v.id,
     membershipId: v.owner_id,
     pinDate: !born,
+    slot: born ? null : slotOf(v),
   };
 }
 
@@ -292,7 +295,8 @@ async function reconcileVisit(
   } else if (
     live.date !== want.date ||
     live.title !== want.title ||
-    live.membershipId !== want.membershipId
+    live.membershipId !== want.membershipId ||
+    (live.slot ?? "") !== slotKeyOf(want.slot)
   ) {
     await calendar.updateEvent(calendarId, live.eventId, want);
     report.updated++;

@@ -116,7 +116,7 @@ export class SupabaseSyncBackend implements SyncBackend {
         // months out — e.g. a display check) are cached regardless of the
         // visit horizon.
         .select(
-          "id, action, due_date, completed_at, account_id, opportunity_id, objective, kind, created_at, updated_at",
+          "id, action, due_date, due_time, completed_at, account_id, opportunity_id, objective, kind, created_at, updated_at",
         )
         // Open work, plus anything closed in the last couple of days. Home's
         // day spine has to show what a rep just logged as "done" — caching

@@ -3,8 +3,9 @@
 // was ever issued). Every call renews the access token from the refresh
 // token first; the cache in oauth.ts makes that free within the hour.
 
+import { endOf } from "@/lib/domain/commitments";
 import { accessTokenFromRefresh, type OAuthClient } from "@/lib/google/oauth";
-import type { TeamCalendarPort, TeamEvent, TeamEventPayload } from "./team-port";
+import { slotKeyOf, type TeamCalendarPort, type TeamEvent, type TeamEventPayload } from "./team-port";
 
 const API = "https://www.googleapis.com/calendar/v3";
 const APP = "commercial-os";
@@ -25,6 +26,16 @@ function allDay(date: string) {
   const dayAfter = new Date(`${date}T00:00:00Z`);
   dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
   return { start: { date }, end: { date: dayAfter.toISOString().slice(0, 10) } };
+}
+
+/** All day, or (2026-11-04) the clock time in the zone it was said in. */
+function when(e: TeamEventPayload) {
+  if (!e.slot) return allDay(e.date);
+  const end = endOf(e.date, e.slot.time, e.slot.minutes);
+  return {
+    start: { dateTime: `${e.date}T${e.slot.time}:00`, timeZone: e.slot.zone },
+    end: { dateTime: `${end.date}T${end.time}:00`, timeZone: e.slot.zone },
+  };
 }
 
 export class GoogleTeamCalendar implements TeamCalendarPort {
@@ -138,6 +149,7 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
           nextActionId: ours ? (priv.next_action_id ?? null) : null,
           membershipId: ours ? (priv.membership_id ?? null) : null,
           cancelled: it.status === "cancelled",
+          slot: ours ? (priv.slot ?? "") : "",
         });
       }
       pageToken = body.nextPageToken ?? "";
@@ -148,7 +160,13 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
   private props(e: TeamEventPayload) {
     return {
       extendedProperties: {
-        private: { app: APP, next_action_id: e.nextActionId, membership_id: e.membershipId },
+        private: {
+          app: APP,
+          next_action_id: e.nextActionId,
+          membership_id: e.membershipId,
+          // What clock we wrote, so a moved time is seen on the next pass.
+          ...(e.pinDate ? { slot: slotKeyOf(e.slot) } : {}),
+        },
       },
     };
   }
@@ -158,7 +176,7 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
       await this.call("POST", `${cal(calendarId)}/events`, {
         summary: e.title,
         description: e.description,
-        ...allDay(e.date),
+        ...when(e),
         ...(this.opts.colorId ? { colorId: this.opts.colorId } : {}),
         ...this.props(e),
       }),
@@ -176,7 +194,7 @@ export class GoogleTeamCalendar implements TeamCalendarPort {
       await this.call("PATCH", `${cal(calendarId)}/events/${encodeURIComponent(eventId)}`, {
         summary: e.title,
         ...(e.description ? { description: e.description } : {}),
-        ...(e.pinDate ? allDay(e.date) : {}),
+        ...(e.pinDate ? when(e) : {}),
         ...this.props(e),
       }),
       "events.patch",

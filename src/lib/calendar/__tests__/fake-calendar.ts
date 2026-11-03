@@ -1,6 +1,6 @@
 // A Google Calendar in memory, shared by the team and mirror tests.
 
-import type { TeamCalendarPort, TeamEvent, TeamEventPayload } from "../team-port";
+import { slotKeyOf, type TeamCalendarPort, type TeamEvent, type TeamEventPayload } from "../team-port";
 
 export class FakeCalendar implements TeamCalendarPort {
   calendars = new Map<string, string>();
@@ -43,9 +43,13 @@ export class FakeCalendar implements TeamCalendarPort {
       nextActionId: e.nextActionId,
       membershipId: e.membershipId,
       cancelled: false,
+      slot: slotKeyOf(e.slot),
     });
+    this.payloads.set(eventId, e);
     return eventId;
   }
+  /** The last payload written per event — what Google would hold. */
+  payloads = new Map<string, TeamEventPayload>();
   async updateEvent(id: string, eventId: string, e: TeamEventPayload) {
     const ev = this.events.get(id)!.find((x) => x.eventId === eventId)!;
     Object.assign(ev, {
@@ -53,7 +57,9 @@ export class FakeCalendar implements TeamCalendarPort {
       title: e.title,
       nextActionId: e.nextActionId,
       membershipId: e.membershipId,
+      ...(e.pinDate ? { slot: slotKeyOf(e.slot) } : {}),
     });
+    this.payloads.set(eventId, e);
   }
   async deleteEvent(id: string, eventId: string) {
     this.events.set(

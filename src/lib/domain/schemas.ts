@@ -87,7 +87,12 @@ export const nextActionCreateSchema = z.object({
   // routine list groups by. Mirrors debriefDraftSchema's next_actions.kind
   // (src/lib/voice/draft.ts) — DISPLAY_CHECK is deliberately excluded, since
   // that kind is only ever derived from an account, never created directly.
-  kind: z.enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"]).nullish(),
+  kind: z.enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "CALL", "MEETING", "OTHER"]).nullish(),
+  // Timed commitments (2026-11-04): a wall-clock time in its zone, and how
+  // long. All three or none; a CALL or MEETING always has them (DB check).
+  due_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullish(),
+  time_zone: z.string().min(1).nullish(),
+  duration_minutes: z.number().int().min(5).max(600).nullish(),
 
   // Dealers page (2026-10-30): the to-do's type and where it came from. Zod
   // strips unknown keys, so a field not listed here vanishes in the outbox.
