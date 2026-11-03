@@ -6775,6 +6775,67 @@ button.dl-todo:hover {
   color: var(--ink-secondary);
 }
 
+/* On a phone each follow-up is a card, not a table row (Andre, 2026-11-03):
+   the action, the status as a full-width coloured bar, the latest note, then
+   priority · alert · owner on one line. The table's head goes; the band head
+   wraps under the dealer's name. Same button, same drawer. */
+@media (max-width: 639px) {
+  .pk-board {
+    min-width: 0;
+  }
+  .pk-cols {
+    display: none;
+  }
+  .pk-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "task task task"
+      "status status status"
+      "note note note"
+      "prio alert owner";
+    gap: 10px 10px;
+    padding: 14px 14px 12px;
+    align-items: center;
+  }
+  .pk-row > .pk-c {
+    padding: 0;
+  }
+  .pk-row > .pk-task {
+    grid-area: task;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .pk-row > .pk-cell {
+    grid-area: status;
+    min-height: 36px;
+    border-radius: var(--r-control);
+  }
+  .pk-row > .pk-note {
+    grid-area: note;
+  }
+  .pk-row > .pk-c:nth-child(4) {
+    grid-area: prio;
+  }
+  .pk-row > .pk-alert {
+    grid-area: alert;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .pk-row > .pk-owner {
+    grid-area: owner;
+    justify-content: flex-end;
+    text-align: right;
+  }
+  .pk-band-name {
+    flex: 1 1 calc(100% - 30px);
+    min-width: 0;
+  }
+  .pk-meter {
+    width: 72px;
+  }
+}
+
 .pk-foot {
   border-top: 1px solid var(--rule);
   padding: 8px 12px;
