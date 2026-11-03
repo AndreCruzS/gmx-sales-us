@@ -195,6 +195,8 @@ export default function DealersPage() {
           .from("activities")
           .select("primary_account_id, occurred_at")
           .in("activity_type", VISIT_TYPES)
+          // A visit on the agenda has not happened yet: it is not the last one.
+          .lte("occurred_at", new Date().toISOString())
           .order("occurred_at", { ascending: false })
           .order("id")
           .range(from, to),

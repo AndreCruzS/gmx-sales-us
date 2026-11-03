@@ -178,8 +178,9 @@ export function DealerTable({
           from={from}
           shown={slice.length}
           total={total}
+          status={`${from + 1}–${from + slice.length} of ${total} dealers · page ${page + 1} of ${pages}`}
           onPage={setPage}
-          className="fu-pager"
+          className="dl-pager"
         />
       )}
     </section>

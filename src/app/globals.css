@@ -6296,6 +6296,17 @@ button.dl-owe-row:hover {
     margin-top: 8px;
   }
 }
+/* The dealer table's pager (2026-11-03): inside the card's gutter, under a
+   rule, with buttons big enough to hit. */
+.pager.dl-pager {
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--rule);
+}
+.dl-pager .pager-btn {
+  width: 34px;
+  height: 34px;
+  background: var(--surface-card);
+}
 .dl-table-card {
   min-width: 0;
 }

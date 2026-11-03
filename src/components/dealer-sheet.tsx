@@ -153,6 +153,8 @@ async function loadSheet(accountId: string): Promise<Omit<Extract<Loaded, { stat
         .select("id, activity_type, occurred_at, owner_id, what_happened")
         .eq("primary_account_id", accountId)
         .in("activity_type", VISIT_TYPES)
+        // A visit on the agenda has not happened yet: it is not the last one.
+        .lte("occurred_at", new Date().toISOString())
         .order("occurred_at", { ascending: false })
         .order("id")
         .range(from, to),
