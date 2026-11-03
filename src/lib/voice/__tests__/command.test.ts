@@ -72,7 +72,12 @@ describe("a follow-up with a teammate", () => {
     expect(c.accountHeard).toBeNull();
   });
   it("refuses a teammate it was not shown, and one on a visit", () => {
-    expect(sanitizeCommands(raw({ teammate_membership_id: "m-x" }), [], [], team)[0].teammateId).toBeNull();
+    expect(
+      sanitizeCommands(raw({ teammate_membership_id: "m-x", action: "Plan the week" }), [], [], team)[0]
+        .teammateId,
+    ).toBeNull();
+    // An unknown id, but the action names Bianca: she is who was meant.
+    expect(sanitizeCommands(raw({ teammate_membership_id: "m-x" }), [], [], team)[0].teammateId).toBe("m-bia");
     expect(sanitizeCommands(raw({ kind: "VISIT" }), [], [], team)[0].teammateId).toBeNull();
   });
 });
@@ -211,5 +216,45 @@ describe("times and follow-up types (2026-11-04)", () => {
     expect(f.followUpType).toBe("TASK");
     expect(v.followUpType).toBeNull();
     expect(v.time).toBe("09:30");
+  });
+});
+
+describe("the speaker is never the teammate (2026-11-04)", () => {
+  const team = [
+    { membershipId: "m-tj", name: "TJ Rep", role: "rep, the speaker" },
+    { membershipId: "m-bia", name: "Bianca Admin", role: "admin" },
+    { membershipId: "m-joao", name: "Joao Manager", role: "manager" },
+  ];
+  const meet = (action: string) => ({
+    commands: [
+      {
+        kind: "FOLLOW_UP" as const,
+        account_id: null,
+        account_heard: null,
+        due_date: "2026-11-06",
+        time: null,
+        follow_up_type: "MEETING" as const,
+        action,
+        objective: null,
+        owner_membership_id: null,
+        teammate_membership_id: "m-tj",
+      },
+    ],
+  });
+
+  it("takes the colleague the action names instead", () => {
+    expect(sanitizeCommands(meet("Meet Bianca"), [], [], team, "m-tj")[0].teammateId).toBe("m-bia");
+    expect(sanitizeCommands(meet("Call Bia about the deck"), [], [], team, "m-tj")[0].teammateId).toBe("m-bia");
+    expect(sanitizeCommands(meet("Email João the list"), [], [], team, "m-tj")[0].teammateId).toBe("m-joao");
+  });
+
+  it("fills a dropped colleague from the action when there is no account", () => {
+    const raw = meet("Meet Bianca");
+    raw.commands[0].teammate_membership_id = null as unknown as "m-tj";
+    expect(sanitizeCommands(raw, [], [], team, "m-tj")[0].teammateId).toBe("m-bia");
+  });
+
+  it("leaves no teammate when the action names nobody else", () => {
+    expect(sanitizeCommands(meet("Plan the week"), [], [], team, "m-tj")[0].teammateId).toBeNull();
   });
 });

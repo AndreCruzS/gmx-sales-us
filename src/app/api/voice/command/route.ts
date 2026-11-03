@@ -104,27 +104,32 @@ export async function POST(req: NextRequest) {
     .limit(1000);
   const shown = candidateAccounts(transcript, (rows ?? []) as CommandAccount[]);
 
-  // GMX's own people, as the caller may see them: who a follow-up can be
-  // WITH ("call Bia"), and — for a desk role — who it can be booked FOR.
-  const { data: people } = await supabase
-    .from("memberships")
-    .select("id, role, users(full_name)")
-    .eq("org_id", orgId)
-    .eq("status", "active");
-  const team: CommandTeammate[] = (
-    (people ?? []) as unknown as { id: string; role: string; users: { full_name: string | null } | null }[]
-  )
-    .filter((r) => r.users?.full_name)
+  // GMX's own people: who a follow-up can be WITH ("call Bia"). Through
+  // pk_member_names, because a rep reads no colleague's membership row — read
+  // straight, a rep's list held only himself, and "meet Bia" found nobody
+  // (2026-11-04).
+  const { data: people } = await supabase.rpc("pk_member_names");
+  const team: CommandTeammate[] = ((people ?? []) as { id: string; full_name: string | null; role: string; status: string }[])
+    .filter((r) => r.status === "active" && r.full_name)
     .map((r) => ({
       membershipId: r.id,
-      name: r.users!.full_name as string,
+      name: r.full_name as string,
       // The speaker is on the list too, so "Bia" is never read as a business.
       role: r.id === me.id ? `${r.role}, the speaker` : r.role,
     }));
+  // Who a desk role may book FOR: only the members RLS lets them write for.
+  const { data: mine } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("org_id", orgId)
+    .eq("status", "active");
+  const writable = new Set(((mine ?? []) as { id: string }[]).map((r) => r.id));
   const reps: CommandRep[] =
     me.role === "rep"
       ? []
-      : team.filter((t) => t.membershipId !== me.id).map((t) => ({ membershipId: t.membershipId, name: t.name }));
+      : team
+          .filter((t) => t.membershipId !== me.id && writable.has(t.membershipId))
+          .map((t) => ({ membershipId: t.membershipId, name: t.name }));
 
   try {
     const { object } = await generateObject({
@@ -135,7 +140,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({
       transcript,
-      commands: sanitizeCommands(object, shown, reps, team),
+      commands: sanitizeCommands(object, shown, reps, team, me.id),
       accounts: shown,
       reps,
       team,

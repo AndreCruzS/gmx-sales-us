@@ -201,12 +201,36 @@ function realDate(s: string | null): string | null {
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s ? null : s;
 }
 
+/** The short forms people use for each other (the prompt's own list). */
+const ALIASES: Record<string, string[]> = { bianca: ["bia"], joao: ["john"], anthony: ["tony"] };
+
+function fold(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/**
+ * The teammate an action names, other than the speaker — "Meet Bianca" →
+ * Bianca. Used when the model set the speaker as the person the follow-up is
+ * WITH, which can never be right (2026-11-04: "meet Bia Friday" came back as
+ * "with TJ" for TJ).
+ */
+function namedTeammate(action: string, team: readonly CommandTeammate[], speakerId: string): string | null {
+  const said = new Set(fold(action).split(/[^a-z]+/).filter(Boolean));
+  const hits = team.filter((t) => {
+    if (t.membershipId === speakerId) return false;
+    const first = fold(t.name).split(/\s+/)[0] ?? "";
+    return [first, ...(ALIASES[first] ?? [])].some((w) => w && said.has(w));
+  });
+  return hits.length === 1 ? hits[0].membershipId : null;
+}
+
 /** Holds what the model said against what it was shown. */
 export function sanitizeCommands(
   raw: RawCommands,
   shownAccounts: readonly CommandAccount[],
   reps: readonly CommandRep[],
   team: readonly CommandTeammate[] = [],
+  speakerId: string | null = null,
 ): Command[] {
   const accountIds = new Set(shownAccounts.map((a) => a.id));
   const repIds = new Set(reps.map((r) => r.membershipId));
@@ -234,6 +258,21 @@ export function sanitizeCommands(
           ? c.teammate_membership_id
           : null,
     }))
+    // Nobody follows up WITH themselves: the speaker as teammate is the model
+    // misreading who was named; take the colleague the action names, if one.
+    .map((c) =>
+      speakerId && c.teammateId === speakerId
+        ? { ...c, teammateId: namedTeammate(c.action, team, speakerId) }
+        : c,
+    )
+    // A follow-up with no business and no colleague, whose action names one
+    // colleague ("Meet Bianca"), is with that colleague — the model drops the
+    // id more often when one sentence asks for several things.
+    .map((c) =>
+      c.kind === "FOLLOW_UP" && !c.teammateId && !c.accountId
+        ? { ...c, teammateId: namedTeammate(c.action, team, speakerId ?? "") }
+        : c,
+    )
     // A teammate heard as a business name is not a business to pick.
     .map((c) => (c.teammateId && !c.accountId ? { ...c, accountHeard: null } : c))
     .filter((c) => c.action.length > 0);
