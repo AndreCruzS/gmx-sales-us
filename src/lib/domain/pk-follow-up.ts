@@ -257,3 +257,13 @@ export function mirrorUpdate(old: PkItem, patch: PkItemPatch, me: string, now: s
   }
   return n;
 }
+
+/** Where Tab goes inside a modal of `count` focusable controls when focus is
+ *  at `at` (-1 = outside it): null lets the browser move on its own. */
+export function trapTarget(count: number, at: number, back: boolean): number | null {
+  if (count === 0) return null;
+  if (at === -1) return back ? count - 1 : 0;
+  if (back && at === 0) return count - 1;
+  if (!back && at === count - 1) return 0;
+  return null;
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  trapTarget,
   alertDate,
   bandProgress,
   daysToAlert,
@@ -245,5 +246,25 @@ describe("mirrorUpdate", () => {
   it("no change stamps nobody", () => {
     const n = mirrorUpdate(item(), { progress: "NOT_STARTED" }, "me", NOW);
     expect(n.last_changed_by).toBeNull();
+  });
+});
+
+describe("trapTarget", () => {
+  it("wraps Tab from the last control to the first", () => {
+    expect(trapTarget(5, 4, false)).toBe(0);
+  });
+  it("wraps Shift+Tab from the first control to the last", () => {
+    expect(trapTarget(5, 0, true)).toBe(4);
+  });
+  it("lets the browser move between controls in the middle", () => {
+    expect(trapTarget(5, 2, false)).toBeNull();
+    expect(trapTarget(5, 2, true)).toBeNull();
+  });
+  it("pulls focus back in when it sits outside the drawer", () => {
+    expect(trapTarget(5, -1, false)).toBe(0);
+    expect(trapTarget(5, -1, true)).toBe(4);
+  });
+  it("does nothing when there is nothing to focus", () => {
+    expect(trapTarget(0, -1, false)).toBeNull();
   });
 });

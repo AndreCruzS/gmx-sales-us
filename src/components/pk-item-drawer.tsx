@@ -26,6 +26,7 @@ import {
   PROGRESS_LABEL,
   alertDate,
   priorityPatch,
+  trapTarget,
   type PkBand,
   type PkItem,
   type PkNote,
@@ -64,6 +65,9 @@ function subscribeOverlay(cb: () => void): () => void {
   mq.addEventListener("change", cb);
   return () => mq.removeEventListener("change", cb);
 }
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function daysBetween(from: string, to: string): number {
   const t = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
@@ -167,6 +171,24 @@ export function PkItemDrawer({
       if (isOverlay() && opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);
+  // Over the page the drawer is modal: Tab and Shift+Tab go round inside it
+  // and never reach the board, the toolbar or the top bar behind.
+  const asideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !isOverlay() || !asideRef.current) return;
+      const inside = Array.from(asideRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.getClientRects().length > 0,
+      );
+      const at = inside.indexOf(document.activeElement as HTMLElement);
+      const next = trapTarget(inside.length, at, e.shiftKey);
+      if (next === null) return;
+      e.preventDefault();
+      inside[next].focus();
+    };
+    window.addEventListener("keydown", onTab);
+    return () => window.removeEventListener("keydown", onTab);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -211,6 +233,7 @@ export function PkItemDrawer({
 
   return (
     <aside
+      ref={asideRef}
       className="pkd"
       aria-label={item.action}
       role={overlay ? "dialog" : undefined}
