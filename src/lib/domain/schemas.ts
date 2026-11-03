@@ -93,6 +93,11 @@ export const nextActionCreateSchema = z.object({
   due_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullish(),
   time_zone: z.string().min(1).nullish(),
   duration_minutes: z.number().int().min(5).max(600).nullish(),
+  // PK by voice (2026-11-04): a PK follow-up arrives with its priority, the
+  // days that set its alert, and its status. Listed or Zod strips them.
+  priority: z.enum(["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"]).nullish(),
+  priority_days: z.number().int().min(0).nullish(),
+  progress: z.enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"]).nullish(),
 
   // Dealers page (2026-10-30): the to-do's type and where it came from. Zod
   // strips unknown keys, so a field not listed here vanishes in the outbox.
@@ -353,6 +358,24 @@ export const accountNoteCreateSchema = z.object({
 });
 export type AccountNoteCreate = z.infer<typeof accountNoteCreateSchema>;
 
+// PK by voice (2026-11-04): a voice-drafted PK follow-up's checklist and its
+// first note ride the outbox after their item (FIFO), so they work offline.
+// The database stamps created_by / author_id from the signed-in member.
+export const nextActionSubtaskCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  next_action_id: uuid,
+  title: z.string().trim().min(1),
+  position: z.number().int().min(0),
+});
+
+export const nextActionNoteCreateSchema = z.object({
+  id: uuid,
+  org_id: uuid,
+  next_action_id: uuid,
+  body: z.string().trim().min(1),
+});
+
 export const ENTITY_TABLES = {
   activity: "activities",
   next_action: "next_actions",
@@ -365,6 +388,8 @@ export const ENTITY_TABLES = {
   account_relationship: "account_relationships",
   account_note: "account_notes",
   opportunity: "opportunities",
+  next_action_subtask: "next_action_subtasks",
+  next_action_note: "next_action_notes",
 } as const;
 export type EntityType = keyof typeof ENTITY_TABLES;
 
@@ -383,6 +408,8 @@ export const outboxPayloadSchemas: Record<string, z.ZodTypeAny> = {
   "account:update": accountUpdateSchema,
   "account_relationship:create": accountRelationshipCreateSchema,
   "account_note:create": accountNoteCreateSchema,
+  "next_action_subtask:create": nextActionSubtaskCreateSchema,
+  "next_action_note:create": nextActionNoteCreateSchema,
   "opportunity:create": opportunityCreateSchema,
   "opportunity:update": opportunityUpdateSchema,
 };

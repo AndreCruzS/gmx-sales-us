@@ -41,7 +41,7 @@ export const sayDraftSchema = debriefDraftSchema.extend({
         "and, when has_visit is false, every to-do as well. Empty when none.",
     ),
 });
-export type SayDraftRaw = z.infer<typeof sayDraftSchema>;
+export type SayDraftRaw = z.input<typeof sayDraftSchema>;
 
 /**
  * What a processed capture stores in ai_draft: the debrief draft as before,
@@ -168,6 +168,10 @@ export function sanitizeSayDraft(
       due_date: c.dueDate as string,
       objective: null,
       kind: null,
+      priority: null,
+      progress: null,
+      subtasks: [],
+      note: null,
     }));
   return {
     ...draft,

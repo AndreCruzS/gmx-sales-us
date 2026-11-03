@@ -77,6 +77,28 @@ export const debriefDraftSchema = z.object({
         kind: z
           .enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"])
           .nullable(),
+        // PK by voice (spec 2026-11-04 one-mic §4, part A), drafted only when
+        // the note is a PK. Defaults keep every draft stored before them valid.
+        // Delegate is not drafted until Bianca says what it means.
+        priority: z
+          .enum(["DO_NOW", "PLAN"])
+          .nullable()
+          .default(null)
+          .describe("PK only: DO_NOW when urgent or due within a day; PLAN when a later date was said; null when no urgency was said"),
+        progress: z
+          .enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING"])
+          .nullable()
+          .default(null)
+          .describe("PK only: WAITING when the ball is with the dealer; WORKING_ON_IT when already under way; else NOT_STARTED"),
+        subtasks: z
+          .array(z.string())
+          .default([])
+          .describe("PK only: the parts of THIS follow-up when the rep lists them (the PDF, the data sheets, the sample book); empty otherwise"),
+        note: z
+          .string()
+          .nullable()
+          .default(null)
+          .describe("PK only: context said about this item that is not the action itself, at most two sentences, never invented"),
       }),
     )
     .describe("every commitment or follow-up mentioned, with a date each"),
@@ -118,7 +140,9 @@ export const debriefDraftSchema = z.object({
         "or complete a detail that was not said. Empty when none.",
     ),
 });
-export type DebriefDraft = z.infer<typeof debriefDraftSchema>;
+// The INPUT shape: drafts stored before a field existed lack it, so every
+// defaulted field reads as optional here and is defaulted where it is used.
+export type DebriefDraft = z.input<typeof debriefDraftSchema>;
 
 // The hallucination guard (spec: dispositions must never reference an item
 // id the model invented). Filters routine_dispositions down to ones whose
@@ -185,7 +209,16 @@ contacts, exactly as spoken. A recited list of contacts ("she sent me the
 contacts: Robert at Atwater, robertd@...") is the classic case: every entry
 becomes one contact. Spell e-mails out plainly (lowercase); never guess at or
 complete a detail that was not said. People mentioned only in passing, with
-nothing to reach them by and no stated role, are not contacts.`;
+nothing to reach them by and no stated role, are not contacts.
+
+A note about a product-knowledge training — a "PK", a "treinamento", a training
+given to a dealer's staff — is activity_type PK_TRAINING. On a PK only, each
+next action also carries: priority (DO_NOW when urgent or due within a day,
+PLAN when a later date was said, null when no urgency was said); progress
+(WAITING when the ball is with the dealer, WORKING_ON_IT when already under
+way, else NOT_STARTED); subtasks (only when the rep lists the parts of one
+follow-up — separate follow-ups stay separate actions); and note (context said
+about that item, never invented). On any other note leave them null or empty.`;
 
   const parts = [base];
 

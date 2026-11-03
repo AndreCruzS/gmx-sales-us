@@ -25,6 +25,41 @@ import { getOfflineLayer, type CachedAccount, type CachedAgendaItem } from "@/li
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildRoutineOps } from "@/lib/voice/fanout";
 import { hasVisit, type SayStoredDraft } from "@/lib/voice/say";
+import {
+  DEFAULT_DAYS,
+  PRIORITY_LABEL,
+  PROGRESS_LABEL,
+  alertDate,
+  pkDateOf,
+  type Priority,
+} from "@/lib/domain/pk-follow-up";
+
+/** Whole days from one calendar date to another. */
+function daysFrom(from: string, to: string): number {
+  const t = (d: string) => {
+    const [y, m, dd] = d.split("-").map(Number);
+    return Date.UTC(y, m - 1, dd);
+  };
+  return Math.round((t(to) - t(from)) / 86_400_000);
+}
+
+/** The priorities a person may pick on a voice-drafted PK item (Eliminate is a board move). */
+const PICKABLE: Priority[] = ["DO_NOW", "PLAN", "DELEGATE"];
+/** The statuses a new item can start in. */
+const STARTS = ["NOT_STARTED", "WORKING_ON_IT", "WAITING"] as const;
+type Start = (typeof STARTS)[number];
+
+/** A follow-up row as the sheet edits it: the draft's fields, defaulted. */
+interface ActionRow {
+  action: string;
+  due_date: string;
+  objective: string | null;
+  kind: "SAMPLE_FOLLOW_UP" | "QUOTE_FOLLOW_UP" | "VISIT" | "OTHER" | null;
+  priority: Priority | null;
+  progress: Start;
+  subtasks: string[];
+  note: string;
+}
 
 export interface CaptureRow {
   id: string;
@@ -103,7 +138,23 @@ export function DebriefSheet({
   const [potential, setPotential] = useState(draft.commercial_potential ?? "");
   const [outcomes, setOutcomes] = useState<ActivityOutcome[]>(draft.outcomes);
   const [followUp, setFollowUp] = useState(draft.follow_up_required);
-  const [actions, setActions] = useState(draft.next_actions);
+  // PK by voice (2026-11-04): a PK's follow-ups carry priority, status,
+  // checklist and note to the PK board. Old drafts lack them: defaulted here.
+  const [actions, setActions] = useState<ActionRow[]>(() =>
+    (draft.next_actions ?? []).map((na) => ({
+      action: na.action,
+      due_date: na.due_date,
+      objective: na.objective ?? null,
+      kind: na.kind ?? null,
+      priority: na.priority ?? null,
+      progress: na.progress ?? "NOT_STARTED",
+      subtasks: na.subtasks ?? [],
+      note: na.note ?? "",
+    })),
+  );
+  const pkDate = pkDateOf(capture.created_at);
+  const patchAction = (i: number, p: Partial<ActionRow>) =>
+    setActions((prev) => prev.map((x, j) => (j === i ? { ...x, ...p } : x)));
   // Routine confirmations (D-routine, Task 10): pre-checked — the rep
   // unchecks anything the model got wrong rather than opting in from zero.
   // Task 9 finding, carried: routine_dispositions is required-without-default
@@ -168,6 +219,9 @@ export function DebriefSheet({
     }
     setBusy(true);
     setError(null);
+    // A PK's follow-ups all take the PK path below (priority, status,
+    // checklist, note), typed ones included; the routine fan-out skips them.
+    const pk = visit && activityType === "PK_TRAINING";
     // Compensation: the fan-out is multiple outbox ops; if any enqueue fails,
     // roll back the ones already queued so a retry can't create duplicates.
     const enqueuedSeqs: number[] = [];
@@ -291,9 +345,23 @@ export function DebriefSheet({
       for (const na of visit ? actions : []) {
         if (!na.action.trim() || !na.due_date) continue;
         // Typed commitments (a kind set) are created by the routine fan-out
-        // below instead, which is where their kind actually gets persisted.
-        if (na.kind) continue;
+        // below instead, which is where their kind actually gets persisted —
+        // except on a PK, where every follow-up goes to the board from here.
+        if (na.kind && !pk) continue;
         const naId = crypto.randomUUID();
+        // The PK board's rule: alert = PK date + days, written into due_date.
+        // A spoken date sets the days; a date before the PK is the PK day.
+        const days = pk && na.priority ? Math.max(0, daysFrom(pkDate, na.due_date)) : null;
+        const pkFields = pk
+          ? {
+              ...(na.kind ? { kind: na.kind } : {}),
+              priority: na.priority,
+              priority_days: days,
+              ...(days !== null ? { due_date: alertDate(pkDate, days) } : {}),
+              progress: na.progress,
+              source: "VISIT_CAPTURE" as const,
+            }
+          : {};
         enqueuedSeqs.push(
           await layer.sync.enqueue({
             clientId: naId,
@@ -311,11 +379,41 @@ export function DebriefSheet({
               // it, so drop OTHER rather than trip the check.
               objective:
                 na.objective === "OTHER" ? null : (na.objective ?? null),
+              ...pkFields,
             },
             baseVersion: null,
             blobRef: null,
           }),
         );
+        if (!pk) continue;
+        // Its checklist, then its first note — after the item (FIFO).
+        const titles = na.subtasks.map((t) => t.trim()).filter(Boolean);
+        for (let k = 0; k < titles.length; k++) {
+          const subId = crypto.randomUUID();
+          enqueuedSeqs.push(
+            await layer.sync.enqueue({
+              clientId: subId,
+              entityType: "next_action_subtask",
+              op: "create",
+              payload: { id: subId, org_id: profile.orgId, next_action_id: naId, title: titles[k], position: k },
+              baseVersion: null,
+              blobRef: null,
+            }),
+          );
+        }
+        if (na.note.trim()) {
+          const noteId = crypto.randomUUID();
+          enqueuedSeqs.push(
+            await layer.sync.enqueue({
+              clientId: noteId,
+              entityType: "next_action_note",
+              op: "create",
+              payload: { id: noteId, org_id: profile.orgId, next_action_id: naId, body: na.note.trim() },
+              baseVersion: null,
+              blobRef: null,
+            }),
+          );
+        }
       }
 
       // The people the note carried, still checked at Send (D9): each becomes
@@ -373,9 +471,16 @@ export function DebriefSheet({
           // the same empty-field skip here, before they ever reach
           // buildRoutineOps — mirrors `if (!na.action.trim() || !na.due_date)
           // continue` in the untyped loop above.
-          next_actions: actions.filter(
-            (na) => na.kind && na.action.trim() && na.due_date,
-          ),
+          next_actions: pk
+            ? []
+            : actions
+                .filter((na) => na.kind && na.action.trim() && na.due_date)
+                .map((na) => ({
+                  action: na.action,
+                  due_date: na.due_date,
+                  objective: (na.objective as never) ?? null,
+                  kind: na.kind,
+                })),
           routine_dispositions: dispositions
             .filter((d) => d.confirmed)
             .map((d) => ({
@@ -414,7 +519,12 @@ export function DebriefSheet({
             clientId: id,
             entityType: "next_action",
             op: "create",
-            payload: bookingPayload(b, { id, orgId: profile.orgId, membershipId: profile.membershipId }),
+            payload: {
+              ...bookingPayload(b, { id, orgId: profile.orgId, membershipId: profile.membershipId }),
+              // Booked at a PK, for that dealer: it is that PK's follow-up too,
+              // and shows on its band on the PK board.
+              ...(pk && b.accountId === accountId ? { activity_id: activityId } : {}),
+            },
             baseVersion: null,
             blobRef: null,
           }),
@@ -656,7 +766,8 @@ export function DebriefSheet({
           <div className="flex flex-col gap-2">
             <span className="t-hint">What happens next</span>
             {actions.map((na, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="flex flex-col gap-2">
+              <div className="flex gap-2">
                 <input
                   value={na.action}
                   onChange={(e) =>
@@ -690,12 +801,103 @@ export function DebriefSheet({
                   <XIcon size={14} />
                 </button>
               </div>
+              {activityType === "PK_TRAINING" && (
+                <details className="pk-row-details" open={Boolean(na.priority || na.subtasks.length || na.note || na.progress !== "NOT_STARTED")}>
+                  <summary className="t-hint">
+                    {[
+                      na.priority ? PRIORITY_LABEL[na.priority] : "No priority",
+                      PROGRESS_LABEL[na.progress],
+                      na.subtasks.length ? `${na.subtasks.length} subtasks` : null,
+                      na.note ? "note" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </summary>
+                  <div className="pk-row-fields">
+                    <select
+                      className="field"
+                      aria-label="Priority"
+                      value={na.priority ?? ""}
+                      onChange={(e) => {
+                        const p = (e.target.value || null) as Priority | null;
+                        // As on the board: picking a priority resets the alert
+                        // to the PK date + that priority's days.
+                        const d = p ? DEFAULT_DAYS[p] : null;
+                        patchAction(i, { priority: p, ...(d !== null ? { due_date: alertDate(pkDate, d) } : {}) });
+                      }}
+                    >
+                      <option value="">No priority</option>
+                      {PICKABLE.map((p) => (
+                        <option key={p} value={p}>
+                          {PRIORITY_LABEL[p]}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="field"
+                      aria-label="Status"
+                      value={na.progress}
+                      onChange={(e) => patchAction(i, { progress: e.target.value as Start })}
+                    >
+                      {STARTS.map((p) => (
+                        <option key={p} value={p}>
+                          {PROGRESS_LABEL[p]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {na.subtasks.map((t, k) => (
+                    <div key={k} className="flex gap-2">
+                      <input
+                        className="field min-w-0 flex-1"
+                        value={t}
+                        aria-label={`Subtask ${k + 1}`}
+                        onChange={(e) =>
+                          patchAction(i, { subtasks: na.subtasks.map((x, m) => (m === k ? e.target.value : x)) })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn-quiet shrink-0"
+                        aria-label={`Remove subtask: ${t || "untitled"}`}
+                        onClick={() => patchAction(i, { subtasks: na.subtasks.filter((_, m) => m !== k) })}
+                      >
+                        <XIcon size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="t-action text-left"
+                    onClick={() => patchAction(i, { subtasks: [...na.subtasks, ""] })}
+                  >
+                    + Add a subtask
+                  </button>
+                  <textarea
+                    className="field"
+                    rows={2}
+                    placeholder="A note for the board"
+                    value={na.note}
+                    onChange={(e) => patchAction(i, { note: e.target.value })}
+                  />
+                </details>
+              )}
+              </div>
             ))}
             <button
               onClick={() =>
                 setActions((prev) => [
                   ...prev,
-                  { action: "", due_date: "", objective: null, kind: null },
+                  {
+                    action: "",
+                    due_date: "",
+                    objective: null,
+                    kind: null,
+                    priority: null,
+                    progress: "NOT_STARTED",
+                    subtasks: [],
+                    note: "",
+                  },
                 ])
               }
               className="t-action text-left"

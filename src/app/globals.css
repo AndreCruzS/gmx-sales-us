@@ -7775,3 +7775,27 @@ textarea.pkd-select {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* PK by voice (2026-11-04): a PK follow-up's priority, status, checklist and
+   note under its row on the check-and-save sheet, folded when nothing was
+   drafted for it. */
+.pk-row-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 2px solid var(--rule);
+}
+.pk-row-details > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+.pk-row-details[open] {
+  gap: 8px;
+}
+.pk-row-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
