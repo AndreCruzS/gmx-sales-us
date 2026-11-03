@@ -515,19 +515,40 @@ export default function DealersPage() {
             count={counts.T1}
             note={
               tiers.length > 0
-                ? `${Math.round(t1Share * 100)}% of the LF`
+                ? `the biggest buyers · ${Math.round(t1Share * 100)}% of the LF`
                 : "no sales on file in the window"
             }
           />
-          <TierTile tier="T2" label="Tier 2" count={counts.T2} note="bought in 3 months or more" />
-          <TierTile tier="T3" label="Tier 3" count={counts.T3} note="small or now and then" />
+          <TierTile tier="T2" label="Tier 2" count={counts.T2} note="steady · bought in 3+ months" />
+          <TierTile tier="T3" label="Tier 3" count={counts.T3} note="occasional · under 3 months" />
           <TierTile
             tier={null}
             label="No history"
             count={untiered.length}
-            note="dealers with no sales on file"
+            note="dealer accounts with no sales on file"
           />
         </div>
+        {/* THE LEGEND (Andre, 2026-11-03): what a tier means, in one place,
+            so a T1 chip anywhere on the page can be read. */}
+        <dl className="dl-legend">
+          <dt>
+            <span className="dl-tier" data-tier="T1">T1</span>
+          </dt>
+          <dd>The dealers who together bought 80% of all LF{windowLabel ? ` in ${windowLabel}` : " in the last twelve months"}, biggest first.</dd>
+          <dt>
+            <span className="dl-tier" data-tier="T2">T2</span>
+          </dt>
+          <dd>Everyone else who bought in at least 3 of those 12 months.</dd>
+          <dt>
+            <span className="dl-tier" data-tier="T3">T3</span>
+          </dt>
+          <dd>Bought in fewer than 3 of the 12 months.</dd>
+          <dt className="dl-legend-none">—</dt>
+          <dd>No history: a dealer account the distributors&rsquo; files have never named.</dd>
+        </dl>
+        <p className="t-hint dl-legend-foot">
+          Tiers come from the distributors&rsquo; sales files and move on their own as new months load; nobody sets one by hand.
+        </p>
       </section>
       ) : (
         <section data-desk="tiles" data-span="full">

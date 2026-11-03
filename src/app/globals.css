@@ -5878,6 +5878,36 @@ input[type="datetime-local"] {
   background: var(--surface-accent);
   color: var(--accent-ink);
 }
+/* The tier legend under the four figures (2026-11-03). */
+.dl-legend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--surface-card);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.dl-legend dd {
+  margin: 0;
+}
+.dl-legend-none {
+  width: 26px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+.dl-legend-foot {
+  margin-top: 6px;
+  padding-left: 2px;
+}
+@media (max-width: 767px) {
+  .dl-legend {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
 .dl-pill {
   display: inline-flex;
   align-items: center;
