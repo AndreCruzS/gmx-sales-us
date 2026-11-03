@@ -91,8 +91,11 @@ reset role;
 -- TJ cannot see Deon's item: no reads, no subtasks, cannot add one.
 select tests.set_claims('tj@gmxgroup.com', 'gmx-us');
 set local role authenticated;
+-- (Counted on that item only: since 20261103140000 TJ reads the subtasks in
+-- his own seeded PK.)
 select is(
-  (select count(*) from next_action_subtasks) + (select count(*) from next_action_reads),
+  (select count(*) from next_action_subtasks where next_action_id = 'e0000000-0000-0000-0000-0000000000d1')
+  + (select count(*) from next_action_reads where next_action_id = 'e0000000-0000-0000-0000-0000000000d1'),
   0::bigint, 'a rep who cannot see the item reads no subtasks or reads');
 select throws_ok(
   $$ insert into next_action_subtasks (org_id, next_action_id, title) values

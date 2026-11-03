@@ -129,10 +129,13 @@ select is(
   'Called the branch, they will ship Friday', 'the body is unchanged');
 
 -- TJ cannot see Deon's item, so he sees none of its notes or versions, and cannot add one.
+-- (Counted on that item only: since 20261103140000 TJ reads the notes in his
+-- own seeded PK, which are Bianca's and João's.)
 select tests.set_claims('tj@gmxgroup.com', 'gmx-us');
 set local role authenticated;
 select is(
-  (select count(*) from next_action_notes) + (select count(*) from next_action_note_versions),
+  (select count(*) from next_action_notes where next_action_id = 'e0000000-0000-0000-0000-0000000000c1')
+  + (select count(*) from next_action_note_versions where note_id = 'e1000000-0000-0000-0000-0000000000c1'),
   0::bigint, 'a rep who cannot see the item reads no notes or versions');
 select throws_ok(
   $$ insert into next_action_notes (org_id, next_action_id, author_id, body) values
