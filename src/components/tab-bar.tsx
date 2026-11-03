@@ -69,7 +69,8 @@ const TABS = [
 const REPS_TAB = { href: "/reps", label: "Reps", Icon: UsersIcon } as const;
 
 // DEALERS (Andre, 2026-10-30): the desk's bar became SALES · DEALERS · REPS ·
-// ACCOUNTS, Add where it always sat. Dealers is the action board Bianca and
+// ACCOUNTS, Add in the middle (since 2026-11-03: Sales · Dealers · Add ·
+// Reps · Accounts). Dealers is the action board Bianca and
 // João asked for on 2026-10-27 — tiers, markets, the to-dos. It wears the
 // sheet: Quotes, the only other tab with that icon, is not on the desk's bar.
 // Contacts left the desk's bar to make the room: /contacts is reached from a
@@ -231,7 +232,7 @@ export function TabBar() {
   // slots is all the phone has, and Quotes is still in the Add menu. The
   // desk's bar is untouched.
   const assistant = profile?.role === "support";
-  // The desk's bar: Sales · Dealers · Reps · Add · Accounts. The Agenda and
+  // The desk's bar: Sales · Dealers · Add · Reps · Accounts. The Agenda and
   // the Quotes are reached from the Reps board, and the Reps tab stays lit
   // while the reader is on either of them — they are that board's readings.
   // Contacts is reached from the Accounts board the same way, so on the desk
@@ -320,21 +321,6 @@ export function TabBar() {
           </Link>
         )}
 
-        {/* Then Reps. Lit on the Agenda and the Quotes too, because for a
-            desk role those are this board's readings, not destinations of
-            their own. */}
-        {desk && (
-          <Link
-            href={REPS_TAB.href}
-            className="tab"
-            data-active={underReps(pathname)}
-            aria-current={underReps(pathname) ? "page" : undefined}
-          >
-            <REPS_TAB.Icon size={21} />
-            {REPS_TAB.label}
-          </Link>
-        )}
-
         {repTabs.map(({ href, label, Icon }) => {
           const TabIcon = iconOf(label, Icon);
           return (
@@ -365,6 +351,22 @@ export function TabBar() {
           </span>
           <span className="tab-capture-label">Add</span>
         </button>
+
+        {/* Reps, straight after Add so Add sits in the middle of the five
+            (Andre, 2026-11-03). Lit on the Agenda and the Quotes too, because for a
+            desk role those are this board's readings, not destinations of
+            their own. */}
+        {desk && (
+          <Link
+            href={REPS_TAB.href}
+            className="tab"
+            data-active={underReps(pathname)}
+            aria-current={underReps(pathname) ? "page" : undefined}
+          >
+            <REPS_TAB.Icon size={21} />
+            {REPS_TAB.label}
+          </Link>
+        )}
 
         {moneyTabs.map(({ href, label, Icon }) => (
           <Link
