@@ -23,7 +23,7 @@
 // sheet on a phone. Its "Sales facts" open the dealer module, so the board
 // sits inside a DealerModuleProvider with the rows it already holds.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { DealerModuleProvider } from "@/components/dealer-module";
 import { DealerSheet } from "@/components/dealer-sheet";
 import { DealersTabs } from "@/components/dealers-tabs";
@@ -561,7 +561,7 @@ export default function DealersPage() {
                 type="button"
                 className="dl-market"
                 aria-pressed={picked === m.key}
-                style={{ borderLeftColor: regionHue.get(m.key) ?? "var(--cat-rest)" }}
+                style={{ "--mk": regionHue.get(m.key) ?? "var(--cat-rest)" } as CSSProperties}
                 onClick={() => pick(picked === m.key ? null : m.key)}
               >
                 <span className="dl-market-name">{m.name}</span>

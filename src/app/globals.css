@@ -5878,18 +5878,6 @@ input[type="datetime-local"] {
   background: var(--surface-accent);
   color: var(--accent-ink);
 }
-.dl-tile[data-tier="T1"] {
-  border-top: 3px solid var(--accent-deep);
-}
-.dl-tile[data-tier="T2"] {
-  border-top: 3px solid color-mix(in srgb, var(--accent) 45%, var(--surface-card));
-}
-.dl-tile[data-tier="T3"] {
-  border-top: 3px solid var(--surface-sunken);
-}
-.dl-tile[data-tier="none"] {
-  border-top: 3px dashed var(--rule);
-}
 .dl-pill {
   display: inline-flex;
   align-items: center;
@@ -5935,7 +5923,6 @@ input[type="datetime-local"] {
   text-align: left;
   background: var(--surface-page);
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--cat-rest);
   border-radius: var(--r-control);
   cursor: pointer;
 }
@@ -5951,9 +5938,22 @@ input[type="datetime-local"] {
   outline-offset: 2px;
 }
 .dl-market-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: var(--text-md);
   font-weight: 700;
   color: var(--ink-primary);
+}
+/* The market's colour on the map, as a dot beside its name (no side
+   border since 2026-11-03). */
+.dl-market-name::before {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mk, var(--cat-rest));
 }
 .dl-market-tiers {
   font-family: var(--font-fig);
