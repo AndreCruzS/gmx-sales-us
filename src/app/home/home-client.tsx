@@ -25,7 +25,7 @@ import {
   BuildingIcon,
   CalendarIcon,
   FileIcon,
-  MicrophoneIcon,
+  CheckIcon,
   PlusIcon,
   SearchIcon,
   XIcon,
@@ -833,9 +833,10 @@ export default function HomeClient() {
               {[
                 {
                   href: "/record",
-                  Icon: MicrophoneIcon,
-                  title: "Talk it through",
-                  sub: "Log a visit in 20 seconds",
+                  // The microphone is Say it's (2026-11-04); this door logs.
+                  Icon: CheckIcon,
+                  title: "Log a visit",
+                  sub: "What happened, in 20 seconds",
                 },
                 {
                   href: "/visits",

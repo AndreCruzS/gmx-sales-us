@@ -90,18 +90,22 @@ interface AddItem {
 
 const ADD_ITEMS: readonly AddItem[] = [
   // Say it (Andre, 2026-10-20): one sentence books a visit, a follow-up or
-  // starts a quote, each confirmed on a card — nearest the thumb.
+  // starts a quote, each confirmed on a card — nearest the thumb. It wears the
+  // one microphone in the menu (Andre, 2026-11-04): two voice buttons side by
+  // side read as the same thing twice.
   {
     href: "/say",
     label: "Say it",
     hint: "Book, chase or quote in one sentence",
-    Icon: CheckIcon,
+    Icon: MicrophoneIcon,
   },
+  // Was "Voice note": named for what it is for, logging what happened at a
+  // visit — by voice or typed, offline too (/record).
   {
     href: "/record",
-    label: "Voice note",
-    hint: "Log a visit in 20 seconds",
-    Icon: MicrophoneIcon,
+    label: "Log a visit",
+    hint: "What happened, in 20 seconds",
+    Icon: CheckIcon,
   },
   {
     href: "/visits?plan=new",
