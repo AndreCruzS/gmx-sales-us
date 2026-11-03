@@ -25,6 +25,7 @@ import {
   stepCountIs,
   tool,
 } from "ai";
+import { TRANSCRIBE_MODEL } from "@/lib/voice/models";
 import { z } from "zod";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -36,8 +37,6 @@ import {
 
 export const maxDuration = 120;
 
-const TRANSCRIBE_MODEL =
-  process.env.VOICE_TRANSCRIBE_MODEL ?? "openai/gpt-4o-mini-transcribe";
 const AUDIO_FALLBACK_MODEL =
   process.env.VOICE_AUDIO_FALLBACK_MODEL ?? "google/gemini-3.5-flash";
 const AGENT_MODEL =

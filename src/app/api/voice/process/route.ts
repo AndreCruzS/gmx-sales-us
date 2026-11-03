@@ -13,6 +13,7 @@ import {
   generateObject,
   generateText,
 } from "ai";
+import { TRANSCRIBE_MODEL, teamNames, transcribePrompt } from "@/lib/voice/models";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import {
   debriefDraftSchema,
@@ -24,8 +25,6 @@ import {
 
 export const maxDuration = 120;
 
-const TRANSCRIBE_MODEL =
-  process.env.VOICE_TRANSCRIBE_MODEL ?? "openai/gpt-4o-mini-transcribe";
 const AUDIO_FALLBACK_MODEL =
   process.env.VOICE_AUDIO_FALLBACK_MODEL ?? "google/gemini-3.5-flash";
 const EXTRACT_MODEL =
@@ -60,11 +59,13 @@ async function transcribeAudio(
   audio: Uint8Array,
   mediaType: string,
   language: string,
+  prompt: string,
 ): Promise<string> {
   try {
     const result = await transcribe({
       model: gateway.transcriptionModel(TRANSCRIBE_MODEL),
       audio,
+      providerOptions: { openai: { prompt } },
     });
     if (result.text.trim()) return result.text;
     throw new Error("empty transcript");
@@ -119,6 +120,10 @@ export async function POST() {
     return NextResponse.json({ error: "no membership" }, { status: 403 });
   }
 
+  // The team's names, for the transcriber (lib/voice/models.ts). Read once
+  // per call, through the service role, so a rep's note can name the desk.
+  const sttPrompt = transcribePrompt(await teamNames(service, orgId));
+
   // Only the caller's own captures, only ones ready to process.
   const { data: captures, error } = await service
     .from("voice_captures")
@@ -151,6 +156,7 @@ export async function POST() {
           new Uint8Array(await blob.arrayBuffer()),
           mimeFromPath(capture.audio_path),
           language,
+          sttPrompt,
         );
       }
       if (!transcript?.trim()) throw new Error("nothing to transcribe");

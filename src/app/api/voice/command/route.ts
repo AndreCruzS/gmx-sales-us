@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { experimental_transcribe as transcribe, gateway, generateObject, generateText } from "ai";
+import { TRANSCRIBE_MODEL, teamNames, transcribePrompt } from "@/lib/voice/models";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { orgIdFromJwt } from "@/lib/supabase/jwt";
 import {
@@ -21,8 +22,6 @@ import {
 
 export const maxDuration = 60;
 
-const TRANSCRIBE_MODEL =
-  process.env.VOICE_TRANSCRIBE_MODEL ?? "openai/gpt-4o-mini-transcribe";
 const AUDIO_FALLBACK_MODEL =
   process.env.VOICE_AUDIO_FALLBACK_MODEL ?? "google/gemini-3.5-flash";
 const EXTRACT_MODEL =
@@ -33,10 +32,14 @@ function todayPacific(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
 }
 
-async function heard(file: Blob): Promise<string> {
+async function heard(file: Blob, prompt: string): Promise<string> {
   const audio = new Uint8Array(await file.arrayBuffer());
   try {
-    const r = await transcribe({ model: gateway.transcriptionModel(TRANSCRIBE_MODEL), audio });
+    const r = await transcribe({
+      model: gateway.transcriptionModel(TRANSCRIBE_MODEL),
+      audio,
+      providerOptions: { openai: { prompt } },
+    });
     if (r.text.trim()) return r.text.trim();
   } catch {
     // fall through to the audio model
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest) {
     if (file.size > 15 * 1024 * 1024) {
       return NextResponse.json({ error: "audio too large" }, { status: 413 });
     }
-    transcript = await heard(file);
+    transcript = await heard(file, transcribePrompt(await teamNames(supabase)));
   }
   if (!transcript) return NextResponse.json({ error: "nothing heard" }, { status: 422 });
 

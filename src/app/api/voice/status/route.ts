@@ -9,12 +9,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { experimental_transcribe as transcribe, gateway, generateText } from "ai";
+import { TRANSCRIBE_MODEL, teamNames, transcribePrompt } from "@/lib/voice/models";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 
-const TRANSCRIBE_MODEL =
-  process.env.VOICE_TRANSCRIBE_MODEL ?? "openai/gpt-4o-mini-transcribe";
 const AUDIO_FALLBACK_MODEL =
   process.env.VOICE_AUDIO_FALLBACK_MODEL ?? "google/gemini-3.5-flash";
 const SUMMARY_MODEL =
@@ -45,6 +44,7 @@ export async function POST(req: NextRequest) {
     const result = await transcribe({
       model: gateway.transcriptionModel(TRANSCRIBE_MODEL),
       audio,
+      providerOptions: { openai: { prompt: transcribePrompt(await teamNames(supabase)) } },
     });
     transcript = result.text.trim();
     if (!transcript) throw new Error("empty transcript");
