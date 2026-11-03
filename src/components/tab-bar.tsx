@@ -88,16 +88,17 @@ interface AddItem {
   Icon: (p: IconProps) => React.ReactElement;
 }
 
+// Bottom to top: the menu rises from the + button (column-reverse), so the
+// first entry sits nearest the thumb and the last at the top. Read from the
+// top, it is Say it, Quote, Plan a visit, Log a visit, Company (Andre,
+// 2026-11-04: "o say it tinha que estar no topo, depois quote, depois plan a
+// visit e por ultimo company").
 const ADD_ITEMS: readonly AddItem[] = [
-  // Say it (Andre, 2026-10-20): one sentence books a visit, a follow-up or
-  // starts a quote, each confirmed on a card — nearest the thumb. It wears the
-  // one microphone in the menu (Andre, 2026-11-04): two voice buttons side by
-  // side read as the same thing twice.
   {
-    href: "/say",
-    label: "Say it",
-    hint: "Book, chase or quote in one sentence",
-    Icon: MicrophoneIcon,
+    href: "/accounts/new",
+    label: "Company",
+    hint: "A new door in the patch",
+    Icon: BuildingIcon,
   },
   // Was "Voice note": named for what it is for, logging what happened at a
   // visit — by voice or typed, offline too (/record).
@@ -119,11 +120,15 @@ const ADD_ITEMS: readonly AddItem[] = [
     hint: "Price something for an account",
     Icon: FileIcon,
   },
+  // Say it (Andre, 2026-10-20): one sentence books a visit, a follow-up or
+  // starts a quote, each confirmed on a card — nearest the thumb. It wears the
+  // one microphone in the menu (Andre, 2026-11-04): two voice buttons side by
+  // side read as the same thing twice.
   {
-    href: "/accounts/new",
-    label: "Company",
-    hint: "A new door in the patch",
-    Icon: BuildingIcon,
+    href: "/say",
+    label: "Say it",
+    hint: "Book, chase or quote in one sentence",
+    Icon: MicrophoneIcon,
   },
 ];
 
@@ -221,8 +226,9 @@ export function TabBar() {
   // offering this to a manager would be offering a form that fails on save.
   // Until the profile resolves this is the rep's list, which is the same default
   // the home switch takes — capture must never wait on a role lookup.
+  // The desk's entry sits just above Company, so Say it stays on top for everyone.
   const addItems = isAdmin(profile?.role)
-    ? [...ADD_ITEMS, ADMIN_ADD_ITEM]
+    ? [ADD_ITEMS[0], ADMIN_ADD_ITEM, ...ADD_ITEMS.slice(1)]
     : ADD_ITEMS;
 
   const isActive = (href: string) =>
