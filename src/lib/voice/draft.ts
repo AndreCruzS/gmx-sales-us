@@ -3,6 +3,7 @@
 // This is a DRAFT — nothing becomes a record until the rep reviews it (D9).
 
 import { z } from "zod";
+import { MATRIX_RULES } from "@/lib/domain/eisenhower";
 import {
   ACTIVITY_OUTCOMES,
   ACTIVITY_TYPES,
@@ -79,12 +80,30 @@ export const debriefDraftSchema = z.object({
           .nullable(),
         // PK by voice (spec 2026-11-04 one-mic §4, part A), drafted only when
         // the note is a PK. Defaults keep every draft stored before them valid.
-        // Delegate is not drafted until Bianca says what it means.
-        priority: z
-          .enum(["DO_NOW", "PLAN"])
+        // The priority is NOT drafted: the model answers the Eisenhower
+        // matrix's two questions and lib/domain/eisenhower.ts (quadrantOf)
+        // turns them into Do now / Plan / Delegate / Eliminate (Bianca,
+        // 2026-11-03). Drafts stored before it may still carry a `priority`.
+        urgent: z
+          .boolean()
           .nullable()
           .default(null)
-          .describe("PK only: DO_NOW when urgent or due within a day; PLAN when a later date was said; null when no urgency was said"),
+          .describe("PK only: the matrix's URGENT answer; null on any other note"),
+        important: z
+          .boolean()
+          .nullable()
+          .default(null)
+          .describe("PK only: the matrix's IMPORTANT answer; null on any other note"),
+        asked_by_dealer: z
+          .boolean()
+          .nullable()
+          .default(null)
+          .describe("PK only: true when the dealer asked for it or GMX promised it to them"),
+        priority_reason: z
+          .string()
+          .nullable()
+          .default(null)
+          .describe('PK only: at most 15 words, "Urgent: … · Not important: …"'),
         progress: z
           .enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING"])
           .nullable()
@@ -213,12 +232,17 @@ nothing to reach them by and no stated role, are not contacts.
 
 A note about a product-knowledge training — a "PK", a "treinamento", a training
 given to a dealer's staff — is activity_type PK_TRAINING. On a PK only, each
-next action also carries: priority (DO_NOW when urgent or due within a day,
-PLAN when a later date was said, null when no urgency was said); progress
+next action also carries: urgent, important and priority_reason (the matrix
+below); asked_by_dealer (true when the dealer asked for it or it was promised
+to them); a due_date that is the date said, or when none was said the capture
+date + 1 day (urgent and important), + 2 days (urgent only) or + 7 days
+(otherwise); progress
 (WAITING when the ball is with the dealer, WORKING_ON_IT when already under
 way, else NOT_STARTED); subtasks (only when the rep lists the parts of one
 follow-up — separate follow-ups stay separate actions); and note (context said
-about that item, never invented). On any other note leave them null or empty.`;
+about that item, never invented). On any other note leave them null or empty.
+
+${MATRIX_RULES}`;
 
   const parts = [base];
 

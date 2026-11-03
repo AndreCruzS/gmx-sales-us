@@ -26,7 +26,9 @@ describe("PK by voice (2026-11-04)", () => {
           due_date: "2026-11-04",
           objective: null,
           kind: null,
-          priority: "DO_NOW",
+          urgent: true,
+          important: false,
+          priority_reason: "Urgent: dealer quotes Friday · Not important: anyone can send it",
           progress: "WAITING",
           subtasks: ["PDF"],
           note: "Urgent.",
@@ -38,10 +40,17 @@ describe("PK by voice (2026-11-04)", () => {
       ...base,
       next_actions: [{ action: "x", due_date: "2026-11-04", objective: null, kind: null }],
     });
-    expect(old.next_actions[0]).toMatchObject({ priority: null, progress: null, subtasks: [], note: null });
+    expect(old.next_actions[0]).toMatchObject({
+      urgent: null,
+      important: null,
+      priority_reason: null,
+      progress: null,
+      subtasks: [],
+      note: null,
+    });
   });
 
-  it("never drafts Delegate, Stuck or Done", () => {
+  it("never drafts a priority, Stuck or Done: the matrix answers stand in", () => {
     const one = (p: Record<string, unknown>) =>
       debriefDraftSchema.shape.next_actions.element.safeParse({
         action: "x",
@@ -50,7 +59,7 @@ describe("PK by voice (2026-11-04)", () => {
         kind: null,
         ...p,
       }).success;
-    expect(one({ priority: "DELEGATE" })).toBe(false);
+    expect(one({ urgent: "yes" })).toBe(false);
     expect(one({ progress: "STUCK" })).toBe(false);
     expect(one({ progress: "DONE" })).toBe(false);
   });

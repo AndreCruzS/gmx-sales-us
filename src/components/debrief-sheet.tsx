@@ -33,6 +33,7 @@ import {
   pkDateOf,
   type Priority,
 } from "@/lib/domain/pk-follow-up";
+import { draftedQuadrant } from "@/lib/domain/eisenhower";
 
 /** Whole days from one calendar date to another. */
 function daysFrom(from: string, to: string): number {
@@ -43,11 +44,33 @@ function daysFrom(from: string, to: string): number {
   return Math.round((t(to) - t(from)) / 86_400_000);
 }
 
-/** The priorities a person may pick on a voice-drafted PK item (Eliminate is a board move). */
+/** The priorities a person may pick on a voice-drafted PK item. Eliminate is
+ *  not one: an item worth eliminating is simply not saved (keep unticked). */
 const PICKABLE: Priority[] = ["DO_NOW", "PLAN", "DELEGATE"];
 /** The statuses a new item can start in. */
 const STARTS = ["NOT_STARTED", "WORKING_ON_IT", "WAITING"] as const;
 type Start = (typeof STARTS)[number];
+
+/** The matrix's answer for a drafted row (Bianca, 2026-11-03). An older
+ *  draft's own `priority` stands; Eliminate becomes "not saved unless kept". */
+function matrixRow(na: {
+  urgent?: boolean | null;
+  important?: boolean | null;
+  asked_by_dealer?: boolean | null;
+  priority_reason?: string | null;
+}): Pick<ActionRow, "priority" | "reason" | "keep"> {
+  const legacy = (na as { priority?: Priority | null }).priority ?? null;
+  const q = draftedQuadrant(na.urgent, na.important, na.asked_by_dealer) ?? legacy;
+  return {
+    priority: q === "ELIMINATE" ? null : q,
+    // When the dealer-asked guard overruled "Not urgent", the reason says so.
+    reason:
+      na.asked_by_dealer && na.urgent === false && na.priority_reason
+        ? na.priority_reason.replace(/^Not urgent:[^·]*/, "Urgent: the dealer asked for it ")
+        : (na.priority_reason ?? null),
+    keep: q !== "ELIMINATE",
+  };
+}
 
 /** A follow-up row as the sheet edits it: the draft's fields, defaulted. */
 interface ActionRow {
@@ -56,6 +79,10 @@ interface ActionRow {
   objective: string | null;
   kind: "SAMPLE_FOLLOW_UP" | "QUOTE_FOLLOW_UP" | "VISIT" | "OTHER" | null;
   priority: Priority | null;
+  /** Why the matrix put it there, as the AI read it ("Urgent: … · Not important: …"). */
+  reason: string | null;
+  /** False for an item the matrix says to eliminate, until the person keeps it. */
+  keep: boolean;
   progress: Start;
   subtasks: string[];
   note: string;
@@ -146,7 +173,7 @@ export function DebriefSheet({
       due_date: na.due_date,
       objective: na.objective ?? null,
       kind: na.kind ?? null,
-      priority: na.priority ?? null,
+      ...matrixRow(na),
       progress: na.progress ?? "NOT_STARTED",
       subtasks: na.subtasks ?? [],
       note: na.note ?? "",
@@ -344,6 +371,7 @@ export function DebriefSheet({
       }
       for (const na of visit ? actions : []) {
         if (!na.action.trim() || !na.due_date) continue;
+        if (pk && !na.keep) continue;
         // Typed commitments (a kind set) are created by the routine fan-out
         // below instead, which is where their kind actually gets persisted —
         // except on a PK, where every follow-up goes to the board from here.
@@ -790,6 +818,8 @@ export function DebriefSheet({
                     )
                   }
                   className="field"
+                  // .field is width:100%; beside the action it must keep to its own size.
+                  style={{ width: "auto", flex: "0 0 auto" }}
                 />
                 <button
                   onClick={() =>
@@ -801,7 +831,20 @@ export function DebriefSheet({
                   <XIcon size={14} />
                 </button>
               </div>
-              {activityType === "PK_TRAINING" && (
+              {activityType === "PK_TRAINING" && na.reason && (
+                <p className="pk-row-reason t-hint">{na.reason}</p>
+              )}
+              {activityType === "PK_TRAINING" && !na.keep && (
+                <label className="pk-row-eliminate t-hint">
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={() => patchAction(i, { keep: true })}
+                  />
+                  Neither urgent nor important — not saved. Keep it
+                </label>
+              )}
+              {activityType === "PK_TRAINING" && na.keep && (
                 <details className="pk-row-details" open={Boolean(na.priority || na.subtasks.length || na.note || na.progress !== "NOT_STARTED")}>
                   <summary className="t-hint">
                     {[
@@ -894,6 +937,8 @@ export function DebriefSheet({
                     objective: null,
                     kind: null,
                     priority: null,
+                    reason: null,
+                    keep: true,
                     progress: "NOT_STARTED",
                     subtasks: [],
                     note: "",

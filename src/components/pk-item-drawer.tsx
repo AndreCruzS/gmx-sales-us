@@ -254,6 +254,44 @@ export function PkItemDrawer({
 
   const alert = alertLine(item, band.pkDate, shownDays, todayIso);
 
+  // ── SUGGEST PRIORITY (Bianca, 2026-11-03: the Eisenhower matrix) ────────
+  // The AI answers "urgent?" and "important?" with a reason; the reader
+  // applies it with the usual priority write, or ignores it.
+  // Held with the item it was asked for, so another item opens without it.
+  const [asked, setAsked] = useState<{
+    id: string;
+    g:
+      | { state: "idle" }
+      | { state: "asking" }
+      | { state: "failed" }
+      | { state: "ready"; priority: Priority; reason: string };
+  }>({ id: item.id, g: { state: "idle" } });
+  const guess = asked.id === item.id ? asked.g : ({ state: "idle" } as const);
+  const forItem = item.id;
+  const setGuess = (g: typeof asked.g) => setAsked({ id: forItem, g });
+  async function suggest() {
+    setGuess({ state: "asking" });
+    try {
+      const res = await fetch("/api/pk/suggest-priority", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: item.action,
+          dealer: band.dealer,
+          pkDate: band.pkDate,
+          today: todayIso,
+          notes: notes.map((n) => n.body).slice(-20),
+          subtasks: subtasks.map((t) => t.title).slice(0, 30),
+        }),
+      });
+      const j = (await res.json()) as { priority?: Priority | null; reason?: string };
+      if (!res.ok || !j.priority) throw new Error("no suggestion");
+      setGuess({ state: "ready", priority: j.priority, reason: j.reason ?? "" });
+    } catch {
+      setGuess({ state: "failed" });
+    }
+  }
+
   // ── WHO HAS SEEN IT ──────────────────────────────────────────────────────
   const readBy = new Map(
     reads.map((r) => [r.membership_id, r.last_read_at] as const),
@@ -408,6 +446,54 @@ export function PkItemDrawer({
             <p className="pkd-calc" data-passed={alert.passed || undefined}>
               {alert.text}
             </p>
+            <div className="pkd-suggest">
+              {guess.state === "ready" ? (
+                <>
+                  <p className="pkd-suggest-text">
+                    <strong>Suggested: {PRIORITY_LABEL[guess.priority]}</strong>
+                    {guess.reason ? ` — ${guess.reason}` : ""}
+                  </p>
+                  {guess.priority !== item.priority ? (
+                    <span className="pkd-suggest-acts">
+                      <button
+                        type="button"
+                        className="t-action"
+                        onClick={() => {
+                          setDaysDraft(null);
+                          write(priorityPatch(band.pkDate, guess.priority));
+                          setGuess({ state: "idle" });
+                        }}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-quiet"
+                        onClick={() => setGuess({ state: "idle" })}
+                      >
+                        Dismiss
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="pkd-suggest-acts t-hint">Matches the priority set</span>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="t-action"
+                  disabled={guess.state === "asking"}
+                  onClick={() => void suggest()}
+                >
+                  {guess.state === "asking"
+                    ? "Weighing urgent and important…"
+                    : "Suggest priority"}
+                </button>
+              )}
+              {guess.state === "failed" && (
+                <span className="t-hint">No suggestion this time — try again.</span>
+              )}
+            </div>
           </div>
           </>
           )}

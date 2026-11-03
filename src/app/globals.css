@@ -7799,3 +7799,39 @@ textarea.pkd-select {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+
+/* Eisenhower matrix on a voice-drafted PK item (Bianca, 2026-11-03): the AI's
+   reason under the row, and the Eliminate suggestion that is not saved. */
+.pk-row-reason {
+  margin: 0 0 0 12px;
+}
+.pk-row-eliminate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+/* Suggest priority (Eisenhower matrix, 2026-11-03): one line under the alert,
+   the AI's quadrant and its reason, applied only on the reader's tap. */
+.pkd-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+.pkd-suggest-text {
+  margin: 0;
+  flex: 1 1 100%;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.pkd-suggest-text strong {
+  color: var(--ink-primary);
+}
+.pkd-suggest-acts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+}
