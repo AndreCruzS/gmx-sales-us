@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOffline, type Profile } from "@/components/offline-provider";
-import { AlertIcon, ChevronDownIcon, FileIcon, XIcon } from "@/components/icons";
+import { AlertIcon, ChevronDownIcon, ChevronRightIcon, FileIcon, XIcon } from "@/components/icons";
 import {
   ACCOUNT_TYPES,
   ACTIVITY_OUTCOMES,
@@ -41,6 +41,19 @@ import {
   type OutboxRecord,
 } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+/** "Visit · Buffalo Lumber Co", or "To book · 2" when nothing happened yet. */
+function captureHead(c: CaptureRow, accounts: CachedAccount[]): string {
+  const d = c.ai_draft;
+  if (d && d.has_visit === false) {
+    const n = d.commands?.length ?? 0;
+    return n > 0 ? `To book · ${n}` : "Note";
+  }
+  const id = c.account_id ?? d?.account_id ?? null;
+  const name = id ? accounts.find((a) => a.id === id)?.name : undefined;
+  const kind = d?.activity_type ? humanize(d.activity_type) : "Visit";
+  return name ? `${kind} · ${displayAccountName(name)}` : kind;
+}
 
 interface CandidateRow {
   id: string;
@@ -306,16 +319,20 @@ export default function ReviewPage() {
                   onClick={() => setReviewing(c)}
                   className="row w-full text-left"
                 >
-                  <span className="row-body">
-                    <span className="t-title line-clamp-2 block">
+                  {/* The whole row is the button (Andre, 2026-11-04: the solid
+                      tag beside a six-line summary read as clumsy): a short
+                      head, two lines of what was said, when, and a chevron. */}
+                  <span className="row-body min-w-0">
+                    <span className="t-title block truncate">{captureHead(c, accounts)}</span>
+                    <span className="t-sub rv-clamp mt-0.5">
                       {c.ai_draft?.summary ?? c.transcript ?? "Note"}
                     </span>
-                    <span className="t-sub block">
+                    <span className="t-hint mt-1 block">
                       {new Date(c.created_at).toLocaleDateString()} ·{" "}
                       {c.audio_path ? "spoken" : "typed"}
                     </span>
                   </span>
-                  <span className="tag tag-solid shrink-0">Check &amp; save</span>
+                  <ChevronRightIcon size={18} className="shrink-0" style={{ color: "var(--ink-muted)" }} />
                 </button>
               </li>
             ))}
@@ -354,9 +371,7 @@ export default function ReviewPage() {
                         " · looks like someone you already have"}
                     </span>
                   </span>
-                  <span className="tag tag-solid shrink-0">
-                    Check &amp; save
-                  </span>
+                  <ChevronRightIcon size={18} className="shrink-0" style={{ color: "var(--ink-muted)" }} />
                 </button>
               </li>
             ))}
@@ -529,8 +544,9 @@ export default function ReviewPage() {
           <ul className="list">
             {done.map((c) => (
               <li key={c.id} className="row">
-                <span className="row-body">
-                  <span className="t-sub line-clamp-1 block">
+                <span className="row-body min-w-0">
+                  <span className="t-title block truncate">{captureHead(c, accounts)}</span>
+                  <span className="t-sub block truncate">
                     {c.ai_draft?.summary ?? c.transcript ?? "Note"}
                   </span>
                 </span>

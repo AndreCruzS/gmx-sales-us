@@ -92,6 +92,39 @@ export function sayPrompt(opts: {
   ].join("\n\n");
 }
 
+const NOISE = new Set([
+  "the", "and", "for", "with", "about", "their", "them", "they", "our", "from", "this", "that",
+  "lumber", "supply", "co", "inc", "llc", "company", "to", "at", "on", "of", "a", "an",
+]);
+
+function tokens(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 3 && !NOISE.has(w)),
+  );
+}
+
+/**
+ * Two lines that say the same thing: most of the shorter one's words are in
+ * the other ("Call Buffalo Lumber buyer about samples" · "Call buyer about
+ * samples"). The model puts one request in both lists often enough that the
+ * cards must not trust it not to.
+ */
+export function sameThing(a: string, b: string): boolean {
+  const x = tokens(a);
+  const y = tokens(b);
+  const small = x.size <= y.size ? x : y;
+  const big = small === x ? y : x;
+  if (small.size === 0) return false;
+  let shared = 0;
+  for (const w of small) if (big.has(w)) shared += 1;
+  return shared / small.size >= 0.75;
+}
+
 /** The draft as it is stored: the debrief guarded as before, the bookings as Say it guards them. */
 export function sanitizeSayDraft(
   raw: SayDraftRaw,
@@ -109,12 +142,39 @@ export function sanitizeSayDraft(
     ctx.openItemIds,
     ctx.accounts.map((a) => a.id),
   );
+  const commands = sanitizeCommands({ commands: bookings }, ctx.accounts, ctx.reps, ctx.team, ctx.speakerId);
+  // A plain to-do said with a visit is that visit's follow-up, whatever list
+  // the model put it in (2026-11-04: "they want the literature tomorrow" came
+  // back as a booking): no clock, nobody else, the same door, and a day.
+  const followUp = (c: Command) =>
+    has_visit &&
+    c.kind === "FOLLOW_UP" &&
+    c.followUpType === "TASK" &&
+    !c.teammateId &&
+    !c.ownerId &&
+    c.dueDate !== null &&
+    (c.accountId === null || c.accountId === draft.account_id);
+  const kept = commands.filter((c) => !followUp(c));
+  // A follow-up that repeats a booking is the booking (it carries the time,
+  // the type, the person); a moved to-do that repeats a follow-up is dropped.
+  const visitActions = draft.next_actions.filter(
+    (na) => !kept.some((c) => sameThing(na.action, c.action)),
+  );
+  const moved = commands
+    .filter(followUp)
+    .filter((c) => !visitActions.some((na) => sameThing(na.action, c.action)))
+    .map((c) => ({
+      action: c.action,
+      due_date: c.dueDate as string,
+      objective: null,
+      kind: null,
+    }));
   return {
     ...draft,
     // Nothing happened yet: no follow-ups of a visit that does not exist.
-    next_actions: has_visit ? draft.next_actions : [],
+    next_actions: has_visit ? [...visitActions, ...moved] : [],
     has_visit,
-    commands: sanitizeCommands({ commands: bookings }, ctx.accounts, ctx.reps, ctx.team, ctx.speakerId),
+    commands: kept,
     reps: [...ctx.reps],
     team: [...ctx.team],
   };

@@ -7767,3 +7767,11 @@ textarea.pkd-select {
 .say-card[data-off] {
   opacity: 0.6;
 }
+
+/* Review rows (2026-11-04): what was said, two lines at most. */
+.rv-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

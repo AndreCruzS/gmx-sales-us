@@ -69,6 +69,40 @@ describe("one microphone: one reading of what was said", () => {
     expect(d.commands![0].accountId).toBeNull();
   });
 
+  it("makes a plain to-do said with a visit that visit's follow-up", () => {
+    const todo = {
+      ...raw().bookings[0],
+      time: null,
+      follow_up_type: "TASK" as const,
+      due_date: "2026-11-05",
+      action: "Send the Maximo literature",
+    };
+    const d = sanitizeSayDraft(raw({ next_actions: [], bookings: [todo, raw().bookings[0]] }), ctx);
+    expect(d.next_actions.map((n) => n.action)).toEqual(["Send the Maximo literature"]);
+    expect(d.commands!.map((c) => c.followUpType)).toEqual(["CALL"]);
+    // No visit: the same to-do stays a booking.
+    const none = sanitizeSayDraft(raw({ has_visit: false, bookings: [todo] }), ctx);
+    expect(none.commands).toHaveLength(1);
+  });
+
+  it("never lists one request twice", () => {
+    const d = sanitizeSayDraft(
+      raw({
+        next_actions: [
+          { action: "Send Maximo literature to Buffalo Lumber", due_date: "2026-11-05", objective: null, kind: null },
+          { action: "Call Buffalo Lumber buyer about samples", due_date: "2026-11-09", objective: null, kind: null },
+        ],
+        bookings: [
+          { ...raw().bookings[0], time: null, follow_up_type: "TASK" as const, due_date: "2026-11-05", action: "Send Maximo literature" },
+          { ...raw().bookings[0], action: "Call buyer about samples" },
+        ],
+      }),
+      ctx,
+    );
+    expect(d.next_actions.map((n) => n.action)).toEqual(["Send Maximo literature to Buffalo Lumber"]);
+    expect(d.commands!.map((c) => c.action)).toEqual(["Call buyer about samples"]);
+  });
+
   it("reads a draft stored before one-mic as a visit", () => {
     expect(hasVisit({})).toBe(true);
     expect(hasVisit({ has_visit: false })).toBe(false);
