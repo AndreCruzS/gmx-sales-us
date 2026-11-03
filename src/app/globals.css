@@ -6830,50 +6830,51 @@ button.dl-todo:hover {
   }
 }
 
-/* ── The PK item drawer (2026-11-02, the approved mockup) ───────────────────
-   One follow-up, opened. Like the dealer sheet: below the desk it floats over
-   the page — the whole width on a phone, a 520px panel on a tablet — and on
-   the desk (>=1280) it shares the row with the board and sticks under the top
-   bar, so the board keeps its place. The two status selects wear the same
-   fills as their cells on the board. */
-.pkd {
+/* ── The PK item drawer (2026-11-02; off-canvas since 2026-11-03) ──────────
+   One follow-up, opened: an off-canvas panel that slides in from the right
+   over a dimmed board, the full height of the screen at every width — the
+   whole width on a phone, 520px from there up. The board behind keeps its
+   width and its place; a click on the dim, Escape or the close button shuts
+   it. The two status selects wear the same fills as their cells on the board. */
+.pkd-scrim {
   position: fixed;
   inset: 0;
   z-index: 60;
+  background: color-mix(in srgb, var(--ink-primary) 34%, transparent);
+  animation: add-fade 0.16s ease-out;
+}
+.pkd {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
   display: flex;
   flex-direction: column;
+  width: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
   background: var(--surface-card);
+  box-shadow: var(--shadow-2);
+  animation: pkd-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-@media (min-width: 640px) and (max-width: 1279px) {
+@media (min-width: 640px) {
   .pkd {
-    left: auto;
-    width: min(520px, 100%);
+    width: 520px;
     border-left: 1px solid var(--rule);
-    box-shadow: var(--shadow-2);
   }
 }
-@media (min-width: 1280px) {
-  .pk-layout[data-open] {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 440px;
-    gap: 20px;
-    align-items: start;
+@keyframes pkd-in {
+  from {
+    transform: translateX(100%);
   }
-  .pk-layout[data-open] .pkd {
-    position: sticky;
-    inset: auto;
-    top: calc(var(--topbar-h) + 12px);
-    z-index: 1;
-    max-height: calc(100dvh - var(--topbar-h) - 24px);
-    margin-top: 8px;
-    border: 1px solid var(--rule);
-    border-radius: var(--r-card);
-    box-shadow: var(--shadow-1);
-  }
-  .pk-layout[data-open] .pkd-head {
-    border-radius: var(--r-card) var(--r-card) 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pkd,
+  .pkd-scrim {
+    animation: none;
   }
 }
 .pkd-head {
@@ -6883,7 +6884,7 @@ button.dl-todo:hover {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 14px 20px;
   background: var(--surface-card);
   border-bottom: 1px solid var(--rule);
 }
@@ -6905,21 +6906,28 @@ button.dl-todo:hover {
 }
 .pkd-x {
   flex: none;
-  min-width: 36px;
-  min-height: 36px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -4px -4px 0 0;
   border-radius: var(--r-control);
-  font-size: 20px;
-  line-height: 1;
   color: var(--ink-muted);
+}
+.pkd-x svg {
+  width: 22px;
+  height: 22px;
 }
 .pkd-x:hover {
   background: var(--surface-sunken);
   color: var(--ink-primary);
 }
 .pkd-x-small {
-  min-width: 28px;
-  min-height: 28px;
+  width: 28px;
+  height: 28px;
+  margin: 0;
   font-size: 16px;
+  line-height: 1;
 }
 .pkd-body {
   display: grid;

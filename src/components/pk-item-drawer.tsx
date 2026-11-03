@@ -14,8 +14,12 @@
 // one before to land, so it carries the row's newest updated_at (D61) — and
 // the board moves at once (use-pk-item-writes.ts).
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { PkNotesLog, stampOf, type NoteVersion } from "@/components/pk-notes-log";
+import { useEffect, useRef, useState } from "react";
+import {
+  PkNotesLog,
+  stampOf,
+  type NoteVersion,
+} from "@/components/pk-notes-log";
 import { PkSubtasks } from "@/components/pk-subtasks";
 import { shortDate } from "@/components/pk-band";
 import { useOffline } from "@/components/offline-provider";
@@ -46,7 +50,11 @@ const REQUIRED_OPTIONS: { v: Required; label: string }[] = [
   { v: "NONE", label: "No action required" },
 ];
 const PROGRESS_OPTIONS = Object.keys(PROGRESS_LABEL) as Progress[];
-const REQUIRED_TONE = { PENDING_ACTION: "pending", AWAITING_RESPONSE: "awaiting", NONE: "none" } as const;
+const REQUIRED_TONE = {
+  PENDING_ACTION: "pending",
+  AWAITING_RESPONSE: "awaiting",
+  NONE: "none",
+} as const;
 const PROGRESS_TONE = {
   NOT_STARTED: "not-started",
   WORKING_ON_IT: "working",
@@ -54,23 +62,12 @@ const PROGRESS_TONE = {
   DONE: "done",
 } as const;
 
-// Below the desk breakpoint the drawer floats over the board (globals.css,
-// .pkd): then it is a modal dialog and gives focus back on close.
-const OVERLAY = "(max-width: 1279px)";
-function isOverlay(): boolean {
-  return typeof window !== "undefined" && window.matchMedia(OVERLAY).matches;
-}
-function subscribeOverlay(cb: () => void): () => void {
-  const mq = window.matchMedia(OVERLAY);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-}
-
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function daysBetween(from: string, to: string): number {
-  const t = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  const t = (s: string) =>
+    Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
   return Math.round((t(to) - t(from)) / 86_400_000);
 }
 
@@ -81,16 +78,26 @@ function alertLine(
   days: number | null,
   todayIso: string,
 ): { text: string; passed: boolean } {
-  if (item.priority === null) return { text: "Set a priority to get an alert", passed: false };
-  if (item.priority === "ELIMINATE") return { text: "No alert — Eliminate", passed: false };
-  if (days === null) return { text: "Type the days after the PK to get an alert", passed: false };
+  if (item.priority === null)
+    return { text: "Set a priority to get an alert", passed: false };
+  if (item.priority === "ELIMINATE")
+    return { text: "No alert — Eliminate", passed: false };
+  if (days === null)
+    return {
+      text: "Type the days after the PK to get an alert",
+      passed: false,
+    };
   const at = alertDate(pkDate, days);
   const sum = `Alert: PK ${shortDate(pkDate)} + ${days} ${days === 1 ? "day" : "days"} = ${shortDate(at)}`;
-  if (item.completed_at !== null) return { text: `${sum} · done`, passed: false };
+  if (item.completed_at !== null)
+    return { text: `${sum} · done`, passed: false };
   const left = daysBetween(todayIso, at);
   if (left < 0) return { text: `${sum} · deadline passed`, passed: true };
   if (left === 0) return { text: `${sum} · today`, passed: false };
-  return { text: `${sum} · in ${left} ${left === 1 ? "day" : "days"}`, passed: false };
+  return {
+    text: `${sum} · in ${left} ${left === 1 ? "day" : "days"}`,
+    passed: false,
+  };
 }
 
 export function PkItemDrawer({
@@ -138,23 +145,33 @@ export function PkItemDrawer({
   const { profile } = useOffline();
   const orgId = profile?.orgId ?? "";
   const [readFailed, setReadFailed] = useState(false);
-  const overlay = useSyncExternalStore(subscribeOverlay, isOverlay, () => false);
 
   // ── OPENING IT IS READING IT ─────────────────────────────────────────────
   useEffect(() => {
     if (!me || !orgId) return;
-    const row = { membership_id: me, next_action_id: item.id, last_read_at: new Date().toISOString() };
-    const mineOf = (r: PkRead) => r.membership_id === me && r.next_action_id === item.id;
+    const row = {
+      membership_id: me,
+      next_action_id: item.id,
+      last_read_at: new Date().toISOString(),
+    };
+    const mineOf = (r: PkRead) =>
+      r.membership_id === me && r.next_action_id === item.id;
     const prior = reads.find(mineOf);
     // The dot goes at once; the server row follows. If it does not land, the
     // dot comes back and the reader is told.
     onReads((list) => [...list.filter((r) => !mineOf(r)), row]);
     void getSupabaseBrowserClient()
       .from("next_action_reads")
-      .upsert({ org_id: orgId, ...row }, { onConflict: "membership_id,next_action_id" })
+      .upsert(
+        { org_id: orgId, ...row },
+        { onConflict: "membership_id,next_action_id" },
+      )
       .then(({ error }) => {
         if (!error) return;
-        onReads((list) => [...list.filter((r) => !mineOf(r)), ...(prior ? [prior] : [])]);
+        onReads((list) => [
+          ...list.filter((r) => !mineOf(r)),
+          ...(prior ? [prior] : []),
+        ]);
         setReadFailed(true);
       });
     // Once per opening: the item's id, not its every edit.
@@ -164,22 +181,30 @@ export function PkItemDrawer({
   // ── ESCAPE, AND FOCUS ON OPEN ────────────────────────────────────────────
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    // Over the page, closing hands focus back to the row that opened it.
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // The page behind stays put while the panel is open; closing hands focus
+    // back to the row that opened it.
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const root = document.documentElement;
+    const priorOverflow = root.style.overflow;
+    root.style.overflow = "hidden";
     closeRef.current?.focus({ preventScroll: true });
     return () => {
-      if (isOverlay() && opener?.isConnected) opener.focus({ preventScroll: true });
+      root.style.overflow = priorOverflow;
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);
-  // Over the page the drawer is modal: Tab and Shift+Tab go round inside it
-  // and never reach the board, the toolbar or the top bar behind.
+  // The panel is modal: Tab and Shift+Tab go round inside it and never reach
+  // the board, the toolbar or the top bar behind.
   const asideRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const onTab = (e: KeyboardEvent) => {
-      if (e.key !== "Tab" || !isOverlay() || !asideRef.current) return;
-      const inside = Array.from(asideRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.getClientRects().length > 0,
-      );
+      if (e.key !== "Tab" || !asideRef.current) return;
+      const inside = Array.from(
+        asideRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => el.getClientRects().length > 0);
       const at = inside.indexOf(document.activeElement as HTMLElement);
       const next = trapTarget(inside.length, at, e.shiftKey);
       if (next === null) return;
@@ -194,7 +219,12 @@ export function PkItemDrawer({
       if (e.key !== "Escape") return;
       // Escape in a box is the typist's, not the drawer's (as in the dealer sheet).
       const t = e.target as HTMLElement | null;
-      if (t?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      if (
+        t?.closest(
+          "input, textarea, select, [contenteditable]:not([contenteditable='false'])",
+        )
+      )
+        return;
       onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -202,12 +232,20 @@ export function PkItemDrawer({
   }, [onClose]);
 
   // ── STATUS AND PRIORITY, THROUGH THE OUTBOX (use-pk-item-writes.ts) ──────
-  const { write, refreshInTurn, writeNote } = usePkItemWrites({ item, me, onItem, onChanged });
+  const { write, refreshInTurn, writeNote } = usePkItemWrites({
+    item,
+    me,
+    onItem,
+    onChanged,
+  });
 
   // The days box: the typed value drives the alert line; it is written when
   // the reader leaves the box or presses Enter.
   const [daysDraft, setDaysDraft] = useState<string | null>(null);
-  const typed = daysDraft !== null && /^\d{1,3}$/.test(daysDraft.trim()) ? Number(daysDraft.trim()) : null;
+  const typed =
+    daysDraft !== null && /^\d{1,3}$/.test(daysDraft.trim())
+      ? Number(daysDraft.trim())
+      : null;
   const shownDays = daysDraft !== null ? typed : item.priority_days;
   const live = item.priority !== null && item.priority !== "ELIMINATE";
 
@@ -221,161 +259,206 @@ export function PkItemDrawer({
   const alert = alertLine(item, band.pkDate, shownDays, todayIso);
 
   // ── WHO HAS SEEN IT ──────────────────────────────────────────────────────
-  const readBy = new Map(reads.map((r) => [r.membership_id, r.last_read_at] as const));
+  const readBy = new Map(
+    reads.map((r) => [r.membership_id, r.last_read_at] as const),
+  );
   const people = [...new Set([...desk, item.owner_id, ...readBy.keys()])];
   const seen = people
     .filter((id) => readBy.has(id))
-    .sort((a, b) => (readBy.get(b) as string).localeCompare(readBy.get(a) as string));
+    .sort((a, b) =>
+      (readBy.get(b) as string).localeCompare(readBy.get(a) as string),
+    );
   const notYet = people
     .filter((id) => !readBy.has(id))
     .sort((a, b) => (names.get(a) ?? "").localeCompare(names.get(b) ?? ""));
-  const who = (id: string) => `${names.get(id) ?? "Someone"}${id === me ? " (you)" : ""}`;
+  const who = (id: string) =>
+    `${names.get(id) ?? "Someone"}${id === me ? " (you)" : ""}`;
 
   return (
-    <aside
-      ref={asideRef}
-      className="pkd"
-      aria-label={item.action}
-      role={overlay ? "dialog" : undefined}
-      aria-modal={overlay || undefined}
-    >
-      <header className="pkd-head">
-        <div className="pkd-head-text">
-          <p className="pkd-crumb">
-            {band.dealer} · PK {shortDate(band.pkDate)}
-            {band.location ? ` · ${band.location}` : ""}
-          </p>
-          <h2 className="pkd-title">{item.action}</h2>
-        </div>
-        <button ref={closeRef} type="button" className="pkd-x" aria-label="Close" onClick={onClose}>
-          ×
-        </button>
-      </header>
-
-      <div className="pkd-body">
-        <div className="pkd-two">
-          <label className="pkd-field">
-            <span className="pkd-lbl">Action required</span>
-            <select
-              className="pkd-select"
-              data-required={REQUIRED_TONE[item.action_required]}
-              value={item.action_required}
-              onChange={(e) => write({ action_required: e.target.value as Required })}
+    <>
+      <div className="pkd-scrim" aria-hidden="true" onClick={onClose} />
+      <aside
+        ref={asideRef}
+        className="pkd"
+        aria-label={item.action}
+        role="dialog"
+        aria-modal="true"
+      >
+        <header className="pkd-head">
+          <div className="pkd-head-text">
+            <p className="pkd-crumb">
+              {band.dealer} · PK {shortDate(band.pkDate)}
+              {band.location ? ` · ${band.location}` : ""}
+            </p>
+            <h2 className="pkd-title">{item.action}</h2>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            className="pkd-x"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
             >
-              {REQUIRED_OPTIONS.map((o) => (
-                <option key={o.v} value={o.v}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="pkd-field">
-            <span className="pkd-lbl">Status</span>
-            <select
-              className="pkd-select"
-              data-progress={PROGRESS_TONE[item.progress]}
-              value={item.progress}
-              onChange={(e) => write({ progress: e.target.value as Progress })}
-            >
-              {PROGRESS_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {PROGRESS_LABEL[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </header>
 
-        <div>
+        <div className="pkd-body">
           <div className="pkd-two">
             <label className="pkd-field">
-              <span className="pkd-lbl">Priority</span>
+              <span className="pkd-lbl">Action required</span>
               <select
                 className="pkd-select"
-                value={item.priority ?? ""}
-                onChange={(e) => {
-                  setDaysDraft(null);
-                  write(priorityPatch(band.pkDate, e.target.value as Priority));
-                }}
+                data-required={REQUIRED_TONE[item.action_required]}
+                value={item.action_required}
+                onChange={(e) =>
+                  write({ action_required: e.target.value as Required })
+                }
               >
-                {item.priority === null && (
-                  <option value="" disabled>
-                    Set a priority
-                  </option>
-                )}
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_LABEL[p]}
+                {REQUIRED_OPTIONS.map((o) => (
+                  <option key={o.v} value={o.v}>
+                    {o.label}
                   </option>
                 ))}
               </select>
             </label>
             <label className="pkd-field">
-              <span className="pkd-lbl">Days after the PK</span>
-              <input
-                className="pkd-select pkd-days"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={365}
-                disabled={!live}
-                value={daysDraft ?? (item.priority_days === null ? "" : String(item.priority_days))}
-                onChange={(e) => setDaysDraft(e.target.value)}
-                onBlur={commitDays}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitDays();
-                  if (e.key === "Escape") setDaysDraft(null);
-                }}
-              />
+              <span className="pkd-lbl">Status</span>
+              <select
+                className="pkd-select"
+                data-progress={PROGRESS_TONE[item.progress]}
+                value={item.progress}
+                onChange={(e) =>
+                  write({ progress: e.target.value as Progress })
+                }
+              >
+                {PROGRESS_OPTIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {PROGRESS_LABEL[p]}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
-          <p className="pkd-calc" data-passed={alert.passed || undefined}>
-            {alert.text}
+
+          <div>
+            <div className="pkd-two">
+              <label className="pkd-field">
+                <span className="pkd-lbl">Priority</span>
+                <select
+                  className="pkd-select"
+                  value={item.priority ?? ""}
+                  onChange={(e) => {
+                    setDaysDraft(null);
+                    write(
+                      priorityPatch(band.pkDate, e.target.value as Priority),
+                    );
+                  }}
+                >
+                  {item.priority === null && (
+                    <option value="" disabled>
+                      Set a priority
+                    </option>
+                  )}
+                  {PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {PRIORITY_LABEL[p]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="pkd-field">
+                <span className="pkd-lbl">Days after the PK</span>
+                <input
+                  className="pkd-select pkd-days"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={365}
+                  disabled={!live}
+                  value={
+                    daysDraft ??
+                    (item.priority_days === null
+                      ? ""
+                      : String(item.priority_days))
+                  }
+                  onChange={(e) => setDaysDraft(e.target.value)}
+                  onBlur={commitDays}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitDays();
+                    if (e.key === "Escape") setDaysDraft(null);
+                  }}
+                />
+              </label>
+            </div>
+            <p className="pkd-calc" data-passed={alert.passed || undefined}>
+              {alert.text}
+            </p>
+          </div>
+
+          {readFailed && (
+            <p className="pkd-error" role="alert">
+              This item was not marked as read — it will show as new again next
+              time.
+            </p>
+          )}
+          {writeNote && (
+            <p className="pkd-error" role="alert">
+              {writeNote}
+            </p>
+          )}
+
+          <PkSubtasks
+            itemId={item.id}
+            orgId={orgId}
+            subtasks={subtasks}
+            onSubtasks={onSubtasks}
+          />
+
+          <PkNotesLog
+            itemId={item.id}
+            orgId={orgId}
+            notes={notes}
+            versionsByNote={versionsByNote}
+            names={names}
+            me={me}
+            onNotes={onNotes}
+            onEdited={refreshInTurn}
+          />
+
+          <section>
+            <h3 className="pkd-lbl">Seen</h3>
+            <ul className="pkd-seen">
+              {seen.map((id) => (
+                <li key={id}>
+                  <b>{who(id)}</b> ·{" "}
+                  <span className="pkd-fig">
+                    {stampOf(readBy.get(id) as string)}
+                  </span>
+                </li>
+              ))}
+              {notYet.map((id) => (
+                <li key={id} className="pkd-quiet">
+                  {who(id)} · Not viewed yet
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <p className="pkd-crumb">
+            Owner: {names.get(item.owner_id) ?? "Someone"}
           </p>
         </div>
-
-        {readFailed && (
-          <p className="pkd-error" role="alert">
-            This item was not marked as read — it will show as new again next time.
-          </p>
-        )}
-        {writeNote && (
-          <p className="pkd-error" role="alert">
-            {writeNote}
-          </p>
-        )}
-
-        <PkSubtasks itemId={item.id} orgId={orgId} subtasks={subtasks} onSubtasks={onSubtasks} />
-
-        <PkNotesLog
-          itemId={item.id}
-          orgId={orgId}
-          notes={notes}
-          versionsByNote={versionsByNote}
-          names={names}
-          me={me}
-          onNotes={onNotes}
-          onEdited={refreshInTurn}
-        />
-
-        <section>
-          <h3 className="pkd-lbl">Seen</h3>
-          <ul className="pkd-seen">
-            {seen.map((id) => (
-              <li key={id}>
-                <b>{who(id)}</b> · <span className="pkd-fig">{stampOf(readBy.get(id) as string)}</span>
-              </li>
-            ))}
-            {notYet.map((id) => (
-              <li key={id} className="pkd-quiet">
-                {who(id)} · Not viewed yet
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <p className="pkd-crumb">Owner: {names.get(item.owner_id) ?? "Someone"}</p>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

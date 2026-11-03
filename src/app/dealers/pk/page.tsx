@@ -442,7 +442,7 @@ export default function PkFollowUpPage() {
   }
 
   return (
-    <div className="pk-layout" data-open={openItem && openBand ? "" : undefined}>
+    <div className="pk-layout">
     <div className="stack pt-2 pk-page" data-open-item={openId ?? undefined}>
       <section>
         <Title />
