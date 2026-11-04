@@ -19,3 +19,20 @@ export function isAllowedEmail(
     .filter(Boolean)
     .includes(e);
 }
+
+/** Structural twin of the MCP SDK AuthInfo (the SDK lands in a later task). */
+export interface AuthInfo {
+  token: string;
+  clientId: string;
+  scopes: string[];
+  expiresAt?: number;
+  extra?: Record<string, unknown>;
+}
+
+/** Thrown with a message that is safe to show the user. */
+export class AgentAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AgentAuthError";
+  }
+}
