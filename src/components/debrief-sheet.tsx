@@ -30,19 +30,11 @@ import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   alertDate,
+  daysFrom,
   pkDateOf,
   type Priority,
 } from "@/lib/domain/pk-follow-up";
 import { draftedQuadrant } from "@/lib/domain/eisenhower";
-
-/** Whole days from one calendar date to another. */
-function daysFrom(from: string, to: string): number {
-  const t = (d: string) => {
-    const [y, m, dd] = d.split("-").map(Number);
-    return Date.UTC(y, m - 1, dd);
-  };
-  return Math.round((t(to) - t(from)) / 86_400_000);
-}
 
 /** The priorities a person may pick on a voice-drafted PK item. Eliminate is
  *  not one: an item worth eliminating is simply not saved (keep unticked). */

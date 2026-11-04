@@ -4,6 +4,7 @@ import { contextFrom, type AgentContext } from "./context";
 import { fail, type CallToolResult } from "./result";
 import { registerAgendaTools } from "./tools/agenda";
 import { registerDiscoveryTools } from "./tools/discovery";
+import { registerPkTools } from "./tools/pk";
 
 /** What the SDK hands a tool callback; only the bit we read. */
 export type ToolExtra = { http?: { authInfo?: Parameters<typeof contextFrom>[0] } };
@@ -34,4 +35,5 @@ export function tool<A>(
 export function buildMcpServer(server: McpServer, getContext: GetCtx = getCtx) {
   registerDiscoveryTools(server, getContext);
   registerAgendaTools(server, getContext);
+  registerPkTools(server, getContext);
 }

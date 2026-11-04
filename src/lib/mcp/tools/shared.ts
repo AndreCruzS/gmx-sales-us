@@ -1,0 +1,64 @@
+import { createHash, randomUUID } from "node:crypto";
+import { checkConfirmation, confirmationReason, issueConfirmation } from "../confirm";
+import type { AgentContext } from "../context";
+import { fail, needsConfirmation, type CallToolResult } from "../result";
+
+/** App schemas allow null where the generated insert types want undefined; the DB treats both alike. */
+export function dbRow(r: object): never {
+  return r as never;
+}
+
+export const STALE = "This changed since you read it — read it again.";
+
+// ---- shared helpers -------------------------------------------------------
+
+/** A UUID shaped from sha256(code:index), so replaying a confirmed call upserts the same rows. */
+function idFromCode(code: string, index: number): string {
+  const h = createHash("sha256").update(`${code}:${index}`).digest("hex");
+  const variant = ((parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(18, 20)}-${h.slice(20, 32)}`;
+}
+
+export function idMaker(code: string | undefined) {
+  return (index: number) => (code ? idFromCode(code, index) : randomUUID());
+}
+
+/**
+ * The confirmation gate. Returns a needs-confirmation result when the call
+ * needs the person's yes and does not carry a valid code; null to proceed.
+ */
+export function gate(
+  ctx: AgentContext,
+  toolName: string,
+  args: Record<string, unknown>,
+  preview: () => string,
+  reasonOverride?: string | null,
+): CallToolResult | null {
+  const reason =
+    reasonOverride !== undefined ? reasonOverride : confirmationReason(toolName, args, { membershipId: ctx.me.membershipId });
+  if (!reason) return null;
+  const given = typeof args.confirmation === "string" ? args.confirmation : undefined;
+  const subject = { userId: ctx.me.userId, tool: toolName, args };
+  if (given && checkConfirmation(given, subject, new Date())) return null;
+  const { code, expiresAt } = issueConfirmation(subject, new Date());
+  const lead = given ? "That confirmation code was not valid or has expired. " : "";
+  return needsConfirmation(`${lead}${reason} Nothing has been saved yet. It would: ${preview()}`, code, expiresAt);
+}
+
+export const validCode = (ctx: AgentContext, toolName: string, args: Record<string, unknown>) =>
+  typeof args.confirmation === "string" &&
+  checkConfirmation(args.confirmation, { userId: ctx.me.userId, tool: toolName, args }, new Date())
+    ? args.confirmation
+    : undefined;
+
+/** Turn a database error into something readable aloud, or rethrow. */
+export function dbProblem(e: { code?: string; message?: string }, kind?: string): CallToolResult | null {
+  if (e.code === "23514") {
+    if (kind === "CALL" || kind === "MEETING") return fail(`A ${kind === "CALL" ? "call" : "meeting"} needs a time, zone and duration.`);
+    return fail("That time is not valid: a time needs its time zone, and a duration is 5 to 600 minutes.");
+  }
+  if (e.code === "42501") return fail("You are not allowed to do that.");
+  if (e.code === "23503") return fail("One of the ids does not exist — look the account up with find.");
+  return null;
+}
+

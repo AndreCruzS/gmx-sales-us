@@ -130,6 +130,15 @@ export function alertDate(pkDate: string, days: number): string {
   return addDays(pkDate, days);
 }
 
+/** Whole days from one calendar date to another. */
+export function daysFrom(from: string, to: string): number {
+  const t = (d: string) => {
+    const [y, m, dd] = d.split("-").map(Number);
+    return Date.UTC(y, m - 1, dd);
+  };
+  return Math.round((t(to) - t(from)) / 86_400_000);
+}
+
 /** The patch a priority pick writes: priority, priority_days (default), due_date (alert). Eliminate leaves the due date alone. */
 export function priorityPatch(
   pkDate: string,
