@@ -61,6 +61,7 @@ import { PagedNames } from "@/components/paged-names";
 import { WhereTags } from "@/components/where-tags";
 import { DealerModuleProvider, DealerName } from "@/components/dealer-module";
 import { MonthByMonth, type WonMonthRow } from "@/components/month-by-month";
+import { buyInTotals, INVOICED_STATUSES, type BuyInWindow } from "@/lib/buy-in";
 import { formatMoney } from "@/lib/format";
 import {
   ORDERS_CONSISTENT_FROM,
@@ -139,7 +140,6 @@ interface HouseReturnRow {
 }
 // THE LAW (Andre, 2026-09-03): only an invoiced order is a sale. Everything
 // else is material in motion — visible, never revenue.
-const INVOICED_STATUSES = new Set(["Invoice_Sent", "Completed"]);
 
 function greeting(hour: number | null): string {
   if (hour === null) return "Hello";
@@ -1031,37 +1031,19 @@ export function ManagerHome({ name }: { name: string }) {
       return region === regionStep.key;
     };
     const anchorYm = latest ? latest.slice(0, 7) : null;
-    const inWindow = (m: string): boolean => {
-      switch (windowInfo.kind) {
-        case "range":
-          return m >= windowInfo.from! && m <= windowInfo.to!;
-        case "before":
-          return m < ORDERS_CONSISTENT_FROM;
-        case "year":
-          return (
-            anchorYm !== null &&
-            m.slice(0, 4) === anchorYm.slice(0, 4) &&
-            m <= anchorYm &&
-            m >= ORDERS_CONSISTENT_FROM
-          );
-        default:
-          return anchorYm !== null && m === anchorYm;
-      }
-    };
-    let lf = 0;
-    let linearValue = 0;
+    const win: BuyInWindow =
+      windowInfo.kind === "range"
+        ? { kind: "range", from: windowInfo.from!, to: windowInfo.to! }
+        : windowInfo.kind === "before"
+          ? { kind: "before" }
+          : { kind: windowInfo.kind, anchorYm };
+    const { lf, linearValue } = buyInTotals(sellOut, win, inRegion);
+    // In motion: a stock, not a window — every open order the region reaches.
     let motion = 0;
     let motionCount = 0;
     for (const o of sellOut) {
       if (!inRegion(o)) continue;
-      if (INVOICED_STATUSES.has(o.status)) {
-        const m = (o.order_date_po ?? o.created_at ?? "").slice(0, 7);
-        if (inWindow(m)) {
-          const vol = orderVolume(o.items ?? []);
-          lf += vol.lf;
-          linearValue += vol.convertedValue;
-        }
-      } else if (!o.archived_at) {
+      if (!INVOICED_STATUSES.has(o.status) && !o.archived_at) {
         motion += Number(o.total_value) || 0;
         motionCount += 1;
       }

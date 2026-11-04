@@ -14,6 +14,8 @@ import {
   yearSoFar,
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
+import { calendarDateIn } from "@/lib/domain/pk-follow-up";
+import { buyInTotals, type BuyInOrder } from "@/lib/buy-in";
 import { fetchAllPages } from "@/lib/supabase/page";
 import type { AgentContext } from "../context";
 import { ok, type CallToolResult } from "../result";
@@ -29,7 +31,6 @@ const ITEM_COLS =
   "id, action, due_date, owner_id, account_id, item_type, source, entered_by, completed_at, priority, account:accounts!next_actions_account_id_fkey(name), activity:activities!next_actions_activity_id_fkey(activity_type)";
 const VISIT_TYPES = ["DEALER_VISIT", "DISTRIBUTOR_VISIT", "JOBSITE_VISIT", "PK_TRAINING"];
 
-const isoOf = (d: Date) => d.toISOString().slice(0, 10);
 
 function shiftMonth(period: string, by: number): string {
   const y = Number(period.slice(0, 4));
@@ -52,7 +53,9 @@ export async function dealersOverview(ctx: AgentContext, args: DealersOverviewAr
   const offset = Math.max(Math.trunc(args.offset ?? 0), 0);
   const db = ctx.db;
   const now = new Date();
-  const first = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  // The calendar month in the person's own zone, not UTC.
+  const today = calendarDateIn(now.toISOString(), ctx.me.timeZone);
+  const first = `${today.slice(0, 7)}-01`;
   const start = shiftMonth(first, -12);
 
   const [rows, accounts, items, visits] = await Promise.all([
@@ -93,7 +96,7 @@ export async function dealersOverview(ctx: AgentContext, args: DealersOverviewAr
     tiers,
     untiered,
     accountById: new Map(accounts.map((a) => [a.id, a])),
-    openBy: openByAccount(items, isoOf(now)),
+    openBy: openByAccount(items, today),
     lastVisit: lastVisitByAccount(visits),
     showTiers,
   });
@@ -130,21 +133,41 @@ export async function dealersOverview(ctx: AgentContext, args: DealersOverviewAr
   });
 }
 
-// ---- sales_summary (home/manager-home.tsx, same fetches and helpers) ------
+/** Invoiced orders, the page's select, paged (the page's own bare limit is a silent 1,000). */
+async function buyIn(ctx: AgentContext, kind: "month" | "year", anchorYm: string | null) {
+  const orders = await fetchAllPages<BuyInOrder>((from, to) =>
+    ctx.db
+      .from("orders_mirror")
+      .select("status, order_date_po, created_at, items")
+      .in("status", ["Invoice_Sent", "Completed"])
+      .order("id")
+      .range(from, to)
+      .then((r) => ({ data: r.data as unknown as BuyInOrder[] | null, error: r.error })),
+  );
+  return buyInTotals(orders, { kind, anchorYm });
+}
 
-const isLf = (r: SellThroughRow) => r.unit === null || r.unit.toUpperCase() === "LF";
+// ---- sales_summary (home/manager-home.tsx, same fetches and helpers) ------
 
 export async function salesSummary(ctx: AgentContext, args: SalesSummaryArgs): Promise<CallToolResult> {
   const mode = args.period ?? "month";
   const db = ctx.db;
-  const pv = await db.from("sell_through_periods").select("period, period_kind").limit(2000);
-  if (pv.error) throw pv.error;
-  const periodRows = pv.data ?? [];
+  // Paged and ordered: a bare limit is silently capped at 1,000 rows.
+  const periodRows = await fetchAllPages<{ period: string | null; period_kind: string | null }>((from, to) =>
+    db
+      .from("sell_through_periods")
+      .select("period, period_kind, region_id, product_line")
+      .order("period")
+      .order("period_kind")
+      .order("region_id")
+      .order("product_line")
+      .range(from, to),
+  );
   const months = [...new Set(periodRows.filter((r) => r.period_kind !== "YTD").map((r) => r.period))]
     .filter((m): m is string => m !== null)
     .sort()
     .reverse();
-  const keep = (r: SellThroughRow) => (!args.distributor_id || r.distributor_id === args.distributor_id) && isLf(r);
+  const keep = (r: SellThroughRow) => !args.distributor_id || r.distributor_id === args.distributor_id;
 
   if (mode === "ytd") {
     const ytdPeriod =
@@ -179,9 +202,10 @@ export async function salesSummary(ctx: AgentContext, args: SalesSummaryArgs): P
     if (!year) return ok("No year-to-date file has been loaded yet.", { period: "ytd", lf: null });
     const lf = scopeVolume(year.current, []);
     const lastYear = year.previous ? scopeVolume(year.prior, []) : null;
+    const bi = await buyIn(ctx, "year", months[0] ? months[0].slice(0, 7) : null);
     return ok(
-      `Year to date through ${periodLabel(year.latest)}: ${QTY.format(lf)} LF sold through by the distributors${lastYear !== null ? `, against ${QTY.format(lastYear)} LF in the same window last year` : ""}. Sell-through arrives a month behind.`,
-      { period: "ytd", through: year.latest, lf, last_year_lf: lastYear, unit: "LF" },
+      `Year to date through ${periodLabel(year.latest)}: ${QTY.format(lf)} LF sold through by the distributors${lastYear !== null ? `, against ${QTY.format(lastYear)} LF in the same window last year` : ""}. Distributor buy-in (invoiced orders) for the year: ${QTY.format(Math.round(bi.lf))} LF, ${QTY.format(Math.round(bi.linearValue))} dollars. Sell-through arrives a month behind.`,
+      { period: "ytd", through: year.latest, lf, last_year_lf: lastYear, unit: "LF", buy_in_lf: bi.lf, buy_in_value: bi.linearValue },
     );
   }
 
@@ -204,9 +228,10 @@ export async function salesSummary(ctx: AgentContext, args: SalesSummaryArgs): P
   ).filter(keep);
   const lf = scopeVolume(rows.filter((r) => r.period === latest), []);
   const before = previous ? scopeVolume(rows.filter((r) => r.period === previous), []) : null;
+  const bi = await buyIn(ctx, "month", latest.slice(0, 7));
   return ok(
-    `${periodLabel(latest)}: ${QTY.format(lf)} LF sold through by the distributors${before !== null ? `, against ${QTY.format(before)} LF in ${periodLabel(previous)}` : ""}. Sell-through arrives a month behind.`,
-    { period: "month", month: latest, lf, previous_month: previous, previous_lf: before, unit: "LF" },
+    `${periodLabel(latest)}: ${QTY.format(lf)} LF sold through by the distributors${before !== null ? `, against ${QTY.format(before)} LF in ${periodLabel(previous)}` : ""}. Distributor buy-in (invoiced orders) that month: ${QTY.format(Math.round(bi.lf))} LF, ${QTY.format(Math.round(bi.linearValue))} dollars. Sell-through arrives a month behind.`,
+    { period: "month", month: latest, lf, previous_month: previous, previous_lf: before, unit: "LF", buy_in_lf: bi.lf, buy_in_value: bi.linearValue },
   );
 }
 

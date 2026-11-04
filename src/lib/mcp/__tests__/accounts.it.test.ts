@@ -1,8 +1,12 @@
+import { execFileSync } from "node:child_process";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AgentContext } from "../context";
 import { contextFor, useLocalStack } from "./it-helpers";
 
 const run = Date.now().toString(36);
+/** Independent truth: SQL straight into the local database container. */
+const sql = (q: string) =>
+  execFileSync("docker", ["exec", "supabase_db_gmx-sales-us", "psql", "-U", "postgres", "-tAc", q], { encoding: "utf8" }).trim();
 const text = (r: { content: { text: string }[] }) => r.content[0].text;
 
 describe.skipIf(!process.env.MCP_IT)("accounts, contacts and views (local stack)", () => {
@@ -81,29 +85,54 @@ describe.skipIf(!process.env.MCP_IT)("accounts, contacts and views (local stack)
     expect(text(r)).toBe("You can't change this account.");
   });
 
-  it("sales_summary LF equals a direct query computed as the page does", async () => {
-    const r = await v.salesSummary(admin, { period: "month" });
-    const s = r.structuredContent as { lf: number | null; month: string };
-    const { data: per } = await admin.db.from("sell_through_periods").select("period, period_kind").limit(2000);
-    const latest = [...new Set((per ?? []).filter((x) => x.period_kind !== "YTD").map((x) => x.period))].sort().reverse()[0];
-    if (!latest) {
-      expect(s.lf).toBeNull();
-      return;
+  it("sales_summary equals independent SQL aggregates for month and ytd, buy-in included", async () => {
+    const tag = `T9${run}`;
+    try {
+      // Fixtures: a year file for September (rows doubled, last year = the month) and invoiced orders.
+      sql(`insert into sell_through_uploads (org_id, distributor_id, period, period_kind, detail, branch_id, row_count)
+           select org_id, distributor_id, period, 'YTD', detail, branch_id, 1 from sell_through_uploads where period = '2026-09-01' and period_kind = 'MONTH'`);
+      sql(`insert into sell_through (org_id, upload_id, branch_id, dealer_id, dealer_label, period, product, quantity, unit, value, ly_quantity)
+           select st.org_id, y.id, st.branch_id, st.dealer_id, st.dealer_label, st.period, st.product, st.quantity * 2, st.unit, st.value, st.quantity
+           from sell_through st
+           join sell_through_uploads m on m.id = st.upload_id and m.period_kind = 'MONTH'
+           join sell_through_uploads y on y.period = m.period and y.period_kind = 'YTD' and y.distributor_id = m.distributor_id
+             and coalesce(y.branch_id, '00000000-0000-0000-0000-000000000000') = coalesce(m.branch_id, '00000000-0000-0000-0000-000000000000')
+           where m.period = '2026-09-01'`);
+      const item = (qty: number, amt: number, uom = "LF") => JSON.stringify([{ sku: "X", description: "Ipe 1x6", uom, quantity: qty, total_amount: amt }]);
+      const order = (n: string, status: string, date: string, items: string) =>
+        `insert into orders_mirror (id, order_number, customer_name, status, order_date_po, created_at, items) values (gen_random_uuid(), '${tag}-${n}', 'T9', '${status}', '${date}', now(), '${items}'::jsonb)`;
+      sql(order("a", "Invoice_Sent", "2026-10-12", item(100, 500)));
+      sql(order("b", "Completed", "2026-10-20", item(250.5, 1000)));
+      sql(order("c", "Invoice_Sent", "2026-09-10", item(40, 200)));
+      sql(order("d", "Draft", "2026-10-12", item(9999, 9999)));
+      sql(order("e", "Completed", "2026-10-12", item(77, 77, "ton")));
+
+      const m = (await v.salesSummary(admin, { period: "month" })).structuredContent as Record<string, number | string>;
+      const expMonth = Number(sql(`select coalesce(sum(quantity),0) from sell_through_rows where period = '2026-10-01' and (period_kind = 'MONTH' or period_kind is null)`));
+      expect(m.month).toBe("2026-10-01");
+      expect(m.lf).toBe(expMonth);
+      const buyOct = sql(`select coalesce(sum((i->>'quantity')::numeric),0)||'|'||coalesce(sum((i->>'total_amount')::numeric),0)
+        from orders_mirror o, jsonb_array_elements(o.items) i
+        where o.status in ('Invoice_Sent','Completed') and lower(i->>'uom') in ('lf','lft') and left(o.order_date_po::text,7) = '2026-10'`).split("|").map(Number);
+      expect(m.buy_in_lf).toBe(buyOct[0]);
+      expect(m.buy_in_value).toBe(buyOct[1]);
+
+      const y = (await v.salesSummary(admin, { period: "ytd" })).structuredContent as Record<string, number | string>;
+      const expYtd = Number(sql(`select coalesce(sum(quantity),0) from sell_through_rows where (period = '2026-09-01' and period_kind = 'YTD') or (period > '2026-09-01' and left(period::text,4) = '2026' and (period_kind = 'MONTH' or period_kind is null))`));
+      const expLy = Number(sql(`select coalesce(sum(ly_quantity),0) from sell_through_rows where period = '2026-09-01' and period_kind = 'YTD' and ly_quantity > 0`));
+      expect(y.lf).toBe(expYtd);
+      expect(y.last_year_lf).toBe(expLy);
+      const buyYear = sql(`select coalesce(sum((i->>'quantity')::numeric),0)||'|'||coalesce(sum((i->>'total_amount')::numeric),0)
+        from orders_mirror o, jsonb_array_elements(o.items) i
+        where o.status in ('Invoice_Sent','Completed') and lower(i->>'uom') in ('lf','lft')
+          and left(o.order_date_po::text,4) = '2026' and left(o.order_date_po::text,7) between '2026-06' and '2026-10'`).split("|").map(Number);
+      expect(y.buy_in_lf).toBe(buyYear[0]);
+      expect(y.buy_in_value).toBe(buyYear[1]);
+    } finally {
+      sql(`delete from orders_mirror where order_number like '${tag}-%'`);
+      sql(`delete from sell_through where upload_id in (select id from sell_through_uploads where period_kind = 'YTD')`);
+      sql(`delete from sell_through_uploads where period_kind = 'YTD'`);
     }
-    expect(s.month).toBe(latest);
-    let total = 0;
-    for (let from = 0; ; from += 1000) {
-      const { data } = await admin.db
-        .from("sell_through_rows")
-        .select("quantity, unit")
-        .eq("period", latest)
-        .or("period_kind.eq.MONTH,period_kind.is.null")
-        .order("row_id")
-        .range(from, from + 999);
-      if (!data || data.length === 0) break;
-      for (const x of data) if (x.unit === null || x.unit.toUpperCase() === "LF") total += Number(x.quantity) || 0;
-    }
-    expect(s.lf).toBe(total);
   });
 
   it("dealers_overview pages and routine_list answers", async () => {
