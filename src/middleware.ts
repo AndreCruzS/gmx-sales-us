@@ -84,7 +84,10 @@ export const config = {
   // endpoint, also Bearer-CRON_SECRET-only with no session cookie — without
   // this exclusion every documented curl (setup, backfill) 307s to /login
   // before the handler ever sees the request.
+  // api/mcp and .well-known: agents call with a bearer token and no cookies, and
+  // fetch the sign-in metadata unauthenticated; the session check would redirect
+  // them to /login and swallow the 401 challenge they need to start OAuth.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest|api/hubspot/sync|api/hubspot/admin|api/email/sync|api/calendar/team/sync).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest|api/hubspot/sync|api/hubspot/admin|api/email/sync|api/calendar/team/sync|api/mcp|\\.well-known).*)",
   ],
 };
