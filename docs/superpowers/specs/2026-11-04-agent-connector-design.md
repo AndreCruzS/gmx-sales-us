@@ -164,7 +164,9 @@ priority prompt) from the tools. Builder's call.
   token's `session_id` claim, within 24 hours (our call; mcp-handler is
   stateless). It only uses reversals the user could already do, with no new
   schema (our call):
-  - a created follow-up/PK item/visit plan → `CANCELLED`;
+  - a created follow-up/PK item/visit plan → deleted where RLS lets the
+    user (admins), otherwise closed (`completed_at`) — `next_actions` has no
+    cancelled state;
   - an edit → the prior values, kept in an agent action log;
   - a created subtask → deleted (the app already lets anyone who sees the
     item delete one); a note → deleted only where RLS lets its author;
