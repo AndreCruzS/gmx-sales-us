@@ -31,6 +31,8 @@ import {
 import { getOfflineLayer, type CachedAccount } from "@/lib/offline";
 import { type RelationshipType } from "@/lib/domain/enums";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { ViaAgent } from "@/components/via-agent";
+import type { Via } from "@/lib/domain/via";
 
 interface Account {
   id: string;
@@ -65,6 +67,7 @@ interface Activity {
   occurred_at: string;
   what_happened: string | null;
   key_information: string | null;
+  created_via?: Via | null;
 }
 interface NextAction {
   id: string;
@@ -120,7 +123,7 @@ export default function AccountPage() {
   // Notes on the history (account_notes) — what someone learned or decided,
   // read beside the activities but never counted as one.
   const [notes, setNotes] = useState<
-    { id: string; body: string; created_at: string; author: string | null }[]
+    { id: string; body: string; created_at: string; author: string | null; created_via?: Via | null }[]
   >([]);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [noteBusy, setNoteBusy] = useState(false);
@@ -284,7 +287,7 @@ export default function AccountPage() {
         supabase
           .from("activities")
           .select(
-            "id, activity_type, occurred_at, what_happened, key_information",
+            "id, activity_type, occurred_at, what_happened, key_information, created_via",
           )
           .eq("primary_account_id", id)
           .order("occurred_at", { ascending: false })
@@ -336,13 +339,13 @@ export default function AccountPage() {
 
       const nt = await supabase
         .from("account_notes")
-        .select("id, body, created_at, author_id")
+        .select("id, body, created_at, author_id, created_via")
         .eq("account_id", id)
         .order("created_at", { ascending: false })
         .limit(30);
       const noteRows =
         (nt.data as
-          | { id: string; body: string; created_at: string; author_id: string | null }[]
+          | { id: string; body: string; created_at: string; author_id: string | null; created_via: Via | null }[]
           | null) ?? [];
       // Who wrote each — best effort: a rep may not be able to read every
       // colleague's membership, and a note without a name still reads.
@@ -366,6 +369,7 @@ export default function AccountPage() {
           id: r.id,
           body: r.body,
           created_at: r.created_at,
+          created_via: r.created_via,
           author:
             r.author_id === profile?.membershipId
               ? "You"
@@ -399,6 +403,7 @@ export default function AccountPage() {
           text: a.what_happened,
           keyInfo: a.key_information,
           author: null as string | null,
+          via: a.created_via ?? null,
         })),
         ...notes.map((n) => ({
           kind: "note" as const,
@@ -408,6 +413,7 @@ export default function AccountPage() {
           text: n.body as string | null,
           keyInfo: null as string | null,
           author: n.author,
+          via: n.created_via ?? null,
         })),
       ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)),
     [activities, notes],
@@ -1182,6 +1188,7 @@ export default function AccountPage() {
                       {h.keyInfo}
                     </span>
                   )}
+                  <ViaAgent via={h.via} />
                 </span>
               </li>
             ))}

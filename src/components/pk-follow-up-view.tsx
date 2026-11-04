@@ -23,7 +23,8 @@
 // updaters below, and after a write it asks the page to read the one item
 // back (refreshItem) so the board shows what the database saved.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useOffline } from "@/components/offline-provider";
 import { PkBoard } from "@/components/pk-board";
 import { PkExportButton } from "@/components/pk-export-button";
@@ -95,7 +96,17 @@ async function inChunks<T>(
 /**
  * `title` is the page's heading and its tabs, which differ by route.
  */
+// useSearchParams (the ?item= deep link an agent's receipt carries) needs a
+// Suspense boundary so the static prerender of the pages that mount this holds.
 export function PkFollowUpView({ title }: { title: ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <PkFollowUpViewInner title={title} />
+    </Suspense>
+  );
+}
+
+function PkFollowUpViewInner({ title }: { title: ReactNode }) {
 
   const { profile } = useOffline();
   const desk = seesDealersBoard(profile?.role);
@@ -117,7 +128,9 @@ export function PkFollowUpView({ title }: { title: ReactNode }) {
   const [addFailed, setAddFailed] = useState(false);
 
   // The open item: the drawer hangs on this.
-  const [openId, setOpenId] = useState<string | null>(null);
+  // /visits/pk?item=<id> opens that item's drawer (the link in an agent's receipt).
+  const searchParams = useSearchParams();
+  const [openId, setOpenId] = useState<string | null>(() => searchParams.get("item"));
   const onOpen = useCallback((id: string) => setOpenId(id), []);
   const onClose = useCallback(() => setOpenId(null), []);
 

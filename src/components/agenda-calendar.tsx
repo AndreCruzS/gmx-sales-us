@@ -575,6 +575,7 @@ export function AgendaCalendar({
                           {humanize(r.objective)}
                         </span>
                       )}
+                      <ViaAgent via={r.created_via} />
                     </span>
                   )}
                   {canAssign && !r.completed_at && assignable.length > 0 && (
