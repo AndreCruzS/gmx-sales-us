@@ -7998,3 +7998,13 @@ textarea.pkd-select {
 .aic-bullets {
   list-style: disc;
 }
+/* h1 > button: the heading stays, the button inside it opens the menu. */
+.navbar-title-menu {
+  margin: 0;
+  font: inherit;
+}
+/* The page reads in a column, not across a 1,100px desk. */
+.aic {
+  max-width: 720px;
+  margin-inline: auto;
+}

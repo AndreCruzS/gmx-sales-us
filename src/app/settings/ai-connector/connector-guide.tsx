@@ -150,7 +150,10 @@ export function ConnectorGuide({ address }: { address: string }) {
 
       <div className="card card-pad">
         <p className="sales-eyebrow aic-eyebrow">Showing someone?</p>
-        <p className="aic-text">Open GMX Sales, tap your name, then AI connector.</p>
+        <p className="aic-text">
+          On a phone: open GMX Sales, tap your name, then AI connector. On a computer: the ✦ at the
+          top right.
+        </p>
       </div>
     </div>
   );

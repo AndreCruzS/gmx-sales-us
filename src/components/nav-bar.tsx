@@ -150,21 +150,23 @@ export function NavBar() {
         {showIdentity ? (
           agentAccess ? (
             <div className="navbar-menu" ref={menuRef}>
-              <button
-                type="button"
-                className="navbar-identity navbar-identity-btn"
-                aria-haspopup="true"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((o) => !o)}
-              >
-                <span className="navbar-avatar" aria-hidden="true">
-                  {avatarLetter(person)}
-                </span>
-                <span className="min-w-0">
-                  <span className="navbar-title truncate">{person}</span>
-                  <span className="navbar-patch truncate">{patch ?? title}</span>
-                </span>
-              </button>
+              <h1 className="navbar-title-menu">
+                <button
+                  type="button"
+                  className="navbar-identity navbar-identity-btn"
+                  aria-haspopup="true"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((o) => !o)}
+                >
+                  <span className="navbar-avatar" aria-hidden="true">
+                    {avatarLetter(person)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="navbar-title truncate">{person}</span>
+                    <span className="navbar-patch truncate">{patch ?? title}</span>
+                  </span>
+                </button>
+              </h1>
               {menuOpen && (
                 <div className="navbar-popover" role="group" aria-label="Account">
                   <Link

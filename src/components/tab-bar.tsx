@@ -26,6 +26,7 @@ import { underReps } from "./reps-menu";
 import { useReviewCount } from "@/lib/review/count";
 import { SyncBadge } from "./sync-badge";
 import { SignOutButton } from "./sign-out";
+import { useAgentAccess } from "@/lib/mcp/use-agent-access";
 import {
   BuildingIcon,
   CalendarIcon,
@@ -148,6 +149,7 @@ const CLOSE_MS = 300;
 export function TabBar() {
   const pathname = usePathname();
   const { profile } = useOffline();
+  const agentAccess = useAgentAccess(profile?.email);
   const reviewCount = useReviewCount();
   // Three states, not two: a menu that is on its way out is still on screen.
   const [addState, setAddState] = useState<"closed" | "open" | "closing">(
@@ -406,6 +408,11 @@ export function TabBar() {
               aria-label="Find an account"
             >
               <SearchIcon size={19} />
+            </Link>
+          )}
+          {agentAccess && (
+            <Link href="/settings/ai-connector" className="navbar-icon" aria-label="AI connector" title="AI connector">
+              <span aria-hidden="true">✦</span>
             </Link>
           )}
           <SyncBadge />
