@@ -66,11 +66,11 @@ export function ConnectorCard() {
         Connect Muse or Claude once. Then tell it about your day — &quot;left a PK at Big Creek,
         six people&quot; — and it records it here, as you.
       </p>
-      <div className="aic-home-actions">
-        <Link href="/settings/ai-connector" className="btn-primary">
+      <div className="tile-acts aic-home-actions">
+        <Link href="/settings/ai-connector" className="tile-act tile-act-primary">
           Set it up
         </Link>
-        <button type="button" className="btn-quiet" onClick={dismiss}>
+        <button type="button" className="tile-act tile-act-secondary" onClick={dismiss}>
           Not now
         </button>
       </div>

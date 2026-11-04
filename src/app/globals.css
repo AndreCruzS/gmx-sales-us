@@ -7903,11 +7903,10 @@ textarea.pkd-select {
   line-height: 1.5;
   color: var(--ink-secondary);
 }
+/* The Home tiles' own pair (.tile-act): same height, same shape, primary
+   ink + outlined secondary — not the full-width form CTA shrunk down. */
 .aic-home-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 .aic {
   padding-top: 8px;
@@ -7986,11 +7985,6 @@ textarea.pkd-select {
 }
 .aic-refuse p {
   margin: 0;
-}
-.aic-home-actions > .btn-primary {
-  width: auto;
-  max-width: none;
-  padding-inline: 20px;
 }
 .aic-steps {
   list-style: decimal;
