@@ -1,21 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { createClient } from "@supabase/supabase-js";
 import type { AgentContext } from "../context";
-
-const URL_ = "http://127.0.0.1:54341";
-// Local-stack demo anon key (public, identical for every `supabase start`).
-const ANON =
-  process.env.MCP_IT_ANON_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
-
-async function contextFor(email: string): Promise<AgentContext> {
-  process.env.MCP_ALLOWED_EMAILS = email;
-  const { verifyAgentToken, contextFrom } = await import("../context");
-  const { data, error } = await createClient(URL_, ANON).auth.signInWithPassword({ email, password: "password123" });
-  if (error) throw error;
-  const info = await verifyAgentToken(new Request("http://localhost/api/mcp"), data.session!.access_token);
-  return contextFrom(info!);
-}
+import { contextFor, useLocalStack } from "./it-helpers";
 
 describe.skipIf(!process.env.MCP_IT)("discovery tools (local stack)", () => {
   let tj: AgentContext;
@@ -23,8 +8,7 @@ describe.skipIf(!process.env.MCP_IT)("discovery tools (local stack)", () => {
   let t: typeof import("../tools/discovery");
 
   beforeAll(async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_URL = URL_;
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON;
+    useLocalStack();
     t = await import("../tools/discovery");
     tj = await contextFor("tj@gmxgroup.com");
     admin = await contextFor("bianca@gmxgroup.com");

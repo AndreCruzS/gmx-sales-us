@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { AgentAuthError } from "./auth";
 import { contextFrom, type AgentContext } from "./context";
 import { fail, type CallToolResult } from "./result";
+import { registerAgendaTools } from "./tools/agenda";
 import { registerDiscoveryTools } from "./tools/discovery";
 
 /** What the SDK hands a tool callback; only the bit we read. */
@@ -32,4 +33,5 @@ export function tool<A>(
 
 export function buildMcpServer(server: McpServer, getContext: GetCtx = getCtx) {
   registerDiscoveryTools(server, getContext);
+  registerAgendaTools(server, getContext);
 }
