@@ -40,6 +40,7 @@ export type Database = {
           author_id: string | null
           body: string
           created_at: string
+          created_via: string | null
           id: string
           org_id: string
           updated_at: string
@@ -49,6 +50,7 @@ export type Database = {
           author_id?: string | null
           body: string
           created_at?: string
+          created_via?: string | null
           id?: string
           org_id: string
           updated_at?: string
@@ -58,6 +60,7 @@ export type Database = {
           author_id?: string | null
           body?: string
           created_at?: string
+          created_via?: string | null
           id?: string
           org_id?: string
           updated_at?: string
@@ -622,6 +625,7 @@ export type Database = {
           address: string | null
           city: string | null
           created_at: string
+          created_via: string | null
           display_last_verified_at: string | null
           has_display_wall: boolean
           hubspot_id: string | null
@@ -650,6 +654,7 @@ export type Database = {
           address?: string | null
           city?: string | null
           created_at?: string
+          created_via?: string | null
           display_last_verified_at?: string | null
           has_display_wall?: boolean
           hubspot_id?: string | null
@@ -678,6 +683,7 @@ export type Database = {
           address?: string | null
           city?: string | null
           created_at?: string
+          created_via?: string | null
           display_last_verified_at?: string | null
           has_display_wall?: boolean
           hubspot_id?: string | null
@@ -947,6 +953,7 @@ export type Database = {
           activity_type: Database["public"]["Enums"]["activity_type"]
           commercial_potential: string | null
           created_at: string
+          created_via: string | null
           follow_up_required: boolean
           hubspot_id: string | null
           id: string
@@ -970,6 +977,7 @@ export type Database = {
           activity_type: Database["public"]["Enums"]["activity_type"]
           commercial_potential?: string | null
           created_at?: string
+          created_via?: string | null
           follow_up_required?: boolean
           hubspot_id?: string | null
           id?: string
@@ -993,6 +1001,7 @@ export type Database = {
           activity_type?: Database["public"]["Enums"]["activity_type"]
           commercial_potential?: string | null
           created_at?: string
+          created_via?: string | null
           follow_up_required?: boolean
           hubspot_id?: string | null
           id?: string
@@ -1382,6 +1391,62 @@ export type Database = {
           },
         ]
       }
+      agent_actions: {
+        Row: {
+          before: Json | null
+          created_at: string
+          entity: string
+          entity_id: string
+          id: string
+          op: string
+          org_id: string
+          session_id: string
+          tool: string
+          undone_at: string | null
+          updated_at: string
+          user_id: string
+          via: string
+        }
+        Insert: {
+          before?: Json | null
+          created_at?: string
+          entity: string
+          entity_id: string
+          id?: string
+          op: string
+          org_id?: string
+          session_id: string
+          tool: string
+          undone_at?: string | null
+          updated_at?: string
+          user_id?: string
+          via: string
+        }
+        Update: {
+          before?: Json | null
+          created_at?: string
+          entity?: string
+          entity_id?: string
+          id?: string
+          op?: string
+          org_id?: string
+          session_id?: string
+          tool?: string
+          undone_at?: string | null
+          updated_at?: string
+          user_id?: string
+          via?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_actions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_candidates: {
         Row: {
           created_at: string
@@ -1566,6 +1631,7 @@ export type Database = {
           account_id: string
           branch_id: string | null
           created_at: string
+          created_via: string | null
           email: string | null
           hubspot_id: string | null
           id: string
@@ -1584,6 +1650,7 @@ export type Database = {
           account_id: string
           branch_id?: string | null
           created_at?: string
+          created_via?: string | null
           email?: string | null
           hubspot_id?: string | null
           id?: string
@@ -1604,6 +1671,7 @@ export type Database = {
           account_id?: string
           branch_id?: string | null
           created_at?: string
+          created_via?: string | null
           email?: string | null
           hubspot_id?: string | null
           id?: string
@@ -3114,6 +3182,7 @@ export type Database = {
           author_id: string
           body: string
           created_at: string
+          created_via: string | null
           edited_at: string | null
           id: string
           next_action_id: string
@@ -3124,6 +3193,7 @@ export type Database = {
           author_id: string
           body: string
           created_at?: string
+          created_via?: string | null
           edited_at?: string | null
           id?: string
           next_action_id: string
@@ -3134,6 +3204,7 @@ export type Database = {
           author_id?: string
           body?: string
           created_at?: string
+          created_via?: string | null
           edited_at?: string | null
           id?: string
           next_action_id?: string
@@ -3298,6 +3369,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          created_via: string | null
           done_at: string | null
           id: string
           next_action_id: string
@@ -3309,6 +3381,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          created_via?: string | null
           done_at?: string | null
           id?: string
           next_action_id: string
@@ -3320,6 +3393,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          created_via?: string | null
           done_at?: string | null
           id?: string
           next_action_id?: string
@@ -3404,6 +3478,7 @@ export type Database = {
           completed_at: string | null
           counterparty_account_id: string | null
           created_at: string
+          created_via: string | null
           due_date: string
           due_time: string | null
           duration_minutes: number | null
@@ -3437,6 +3512,7 @@ export type Database = {
           completed_at?: string | null
           counterparty_account_id?: string | null
           created_at?: string
+          created_via?: string | null
           due_date: string
           due_time?: string | null
           duration_minutes?: number | null
@@ -3470,6 +3546,7 @@ export type Database = {
           completed_at?: string | null
           counterparty_account_id?: string | null
           created_at?: string
+          created_via?: string | null
           due_date?: string
           due_time?: string | null
           duration_minutes?: number | null
@@ -8658,6 +8735,7 @@ export type Database = {
           completed_at: string | null
           counterparty_account_id: string | null
           created_at: string
+          created_via: string | null
           due_date: string
           due_time: string | null
           duration_minutes: number | null
@@ -8695,6 +8773,7 @@ export type Database = {
           activity_type: Database["public"]["Enums"]["activity_type"]
           commercial_potential: string | null
           created_at: string
+          created_via: string | null
           follow_up_required: boolean
           hubspot_id: string | null
           id: string
