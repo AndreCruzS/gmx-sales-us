@@ -67,7 +67,7 @@ describe.skipIf(!process.env.MCP_IT)("undo (local stack)", () => {
     expect(after).toMatchObject({ priority: before!.priority, priority_days: before!.priority_days, due_date: before!.due_date });
   });
 
-  it("a change made since is not overwritten blindly: restore only under the current version", async () => {
+  it("undo of an edit restores the text the follow-up had before the agent edited it", async () => {
     const id = idOf(await agenda.planFollowUp(tj, { action: `undo ${run} c`, due_date: "2026-12-01", account_id: accountId }));
     const { data: row } = await tj.db.from("next_actions").select("updated_at").eq("id", id).single();
     await agenda.updateFollowUp(tj, { id, updated_at: row!.updated_at, action: `undo ${run} c2` });
@@ -77,13 +77,47 @@ describe.skipIf(!process.env.MCP_IT)("undo (local stack)", () => {
     expect(data!.action).toBe(`undo ${run} c`);
   });
 
-  it("a created contact cannot be undone, and stays offered", async () => {
+  it("a created contact cannot be undone by id, and stays offered", async () => {
     const id = idOf(await acc.addContact(tj, { account_id: accountId, name: `Pat ${run}` }));
-    const r = await u.undoLast(tj, {});
+    const mine = (await u.undoableActions(tj)).find((a) => a.entity_id === id)!;
+    const r = await u.undoLast(tj, { action_id: mine.id });
     expect(r.isError).toBe(true);
-    expect(text(r)).toBe("That can't be undone from here — tell me what to change instead.");
+    expect(text(r)).toContain("That can't be undone from here — tell me what to change instead.");
     const { data } = await tj.db.from("agent_actions").select("undone_at").eq("entity_id", id).single();
     expect(data!.undone_at).toBeNull();
+  });
+
+  it("without an id, the newest reversible action is undone and newer irreversible ones are mentioned", async () => {
+    const fid = idOf(await agenda.planFollowUp(tj, { action: `undo ${run} f`, due_date: "2026-12-01", account_id: accountId }));
+    await acc.addContact(tj, { account_id: accountId, name: `Sam ${run}` });
+    const r = await u.undoLast(tj, {});
+    expect(r.isError).toBeFalsy();
+    expect(text(r)).toContain("Newer changes that can't be undone");
+    expect((r.structuredContent as { undone: { entity_id: string } }).undone.entity_id).toBe(fid);
+  });
+
+  it("closing an already closed item does not overwrite completed_at", async () => {
+    const id = idOf(await agenda.planFollowUp(tj, { action: `undo ${run} g`, due_date: "2026-12-01", account_id: accountId }));
+    const { data: row } = await tj.db.from("next_actions").select("updated_at").eq("id", id).single();
+    await agenda.updateFollowUp(tj, { id, updated_at: row!.updated_at, done: true });
+    const { data: closed } = await tj.db.from("next_actions").select("completed_at").eq("id", id).single();
+    const mine = (await u.undoableActions(tj)).find((a) => a.entity_id === id && a.op === "create")!;
+    const r = await u.undoLast(tj, { action_id: mine.id });
+    expect(text(r)).toContain("already closed");
+    const { data: after } = await tj.db.from("next_actions").select("completed_at").eq("id", id).single();
+    expect(after!.completed_at).toBe(closed!.completed_at);
+  });
+
+  it("two parallel undos of the same action: exactly one reverses", async () => {
+    const id = idOf(await agenda.planFollowUp(tj, { action: `undo ${run} h`, due_date: "2026-12-01", account_id: accountId }));
+    const { data: row } = await tj.db.from("next_actions").select("updated_at").eq("id", id).single();
+    await agenda.updateFollowUp(tj, { id, updated_at: row!.updated_at, action: `undo ${run} h2` });
+    const mine = (await u.undoableActions(tj)).find((a) => a.entity_id === id && a.op === "update")!;
+    const rs = await Promise.all([u.undoLast(tj, { action_id: mine.id }), u.undoLast(tj, { action_id: mine.id })]);
+    expect(rs.filter((r) => !r.isError)).toHaveLength(1);
+    expect(rs.filter((r) => r.isError).map(text)[0]).toContain("already undone");
+    const { data } = await tj.db.from("next_actions").select("action").eq("id", id).single();
+    expect(data!.action).toBe(`undo ${run} h`);
   });
 
   it("an action id can be named; an unknown or another session's id is refused", async () => {
