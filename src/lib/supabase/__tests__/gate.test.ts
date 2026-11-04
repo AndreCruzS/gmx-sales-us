@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { gate } from "../gate";
+import { gate as rawGate, safeNext } from "../gate";
+
+const gate = (r: { pathname: string; signedIn: boolean; code: string | null; search?: string }) =>
+  rawGate({ search: "", ...r });
 
 describe("the auth gate (Andre, 2026-10-14: Google sign-in sat on the page until a refresh)", () => {
   it("lets a signed-in person through to any page", () => {
@@ -39,5 +42,48 @@ describe("the auth gate (Andre, 2026-10-14: Google sign-in sat on the page until
     expect(gate({ pathname: "/settings/google", signedIn: true, code: "abc" })).toEqual({
       kind: "pass",
     });
+  });
+
+  it("a stranger at the consent page is sent to login carrying the way back", () => {
+    expect(
+      gate({ pathname: "/oauth/consent", search: "?authorization_id=abc", signedIn: false, code: null }),
+    ).toEqual({ kind: "redirect", pathname: "/login", next: "/oauth/consent?authorization_id=abc" });
+  });
+
+  it("a stranger at an ordinary page gets no way back", () => {
+    expect(gate({ pathname: "/visits", search: "?x=1", signedIn: false, code: null })).toEqual({
+      kind: "redirect",
+      pathname: "/login",
+    });
+  });
+
+  it("a signed-in person on login with a consent next is sent there", () => {
+    expect(
+      gate({
+        pathname: "/login",
+        search: "?next=/oauth/consent?authorization_id=abc",
+        signedIn: true,
+        code: null,
+      }),
+    ).toEqual({ kind: "redirect", pathname: "/", next: "/oauth/consent?authorization_id=abc" });
+  });
+
+  it("a foreign next is ignored", () => {
+    expect(
+      gate({ pathname: "/login", search: "?next=https://evil.com", signedIn: true, code: null }),
+    ).toEqual({ kind: "redirect", pathname: "/" });
+  });
+});
+
+describe("safeNext", () => {
+  it("allows only the consent page", () => {
+    expect(safeNext("/oauth/consent?authorization_id=abc")).toBe("/oauth/consent?authorization_id=abc");
+    expect(safeNext("/oauth/consent")).toBe("/oauth/consent");
+    expect(safeNext(null)).toBeNull();
+    expect(safeNext("/visits")).toBeNull();
+    expect(safeNext("https://evil.com")).toBeNull();
+    expect(safeNext("//evil.com/oauth/consent")).toBeNull();
+    expect(safeNext("/oauth/consent\..\evil")).toBeNull();
+    expect(safeNext("/oauth/consentx")).toBeNull();
   });
 });

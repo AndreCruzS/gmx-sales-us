@@ -36,6 +36,7 @@ export async function middleware(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const decision = gate({
     pathname: request.nextUrl.pathname,
+    search: request.nextUrl.search,
     signedIn: user !== null,
     code,
   });
@@ -55,7 +56,18 @@ export async function middleware(request: NextRequest) {
   }
   if (decision.kind === "redirect") {
     const url = request.nextUrl.clone();
-    url.pathname = decision.pathname;
+    url.search = "";
+    if (decision.next && decision.pathname === "/login") {
+      url.pathname = "/login";
+      url.searchParams.set("next", decision.next);
+    } else if (decision.next) {
+      // Signed in, bound for the consent page: go straight there.
+      const target = new URL(decision.next, request.nextUrl.origin);
+      url.pathname = target.pathname;
+      url.search = target.search;
+    } else {
+      url.pathname = decision.pathname;
+    }
     return NextResponse.redirect(url);
   }
 

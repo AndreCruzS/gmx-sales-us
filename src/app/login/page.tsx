@@ -1,11 +1,23 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { safeNext } from "@/lib/supabase/gate";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  // An agent connector sends people here from its consent page; after signing
+  // in they go back to it (safeNext only lets the consent page through).
+  const back = safeNext(useSearchParams().get("next")) ?? "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +37,7 @@ export default function LoginPage() {
       setError(error.message);
       return;
     }
-    router.push("/");
+    router.push(back);
     router.refresh();
   }
 
@@ -35,7 +47,7 @@ export default function LoginPage() {
     setError(null);
     const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/` },
+      options: { redirectTo: `${window.location.origin}${back}` },
     });
     if (error) setError(error.message);
   }
