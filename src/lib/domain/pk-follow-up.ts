@@ -58,6 +58,7 @@ export interface PkItem {
   last_changed_by: string | null;
   last_changed_at: string | null;
   updated_at: string;
+  created_via?: "claude" | "muse" | null;
 }
 
 export interface PkNote {
@@ -67,6 +68,7 @@ export interface PkNote {
   body: string;
   created_at: string;
   edited_at: string | null;
+  created_via?: "claude" | "muse" | null;
 }
 
 export interface PkSubtask {

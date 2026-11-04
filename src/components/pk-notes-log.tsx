@@ -8,6 +8,7 @@
 import { useState } from "react";
 import type { PkNote } from "@/lib/domain/pk-follow-up";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { ViaAgent } from "@/components/via-agent";
 
 export type NoteVersion = { body: string; replaced_at: string };
 
@@ -22,7 +23,7 @@ export function stampOf(iso: string): string {
   return WHEN.format(new Date(iso));
 }
 
-const COLS = "id, next_action_id, author_id, body, created_at, edited_at";
+const COLS = "id, next_action_id, author_id, body, created_at, edited_at, created_via";
 
 export function PkNotesLog({
   itemId,
@@ -112,6 +113,12 @@ export function PkNotesLog({
                 <p className="pkd-by">
                   <b>{names.get(n.author_id) ?? "Someone"}</b> ·{" "}
                   <span className="pkd-fig">{stampOf(n.created_at)}</span>
+                  {n.created_via && (
+                    <>
+                      {" "}
+                      · <ViaAgent via={n.created_via} />
+                    </>
+                  )}
                   {mine && editing?.id !== n.id && (
                     <button
                       type="button"

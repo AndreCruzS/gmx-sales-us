@@ -24,6 +24,7 @@ import { PkSubtasks } from "@/components/pk-subtasks";
 import { shortDate } from "@/components/pk-band";
 import { useOffline } from "@/components/offline-provider";
 import { usePkItemWrites } from "@/components/use-pk-item-writes";
+import { ViaAgent } from "@/components/via-agent";
 import {
   PRIORITIES,
   PRIORITY_LABEL,
@@ -325,6 +326,7 @@ export function PkItemDrawer({
               {band.location ? ` · ${band.location}` : ""}
             </p>
             <h2 className="pkd-title">{item.action}</h2>
+            <ViaAgent via={item.created_via} />
           </div>
           <button
             ref={closeRef}

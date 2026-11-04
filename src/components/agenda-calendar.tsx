@@ -37,6 +37,7 @@ import { humanize } from "@/lib/domain/enums";
 import { AGENDA_KIND_FILTER, KIND_LABEL, formatTime, timeOrder } from "@/lib/domain/commitments";
 import { getOfflineLayer } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { ViaAgent } from "@/components/via-agent";
 
 interface CalRow {
   id: string;
@@ -47,6 +48,7 @@ interface CalRow {
   objective: string | null;
   kind?: string | null;
   due_time?: string | null;
+  created_via?: "claude" | "muse" | null;
   owner_id: string | null;
   updated_at: string;
   accountName?: string;
@@ -160,7 +162,7 @@ export function AgendaCalendar({
         supabase
           .from("next_actions")
           .select(
-            "id, action, due_date, due_time, completed_at, account_id, objective, kind, owner_id, updated_at, accounts!next_actions_account_id_fkey(name)",
+            "id, action, due_date, due_time, completed_at, account_id, objective, kind, created_via, owner_id, updated_at, accounts!next_actions_account_id_fkey(name)",
           )
           .gte("due_date", monthStart)
           .lte("due_date", monthEnd)
@@ -562,6 +564,7 @@ export function AgendaCalendar({
                             {humanize(r.objective)}
                           </span>
                         )}
+                        <ViaAgent via={r.created_via} />
                       </span>
                     </Link>
                   ) : (

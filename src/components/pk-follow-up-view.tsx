@@ -46,7 +46,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAllPages } from "@/lib/supabase/page";
 
 const ITEM_COLS =
-  "id, action, owner_id, due_date, completed_at, priority, priority_days, progress, last_changed_by, last_changed_at, updated_at, account_id, activity_id";
+  "id, action, owner_id, due_date, completed_at, priority, priority_days, progress, last_changed_by, last_changed_at, updated_at, created_via, account_id, activity_id";
 
 /** Ids per `.in()` request — enough to be few trips, short enough for a URL. */
 const CHUNK = 200;
@@ -69,7 +69,7 @@ interface MemberName {
   status: string;
 }
 
-const NOTE_COLS = "id, next_action_id, author_id, body, created_at, edited_at";
+const NOTE_COLS = "id, next_action_id, author_id, body, created_at, edited_at, created_via";
 const SUB_COLS = "id, next_action_id, title, done_at, position";
 const READ_COLS = "membership_id, next_action_id, last_read_at";
 
