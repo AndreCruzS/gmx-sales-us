@@ -6,6 +6,7 @@ import { registerAgendaTools } from "./tools/agenda";
 import { registerDiscoveryTools } from "./tools/discovery";
 import { registerAccountTools } from "./tools/accounts";
 import { registerPkTools } from "./tools/pk";
+import { registerUndoTools } from "./tools/undo";
 import { registerViewTools } from "./tools/views";
 
 /** What the SDK hands a tool callback; only the bit we read. */
@@ -40,4 +41,5 @@ export function buildMcpServer(server: McpServer, getContext: GetCtx = getCtx) {
   registerPkTools(server, getContext);
   registerAccountTools(server, getContext);
   registerViewTools(server, getContext);
+  registerUndoTools(server, getContext);
 }
