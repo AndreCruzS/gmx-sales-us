@@ -1,6 +1,7 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { verifyAgentToken } from "@/lib/mcp/context";
 import { SERVER_INSTRUCTIONS } from "@/lib/mcp/guide";
+import { configuredOrigin } from "@/lib/mcp/metadata";
 import { buildMcpServer } from "@/lib/mcp/server";
 
 export const maxDuration = 60;
@@ -15,7 +16,7 @@ const mcp = createMcpHandler((server) => buildMcpServer(server), {
 const handler = withMcpAuth(mcp, verifyAgentToken, {
   required: true,
   resourceMetadataPath: "/.well-known/oauth-protected-resource/api/mcp",
-  resourceUrl: process.env.MCP_PUBLIC_ORIGIN || undefined,
+  resourceUrl: configuredOrigin(),
 });
 
 export { handler as GET, handler as POST, handler as DELETE };

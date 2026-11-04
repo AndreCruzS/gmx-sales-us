@@ -7,10 +7,16 @@ const CORS = {
   "Access-Control-Max-Age": "86400",
 };
 
+/** The configured public origin without trailing slashes, or undefined when unset. */
+export function configuredOrigin(raw: string | undefined = process.env.MCP_PUBLIC_ORIGIN): string | undefined {
+  const o = raw?.trim().replace(/\/+$/, "");
+  return o || undefined;
+}
+
 /** The MCP endpoint URL: the configured public origin, else the request's. */
 export function mcpResourceUrl(req: Request): string {
-  const origin = process.env.MCP_PUBLIC_ORIGIN || getPublicOrigin(req);
-  return `${origin.replace(/\/$/, "")}/api/mcp`;
+  const origin = configuredOrigin() ?? getPublicOrigin(req);
+  return `${origin.replace(/\/+$/, "")}/api/mcp`;
 }
 
 export function protectedResourceMetadata(req: Request): Response {

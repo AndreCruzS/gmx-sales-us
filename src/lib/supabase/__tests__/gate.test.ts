@@ -83,7 +83,10 @@ describe("safeNext", () => {
     expect(safeNext("/visits")).toBeNull();
     expect(safeNext("https://evil.com")).toBeNull();
     expect(safeNext("//evil.com/oauth/consent")).toBeNull();
-    expect(safeNext("/oauth/consent\..\evil")).toBeNull();
+    // A real backslash (in a JS literal "\\" is one character).
+    expect("/oauth/consent\\..\\evil").toContain("\\");
+    expect(safeNext("/oauth/consent\\..\\evil")).toBeNull();
+    expect(safeNext("/oauth/consent?x=\\evil")).toBeNull();
     expect(safeNext("/oauth/consentx")).toBeNull();
   });
 });
