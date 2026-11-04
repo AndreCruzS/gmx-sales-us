@@ -41,17 +41,14 @@ import {
   type DealerLine,
 } from "@/lib/dealers-board";
 import { packDesk, spanner } from "@/lib/desk-pack";
-import { isLate } from "@/lib/domain/dealer-items";
 import {
   tierCounts,
   tierDealers,
   untieredTargets,
   type DealerTier,
-  type Tier,
 } from "@/lib/domain/dealer-tiers";
 import { isAdmin, seesDealersBoard } from "@/lib/domain/roles";
 import { isBranchLevel, type BranchRef, type SellThroughRow } from "@/lib/domain/sell-through";
-import { displayAccountName } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAllPages } from "@/lib/supabase/page";
 
