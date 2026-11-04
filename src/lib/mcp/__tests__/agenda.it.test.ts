@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { ACTIVITY_OUTCOMES } from "@/lib/domain/enums";
 import type { AgentContext } from "../context";
 import { contextFor, useLocalStack } from "./it-helpers";
 
@@ -31,7 +32,7 @@ describe.skipIf(!process.env.MCP_IT)("agenda tools (local stack)", () => {
     const r = await t.planFollowUp(tj, { action: `Call back ${run} a`, due_date: "2026-12-01", account_id: accountId });
     expect(r.isError).toBeFalsy();
     const id = (r.structuredContent as { id: string }).id;
-    expect(text(r)).toContain(`/visits?item=${id}`);
+    expect(text(r)).toContain(`/accounts/${accountId}`);
     const { data: row } = await tj.db.from("next_actions").select("*").eq("id", id).single();
     expect(row!.created_via).toBe("claude");
     expect(row!.entered_by).toBe(tj.me.membershipId);
@@ -160,5 +161,91 @@ describe.skipIf(!process.env.MCP_IT)("agenda tools (local stack)", () => {
       what_happened: "x",
     });
     expect(text(r)).toBe("Use create_pk for a PK.");
+  });
+
+  it("an admin changing tj's follow-up needs a yes; nothing changes until the code comes back", async () => {
+    const c = await t.planFollowUp(tj, { action: `Theirs ${run}`, due_date: "2026-12-04" });
+    const id = (c.structuredContent as { id: string }).id;
+    const { data: row } = await tj.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const args = { id, updated_at: row!.updated_at, due_date: "2026-12-09" };
+    const held = await t.updateFollowUp(admin, args);
+    expect(held.structuredContent?.needs_confirmation).toBe(true);
+    expect(text(held)).toContain("This changes someone else's agenda.");
+    const { data: same } = await tj.db.from("next_actions").select("due_date").eq("id", id).single();
+    expect(same!.due_date).toBe("2026-12-04");
+    const done = await t.updateFollowUp(admin, { ...args, confirmation: held.structuredContent!.confirmation as string });
+    expect(done.isError).toBeFalsy();
+    expect(text(done)).toContain("due_date: 2026-12-04 → 2026-12-09");
+    const { data: after } = await tj.db.from("next_actions").select("due_date").eq("id", id).single();
+    expect(after!.due_date).toBe("2026-12-09");
+  });
+
+  it("log_visit completing someone else's planned visit needs a yes", async () => {
+    const c = await t.planFollowUp(tj, { action: `Planned ${run}`, due_date: "2026-12-04", account_id: accountId });
+    const planned = (c.structuredContent as { id: string }).id;
+    const args = {
+      account_id: accountId,
+      activity_type: "DEALER_VISIT" as const,
+      occurred_at: "2026-11-03T17:00:00Z",
+      what_happened: `Admin visit ${run}`,
+      planned_action_id: planned,
+    };
+    const held = await t.logVisit(admin, args);
+    expect(held.structuredContent?.needs_confirmation).toBe(true);
+    expect(text(held)).toContain("This changes someone else's agenda.");
+    const { data: none } = await admin.db.from("activities").select("id").eq("what_happened", args.what_happened);
+    expect(none ?? []).toHaveLength(0);
+    const ok = await t.logVisit(admin, { ...args, confirmation: held.structuredContent!.confirmation as string });
+    expect(ok.isError).toBeFalsy();
+    const { data: p } = await tj.db.from("next_actions").select("completed_at").eq("id", planned).single();
+    expect(p!.completed_at).toBeTruthy();
+  });
+
+  it("five outcomes alone do not trigger the bulk rule; five follow-ups do", async () => {
+    const outcomes = ACTIVITY_OUTCOMES.slice(0, 5);
+    expect(outcomes).toHaveLength(5);
+    const base = { account_id: accountId, activity_type: "DEALER_VISIT" as const, occurred_at: "2026-11-03T17:00:00Z" };
+    const a = await t.logVisit(tj, { ...base, what_happened: `Outcomes ${run}`, outcomes: [...outcomes] });
+    expect(a.structuredContent?.needs_confirmation).toBeUndefined();
+    const five = Array.from({ length: 5 }, (_, i) => ({ action: `bulk ${run} ${i}`, due_date: "2026-12-12" }));
+    const b = await t.logVisit(tj, { ...base, what_happened: `Bulk ${run}`, follow_ups: five });
+    expect(b.structuredContent?.needs_confirmation).toBe(true);
+  });
+
+  it("a failure after the visit is saved says so and names the ids, not 'try again'", async () => {
+    const r = await t.logVisit(tj, {
+      account_id: accountId,
+      activity_type: "DEALER_VISIT",
+      occurred_at: "2026-11-03T17:00:00Z",
+      what_happened: `Partial ${run}`,
+      follow_ups: [
+        { action: `fine ${run}`, due_date: "2026-12-12" },
+        { action: `bad kind ${run}`, due_date: "2026-12-12", kind: "NOT_A_KIND" as never },
+      ],
+    });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain("Saved the visit as ");
+    expect(text(r)).toContain("Don't call log_visit again");
+    expect(text(r)).not.toContain("try again");
+    const d = r.structuredContent as { id: string; follow_up_ids: string[]; partial: boolean };
+    expect(d.partial).toBe(true);
+    expect(d.follow_up_ids).toHaveLength(1);
+    const { data: act } = await tj.db.from("activities").select("id").eq("id", d.id);
+    expect(act).toHaveLength(1);
+  });
+
+  it("a PK follow-up is refused here and sent to update_pk_item", async () => {
+    const pk = await import("../tools/pk");
+    const mk = await pk.createPk(admin, {
+      dealer_account_id: accountId,
+      occurred_at: "2026-11-03T17:00:00Z",
+      what_happened: `PK ${run} refuse`,
+      follow_ups: [{ action: `pk fu ${run}`, urgent: true, important: true, reason: "r", asked_by_dealer: false }],
+    });
+    const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await admin.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const r = await t.updateFollowUp(admin, { id, updated_at: row!.updated_at, action: "renamed" });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toBe("This is a PK follow-up — use update_pk_item.");
   });
 });

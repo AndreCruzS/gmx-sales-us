@@ -117,7 +117,7 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     const r = await t.updatePkItem(tj, { id, updated_at: row!.updated_at, progress: "WORKING_ON_IT" });
     expect(r.isError).toBe(true);
     expect(text(r)).toBe("You can't change this item.");
-    const ok = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, priority: "DO_NOW" });
+    const ok = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true, important: true, reason: "x" });
     expect(ok.isError).toBeFalsy();
     const stale = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, progress: "WAITING" });
     expect(text(stale)).toBe("This changed since you read it — read it again.");
@@ -172,5 +172,55 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(item.isError).toBeFalsy();
     expect(text(item)).toContain(`theirs2 ${run}`);
     expect(text(await t.pkBoard(tj, { limit: 200 }))).toContain(`theirs2 ${run}`);
+  });
+
+  it("update_pk_item takes the matrix answers; both no is a suggestion that changes nothing", async () => {
+    const mk = await t.createPk(admin, {
+      dealer_account_id: dealerId,
+      occurred_at: PK_AT,
+      what_happened: `PK ${run} matrix`,
+      follow_ups: [fu("mx", { important: true })],
+    });
+    const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await admin.db.from("next_actions").select("updated_at, priority").eq("id", id).single();
+    expect(row!.priority).toBe("PLAN");
+    const half = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true });
+    expect(half.isError).toBe(true);
+    const drop = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: false, important: false, reason: "nope" });
+    expect(drop.isError).toBeFalsy();
+    expect(text(drop)).toContain("Suggested to drop");
+    const { data: same } = await admin.db.from("next_actions").select("priority").eq("id", id).single();
+    expect(same!.priority).toBe("PLAN");
+    const up = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true, important: true, reason: "now" });
+    expect(text(up)).toContain("priority: PLAN → DO_NOW");
+  });
+
+  it("a failure after the PK is saved names what exists and says not to call create_pk again", async () => {
+    const r = await t.createPk(admin, {
+      dealer_account_id: dealerId,
+      occurred_at: PK_AT,
+      what_happened: `PK ${run} partial`,
+      follow_ups: [
+        fu("first", { important: true }),
+        fu("second", { important: true, progress: "NOT_A_PROGRESS" }),
+      ],
+    });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain("Saved the PK as ");
+    expect(text(r)).toContain("Don't call create_pk again");
+    const d = r.structuredContent as { id: string; follow_up_ids: string[]; partial: boolean };
+    expect(d.partial).toBe(true);
+    expect(d.follow_up_ids).toHaveLength(1);
+  });
+
+  it("each saved follow-up gets its own link", async () => {
+    const r = await t.createPk(admin, {
+      dealer_account_id: dealerId,
+      occurred_at: PK_AT,
+      what_happened: `PK ${run} links`,
+      follow_ups: [fu("l1", { important: true }), fu("l2", { urgent: true })],
+    });
+    const ids = (r.structuredContent as { follow_up_ids: string[] }).follow_up_ids;
+    for (const id of ids) expect(text(r)).toContain(`/visits/pk?item=${id}`);
   });
 });

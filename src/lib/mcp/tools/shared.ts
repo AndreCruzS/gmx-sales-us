@@ -40,7 +40,13 @@ export function gate(
   const given = typeof args.confirmation === "string" ? args.confirmation : undefined;
   const subject = { userId: ctx.me.userId, tool: toolName, args };
   if (given && checkConfirmation(given, subject, new Date())) return null;
-  const { code, expiresAt } = issueConfirmation(subject, new Date());
+  let issued: { code: string; expiresAt: string };
+  try {
+    issued = issueConfirmation(subject, new Date());
+  } catch {
+    return fail("Confirmations aren't set up on the server yet — tell Andre.");
+  }
+  const { code, expiresAt } = issued;
   const lead = given ? "That confirmation code was not valid or has expired. " : "";
   return needsConfirmation(`${lead}${reason} Nothing has been saved yet. It would: ${preview()}`, code, expiresAt);
 }

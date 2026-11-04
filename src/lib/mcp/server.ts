@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { ZodError } from "zod";
 import { AgentAuthError } from "./auth";
 import { contextFrom, type AgentContext } from "./context";
 import { fail, type CallToolResult } from "./result";
@@ -19,6 +20,18 @@ export const getCtx: GetCtx = async (extra) => {
   return contextFrom(info);
 };
 
+export const BAD_DATE =
+  "That date or time isn't valid — use ISO 8601 with the UTC offset, e.g. 2026-11-04T18:30:00-08:00.";
+
+export const BAD_ZONE = "That time zone isn't valid — use an IANA name like America/Los_Angeles.";
+
+/** The first problem of a schema check, with the field it is about. */
+export function zodMessage(e: ZodError): string {
+  const i = e.issues[0];
+  const path = i?.path.join(".");
+  return `${path ? `${path}: ` : ""}${i?.message ?? "That input isn't valid."}`;
+}
+
 /** Wrap a tool body so no error ever reaches the agent as a stack trace. */
 export function tool<A>(
   getContext: GetCtx,
@@ -29,6 +42,11 @@ export function tool<A>(
       return await handler(await getContext(extra), args);
     } catch (e) {
       if (e instanceof AgentAuthError) return fail(e.message);
+      if (e instanceof ZodError) return fail(zodMessage(e));
+      if (e instanceof RangeError) {
+        if (/time zone/i.test(e.message)) return fail(BAD_ZONE);
+        if (/invalid (time|date)/i.test(e.message)) return fail(BAD_DATE);
+      }
       console.error("[mcp] tool failed:", e);
       return fail("Something went wrong on GMX Sales — try again.");
     }

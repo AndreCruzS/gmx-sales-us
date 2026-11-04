@@ -16,8 +16,10 @@ export function ok(text: string, data?: unknown): CallToolResult {
   return r;
 }
 
-export function fail(text: string): CallToolResult {
-  return { content: [{ type: "text", text }], isError: true };
+export function fail(text: string, data?: Record<string, unknown>): CallToolResult {
+  const r: CallToolResult = { content: [{ type: "text", text }], isError: true };
+  if (data) r.structuredContent = data;
+  return r;
 }
 
 export function needsConfirmation(preview: string, code: string, expiresAt: string): CallToolResult {

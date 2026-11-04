@@ -8,7 +8,8 @@ export type LoggedEntity =
   | "next_action_subtasks"
   | "accounts"
   | "contacts"
-  | "account_notes";
+  | "account_notes"
+  | "account_relationships";
 
 /**
  * One row per agent write; it backs undo. `before` holds the prior values of
@@ -28,6 +29,23 @@ export async function logAction(
     before: (a.before ?? null) as Json | null,
   });
   if (error) throw error;
+}
+
+export const NO_UNDO = "Undo won't be available for this one.";
+
+/**
+ * The write already happened. A log failure must not read as "try again" (that
+ * would repeat the write): it only costs the undo. Returns a line to add to the
+ * receipt, or null when the action was logged.
+ */
+export async function logActionQuiet(ctx: AgentContext, a: Parameters<typeof logAction>[1]): Promise<string | null> {
+  try {
+    await logAction(ctx, a);
+    return null;
+  } catch (e) {
+    console.error("[mcp] could not log an action (undo unavailable):", e);
+    return NO_UNDO;
+  }
 }
 
 export type LoggedAction = {

@@ -2,10 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { ACTIVITY_OUTCOMES, ACTIVITY_TYPES, VISIT_OBJECTIVES } from "@/lib/domain/enums";
 import { activityCreateSchema, nextActionCreateSchema, nextActionUpdateSchema } from "@/lib/domain/schemas";
-import { logAction } from "../actions-log";
+import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
 import { dbProblem, dbRow, gate, idMaker, STALE, validCode } from "./shared";
-import { receipt } from "../receipt";
+import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
 
@@ -61,6 +61,11 @@ function timedProblem(t: TimedArgs): string | null {
   return null;
 }
 
+/** The most direct existing page for a follow-up: its account, else the agenda. */
+const followUpPath = (accountId?: string | null) => (accountId ? `/accounts/${accountId}` : "/visits");
+
+const SOMEONE_ELSES = "This changes someone else's agenda.";
+
 const when = (d: string, t?: string | null) => (t ? `${d} at ${t.slice(0, 5)}` : d);
 
 // ---- list_agenda ----------------------------------------------------------
@@ -81,6 +86,7 @@ export async function listAgenda(ctx: AgentContext, args: ListAgendaArgs): Promi
     .or(`completed_at.is.null,completed_at.gte.${since}`)
     .order("due_date")
     .order("due_time", { nullsFirst: true })
+    .order("id")
     .range(offset, offset + limit - 1);
   if (error) throw error;
   const rows = data ?? [];
@@ -126,20 +132,18 @@ export async function planFollowUp(ctx: AgentContext, args: PlanFollowUpArgs): P
     if (known) return known;
     throw error;
   }
-  if ((data ?? []).length > 0) await logAction(ctx, { tool: "plan_follow_up", entity: "next_actions", entityId: id, op: "create" });
-
-  return ok(
-    receipt([`Planned: ${args.action}, ${when(args.due_date, args.due_time)}. Record ${id}.`], [{ id, path: `/visits?item=${id}` }]),
-    { id },
-  );
+  const lines = [`Planned: ${args.action}, ${when(args.due_date, args.due_time)}. Record ${id}.`];
+  if ((data ?? []).length > 0) {
+    const note = await logActionQuiet(ctx, { tool: "plan_follow_up", entity: "next_actions", entityId: id, op: "create" });
+    if (note) lines.push(note);
+  }
+  // /visits does not open one item; the account page lists its open follow-ups, else the agenda.
+  return ok(receipt(lines, [{ id, path: followUpPath(args.account_id) }]), { id });
 }
 
 // ---- update_follow_up -----------------------------------------------------
 
 export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs): Promise<CallToolResult> {
-  const held = gate(ctx, "update_follow_up", args, () => `change follow-up ${args.id} so it belongs to someone else.`);
-  if (held) return held;
-
   const base = nextActionUpdateSchema.parse({
     id: args.id,
     due_date: args.due_date,
@@ -154,10 +158,33 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
   if (args.duration_minutes !== undefined) patch.duration_minutes = args.duration_minutes;
   if (Object.keys(patch).length === 0) return fail("Nothing to change — say what should be different.");
 
-  const keys = Object.keys(patch).join(", ");
-  const { data: prior, error: readErr } = await ctx.db.from("next_actions").select(keys).eq("id", args.id).maybeSingle();
+  // Read the row before anything: who owns it decides whether this needs a yes.
+  const keys = Object.keys(patch);
+  const { data: row, error: readErr } = await ctx.db
+    .from("next_actions")
+    .select([...new Set(["owner_id", "account_id", "activity_id", "source", "priority", ...keys])].join(", "))
+    .eq("id", args.id)
+    .maybeSingle();
   if (readErr) throw readErr;
-  if (!prior) return fail("I can't find that follow-up (or it isn't yours to change).");
+  if (!row) return fail("I can't find that follow-up (or it isn't yours to change).");
+  const prior = row as unknown as Record<string, unknown> & {
+    owner_id: string;
+    account_id: string | null;
+    activity_id: string | null;
+    source: string | null;
+    priority: string | null;
+  };
+
+  if (await isPkItem(ctx, prior)) return fail("This is a PK follow-up — use update_pk_item.");
+
+  const held = gate(
+    ctx,
+    "update_follow_up",
+    args,
+    () => `change follow-up ${args.id}${prior.owner_id !== ctx.me.membershipId ? " (owned by someone else)" : " so it belongs to someone else"}.`,
+    prior.owner_id !== ctx.me.membershipId ? SOMEONE_ELSES : undefined,
+  );
+  if (held) return held;
 
   const { data, error } = await ctx.db
     .from("next_actions")
@@ -171,18 +198,28 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
     throw error;
   }
   if ((data ?? []).length === 0) return fail(STALE);
-  await logAction(ctx, {
-    tool: "update_follow_up",
-    entity: "next_actions",
-    entityId: args.id,
-    op: "update",
-    before: prior as unknown as Record<string, unknown>,
-  });
-  const verb = args.done ? "Marked done" : "Updated";
-  return ok(receipt([`${verb}: follow-up ${args.id}.`], [{ id: args.id, path: `/visits?item=${args.id}` }]), { id: args.id });
+  const before = Object.fromEntries(keys.map((k) => [k, prior[k] ?? null]));
+  const lines = [`${args.done ? "Marked done" : "Updated"}: follow-up ${args.id}. ${changes(before, patch)}.`];
+  const note = await logActionQuiet(ctx, { tool: "update_follow_up", entity: "next_actions", entityId: args.id, op: "update", before });
+  if (note) lines.push(note);
+  return ok(receipt(lines, [{ id: args.id, path: followUpPath(prior.account_id) }]), { id: args.id });
+}
+
+/** A PK's follow-up has its own tool (priority, alert days, the board). */
+async function isPkItem(
+  ctx: AgentContext,
+  r: { activity_id: string | null; source: string | null; priority: string | null },
+): Promise<boolean> {
+  if (!r.activity_id) return false;
+  if (r.priority !== null) return true;
+  if (r.source !== "VISIT_CAPTURE") return false;
+  const { data } = await ctx.db.rpc("pk_board_visits").select("id").eq("id", r.activity_id).maybeSingle();
+  return !!data;
 }
 
 // ---- log_visit ------------------------------------------------------------
+
+class StepFailed extends Error {}
 
 export async function logVisit(ctx: AgentContext, args: LogVisitArgs): Promise<CallToolResult> {
   if (args.activity_type === "PK_TRAINING") return fail("Use create_pk for a PK.");
@@ -191,7 +228,25 @@ export async function logVisit(ctx: AgentContext, args: LogVisitArgs): Promise<C
     const bad = timedProblem(f);
     if (bad) return fail(`${bad} (follow-up "${f.action}")`);
   }
-  const held = gate(ctx, "log_visit", args, () => `log the visit and ${followUps.length} follow-ups.`);
+
+  // Completing a planned visit is a change to its owner's agenda.
+  let planned: { owner_id: string; completed_at: string | null; updated_at: string } | null = null;
+  if (args.planned_action_id) {
+    const { data, error } = await ctx.db
+      .from("next_actions")
+      .select("owner_id, completed_at, updated_at")
+      .eq("id", args.planned_action_id)
+      .maybeSingle();
+    if (error) throw error;
+    planned = data;
+  }
+  const reason =
+    planned && planned.owner_id !== ctx.me.membershipId
+      ? SOMEONE_ELSES
+      : followUps.length >= 5
+        ? "This changes 5 or more records at once."
+        : null;
+  const held = gate(ctx, "log_visit", args, () => `log the visit and ${followUps.length} follow-ups${reason === SOMEONE_ELSES ? ", and mark someone else's planned visit done" : ""}.`, reason);
   if (held) return held;
 
   const nextId = idMaker(validCode(ctx, "log_visit", args));
@@ -219,72 +274,90 @@ export async function logVisit(ctx: AgentContext, args: LogVisitArgs): Promise<C
     if (known) return known;
     throw created.error;
   }
-  if ((created.data ?? []).length > 0) {
-    await logAction(ctx, { tool: "log_visit", entity: "activities", entityId: activityId, op: "create" });
-  }
 
+  // From here the visit exists: nothing may read as "try again" (that would log it twice).
   const followIds: string[] = [];
-  for (const [i, f] of followUps.entries()) {
-    const id = nextId(i + 1);
-    followIds.push(id);
-    const row = nextActionCreateSchema.parse({
-      id,
-      org_id: ctx.me.orgId,
-      action: f.action,
-      owner_id: ctx.me.membershipId,
-      due_date: f.due_date,
-      account_id: args.account_id,
-      activity_id: activityId,
-      kind: f.kind,
-      due_time: f.due_time,
-      time_zone: f.time_zone,
-      duration_minutes: f.duration_minutes,
-      source: "MANUAL",
-    });
-    const r = await ctx.db
-      .from("next_actions")
-      .upsert(dbRow({ ...row, created_via: ctx.via }), { onConflict: "id", ignoreDuplicates: true })
-      .select("id");
-    if (r.error) {
-      const known = dbProblem(r.error, f.kind);
-      if (known) return fail(`The visit is logged (${activityId}) but a follow-up failed: ${known.content[0].text}`);
-      throw r.error;
+  const notes: string[] = [];
+  let step = "logging the visit";
+  try {
+    if ((created.data ?? []).length > 0) {
+      const n = await logActionQuiet(ctx, { tool: "log_visit", entity: "activities", entityId: activityId, op: "create" });
+      if (n) notes.push(n);
     }
-    if ((r.data ?? []).length > 0) await logAction(ctx, { tool: "log_visit", entity: "next_actions", entityId: id, op: "create" });
+
+    for (const [i, f] of followUps.entries()) {
+      step = `adding the follow-up "${f.action}"`;
+      const id = nextId(i + 1);
+      const row = nextActionCreateSchema.parse({
+        id,
+        org_id: ctx.me.orgId,
+        action: f.action,
+        owner_id: ctx.me.membershipId,
+        due_date: f.due_date,
+        account_id: args.account_id,
+        activity_id: activityId,
+        kind: f.kind,
+        due_time: f.due_time,
+        time_zone: f.time_zone,
+        duration_minutes: f.duration_minutes,
+        source: "MANUAL",
+      });
+      const r = await ctx.db
+        .from("next_actions")
+        .upsert(dbRow({ ...row, created_via: ctx.via }), { onConflict: "id", ignoreDuplicates: true })
+        .select("id");
+      if (r.error) {
+        const known = dbProblem(r.error, f.kind);
+        if (known) throw new StepFailed(known.content[0].text);
+        throw r.error;
+      }
+      followIds.push(id);
+      if ((r.data ?? []).length > 0) {
+        const n = await logActionQuiet(ctx, { tool: "log_visit", entity: "next_actions", entityId: id, op: "create" });
+        if (n) notes.push(n);
+      }
+    }
+  } catch (e) {
+    if (!(e instanceof StepFailed)) console.error("[mcp] log_visit failed after the visit was saved:", e);
+    const why = e instanceof StepFailed ? ` (${e.message})` : "";
+    const saved = followIds.length ? ` and ${followIds.length} follow-up${followIds.length === 1 ? "" : "s"} (${followIds.join(", ")})` : "";
+    return fail(
+      `Saved the visit as ${activityId}${saved}, but ${step} failed${why}. Don't call log_visit again — add the rest with plan_follow_up.`,
+      { id: activityId, follow_up_ids: followIds, partial: true },
+    );
   }
 
   let completedPlanned = false;
-  if (args.planned_action_id) {
-    const { data: planned, error } = await ctx.db
-      .from("next_actions")
-      .select("completed_at, updated_at")
-      .eq("id", args.planned_action_id)
-      .maybeSingle();
-    if (error) throw error;
+  try {
     if (planned && planned.completed_at === null) {
       const done = await ctx.db
         .from("next_actions")
         .update({ completed_at: new Date().toISOString() })
-        .eq("id", args.planned_action_id)
+        .eq("id", args.planned_action_id!)
         .eq("updated_at", planned.updated_at)
         .select("id");
       if (done.error) throw done.error;
       if ((done.data ?? []).length > 0) {
         completedPlanned = true;
-        await logAction(ctx, {
+        const n = await logActionQuiet(ctx, {
           tool: "log_visit",
           entity: "next_actions",
-          entityId: args.planned_action_id,
+          entityId: args.planned_action_id!,
           op: "update",
           before: { completed_at: null },
         });
+        if (n) notes.push(n);
       }
     }
+  } catch (e) {
+    console.error("[mcp] log_visit could not close the planned visit:", e);
+    notes.push("The visit is saved, but the planned visit could not be marked done — use update_follow_up with done: true.");
   }
 
   const lines = [`Logged: ${args.activity_type.toLowerCase().replace(/_/g, " ")} on ${args.occurred_at.slice(0, 10)}. Record ${activityId}.`];
   if (followIds.length) lines.push(`${followIds.length} follow-up${followIds.length === 1 ? "" : "s"} planned.`);
   if (completedPlanned) lines.push("The planned visit is marked done.");
+  lines.push(...new Set(notes));
   return ok(receipt(lines, [{ id: activityId, path: `/accounts/${args.account_id}` }]), {
     id: activityId,
     follow_up_ids: followIds,
@@ -345,7 +418,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Change or complete a follow-up",
       description:
-        "Move, rename, reassign or complete a follow-up. Read it first with list_agenda and pass its updated_at; if it changed meanwhile you are told to read again. done: true completes it. Reassigning needs the person's yes first." +
+        "Move, rename, reassign or complete a follow-up. Read it first with list_agenda and pass its updated_at; if it changed meanwhile you are told to read again. done: true completes it. Reassigning it, or changing a follow-up that belongs to someone else, needs the person's yes first. A PK follow-up is changed with update_pk_item." +
         writeNote,
       inputSchema: z.object({
         id: z.string().uuid(),
@@ -368,7 +441,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Log a visit",
       description:
-        "Record a visit or touch that already happened, with the follow-ups it produced. Ask the person which account (look it up with find), when it happened, and what happened. Not for PK training (use create_pk). If it was a planned visit, pass planned_action_id and it is marked done. For a CALL or MEETING follow-up ask for time, zone and duration. Five or more follow-ups need the person's yes first." +
+        "Record a visit or touch that already happened, with the follow-ups it produced. Ask the person which account (look it up with find), when it happened, and what happened. Not for PK training (use create_pk). If it was a planned visit, pass planned_action_id and it is marked done. For a CALL or MEETING follow-up ask for time, zone and duration. Five or more follow-ups, or completing a planned visit that belongs to someone else, need the person's yes first." +
         writeNote,
       inputSchema: z.object({
         account_id: z.string().uuid(),

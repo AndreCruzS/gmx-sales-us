@@ -26,7 +26,7 @@ export function planPkFollowUp(pkDate: string, f: PkFollowUpInput): PkRowPlan {
   return { save: true, priority: q, priority_days: days, due_date: alertDate(pkDate, days), reason: f.reason };
 }
 
-const OFFSET = /[+-]\d{2}:?\d{2}$/;
+const OFFSET = /[+-]\d{2}(:?\d{2})?$/;
 
 function zoneOffsetMs(instant: number, timeZone: string): number {
   const p = Object.fromEntries(
@@ -44,7 +44,9 @@ function zoneOffsetMs(instant: number, timeZone: string): number {
  */
 export function pkMoment(occurredAt: string, timeZone: string): { instant: string; pkDate: string } {
   if (/T/.test(occurredAt) && OFFSET.test(occurredAt)) {
-    return { instant: new Date(occurredAt).toISOString(), pkDate: occurredAt.slice(0, 10) };
+    // "+05" (hours only) is valid ISO 8601 but not every parser reads it: make it "+05:00".
+    const full = /[+-]\d{2}$/.test(occurredAt) ? `${occurredAt}:00` : occurredAt;
+    return { instant: new Date(full).toISOString(), pkDate: occurredAt.slice(0, 10) };
   }
   if (/Z$/i.test(occurredAt)) {
     const instant = new Date(occurredAt).toISOString();

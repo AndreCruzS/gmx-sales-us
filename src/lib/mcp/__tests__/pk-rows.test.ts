@@ -51,4 +51,10 @@ describe("zone-aware PK dates", () => {
   it("no offset is wall time in the zone", () => {
     expect(pkMoment("2026-11-04T18:30:00", "America/Los_Angeles")).toEqual({ instant: "2026-11-05T02:30:00.000Z", pkDate: "2026-11-04" });
   });
+  it("an hours-only offset (+05) is read as +05:00", () => {
+    expect(pkMoment("2026-11-04T18:30:00+05", "UTC")).toEqual({ instant: "2026-11-04T13:30:00.000Z", pkDate: "2026-11-04" });
+  });
+  it("a nonsense date throws a RangeError (the tool wrapper turns it into plain English)", () => {
+    expect(() => pkMoment("2026-13-45T99:00:00Z", "UTC")).toThrow(RangeError);
+  });
 });

@@ -15,10 +15,11 @@ import {
   type SellThroughRow,
 } from "@/lib/domain/sell-through";
 import { calendarDateIn } from "@/lib/domain/pk-follow-up";
+import { seesDealersBoard } from "@/lib/domain/roles";
 import { buyInTotals, type BuyInOrder } from "@/lib/buy-in";
 import { fetchAllPages } from "@/lib/supabase/page";
 import type { AgentContext } from "../context";
-import { ok, type CallToolResult } from "../result";
+import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
 
 export type DealersOverviewArgs = { territory?: string; limit?: number; offset?: number };
@@ -49,6 +50,7 @@ const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 // ---- dealers_overview (app/dealers/page.tsx, same fetches and lines) -------
 
 export async function dealersOverview(ctx: AgentContext, args: DealersOverviewArgs): Promise<CallToolResult> {
+  if (!seesDealersBoard(ctx.me.role)) return fail("The Dealers board isn't part of your view in the app.");
   const limit = Math.min(Math.max(Math.trunc(args.limit ?? 50), 1), 200);
   const offset = Math.max(Math.trunc(args.offset ?? 0), 0);
   const db = ctx.db;

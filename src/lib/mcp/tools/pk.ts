@@ -4,7 +4,6 @@ import {
   alertDate,
   daysFrom,
   isUnread,
-  PRIORITIES,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   calendarDateIn,
@@ -12,15 +11,15 @@ import {
   type PkItem,
   type PkNote,
   type PkRead,
-  type Priority,
   type Progress,
 } from "@/lib/domain/pk-follow-up";
+import { draftedQuadrant } from "@/lib/domain/eisenhower";
 import { activityCreateSchema, nextActionCreateSchema } from "@/lib/domain/schemas";
 import { fetchAllPages } from "@/lib/supabase/page";
-import { logAction } from "../actions-log";
+import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
 import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
-import { receipt } from "../receipt";
+import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
 import { dbProblem, dbRow, gate, idMaker, STALE, validCode } from "./shared";
@@ -28,6 +27,7 @@ import { dbProblem, dbRow, gate, idMaker, STALE, validCode } from "./shared";
 const PROGRESSES = ["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"] as const;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const CANT = "You can't change this item.";
+class StepFailed extends Error {}
 const link = (id: string) => `/visits/pk?item=${id}`;
 
 export type PkBoardArgs = {
@@ -50,7 +50,10 @@ export type CreatePkArgs = {
 export type UpdatePkItemArgs = {
   id: string;
   updated_at: string;
-  priority?: Priority;
+  urgent?: boolean;
+  important?: boolean;
+  asked_by_dealer?: boolean;
+  reason?: string;
   progress?: Progress;
   done?: boolean;
   due_date?: string;
@@ -255,85 +258,107 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
     if (known) return known;
     throw created.error;
   }
-  if ((created.data ?? []).length > 0) {
-    await logAction(ctx, { tool: "create_pk", entity: "activities", entityId: activityId, op: "create" });
-  }
 
+  // From here the PK exists: nothing may read as "try again" (that would log it twice).
   const saved: { id: string; text: string }[] = [];
   const dropped: string[] = [];
-  for (const [i, f] of fus.entries()) {
-    const plan = plans[i];
-    if (!plan.save && !keep.has(i)) {
-      dropped.push(`${i}: "${f.action}" (${f.reason})`);
-      continue;
-    }
-    const base = 1 + i * 100;
-    const itemId = nextId(base);
-    const fields = plan.save
-      ? { priority: plan.priority, priority_days: plan.priority_days, due_date: plan.due_date }
-      : { priority: null, priority_days: null, due_date: f.due_date ?? alertDate(pkDate, 7) };
-    const row = nextActionCreateSchema.parse({
-      id: itemId,
-      org_id: ctx.me.orgId,
-      action: f.action.trim(),
-      owner_id: f.owner_id ?? ctx.me.membershipId,
-      account_id: args.dealer_account_id,
-      activity_id: activityId,
-      progress: f.progress ?? "NOT_STARTED",
-      source: "VISIT_CAPTURE",
-      ...fields,
-    });
-    const r = await ctx.db
-      .from("next_actions")
-      .upsert(dbRow({ ...row, created_via: ctx.via }), { onConflict: "id", ignoreDuplicates: true })
-      .select("id");
-    if (r.error) {
-      const known = dbProblem(r.error);
-      if (known) return fail(`The PK is logged (${activityId}) but a follow-up failed: ${known.content[0].text}`);
-      throw r.error;
-    }
-    if ((r.data ?? []).length > 0) {
-      await logAction(ctx, { tool: "create_pk", entity: "next_actions", entityId: itemId, op: "create" });
+  const notes: string[] = [];
+  let step = "logging the PK";
+  const quiet = async (a: Parameters<typeof logActionQuiet>[1]) => {
+    const n = await logActionQuiet(ctx, a);
+    if (n) notes.push(n);
+  };
+  try {
+    if ((created.data ?? []).length > 0) {
+      await quiet({ tool: "create_pk", entity: "activities", entityId: activityId, op: "create" });
     }
 
-    const titles = (f.subtasks ?? []).map((t) => t.trim()).filter(Boolean);
-    for (const [k, title] of titles.entries()) {
-      const subId = nextId(base + 2 + k);
-      const s = await ctx.db
-        .from("next_action_subtasks")
-        .upsert(
-          dbRow({ id: subId, org_id: ctx.me.orgId, next_action_id: itemId, title, position: k, created_via: ctx.via }),
-          { onConflict: "id", ignoreDuplicates: true },
-        )
+    for (const [i, f] of fus.entries()) {
+      const plan = plans[i];
+      if (!plan.save && !keep.has(i)) {
+        dropped.push(`${i}: "${f.action}" (${f.reason})`);
+        continue;
+      }
+      step = `saving the follow-up "${f.action}"`;
+      const base = 1 + i * 100;
+      const itemId = nextId(base);
+      const fields = plan.save
+        ? { priority: plan.priority, priority_days: plan.priority_days, due_date: plan.due_date }
+        : { priority: null, priority_days: null, due_date: f.due_date ?? alertDate(pkDate, 7) };
+      const row = nextActionCreateSchema.parse({
+        id: itemId,
+        org_id: ctx.me.orgId,
+        action: f.action.trim(),
+        owner_id: f.owner_id ?? ctx.me.membershipId,
+        account_id: args.dealer_account_id,
+        activity_id: activityId,
+        progress: f.progress ?? "NOT_STARTED",
+        source: "VISIT_CAPTURE",
+        ...fields,
+      });
+      const r = await ctx.db
+        .from("next_actions")
+        .upsert(dbRow({ ...row, created_via: ctx.via }), { onConflict: "id", ignoreDuplicates: true })
         .select("id");
-      if (s.error) throw s.error;
-      if ((s.data ?? []).length > 0) {
-        await logAction(ctx, { tool: "create_pk", entity: "next_action_subtasks", entityId: subId, op: "create" });
+      if (r.error) {
+        const known = dbProblem(r.error);
+        if (known) throw new StepFailed(known.content[0].text);
+        throw r.error;
+      }
+      // The item exists now; list it before its subtasks and note so a failure there still names it.
+      const label = plan.save ? PRIORITY_LABEL[plan.priority] : "kept, no priority";
+      saved.push({ id: itemId, text: `- ${f.action} — ${label}, alert ${fields.due_date}.` });
+      if ((r.data ?? []).length > 0) {
+        await quiet({ tool: "create_pk", entity: "next_actions", entityId: itemId, op: "create" });
+      }
+
+      step = `adding the subtasks of "${f.action}" (follow-up ${itemId} is saved)`;
+      const titles = (f.subtasks ?? []).map((t) => t.trim()).filter(Boolean);
+      for (const [k, title] of titles.entries()) {
+        const subId = nextId(base + 2 + k);
+        const sres = await ctx.db
+          .from("next_action_subtasks")
+          .upsert(
+            dbRow({ id: subId, org_id: ctx.me.orgId, next_action_id: itemId, title, position: k, created_via: ctx.via }),
+            { onConflict: "id", ignoreDuplicates: true },
+          )
+          .select("id");
+        if (sres.error) throw sres.error;
+        if ((sres.data ?? []).length > 0) {
+          await quiet({ tool: "create_pk", entity: "next_action_subtasks", entityId: subId, op: "create" });
+        }
+      }
+      if (f.note?.trim()) {
+        step = `adding the note of "${f.action}" (follow-up ${itemId} is saved)`;
+        const noteId = nextId(base + 1);
+        const nres = await ctx.db
+          .from("next_action_notes")
+          .upsert(
+            dbRow({
+              id: noteId,
+              org_id: ctx.me.orgId,
+              next_action_id: itemId,
+              author_id: ctx.me.membershipId,
+              body: f.note.trim(),
+              created_via: ctx.via,
+            }),
+            { onConflict: "id", ignoreDuplicates: true },
+          )
+          .select("id");
+        if (nres.error) throw nres.error;
+        if ((nres.data ?? []).length > 0) {
+          await quiet({ tool: "create_pk", entity: "next_action_notes", entityId: noteId, op: "create" });
+        }
       }
     }
-    if (f.note?.trim()) {
-      const noteId = nextId(base + 1);
-      const n = await ctx.db
-        .from("next_action_notes")
-        .upsert(
-          dbRow({
-            id: noteId,
-            org_id: ctx.me.orgId,
-            next_action_id: itemId,
-            author_id: ctx.me.membershipId,
-            body: f.note.trim(),
-            created_via: ctx.via,
-          }),
-          { onConflict: "id", ignoreDuplicates: true },
-        )
-        .select("id");
-      if (n.error) throw n.error;
-      if ((n.data ?? []).length > 0) {
-        await logAction(ctx, { tool: "create_pk", entity: "next_action_notes", entityId: noteId, op: "create" });
-      }
-    }
-    const label = plan.save ? PRIORITY_LABEL[plan.priority] : "kept, no priority";
-    saved.push({ id: itemId, text: `- ${f.action} — ${label}, alert ${fields.due_date}. Open: ${link(itemId)}` });
+  } catch (e) {
+    if (!(e instanceof StepFailed)) console.error("[mcp] create_pk failed after the PK was saved:", e);
+    const why = e instanceof StepFailed ? ` (${e.message})` : "";
+    const have = saved.length ? ` and ${saved.length} follow-up${saved.length === 1 ? "" : "s"} (${saved.map((s) => s.id).join(", ")})` : "";
+    return fail(
+      `Saved the PK as ${activityId}${have}, but ${step} failed${why}. Don't call create_pk again — add the rest with plan_follow_up (follow-ups), add_subtask and add_pk_note (on a saved follow-up).`,
+      { id: activityId, follow_up_ids: saved.map((s) => s.id), partial: true },
+    );
   }
 
   const lines = [
@@ -346,7 +371,10 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
       `Suggested to drop (neither urgent nor important): ${dropped.join("; ")}. They were not saved. Do not call create_pk again for them (that would log the PK twice); tell the person.`,
     );
   }
-  return ok(receipt(lines, [{ id: activityId, path: "/visits/pk" }]), {
+  lines.push(...new Set(notes));
+  // Each saved follow-up opens its own drawer; with none, the board.
+  const refs = saved.length ? saved.map((s) => ({ id: s.id, path: link(s.id) })) : [{ id: activityId, path: "/visits/pk" }];
+  return ok(receipt(lines, refs), {
     id: activityId,
     follow_up_ids: saved.map((s) => s.id),
     dropped: dropped.length,
@@ -364,16 +392,26 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   if (readErr) throw readErr;
   if (!prior) return fail(CANT);
 
+  // A new priority comes only from the two matrix answers, as in create_pk.
+  const answering = args.urgent !== undefined || args.important !== undefined;
+  let quadrant: ReturnType<typeof draftedQuadrant> = null;
+  if (answering) {
+    if (args.urgent === undefined || args.important === undefined) return fail("Give both answers: urgent and important.");
+    if (!args.reason?.trim()) return fail("Give a short reason for the urgent / important answers.");
+    quadrant = draftedQuadrant(args.urgent, args.important, args.asked_by_dealer ?? false);
+  }
+  const eliminate = quadrant === "ELIMINATE";
+
   const patch: Record<string, unknown> = {};
   let pkDate: string | null = null;
-  if ((args.priority !== undefined || args.due_date !== undefined) && prior.activity_id) {
+  if ((quadrant !== null || args.due_date !== undefined) && prior.activity_id) {
     const { data: v } = await ctx.db.rpc("pk_board_visits").select("occurred_at").eq("id", prior.activity_id).maybeSingle();
     if (v) pkDate = calendarDateIn((v as { occurred_at: string }).occurred_at, ctx.me.timeZone);
   }
-  if (args.priority !== undefined) {
+  if (quadrant !== null && !eliminate) {
     if (!pkDate) return fail("This item is not part of a PK, so it has no priority to set.");
     const days = args.due_date ? Math.max(0, daysFrom(pkDate, args.due_date)) : undefined;
-    Object.assign(patch, priorityPatch(pkDate, args.priority, days));
+    Object.assign(patch, priorityPatch(pkDate, quadrant, days));
   } else if (args.due_date !== undefined) {
     if (pkDate && prior.priority && prior.priority !== "ELIMINATE") {
       const days = Math.max(0, daysFrom(pkDate, args.due_date));
@@ -383,7 +421,11 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   if (args.progress !== undefined) patch.progress = args.progress;
   if (args.done !== undefined) patch.completed_at = args.done ? new Date().toISOString() : null;
   if (args.action !== undefined) patch.action = args.action;
-  if (Object.keys(patch).length === 0) return fail("Nothing to change — say what should be different.");
+
+  const suggestion = `Suggested to drop (neither urgent nor important): "${prior.action}" (${args.reason?.trim()}). Its priority was not changed. Ask the person; do not set it yourself.`;
+  if (Object.keys(patch).length === 0) {
+    return eliminate ? ok(suggestion, { id: args.id, changed: false }) : fail("Nothing to change — say what should be different.");
+  }
 
   const { data, error } = await ctx.db
     .from("next_actions")
@@ -397,14 +439,12 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
     throw error;
   }
   if ((data ?? []).length === 0) return fail(prior.updated_at !== args.updated_at ? STALE : CANT);
-  await logAction(ctx, {
-    tool: "update_pk_item",
-    entity: "next_actions",
-    entityId: args.id,
-    op: "update",
-    before: Object.fromEntries(Object.keys(patch).map((k) => [k, (prior as Record<string, unknown>)[k] ?? null])),
-  });
-  return ok(receipt([`Updated PK item ${args.id}.`], [{ id: args.id, path: link(args.id) }]), { id: args.id });
+  const before = Object.fromEntries(Object.keys(patch).map((k) => [k, (prior as Record<string, unknown>)[k] ?? null]));
+  const lines = [`Updated PK item ${args.id}. ${changes(before, patch)}.`];
+  if (eliminate) lines.push(suggestion);
+  const note = await logActionQuiet(ctx, { tool: "update_pk_item", entity: "next_actions", entityId: args.id, op: "update", before });
+  if (note) lines.push(note);
+  return ok(receipt(lines, [{ id: args.id, path: link(args.id) }]), { id: args.id });
 }
 
 // ---- notes, subtasks, reads -----------------------------------------------
@@ -426,8 +466,8 @@ export async function addPkNote(ctx: AgentContext, args: { next_action_id: strin
     if (known) return known;
     throw error;
   }
-  await logAction(ctx, { tool: "add_pk_note", entity: "next_action_notes", entityId: id, op: "create" });
-  return ok(receipt(["Note added."], [{ id: args.next_action_id, path: link(args.next_action_id) }]), { id });
+  const note = await logActionQuiet(ctx, { tool: "add_pk_note", entity: "next_action_notes", entityId: id, op: "create" });
+  return ok(receipt(["Note added.", ...(note ? [note] : [])], [{ id: args.next_action_id, path: link(args.next_action_id) }]), { id });
 }
 
 export async function addSubtask(ctx: AgentContext, args: { next_action_id: string; title: string }): Promise<CallToolResult> {
@@ -454,8 +494,8 @@ export async function addSubtask(ctx: AgentContext, args: { next_action_id: stri
     if (known) return known;
     throw error;
   }
-  await logAction(ctx, { tool: "add_subtask", entity: "next_action_subtasks", entityId: id, op: "create" });
-  return ok(receipt(["Subtask added."], [{ id: args.next_action_id, path: link(args.next_action_id) }]), { id });
+  const note = await logActionQuiet(ctx, { tool: "add_subtask", entity: "next_action_subtasks", entityId: id, op: "create" });
+  return ok(receipt(["Subtask added.", ...(note ? [note] : [])], [{ id: args.next_action_id, path: link(args.next_action_id) }]), { id });
 }
 
 export async function setSubtaskDone(ctx: AgentContext, args: { id: string; done: boolean }): Promise<CallToolResult> {
@@ -477,14 +517,14 @@ export async function setSubtaskDone(ctx: AgentContext, args: { id: string; done
     throw error;
   }
   if ((data ?? []).length === 0) return fail(CANT);
-  await logAction(ctx, {
+  const note = await logActionQuiet(ctx, {
     tool: "set_subtask_done",
     entity: "next_action_subtasks",
     entityId: args.id,
     op: "update",
     before: { done_at: prior.done_at },
   });
-  return ok(receipt([args.done ? "Subtask ticked." : "Subtask unticked."], [{ id: prior.next_action_id, path: link(prior.next_action_id) }]), {
+  return ok(receipt([args.done ? "Subtask ticked." : "Subtask unticked.", ...(note ? [note] : [])], [{ id: prior.next_action_id, path: link(prior.next_action_id) }]), {
     id: args.id,
   });
 }
@@ -584,13 +624,16 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Change a PK follow-up",
       description:
-        "Change a PK follow-up's priority, status, alert date, text, or close it. Read it first (pk_board or pk_item) and pass its updated_at; if it changed meanwhile you are told to read again. A new priority sets its alert date by the matrix days." +
+        "Change a PK follow-up's priority, status, alert date, text, or close it. Read it first (pk_board or pk_item) and pass its updated_at; if it changed meanwhile you are told to read again. To change the priority give urgent and important (and asked_by_dealer) with a reason: the system picks the priority and sets the alert date by the matrix days. If both answers are no it is suggested to drop and the priority is NOT changed." +
         matrixNote +
         writeNote,
       inputSchema: z.object({
         id: z.string().uuid(),
         updated_at: z.string().describe("The updated_at you read"),
-        priority: z.enum(PRIORITIES).optional().describe("Only the priority the matrix answers give"),
+        urgent: z.boolean().optional().describe("To change the priority: does it have to happen within about two days? (give with important and reason)"),
+        important: z.boolean().optional().describe("To change the priority: does it move this dealer toward selling GMX?"),
+        asked_by_dealer: z.boolean().optional().describe("The dealer asked for it, or GMX promised it"),
+        reason: z.string().optional().describe('Required with urgent/important; at most 15 words, "Urgent: ... / Not important: ..."'),
         progress: z.enum(PROGRESSES).optional(),
         done: z.boolean().optional(),
         due_date: z.string().regex(DATE).optional(),

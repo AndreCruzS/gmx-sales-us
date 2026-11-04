@@ -59,7 +59,7 @@ describe.skipIf(!process.env.MCP_IT)("undo (local stack)", () => {
     });
     const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
     const { data: before } = await admin.db.from("next_actions").select("priority, priority_days, due_date, updated_at").eq("id", id).single();
-    const up = await pk.updatePkItem(admin, { id, updated_at: before!.updated_at, priority: "DO_NOW" });
+    const up = await pk.updatePkItem(admin, { id, updated_at: before!.updated_at, urgent: true, important: true, reason: "x" });
     expect(up.isError).toBeFalsy();
     const r = await u.undoLast(admin, {});
     expect(r.isError).toBeFalsy();
