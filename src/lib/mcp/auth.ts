@@ -1,9 +1,15 @@
 export type AgentSource = "claude" | "muse";
 
+let warnedNoMuse = false;
+
 export function agentSourceOf(
   clientId: string | undefined,
   museClientId: string | undefined = process.env.MCP_MUSE_CLIENT_ID,
 ): AgentSource {
+  if (!museClientId && !warnedNoMuse) {
+    warnedNoMuse = true;
+    console.warn("[mcp] MCP_MUSE_CLIENT_ID is not set: every agent will be recorded as Claude.");
+  }
   return clientId && museClientId && clientId === museClientId ? "muse" : "claude";
 }
 
@@ -35,4 +41,33 @@ export class AgentAuthError extends Error {
     super(message);
     this.name = "AgentAuthError";
   }
+}
+
+/**
+ * Where a sign-in may return the person. Clients register themselves (dynamic
+ * client registration), so a client's NAME proves nothing: anyone can register
+ * "Claude" with their own redirect address. Only these hosts are offered the
+ * Allow button.
+ */
+export const KNOWN_AGENT_HOSTS = ["claude.ai", "claude.com", "muse.ai", "platform.muse.ai"] as const;
+export const LOCAL_AGENT_HOSTS = ["localhost", "127.0.0.1"] as const;
+
+/** The host of a redirect address when it is a known agent's, else null. */
+export function knownAgentHost(uri: string | null | undefined): string | null {
+  if (!uri) return null;
+  let u: URL;
+  try {
+    u = new URL(uri);
+  } catch {
+    return null;
+  }
+  if (u.username || u.password) return null;
+  const host = u.hostname.toLowerCase();
+  if ((KNOWN_AGENT_HOSTS as readonly string[]).includes(host)) return u.protocol === "https:" ? host : null;
+  if ((LOCAL_AGENT_HOSTS as readonly string[]).includes(host)) return u.protocol === "http:" || u.protocol === "https:" ? host : null;
+  return null;
+}
+
+export function isKnownAgentRedirect(uri: string | null | undefined): boolean {
+  return knownAgentHost(uri) !== null;
 }

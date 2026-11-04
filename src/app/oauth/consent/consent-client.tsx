@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { knownAgentHost } from "@/lib/mcp/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Phase =
   | { kind: "loading" }
-  | { kind: "ready"; clientName: string }
+  | { kind: "ready"; clientName: string; host: string | null; shownHost: string }
   | { kind: "error"; message: string };
+
+/** Only the host, for showing; never the full address. */
+function hostOf(uri: string): string {
+  try {
+    return new URL(uri).host;
+  } catch {
+    return "an unknown address";
+  }
+}
 
 export function ConsentClient({
   authorizationId,
@@ -31,10 +41,16 @@ export function ConsentClient({
       if (error || !data) {
         setPhase({ kind: "error", message: "We couldn't load this request. It may have expired. Start again from your agent." });
       } else if (!("authorization_id" in data)) {
-        // Already approved earlier: send the person straight back.
-        window.location.assign(data.redirect_url);
+        // Already approved earlier: send the person straight back, but only to a known agent.
+        if (knownAgentHost(data.redirect_url)) window.location.assign(data.redirect_url);
+        else setPhase({ kind: "ready", clientName: "This agent", host: null, shownHost: hostOf(data.redirect_url) });
       } else {
-        setPhase({ kind: "ready", clientName: data.client?.name || "This agent" });
+        setPhase({
+          kind: "ready",
+          clientName: data.client?.name || "This agent",
+          host: knownAgentHost(data.redirect_uri),
+          shownHost: hostOf(data.redirect_uri),
+        });
       }
     })();
     return () => {
@@ -76,13 +92,24 @@ export function ConsentClient({
             </>
           )}
 
-          {phase.kind === "ready" && allowed && (
+          {phase.kind === "ready" && allowed && phase.host === null && (
+            <>
+              <h1 className="t-title text-xl">This sign-in request doesn&apos;t come from a known agent.</h1>
+              <p className="t-hint">It would have returned you to {phase.shownHost}. Nothing was allowed.</p>
+              <button onClick={() => decide(false)} disabled={busy} className="btn-secondary w-full">
+                Deny
+              </button>
+            </>
+          )}
+
+          {phase.kind === "ready" && allowed && phase.host !== null && (
             <>
               <h1 className="t-title text-xl">Allow {name} to act as you on GMX Sales?</h1>
               <p className="t-hint">
                 It will see and record what you can see and record in the app, as you. You can
                 disconnect it any time from {name}.
               </p>
+              <p className="t-hint">It will return you to {phase.host}.</p>
               <div className="flex flex-col gap-2">
                 <button onClick={() => decide(true)} disabled={busy} className="btn-primary w-full">
                   Allow

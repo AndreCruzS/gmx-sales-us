@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentSourceOf, isAllowedEmail } from "../auth";
+import { agentSourceOf, isAllowedEmail, isKnownAgentRedirect } from "../auth";
 import { checkConfirmation, confirmationReason, issueConfirmation } from "../confirm";
 import { linkTo, receipt } from "../receipt";
 import { fail, needsConfirmation, ok } from "../result";
@@ -22,6 +22,41 @@ describe("auth", () => {
     expect(isAllowedEmail(undefined, l)).toBe(false);
     expect(isAllowedEmail("a@b.c", "")).toBe(false);
     expect(isAllowedEmail("a@b.c", undefined)).toBe(false);
+  });
+});
+
+describe("isKnownAgentRedirect", () => {
+  it("accepts the known agents over https", () => {
+    for (const u of [
+      "https://claude.ai/api/mcp/auth_callback",
+      "https://claude.com/cb",
+      "https://muse.ai/oauth",
+      "https://platform.muse.ai/oauth/callback?x=1",
+    ])
+      expect(isKnownAgentRedirect(u), u).toBe(true);
+  });
+  it("accepts localhost over http or https", () => {
+    expect(isKnownAgentRedirect("http://localhost:6274/oauth/callback")).toBe(true);
+    expect(isKnownAgentRedirect("http://127.0.0.1:33418/cb")).toBe(true);
+  });
+  it("refuses plain http for the public hosts", () => {
+    expect(isKnownAgentRedirect("http://claude.ai/cb")).toBe(false);
+  });
+  it("refuses userinfo tricks, suffixes, lookalikes and junk", () => {
+    for (const u of [
+      "https://claude.ai@evil.com/cb",
+      "https://claude.ai:pw@evil.com/cb",
+      "https://claude.ai.evil.com/cb",
+      "https://evilclaude.ai/cb",
+      "https://evil.com/?https://claude.ai",
+      "https://evil.localhost/cb",
+      "javascript:alert(1)",
+      "claude.ai",
+      "",
+    ])
+      expect(isKnownAgentRedirect(u), u).toBe(false);
+    expect(isKnownAgentRedirect(undefined)).toBe(false);
+    expect(isKnownAgentRedirect(null)).toBe(false);
   });
 });
 
