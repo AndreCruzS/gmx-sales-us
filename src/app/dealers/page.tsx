@@ -28,10 +28,18 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import { DealerModuleProvider } from "@/components/dealer-module";
 import { DealerSheet } from "@/components/dealer-sheet";
 import { DealersTabs } from "@/components/dealers-tabs";
-import { DealerTable, TierTile, type DealerLine } from "@/components/dealers-table";
+import { DealerTable, TierTile } from "@/components/dealers-table";
 import { DealersTodos, type DealerItem } from "@/components/dealers-todos";
 import { useOffline } from "@/components/offline-provider";
 import { SalesMap } from "@/components/sales-map";
+import {
+  buildDealerLines,
+  lastVisitByAccount,
+  NO_MARKET,
+  openByAccount,
+  type DealerAccountRef,
+  type DealerLine,
+} from "@/lib/dealers-board";
 import { packDesk, spanner } from "@/lib/desk-pack";
 import { isLate } from "@/lib/domain/dealer-items";
 import {
@@ -57,17 +65,8 @@ const ITEM_COLS =
 /** A visit is somebody standing in front of the account; a call is not. */
 const VISIT_TYPES = ["DEALER_VISIT", "DISTRIBUTOR_VISIT", "JOBSITE_VISIT", "PK_TRAINING"];
 
-/** The market key the map uses for a row with no market. */
-const NO_MARKET = "unmapped";
 
-const TIER_ORDER: Record<Tier, number> = { T1: 0, T2: 1, T3: 2 };
-
-interface DealerAccount {
-  id: string;
-  name: string;
-  owner_id: string;
-  territory_id: string | null;
-}
+type DealerAccount = DealerAccountRef;
 
 interface MemberName {
   id: string;
@@ -311,24 +310,8 @@ export default function DealersPage() {
   }, [asOf]);
 
   // ── EVERY DEALER, ONE LINE EACH ─────────────────────────────────────────
-  const lastVisit = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const v of visits) {
-      if (!m.has(v.primary_account_id)) m.set(v.primary_account_id, v.occurred_at.slice(0, 10));
-    }
-    return m;
-  }, [visits]);
-  const openBy = useMemo(() => {
-    const m = new Map<string, { open: number; late: number }>();
-    for (const i of items) {
-      if (!i.account_id) continue;
-      const c = m.get(i.account_id) ?? { open: 0, late: 0 };
-      c.open += 1;
-      if (todayIso && isLate(i, todayIso)) c.late += 1;
-      m.set(i.account_id, c);
-    }
-    return m;
-  }, [items, todayIso]);
+  const lastVisit = useMemo(() => lastVisitByAccount(visits), [visits]);
+  const openBy = useMemo(() => openByAccount(items, todayIso), [items, todayIso]);
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
   // The team's promises per visit, over dealer accounts only — the yardstick
@@ -340,48 +323,10 @@ export default function DealersPage() {
   }, [visits, promises, accountById]);
   const tierByKey = useMemo(() => new Map(tiers.map((t) => [t.key, t] as const)), [tiers]);
 
-  const lines = useMemo<DealerLine[]>(() => {
-    const out: DealerLine[] = [];
-    for (const t of tiers) {
-      const acc = t.accountId ? accountById.get(t.accountId) : undefined;
-      const o = t.accountId ? openBy.get(t.accountId) : undefined;
-      out.push({
-        key: t.key,
-        accountId: t.accountId,
-        name: acc ? displayAccountName(acc.name) : t.name,
-        tier: t.tier,
-        lf: t.lf,
-        market: t.regionId ?? NO_MARKET,
-        ownerId: acc?.owner_id ?? null,
-        lastVisit: t.accountId ? (lastVisit.get(t.accountId) ?? null) : null,
-        open: o?.open ?? 0,
-        late: o?.late ?? 0,
-      });
-    }
-    for (const a of untiered) {
-      const o = openBy.get(a.id);
-      out.push({
-        key: a.id,
-        accountId: a.id,
-        name: displayAccountName(a.name),
-        tier: null,
-        lf: 0,
-        market: a.territory_id ?? NO_MARKET,
-        ownerId: a.owner_id,
-        lastVisit: lastVisit.get(a.id) ?? null,
-        open: o?.open ?? 0,
-        late: o?.late ?? 0,
-      });
-    }
-    // Tier order and LF order both give the tiers away; without them, by name.
-    return out.sort((a, b) =>
-      showTiers
-        ? (a.tier ? TIER_ORDER[a.tier] : 3) - (b.tier ? TIER_ORDER[b.tier] : 3) ||
-          b.lf - a.lf ||
-          a.name.localeCompare(b.name)
-        : a.name.localeCompare(b.name),
-    );
-  }, [tiers, untiered, accountById, openBy, lastVisit, showTiers]);
+  const lines = useMemo<DealerLine[]>(
+    () => buildDealerLines({ tiers, untiered, accountById, openBy, lastVisit, showTiers }),
+    [tiers, untiered, accountById, openBy, lastVisit, showTiers],
+  );
 
   // ── THE MARKETS ──────────────────────────────────────────────────────────
   const marketName = useCallback(

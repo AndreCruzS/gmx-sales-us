@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { Pager, usePaged, usePageSize } from "@/components/pager";
+import type { DealerLine } from "@/lib/dealers-board";
 import type { Tier } from "@/lib/domain/dealer-tiers";
 import { formatDay } from "@/lib/format";
 
@@ -14,18 +15,7 @@ const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const STALE_DAYS = 60;
 
 /** One line of the dealer table — a tiered dealer or an untiered target. */
-export interface DealerLine {
-  key: string;
-  accountId: string | null;
-  name: string;
-  tier: Tier | null;
-  lf: number;
-  market: string;
-  ownerId: string | null;
-  lastVisit: string | null;
-  open: number;
-  late: number;
-}
+export type { DealerLine };
 
 function daysBetween(from: string, to: string): number {
   const a = Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1, +from.slice(8, 10));
