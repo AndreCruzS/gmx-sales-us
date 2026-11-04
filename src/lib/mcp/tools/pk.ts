@@ -7,7 +7,7 @@ import {
   PRIORITIES,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
-  pkDateOf,
+  calendarDateIn,
   priorityPatch,
   type PkItem,
   type PkNote,
@@ -19,7 +19,7 @@ import { activityCreateSchema, nextActionCreateSchema } from "@/lib/domain/schem
 import { fetchAllPages } from "@/lib/supabase/page";
 import { logAction } from "../actions-log";
 import type { AgentContext } from "../context";
-import { planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
+import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
 import { receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
@@ -42,6 +42,7 @@ export type CreatePkArgs = {
   occurred_at: string;
   what_happened: string;
   attendees?: string[];
+  time_zone?: string;
   follow_ups: PkFollowUpInput[];
   keep_eliminated?: number[];
   confirmation?: string;
@@ -159,7 +160,7 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
         activity_id: v.id,
         dealer: v.account?.name ?? "Unknown dealer",
         dealer_account_id: v.primary_account_id,
-        pk_date: pkDateOf(v.occurred_at),
+        pk_date: calendarDateIn(v.occurred_at, ctx.me.timeZone),
         items: its,
       };
     })
@@ -179,8 +180,9 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
 // ---- pk_item --------------------------------------------------------------
 
 export async function pkItem(ctx: AgentContext, args: { id: string }): Promise<CallToolResult> {
+  // As the app's board does: the item through pk_board_items (a rep's table policy does not reach a colleague's follow-up on their PK).
   const { data: item, error } = await ctx.db
-    .from("next_actions")
+    .rpc("pk_board_items")
     .select("id, action, owner_id, due_date, completed_at, priority, priority_days, progress, activity_id, account_id, updated_at")
     .eq("id", args.id)
     .maybeSingle();
@@ -209,7 +211,7 @@ export async function pkItem(ctx: AgentContext, args: { id: string }): Promise<C
 export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<CallToolResult> {
   const fus = args.follow_ups ?? [];
   const asRecord = args as unknown as Record<string, unknown>;
-  const pkDate = pkDateOf(new Date(args.occurred_at).toISOString());
+  const { instant, pkDate } = pkMoment(args.occurred_at, args.time_zone ?? ctx.me.timeZone);
   const plans = fus.map((f) => planPkFollowUp(pkDate, f));
   const keep = new Set(args.keep_eliminated ?? []);
   for (const k of keep) {
@@ -238,7 +240,7 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
     activity_type: "PK_TRAINING",
     primary_account_id: args.dealer_account_id,
     owner_id: ctx.me.membershipId,
-    occurred_at: new Date(args.occurred_at).toISOString(),
+    occurred_at: instant,
     was_planned: false,
     what_happened: what,
     outcomes: [],
@@ -355,7 +357,7 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
 
 export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): Promise<CallToolResult> {
   const { data: prior, error: readErr } = await ctx.db
-    .from("next_actions")
+    .rpc("pk_board_items")
     .select("action, due_date, priority, priority_days, progress, completed_at, activity_id, updated_at")
     .eq("id", args.id)
     .maybeSingle();
@@ -366,7 +368,7 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   let pkDate: string | null = null;
   if ((args.priority !== undefined || args.due_date !== undefined) && prior.activity_id) {
     const { data: v } = await ctx.db.rpc("pk_board_visits").select("occurred_at").eq("id", prior.activity_id).maybeSingle();
-    if (v) pkDate = pkDateOf((v as { occurred_at: string }).occurred_at);
+    if (v) pkDate = calendarDateIn((v as { occurred_at: string }).occurred_at, ctx.me.timeZone);
   }
   if (args.priority !== undefined) {
     if (!pkDate) return fail("This item is not part of a PK, so it has no priority to set.");
@@ -488,6 +490,7 @@ export async function setSubtaskDone(ctx: AgentContext, args: { id: string; done
 }
 
 export async function markPkRead(ctx: AgentContext, args: { next_action_id: string }): Promise<CallToolResult> {
+  // Deliberately not in agent_actions: per-person read state, nothing to undo.
   const { error } = await ctx.db.from("next_action_reads").upsert(
     {
       org_id: ctx.me.orgId,
@@ -518,7 +521,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "The PK follow-up board",
       description:
-        "PK trainings (newest first) with their follow-ups: priority, status, alert date and an unread flag. Reps see their own PKs; the desk sees all. Pages of 50 PKs (max 200): use offset for more.",
+        "PK trainings (newest first) with their follow-ups: priority, status, alert date and an unread flag. Reps see their own PKs; the desk sees all. Pages of 50 PKs (max 200): use offset for more. mine_only and open_only filter within each page, so a page can show fewer PKs than the limit: keep paging until a page comes back empty.",
       inputSchema: z.object({
         mine_only: z.boolean().optional().describe("Only follow-ups owned by the person"),
         dealer_account_id: z.string().uuid().optional(),
@@ -551,7 +554,8 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
         writeNote,
       inputSchema: z.object({
         dealer_account_id: z.string().uuid().describe("Look the dealer up with find; never guess an id"),
-        occurred_at: z.string().describe("ISO date-time with offset, e.g. 2026-11-03T17:00:00Z"),
+        occurred_at: z.string().describe("Give it with the person's UTC offset, e.g. 2026-11-04T18:30:00-08:00 (the PK date is the date in that offset)"),
+        time_zone: z.string().optional().describe("IANA zone, only used when occurred_at has no offset; default is the person's zone"),
         what_happened: z.string().min(1),
         attendees: z.array(z.string()).optional(),
         follow_ups: z.array(

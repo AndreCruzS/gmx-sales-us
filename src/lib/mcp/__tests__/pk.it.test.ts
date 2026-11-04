@@ -49,14 +49,9 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
       .select("id, priority, priority_days, due_date, source, activity_id, created_via")
       .in("id", ids);
     const by = new Map(rows!.map((x) => [x.id, x]));
-    const d = (n: number) => {
-      const x = new Date(PK_AT);
-      const dt = new Date(x.getFullYear(), x.getMonth(), x.getDate() + n);
-      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-    };
-    expect(by.get(ids[0])).toMatchObject({ priority: "DO_NOW", priority_days: 1, due_date: d(1), source: "VISIT_CAPTURE", created_via: "claude" });
-    expect(by.get(ids[1])).toMatchObject({ priority: "PLAN", priority_days: 7, due_date: d(7) });
-    expect(by.get(ids[2])).toMatchObject({ priority: "DELEGATE", priority_days: 2, due_date: d(2) });
+    expect(by.get(ids[0])).toMatchObject({ priority: "DO_NOW", priority_days: 1, due_date: "2026-11-04", source: "VISIT_CAPTURE", created_via: "claude" });
+    expect(by.get(ids[1])).toMatchObject({ priority: "PLAN", priority_days: 7, due_date: "2026-11-10" });
+    expect(by.get(ids[2])).toMatchObject({ priority: "DELEGATE", priority_days: 2, due_date: "2026-11-05" });
     expect(text(r)).toContain(`/visits/pk?item=${ids[0]}`);
     expect(text(r)).toContain("Do now");
     const item = await t.pkItem(admin, { id: ids[0] });
@@ -146,5 +141,36 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     const item = await t.pkItem(admin, { id });
     expect(text(item)).toContain("[x] step");
     expect(text(item)).toContain("hello");
+  });
+
+  it("a PK given with the person's offset keeps the date they said", async () => {
+    const r = await t.createPk(admin, {
+      dealer_account_id: dealerId,
+      occurred_at: "2026-11-04T18:30:00-08:00",
+      what_happened: `PK ${run} g`,
+      follow_ups: [fu("late", { urgent: true, important: true })],
+    });
+    const id = (r.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await admin.db.from("next_actions").select("due_date, priority_days").eq("id", id).single();
+    expect(row).toMatchObject({ due_date: "2026-11-05", priority_days: 1 });
+    expect(text(r)).toContain("PK logged on 2026-11-04");
+  });
+
+  it("a rep reads a colleague's follow-up on their own PK, as the board does", async () => {
+    // A rep cannot create an item for a colleague, so the desk hands it over after.
+    const done = await t.createPk(tj, {
+      dealer_account_id: dealerId,
+      occurred_at: PK_AT,
+      what_happened: `PK ${run} h`,
+      follow_ups: [fu("theirs2", { important: true })],
+    });
+    expect(done.isError).toBeFalsy();
+    const id = (done.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { error } = await admin.db.from("next_actions").update({ owner_id: admin.me.membershipId }).eq("id", id);
+    expect(error).toBeNull();
+    const item = await t.pkItem(tj, { id });
+    expect(item.isError).toBeFalsy();
+    expect(text(item)).toContain(`theirs2 ${run}`);
+    expect(text(await t.pkBoard(tj, { limit: 200 }))).toContain(`theirs2 ${run}`);
   });
 });

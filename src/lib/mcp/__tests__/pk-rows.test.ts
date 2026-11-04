@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { alertDate } from "@/lib/domain/pk-follow-up";
-import { planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
+import { alertDate, calendarDateIn } from "@/lib/domain/pk-follow-up";
+import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
 
 const PK = "2026-11-03";
 const f = (o: Partial<PkFollowUpInput>): PkFollowUpInput => ({
@@ -35,5 +35,20 @@ describe("planPkFollowUp (the Say it rule)", () => {
   });
   it("a said date before the PK is the PK day", () => {
     expect(planPkFollowUp(PK, f({ important: true, due_date: "2026-11-01" }))).toMatchObject({ priority_days: 0, due_date: PK });
+  });
+});
+
+describe("zone-aware PK dates", () => {
+  it("calendarDateIn reads the date in the zone", () => {
+    expect(calendarDateIn("2026-11-05T02:30:00Z", "America/Los_Angeles")).toBe("2026-11-04");
+  });
+  it("an explicit offset keeps the date the person said", () => {
+    expect(pkMoment("2026-11-04T18:30:00-08:00", "UTC")).toEqual({ instant: "2026-11-05T02:30:00.000Z", pkDate: "2026-11-04" });
+  });
+  it("Z uses the person's zone", () => {
+    expect(pkMoment("2026-11-05T02:30:00Z", "America/Los_Angeles").pkDate).toBe("2026-11-04");
+  });
+  it("no offset is wall time in the zone", () => {
+    expect(pkMoment("2026-11-04T18:30:00", "America/Los_Angeles")).toEqual({ instant: "2026-11-05T02:30:00.000Z", pkDate: "2026-11-04" });
   });
 });

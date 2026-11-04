@@ -120,6 +120,11 @@ export function pkDateOf(occurredAt: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** The calendar date, 'YYYY-MM-DD', an instant has in a given IANA zone. */
+export function calendarDateIn(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+}
+
 function addDays(date: string, n: number): string {
   const [y, m, d] = date.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
