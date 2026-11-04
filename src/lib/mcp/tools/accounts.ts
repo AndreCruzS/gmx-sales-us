@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { ACCOUNT_TYPES, LEAD_SOURCES_ALL } from "@/lib/domain/enums";
+import { ACCOUNT_TYPES, LEAD_SOURCES_ALL, REFERRAL_LEAD_SOURCES } from "@/lib/domain/enums";
+import { placeAddress, type TerritoryCityRow, type TerritoryStateRow } from "@/lib/domain/placement";
 import {
   accountCreateSchema,
   accountNoteCreateSchema,
@@ -8,11 +9,12 @@ import {
   contactCreateSchema,
   contactUpdateSchema,
 } from "@/lib/domain/schemas";
-import { logAction } from "../actions-log";
+import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
-import { receipt } from "../receipt";
+import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
+import { fetchAllPages } from "@/lib/supabase/page";
 import { dbRow, idMaker, STALE } from "./shared";
 
 export type GetAccountArgs = { id: string };
@@ -123,9 +125,24 @@ export async function getAccount(ctx: AgentContext, args: GetAccountArgs): Promi
 // ---- create_account -------------------------------------------------------
 
 export async function createAccount(ctx: AgentContext, args: CreateAccountArgs): Promise<CallToolResult> {
-  // The person's own patch, like the app's form (a membership without one places it later).
-  const { data: me, error: meErr } = await ctx.db.from("memberships").select("territory_id").eq("id", ctx.me.membershipId).maybeSingle();
-  if (meErr) throw meErr;
+  const state = args.state.trim().toUpperCase();
+  const city = args.city.trim();
+
+  // Where the account lands, as the app's new-account form does: the address's own
+  // region (by state; California by city), else the creator's patch (admins have none).
+  const [st, ct, me] = await Promise.all([
+    ctx.db.from("territory_states").select("state, territory_id").limit(200),
+    state === "CA"
+      ? fetchAllPages<TerritoryCityRow>((from, to) =>
+          ctx.db.from("territory_cities").select("state, city, territory_id").order("state").order("city").range(from, to),
+        )
+      : Promise.resolve([] as TerritoryCityRow[]),
+    ctx.db.from("memberships").select("territory_id").eq("id", ctx.me.membershipId).maybeSingle(),
+  ]);
+  if (st.error) throw st.error;
+  if (me.error) throw me.error;
+  const placement = placeAddress({ state, city }, (st.data as TerritoryStateRow[] | null) ?? [], ct);
+  const territoryId = placement.territoryId ?? me.data?.territory_id ?? null;
 
   const id = idMaker(undefined)(0);
   const row = accountCreateSchema.parse({
@@ -133,10 +150,10 @@ export async function createAccount(ctx: AgentContext, args: CreateAccountArgs):
     org_id: ctx.me.orgId,
     name: args.name.trim(),
     account_type: args.account_type,
-    city: args.city.trim(),
-    state: args.state.trim().toUpperCase(),
+    city,
+    state,
     postal_code: args.postal_code ?? null,
-    territory_id: me?.territory_id ?? null,
+    territory_id: territoryId,
     owner_id: ctx.me.membershipId,
     lead_source: args.lead_source,
     source_detail: args.source_detail ?? null,
@@ -150,8 +167,39 @@ export async function createAccount(ctx: AgentContext, args: CreateAccountArgs):
     if (error.code === "42501") return fail("You can't create accounts here.");
     throw error;
   }
-  if ((data ?? []).length > 0) await logAction(ctx, { tool: "create_account", entity: "accounts", entityId: id, op: "create" });
-  return ok(receipt([`Created account: ${row.name}. Record ${id}.`], [{ id, path: `/accounts/${id}` }]), { id });
+  const lines = [`Created account: ${row.name}. Record ${id}.`];
+  if (!territoryId) lines.push("It is not placed in a region yet (that state or city is not on the map).");
+  if ((data ?? []).length > 0) {
+    const n = await logActionQuiet(ctx, { tool: "create_account", entity: "accounts", entityId: id, op: "create" });
+    if (n) lines.push(n);
+  }
+
+  // The app also writes the referral as a row on account_relationships (the new account is "a").
+  if (args.referring_account_id && (REFERRAL_LEAD_SOURCES as readonly string[]).includes(args.lead_source) && (data ?? []).length > 0) {
+    const relId = idMaker(undefined)(1);
+    try {
+      const rel = await ctx.db.from("account_relationships").insert(
+        dbRow({
+          id: relId,
+          org_id: ctx.me.orgId,
+          account_a_id: id,
+          relationship_type: "REFERRED_BY",
+          account_b_id: args.referring_account_id,
+          created_by: ctx.me.membershipId,
+        }),
+      );
+      if (rel.error) throw rel.error;
+    } catch (e) {
+      console.error("[mcp] create_account saved the account but not its referral row:", e);
+      return fail(
+        `Saved the account as ${id}, but recording who referred it failed. Don't call create_account again - the account exists.`,
+        { id, partial: true },
+      );
+    }
+    const n = await logActionQuiet(ctx, { tool: "create_account", entity: "account_relationships", entityId: relId, op: "create" });
+    if (n) lines.push(n);
+  }
+  return ok(receipt(lines, [{ id, path: `/accounts/${id}` }]), { id, territory_id: territoryId });
 }
 
 // ---- update_account -------------------------------------------------------
@@ -173,8 +221,9 @@ export async function updateAccount(ctx: AgentContext, args: UpdateAccountArgs):
     throw error;
   }
   if ((data ?? []).length === 0) return fail(STALE);
-  await logAction(ctx, { tool: "update_account", entity: "accounts", entityId: args.id, op: "update", before: prior as unknown as Record<string, unknown> });
-  return ok(receipt([`Updated account ${args.id}.`], [{ id: args.id, path: `/accounts/${args.id}` }]), { id: args.id });
+  const before = prior as unknown as Record<string, unknown>;
+  const note = await logActionQuiet(ctx, { tool: "update_account", entity: "accounts", entityId: args.id, op: "update", before });
+  return ok(receipt([`Updated account ${args.id}. ${changes(before, patch)}.`, ...(note ? [note] : [])], [{ id: args.id, path: `/accounts/${args.id}` }]), { id: args.id });
 }
 
 // ---- add_contact / update_contact ----------------------------------------
@@ -200,8 +249,9 @@ export async function addContact(ctx: AgentContext, args: AddContactArgs): Promi
     if (known) return known;
     throw error;
   }
-  if ((data ?? []).length > 0) await logAction(ctx, { tool: "add_contact", entity: "contacts", entityId: id, op: "create" });
-  return ok(receipt([`Added contact: ${row.name}. Record ${id}.`], [{ id, path: `/accounts/${args.account_id}` }]), { id });
+  const note =
+    (data ?? []).length > 0 ? await logActionQuiet(ctx, { tool: "add_contact", entity: "contacts", entityId: id, op: "create" }) : null;
+  return ok(receipt([`Added contact: ${row.name}. Record ${id}.`, ...(note ? [note] : [])], [{ id, path: `/accounts/${args.account_id}` }]), { id });
 }
 
 export async function updateContact(ctx: AgentContext, args: UpdateContactArgs): Promise<CallToolResult> {
@@ -233,8 +283,8 @@ export async function updateContact(ctx: AgentContext, args: UpdateContactArgs):
     throw error;
   }
   if ((data ?? []).length === 0) return fail(STALE);
-  await logAction(ctx, { tool: "update_contact", entity: "contacts", entityId: args.id, op: "update", before });
-  return ok(receipt([`Updated contact ${args.id}.`], [{ id: args.id, path: `/accounts/${account_id}` }]), { id: args.id });
+  const note = await logActionQuiet(ctx, { tool: "update_contact", entity: "contacts", entityId: args.id, op: "update", before });
+  return ok(receipt([`Updated contact ${args.id}. ${changes(before, patch)}.`, ...(note ? [note] : [])], [{ id: args.id, path: `/accounts/${account_id}` }]), { id: args.id });
 }
 
 // ---- add_account_note -----------------------------------------------------
@@ -257,8 +307,9 @@ export async function addAccountNote(ctx: AgentContext, args: AddAccountNoteArgs
     if (known) return known;
     throw error;
   }
-  if ((data ?? []).length > 0) await logAction(ctx, { tool: "add_account_note", entity: "account_notes", entityId: id, op: "create" });
-  return ok(receipt(["Note added."], [{ id, path: `/accounts/${args.account_id}` }]), { id });
+  const note =
+    (data ?? []).length > 0 ? await logActionQuiet(ctx, { tool: "add_account_note", entity: "account_notes", entityId: id, op: "create" }) : null;
+  return ok(receipt(["Note added.", ...(note ? [note] : [])], [{ id, path: `/accounts/${args.account_id}` }]), { id });
 }
 
 // ---- registration ---------------------------------------------------------

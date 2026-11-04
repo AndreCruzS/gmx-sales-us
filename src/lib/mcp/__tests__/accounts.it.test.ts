@@ -146,4 +146,62 @@ describe.skipIf(!process.env.MCP_IT)("accounts, contacts and views (local stack)
     const y = await v.salesSummary(admin, { period: "ytd" });
     expect(y.isError).toBeFalsy();
   });
+
+  it("create_account places the account like the app: by state, California by city", async () => {
+    const { data: st } = await admin.db.from("territory_states").select("state, territory_id").neq("state", "CA").limit(1).single();
+    const r = await a.createAccount(admin, {
+      name: `Placed ${run} Town`,
+      account_type: "DEALER",
+      city: "Town",
+      state: st!.state,
+      lead_source: "COLD_OUTREACH",
+    });
+    expect(r.isError).toBeFalsy();
+    const id = (r.structuredContent as { id: string }).id;
+    const { data: acc } = await admin.db.from("accounts").select("territory_id").eq("id", id).single();
+    expect(acc!.territory_id).toBe(st!.territory_id);
+
+    // California is placed city by city: seed one town (the local database has none) and clean up.
+    const town = `Testville${run}`;
+    const { data: terr } = await admin.db.from("territory_states").select("territory_id").eq("state", st!.state).single();
+    sql(`insert into territory_cities (org_id, state, city, territory_id) select org_id, 'CA', '${town}', '${terr!.territory_id}' from territory_states limit 1`);
+    try {
+      const r2 = await a.createAccount(admin, {
+        name: `Placed ${run} ${town}`,
+        account_type: "DEALER",
+        city: town,
+        state: "ca",
+        lead_source: "COLD_OUTREACH",
+      });
+      const { data: acc2 } = await admin.db.from("accounts").select("territory_id").eq("id", (r2.structuredContent as { id: string }).id).single();
+      expect(acc2!.territory_id).toBe(terr!.territory_id);
+    } finally {
+      sql(`delete from territory_cities where city = '${town}'`);
+    }
+  });
+
+  it("a referral lead source also writes the REFERRED_BY relationship, logged as a create", async () => {
+    const ref = await create(admin, `Referrer ${run} Boise`);
+    const refId = (ref.structuredContent as { id: string }).id;
+    const r = await a.createAccount(admin, {
+      name: `Referred ${run} Boise`,
+      account_type: "DEALER",
+      city: "Boise",
+      state: "ID",
+      lead_source: "REFERRAL_DEALER",
+      referring_account_id: refId,
+    });
+    expect(r.isError).toBeFalsy();
+    const id = (r.structuredContent as { id: string }).id;
+    const { data: rel } = await admin.db.from("account_relationships").select("id, relationship_type, account_b_id").eq("account_a_id", id);
+    expect(rel).toMatchObject([{ relationship_type: "REFERRED_BY", account_b_id: refId }]);
+    const { data: log } = await admin.db.from("agent_actions").select("entity, op").eq("entity_id", rel![0].id);
+    expect(log).toEqual([{ entity: "account_relationships", op: "create" }]);
+  });
+
+  it("dealers_overview is refused for a role that does not see the board", async () => {
+    const r = await v.dealersOverview(tj, {});
+    expect(r.isError).toBe(true);
+    expect(text(r)).toBe("The Dealers board isn't part of your view in the app.");
+  });
 });
