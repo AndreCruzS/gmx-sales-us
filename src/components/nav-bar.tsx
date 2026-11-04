@@ -10,13 +10,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { avatarLetter } from "@/lib/format";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CheckIcon, ChevronRightIcon, SearchIcon } from "./icons";
 import { useOffline } from "./offline-provider";
 import { SignOutButton } from "./sign-out";
 import { SyncBadge } from "./sync-badge";
 import { useReviewCount } from "@/lib/review/count";
+import { useAgentAccess } from "@/lib/mcp/use-agent-access";
 
 const TITLES: Record<string, string> = {
   "/": "Home",
@@ -36,6 +37,7 @@ const TITLES: Record<string, string> = {
   "/dashboard": "Insights",
   "/dashboard/rep": "Rep",
   "/weekly": "Weekly review",
+  "/settings/ai-connector": "AI connector",
 };
 
 // The tab-bar destinations — these are roots, so they carry no back button.
@@ -88,6 +90,26 @@ export function NavBar() {
     };
   }, [profile?.territoryId]);
 
+  // Only people on the agent allow-list get a menu under their name.
+  const agentAccess = useAgentAccess(profile?.email);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
   const patch =
     territory && territory.id === profile?.territoryId ? territory.name : null;
 
@@ -126,15 +148,47 @@ export function NavBar() {
         )}
 
         {showIdentity ? (
-          <div className="navbar-identity">
-            <span className="navbar-avatar" aria-hidden="true">
-              {avatarLetter(person)}
-            </span>
-            <span className="min-w-0">
-              <h1 className="navbar-title truncate">{person}</h1>
-              <span className="navbar-patch truncate">{patch ?? title}</span>
-            </span>
-          </div>
+          agentAccess ? (
+            <div className="navbar-menu" ref={menuRef}>
+              <button
+                type="button"
+                className="navbar-identity navbar-identity-btn"
+                aria-haspopup="true"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((o) => !o)}
+              >
+                <span className="navbar-avatar" aria-hidden="true">
+                  {avatarLetter(person)}
+                </span>
+                <span className="min-w-0">
+                  <span className="navbar-title truncate">{person}</span>
+                  <span className="navbar-patch truncate">{patch ?? title}</span>
+                </span>
+              </button>
+              {menuOpen && (
+                <div className="navbar-popover" role="group" aria-label="Account">
+                  <Link
+                    href="/settings/ai-connector"
+                    className="navbar-popover-item"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    AI connector
+                  </Link>
+                  <SignOutButton className="navbar-popover-item" label="Sign out" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="navbar-identity">
+              <span className="navbar-avatar" aria-hidden="true">
+                {avatarLetter(person)}
+              </span>
+              <span className="min-w-0">
+                <h1 className="navbar-title truncate">{person}</h1>
+                <span className="navbar-patch truncate">{patch ?? title}</span>
+              </span>
+            </div>
+          )
         ) : (
           <h1 className="navbar-title">{title}</h1>
         )}

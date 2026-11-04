@@ -7835,3 +7835,166 @@ textarea.pkd-select {
   align-items: baseline;
   gap: 12px;
 }
+
+/* ── AI connector: name menu, Home card, setup page (2026-11-04) ────────────
+   Text face throughout; the eyebrows reuse .sales-eyebrow (figures face). */
+.navbar-menu {
+  position: relative;
+  flex: 1 0 0;
+  min-width: 0;
+}
+.navbar-identity-btn {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+.navbar-identity-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.navbar-identity-btn .navbar-title {
+  display: block;
+}
+.navbar-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 190px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-2);
+}
+.navbar-popover-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.navbar-popover-item:hover,
+.navbar-popover-item:focus-visible {
+  background: var(--surface-sunken);
+}
+.aic-home {
+  margin-bottom: 16px;
+}
+.aic-home-title {
+  margin: 0 0 6px;
+  font-size: var(--text-md, 16px);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.aic-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.aic-home-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.aic {
+  padding-top: 8px;
+}
+.aic-eyebrow {
+  margin-top: 0;
+}
+.aic-address {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.aic-url {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+.aic-tabs {
+  margin-top: 0;
+}
+.aic-steps {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.aic-steps b {
+  color: var(--ink-primary);
+}
+.aic-note {
+  margin: 14px 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.aic-quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.aic-quote {
+  display: block;
+  padding: 10px 14px;
+  border-radius: var(--r-control);
+  background: var(--surface-sunken);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  quotes: none;
+}
+.aic-bullets {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.aic-bullets + .sales-eyebrow {
+  margin-top: 18px;
+}
+.sales-eyebrow + .aic-text {
+  margin-top: 8px;
+}
+.aic-refuse {
+  margin-top: 8px;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.aic-refuse p {
+  margin: 0;
+}
+.aic-home-actions > .btn-primary {
+  width: auto;
+  max-width: none;
+  padding-inline: 20px;
+}
+.aic-steps {
+  list-style: decimal;
+}
+.aic-bullets {
+  list-style: disc;
+}

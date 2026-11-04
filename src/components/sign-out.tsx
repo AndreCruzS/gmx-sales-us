@@ -13,7 +13,7 @@ import { wipeLocalData } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { LogOutIcon } from "./icons";
 
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({ className, label }: { className?: string; label?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +38,7 @@ export function SignOutButton({ className }: { className?: string }) {
       disabled={busy}
       onClick={() => void logout()}
     >
-      <LogOutIcon size={19} />
+      {label ?? <LogOutIcon size={19} />}
     </button>
   );
 }

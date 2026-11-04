@@ -8,6 +8,7 @@
 //
 // Reps and support keep the day. Managers and admins get the team.
 
+import { ConnectorCard } from "@/components/connector-card";
 import { useOffline } from "@/components/offline-provider";
 import { manages } from "@/lib/domain/roles";
 import HomeClient from "./home-client";
@@ -38,7 +39,17 @@ export function HomeSwitch() {
   if (resolving && !profile) return <HomeBootSkeleton />;
 
   if (profile && manages(profile.role)) {
-    return <ManagerHome name={nameFromEmail(profile.email)} />;
+    return (
+      <>
+        <ConnectorCard />
+        <ManagerHome name={nameFromEmail(profile.email)} />
+      </>
+    );
   }
-  return <HomeClient />;
+  return (
+    <>
+      <ConnectorCard />
+      <HomeClient />
+    </>
+  );
 }
