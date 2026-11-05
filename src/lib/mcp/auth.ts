@@ -49,7 +49,15 @@ export class AgentAuthError extends Error {
  * "Claude" with their own redirect address. Only these hosts are offered the
  * Allow button.
  */
-export const KNOWN_AGENT_HOSTS = ["claude.ai", "claude.com", "muse.ai", "platform.muse.ai"] as const;
+// agent.meta.ai: Muse's real callback, seen when Bianca's Muse registered in
+// prod on 2026-11-05 (https://agent.meta.ai/api/hatch/oauth/callback).
+export const KNOWN_AGENT_HOSTS = [
+  "claude.ai",
+  "claude.com",
+  "muse.ai",
+  "platform.muse.ai",
+  "agent.meta.ai",
+] as const;
 export const LOCAL_AGENT_HOSTS = ["localhost", "127.0.0.1"] as const;
 
 /** The host of a redirect address when it is a known agent's, else null. */

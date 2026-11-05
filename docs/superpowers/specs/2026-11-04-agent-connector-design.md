@@ -86,7 +86,7 @@ Nothing in the app changes. The connector is a second door onto the same rules.
 - Meta publishes no developer docs. Third-party guides (checked 2026-09/10)
   say Muse adds a custom connector by URL (Settings → Connectors, or by
   asking in chat), connects **from Meta's cloud**, and signs in with OAuth
-  + PKCE; known callbacks are `https://muse.ai/api/hatch/oauth/callback` and
+  + PKCE; known callbacks are `https://agent.meta.ai/api/hatch/oauth/callback` (seen in prod 2026-11-05), `https://muse.ai/api/hatch/oauth/callback` and
   `https://platform.muse.ai/oauth/credential-test/callback`.
 - Supabase's server has no CIMD, so pre-register a static public client
   "Muse" in Supabase with those callbacks (DCR also on, if Muse uses it).

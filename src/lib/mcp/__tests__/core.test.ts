@@ -32,6 +32,8 @@ describe("isKnownAgentRedirect", () => {
       "https://claude.com/cb",
       "https://muse.ai/oauth",
       "https://platform.muse.ai/oauth/callback?x=1",
+      // Meta's Muse registered with this callback in prod (2026-11-05)
+      "https://agent.meta.ai/api/hatch/oauth/callback",
     ])
       expect(isKnownAgentRedirect(u), u).toBe(true);
   });
@@ -48,6 +50,8 @@ describe("isKnownAgentRedirect", () => {
       "https://claude.ai:pw@evil.com/cb",
       "https://claude.ai.evil.com/cb",
       "https://evilclaude.ai/cb",
+      "https://evil.meta.ai/cb",
+      "https://agent.meta.ai.evil.com/cb",
       "https://evil.com/?https://claude.ai",
       "https://evil.localhost/cb",
       "javascript:alert(1)",
