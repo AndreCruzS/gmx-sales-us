@@ -559,7 +559,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
   server.registerTool(
     "pk_board",
     {
-      title: "The PK follow-up board",
+      title: "The PK follow-up board (Open action items)",
       description:
         "PK trainings (newest first) with their follow-ups: priority, status, alert date and an unread flag. Reps see their own PKs; the desk sees all. Pages of 50 PKs (max 200): use offset for more. mine_only and open_only filter within each page, so a page can show fewer PKs than the limit: keep paging until a page comes back empty.",
       inputSchema: z.object({

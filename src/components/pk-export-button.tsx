@@ -44,7 +44,7 @@ export function PkExportButton({
       await writeXlsxFile([
         {
           data: followUps,
-          sheet: "PK follow-ups",
+          sheet: "Open action items",
           columns: [{ width: 38 }, { width: 18 }, { width: 16 }, { width: 12 }, { width: 7 }, { width: 14 }, { width: 16 }, { width: 10 }, { width: 70 }],
           stickyRowsCount: 1,
         },

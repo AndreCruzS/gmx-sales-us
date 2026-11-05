@@ -169,7 +169,7 @@ export function PkBoard({
 
   return (
     <>
-      <section className="pk-summary" aria-label="PK follow-up in figures">
+      <section className="pk-summary" aria-label="Open action items in figures">
         {figures.map((f) => (
           <div key={f.k} className="pk-stat" data-bad={(f.bad && f.v > 0) || undefined}>
             <span className="pk-stat-k">{f.k}</span>

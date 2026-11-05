@@ -278,7 +278,7 @@ export function DealersTodos({
               </>
             )}
           </span>
-          <span>Open PK follow-up →</span>
+          <span>Open action items →</span>
         </Link>
       )}
     </section>

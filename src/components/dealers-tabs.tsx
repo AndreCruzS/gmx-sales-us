@@ -7,7 +7,7 @@ import Link from "next/link";
 
 const TABS = [
   { key: "overview", href: "/dealers", label: "Overview" },
-  { key: "pk", href: "/dealers/pk", label: "PK follow-up" },
+  { key: "pk", href: "/dealers/pk", label: "Open action items" },
 ] as const;
 
 export function DealersTabs({ current }: { current: "overview" | "pk" }) {

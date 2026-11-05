@@ -5,7 +5,7 @@ import Link from "next/link";
 
 const TABS = [
   { key: "day", href: "/visits", label: "Day" },
-  { key: "pk", href: "/visits/pk", label: "PK follow-up" },
+  { key: "pk", href: "/visits/pk", label: "Open action items" },
 ] as const;
 
 export function AgendaTabs({ current }: { current: "day" | "pk" }) {
