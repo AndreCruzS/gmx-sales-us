@@ -14,6 +14,12 @@ describe("agent guide", () => {
     expect(PLATFORM_GUIDE).toContain("time, a time zone and a duration");
     expect(PLATFORM_GUIDE).toContain("<Company> <City>");
   });
+  it("turns promises into follow-ups, names yards, and fixes lead source up front (Bianca, 2026-11-05)", () => {
+    expect(PLATFORM_GUIDE).toContain("becomes a follow-up");
+    expect(PLATFORM_GUIDE).toContain("Dykes Lumber Brooklyn");
+    expect(PLATFORM_GUIDE).toContain("cannot be changed after the account is created");
+    expect(PLATFORM_GUIDE).toContain("link");
+  });
   it("stays short", () => {
     expect(PLATFORM_GUIDE.split(/\s+/).length).toBeLessThan(1500);
   });

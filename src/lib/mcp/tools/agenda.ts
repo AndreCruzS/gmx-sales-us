@@ -441,7 +441,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Log a visit",
       description:
-        "Record a visit or touch that already happened, with the follow-ups it produced. Ask the person which account (look it up with find), when it happened, and what happened. Not for PK training (use create_pk). If it was a planned visit, pass planned_action_id and it is marked done. For a CALL or MEETING follow-up ask for time, zone and duration. Five or more follow-ups, or completing a planned visit that belongs to someone else, need the person's yes first." +
+        "Record a visit or touch that already happened, with the follow-ups it produced. Ask the person which account (look it up with find), when it happened, and what happened. Not for PK training (use create_pk). If it was a planned visit, pass planned_action_id and it is marked done. Every commitment in what happened (the person's or the account's) goes in follow_ups too - ask for its date; never leave it only in the text. For a CALL or MEETING follow-up ask for time, zone and duration. Five or more follow-ups, or completing a planned visit that belongs to someone else, need the person's yes first." +
         writeNote,
       inputSchema: z.object({
         account_id: dbId(),
