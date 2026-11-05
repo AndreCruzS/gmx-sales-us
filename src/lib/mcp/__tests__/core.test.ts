@@ -15,6 +15,13 @@ describe("auth", () => {
     expect(agentSourceOf("x", "muse-id")).toBe("claude");
     expect(agentSourceOf(undefined, undefined)).toBe("claude");
   });
+  it("agentSourceOf takes a comma list (Muse re-registers on every reconnect)", () => {
+    const l = " id-a , id-b,id-c ";
+    expect(agentSourceOf("id-b", l)).toBe("muse");
+    expect(agentSourceOf("id-c", l)).toBe("muse");
+    expect(agentSourceOf("id-d", l)).toBe("claude");
+    expect(agentSourceOf("", ",,")).toBe("claude");
+  });
   it("isAllowedEmail", () => {
     const l = "andre.cruz@gmxgroup.com,bianca@gmxgroup.us";
     expect(isAllowedEmail("Bianca@GMXgroup.us", l)).toBe(true);

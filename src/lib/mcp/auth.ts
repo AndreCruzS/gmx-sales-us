@@ -10,7 +10,10 @@ export function agentSourceOf(
     warnedNoMuse = true;
     console.warn("[mcp] MCP_MUSE_CLIENT_ID is not set: every agent will be recorded as Claude.");
   }
-  return clientId && museClientId && clientId === museClientId ? "muse" : "claude";
+  // A comma list: Muse registers a new client on every reconnect (three in
+  // one morning on 2026-11-05), so one id goes stale.
+  const ids = (museClientId ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return clientId && ids.includes(clientId) ? "muse" : "claude";
 }
 
 export function isAllowedEmail(
