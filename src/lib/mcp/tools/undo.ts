@@ -4,7 +4,7 @@ import { undoableActions, type LoggedAction } from "../actions-log";
 import type { AgentContext } from "../context";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
-import { dbProblem, dbRow } from "./shared";
+import { dbProblem, dbRow, dbId } from "./shared";
 
 export { undoableActions };
 
@@ -161,7 +161,7 @@ export function registerUndoTools(server: McpServer, getCtx: GetCtx) {
       description:
         "Reverses the newest thing this agent changed in this conversation's sign-in session (within 24 hours), or a specific action_id from the list this tool returns. It only does what the person could do in the app: created follow-ups are deleted (or closed when the person cannot delete), changes are put back as they were, subtasks and account notes are deleted; other creations cannot be undone, and you are told so. Always tell the person exactly what was reversed.",
       inputSchema: z.object({
-        action_id: z.string().uuid().optional().describe("One of the ids listed by an earlier undo_last; default the newest"),
+        action_id: dbId().optional().describe("One of the ids listed by an earlier undo_last; default the newest"),
       }),
     },
     tool<{ action_id?: string }>(getCtx, (ctx, a) => undoLast(ctx, a)),

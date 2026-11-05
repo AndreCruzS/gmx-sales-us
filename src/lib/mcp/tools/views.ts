@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { dbId } from "./shared";
 import {
   buildDealerLines,
   lastVisitByAccount,
@@ -280,7 +281,7 @@ export function registerViewTools(server: McpServer, getCtx: GetCtx) {
         "What the distributors sold through, in LF (linear feet, the one measure): the latest month with the month before it, or the year to date with the same window last year. Distributor files arrive a month behind. Optionally narrowed to one distributor. Read-only.",
       inputSchema: z.object({
         period: z.enum(["month", "ytd"]).optional().describe("Default: month"),
-        distributor_id: z.string().uuid().optional(),
+        distributor_id: dbId().optional(),
       }),
     },
     tool<SalesSummaryArgs>(getCtx, (ctx, a) => salesSummary(ctx, a)),

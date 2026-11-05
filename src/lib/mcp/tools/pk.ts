@@ -22,7 +22,7 @@ import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
-import { dbProblem, dbRow, gate, idMaker, STALE, validCode } from "./shared";
+import { dbProblem, dbRow, gate, idMaker, STALE, validCode, dbId } from "./shared";
 
 const PROGRESSES = ["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"] as const;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -564,7 +564,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
         "PK trainings (newest first) with their follow-ups: priority, status, alert date and an unread flag. Reps see their own PKs; the desk sees all. Pages of 50 PKs (max 200): use offset for more. mine_only and open_only filter within each page, so a page can show fewer PKs than the limit: keep paging until a page comes back empty.",
       inputSchema: z.object({
         mine_only: z.boolean().optional().describe("Only follow-ups owned by the person"),
-        dealer_account_id: z.string().uuid().optional(),
+        dealer_account_id: dbId().optional(),
         open_only: z.boolean().optional().describe("Hide closed follow-ups"),
         limit: z.number().int().min(1).max(200).optional(),
         offset: z.number().int().min(0).optional(),
@@ -578,7 +578,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "One PK follow-up",
       description: "A PK follow-up with its notes (oldest first), subtasks and updated_at (needed to edit it).",
-      inputSchema: z.object({ id: z.string().uuid() }),
+      inputSchema: z.object({ id: dbId() }),
     },
     tool<{ id: string }>(getCtx, (ctx, a) => pkItem(ctx, a)),
   );
@@ -593,7 +593,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
         " If both answers for a follow-up are no, it is suggested to drop and is NOT saved: ASK the person about those BEFORE calling, and if they want one kept pass its index (0-based, in follow_ups) in keep_eliminated in this same single call. Never call create_pk twice for one PK (it would be logged twice). A said due_date sets the alert; without one the matrix days apply. Giving a follow-up to a colleague (owner_id) or five or more follow-ups needs the person's yes first." +
         writeNote,
       inputSchema: z.object({
-        dealer_account_id: z.string().uuid().describe("Look the dealer up with find; never guess an id"),
+        dealer_account_id: dbId().describe("Look the dealer up with find; never guess an id"),
         occurred_at: z.string().describe("Give it with the person's UTC offset, e.g. 2026-11-04T18:30:00-08:00 (the PK date is the date in that offset)"),
         time_zone: z.string().optional().describe("IANA zone, only used when occurred_at has no offset; default is the person's zone"),
         what_happened: z.string().min(1),
@@ -607,7 +607,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
             asked_by_dealer: z.boolean().describe("The dealer asked for it, or GMX promised it"),
             due_date: z.string().regex(DATE).optional().describe("Only a date the person said"),
             progress: z.enum(PROGRESSES).optional(),
-            owner_id: z.string().uuid().optional().describe("Membership id of a colleague; default the person"),
+            owner_id: dbId().optional().describe("Membership id of a colleague; default the person"),
             subtasks: z.array(z.string().min(1)).max(20).optional(),
             note: z.string().optional(),
           }),
@@ -628,7 +628,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
         matrixNote +
         writeNote,
       inputSchema: z.object({
-        id: z.string().uuid(),
+        id: dbId(),
         updated_at: z.string().describe("The updated_at you read"),
         urgent: z.boolean().optional().describe("To change the priority: does it have to happen within about two days? (give with important and reason)"),
         important: z.boolean().optional().describe("To change the priority: does it move this dealer toward selling GMX?"),
@@ -648,7 +648,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Add a note to a PK follow-up",
       description: "Add a note on the follow-up's thread." + writeNote,
-      inputSchema: z.object({ next_action_id: z.string().uuid(), body: z.string().min(1) }),
+      inputSchema: z.object({ next_action_id: dbId(), body: z.string().min(1) }),
     },
     tool<{ next_action_id: string; body: string }>(getCtx, (ctx, a) => addPkNote(ctx, a)),
   );
@@ -657,7 +657,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Add a subtask to a PK follow-up",
       description: "Add a checklist step." + writeNote,
-      inputSchema: z.object({ next_action_id: z.string().uuid(), title: z.string().min(1) }),
+      inputSchema: z.object({ next_action_id: dbId(), title: z.string().min(1) }),
     },
     tool<{ next_action_id: string; title: string }>(getCtx, (ctx, a) => addSubtask(ctx, a)),
   );
@@ -666,7 +666,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Tick or untick a subtask",
       description: "Mark a checklist step done or not done." + writeNote,
-      inputSchema: z.object({ id: z.string().uuid(), done: z.boolean() }),
+      inputSchema: z.object({ id: dbId(), done: z.boolean() }),
     },
     tool<{ id: string; done: boolean }>(getCtx, (ctx, a) => setSubtaskDone(ctx, a)),
   );
@@ -675,7 +675,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Mark a PK follow-up read",
       description: "Clear the unread dot on a follow-up for the person.",
-      inputSchema: z.object({ next_action_id: z.string().uuid() }),
+      inputSchema: z.object({ next_action_id: dbId() }),
     },
     tool<{ next_action_id: string }>(getCtx, (ctx, a) => markPkRead(ctx, a)),
   );

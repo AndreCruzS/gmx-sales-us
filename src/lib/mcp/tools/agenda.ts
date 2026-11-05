@@ -4,7 +4,7 @@ import { ACTIVITY_OUTCOMES, ACTIVITY_TYPES, VISIT_OBJECTIVES } from "@/lib/domai
 import { activityCreateSchema, nextActionCreateSchema, nextActionUpdateSchema } from "@/lib/domain/schemas";
 import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
-import { dbProblem, dbRow, gate, idMaker, STALE, validCode } from "./shared";
+import { dbProblem, dbRow, gate, idMaker, STALE, validCode, dbId } from "./shared";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
@@ -385,7 +385,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
       inputSchema: z.object({
         from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("First day, YYYY-MM-DD"),
         to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Last day, YYYY-MM-DD"),
-        owner_id: z.string().uuid().optional().describe("A colleague's membership id from find; default is the person themselves"),
+        owner_id: dbId().optional().describe("A colleague's membership id from find; default is the person themselves"),
         limit: z.number().int().min(1).max(200).optional(),
         offset: z.number().int().min(0).optional(),
       }),
@@ -403,8 +403,8 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
       inputSchema: z.object({
         action: z.string().min(1).describe("What to do, in a short sentence"),
         due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        account_id: z.string().uuid().optional(),
-        owner_id: z.string().uuid().optional().describe("Membership id of the colleague; default is the person themselves"),
+        account_id: dbId().optional(),
+        owner_id: dbId().optional().describe("Membership id of the colleague; default is the person themselves"),
         objective: z.enum(VISIT_OBJECTIVES).optional(),
         confirmation: z.string().optional().describe("Only the code this tool gave you, after the person said yes"),
         ...timed,
@@ -421,14 +421,14 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
         "Move, rename, reassign or complete a follow-up. Read it first with list_agenda and pass its updated_at; if it changed meanwhile you are told to read again. done: true completes it. Reassigning it, or changing a follow-up that belongs to someone else, needs the person's yes first. A PK follow-up is changed with update_pk_item." +
         writeNote,
       inputSchema: z.object({
-        id: z.string().uuid(),
+        id: dbId(),
         updated_at: z.string().describe("The updated_at you read"),
         due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         due_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
         time_zone: z.string().optional().describe("Required together with due_time"),
         duration_minutes: z.number().int().min(5).max(600).optional(),
         action: z.string().min(1).optional(),
-        owner_id: z.string().uuid().optional(),
+        owner_id: dbId().optional(),
         done: z.boolean().optional(),
         confirmation: z.string().optional(),
       }),
@@ -444,13 +444,13 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
         "Record a visit or touch that already happened, with the follow-ups it produced. Ask the person which account (look it up with find), when it happened, and what happened. Not for PK training (use create_pk). If it was a planned visit, pass planned_action_id and it is marked done. For a CALL or MEETING follow-up ask for time, zone and duration. Five or more follow-ups, or completing a planned visit that belongs to someone else, need the person's yes first." +
         writeNote,
       inputSchema: z.object({
-        account_id: z.string().uuid(),
+        account_id: dbId(),
         activity_type: z.enum(ACTIVITY_TYPES),
         occurred_at: z.string().describe("ISO date-time with offset, e.g. 2026-11-03T17:00:00Z"),
         what_happened: z.string().min(1),
         outcomes: z.array(z.enum(ACTIVITY_OUTCOMES)).optional(),
         objective: z.enum(VISIT_OBJECTIVES).optional(),
-        planned_action_id: z.string().uuid().optional(),
+        planned_action_id: dbId().optional(),
         follow_ups: z
           .array(z.object({ action: z.string().min(1), due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), ...timed }))
           .optional(),

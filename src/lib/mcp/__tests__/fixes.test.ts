@@ -95,3 +95,13 @@ describe("a log failure after a successful write", () => {
     expect(await logActionQuiet(fine, { tool: "t", entity: "next_actions", entityId: "i", op: "create" })).toBeNull();
   });
 });
+
+describe("dbId", () => {
+  it("accepts the seeded ids prod still has (Russin is d0000000-…-0007)", async () => {
+    const { dbId } = await import("../tools/shared");
+    expect(dbId().safeParse("d0000000-0000-0000-0000-000000000007").success).toBe(true);
+    expect(dbId().safeParse("6AA2F0CE-CB6D-4F4D-878A-EDF342950B7F").success).toBe(true);
+    for (const bad of ["", "Russin", "d0000000-0000-0000-0000-00000000000", "d0000000000000000000000000000007"])
+      expect(dbId().safeParse(bad).success, bad).toBe(false);
+  });
+});

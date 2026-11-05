@@ -15,7 +15,7 @@ import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
 import { fetchAllPages } from "@/lib/supabase/page";
-import { dbRow, idMaker, STALE } from "./shared";
+import { dbRow, idMaker, STALE, dbId } from "./shared";
 
 export type GetAccountArgs = { id: string };
 export type CreateAccountArgs = {
@@ -324,7 +324,7 @@ export function registerAccountTools(server: McpServer, getCtx: GetCtx) {
       title: "Open an account",
       description:
         "Everything about one account: its details, contacts, open follow-ups, the 10 latest notes and the subjects of the last 5 email threads. Look the account up with find first. The updated_at values are what update_account and update_contact need.",
-      inputSchema: z.object({ id: z.string().uuid() }),
+      inputSchema: z.object({ id: dbId() }),
     },
     tool<GetAccountArgs>(getCtx, (ctx, a) => getAccount(ctx, a)),
   );
@@ -344,7 +344,7 @@ export function registerAccountTools(server: McpServer, getCtx: GetCtx) {
         postal_code: z.string().regex(/^\d{5}$/).optional(),
         lead_source: z.enum(LEAD_SOURCES_ALL).describe("Where the lead came from; ask the person"),
         source_detail: z.string().optional().describe("Required when lead_source is OTHER"),
-        referring_account_id: z.string().uuid().optional().describe("Required for referral lead sources"),
+        referring_account_id: dbId().optional().describe("Required for referral lead sources"),
       }),
     },
     tool<CreateAccountArgs>(getCtx, (ctx, a) => createAccount(ctx, a)),
@@ -358,7 +358,7 @@ export function registerAccountTools(server: McpServer, getCtx: GetCtx) {
         'Correct an account\'s name, type or city. Read it first with get_account and pass its updated_at; if it changed meanwhile you are told to read again. Keep the name in the form "<Company> <City>".' +
         writeNote,
       inputSchema: z.object({
-        id: z.string().uuid(),
+        id: dbId(),
         updated_at: z.string().describe("The updated_at you read"),
         name: z.string().min(1).optional(),
         account_type: z.enum(ACCOUNT_TYPES).optional(),
@@ -374,7 +374,7 @@ export function registerAccountTools(server: McpServer, getCtx: GetCtx) {
       title: "Add a contact",
       description: "Add a person to an account (look the account up with find). Ask for the name; the rest is optional." + writeNote,
       inputSchema: z.object({
-        account_id: z.string().uuid(),
+        account_id: dbId(),
         name: z.string().min(1),
         job_title: z.string().optional(),
         email: z.string().optional(),
@@ -393,7 +393,7 @@ export function registerAccountTools(server: McpServer, getCtx: GetCtx) {
         "Correct a contact's name, title, email, phone or champion flag. Read it first with get_account and pass its updated_at; if it changed meanwhile you are told to read again." +
         writeNote,
       inputSchema: z.object({
-        id: z.string().uuid(),
+        id: dbId(),
         updated_at: z.string().describe("The updated_at you read"),
         name: z.string().min(1).optional(),
         job_title: z.string().optional(),
@@ -410,7 +410,7 @@ export function registerAccountTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Add a note to an account",
       description: "Add a note to an account's history: what someone learned or decided." + writeNote,
-      inputSchema: z.object({ account_id: z.string().uuid(), body: z.string().min(1) }),
+      inputSchema: z.object({ account_id: dbId(), body: z.string().min(1) }),
     },
     tool<AddAccountNoteArgs>(getCtx, (ctx, a) => addAccountNote(ctx, a)),
   );

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { z } from "zod";
 import { checkConfirmation, confirmationReason, issueConfirmation } from "../confirm";
 import type { AgentContext } from "../context";
 import { fail, needsConfirmation, type CallToolResult } from "../result";
@@ -68,3 +69,11 @@ export function dbProblem(e: { code?: string; message?: string }, kind?: string)
   return null;
 }
 
+/**
+ * A database id. Not z.string().uuid(): zod 4 enforces the RFC version and
+ * variant digits, and the seeded rows prod still uses (Russin is
+ * d0000000-0000-0000-0000-000000000007) fail it although Postgres accepts
+ * them — the agent could not refer to those accounts (found 2026-11-05).
+ */
+export const dbId = () =>
+  z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "not a GMX Sales id");
