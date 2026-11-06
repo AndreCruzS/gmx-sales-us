@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  subtaskBar,
   isOnUs,
   canEditItem,
   firstNameOf,
@@ -292,5 +293,22 @@ describe("PK follow-up for reps (spec 2026-11-03)", () => {
     expect(firstNameOf("Joao Manager")).toBe("Joao");
     expect(firstNameOf("  Deonn  Deford ")).toBe("Deonn");
     expect(firstNameOf(undefined)).toBe("Someone");
+  });
+});
+
+describe("subtaskBar (2026-11-06: the In progress cell fills with its subtasks)", () => {
+  const sub = (done: boolean) => ({ id: "s", next_action_id: "n", title: "t", done_at: done ? "2026-11-06T00:00:00Z" : null, position: 0 });
+  it("is the share of subtasks done, rounded", () => {
+    expect(subtaskBar("WORKING_ON_IT", [sub(true), sub(true), sub(false), sub(false), sub(false)])).toEqual({ done: 2, total: 5, pct: 40 });
+    expect(subtaskBar("WORKING_ON_IT", [sub(true), sub(false), sub(false)])).toEqual({ done: 1, total: 3, pct: 33 });
+  });
+  it("shows 0% when none is done yet", () => {
+    expect(subtaskBar("WORKING_ON_IT", [sub(false)])).toEqual({ done: 0, total: 1, pct: 0 });
+  });
+  it("is only for In progress, and only with subtasks", () => {
+    expect(subtaskBar("WORKING_ON_IT", [])).toBeNull();
+    for (const p of ["NOT_STARTED", "WAITING", "STUCK", "DONE"] as const) {
+      expect(subtaskBar(p, [sub(true)])).toBeNull();
+    }
   });
 });

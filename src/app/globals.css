@@ -7045,6 +7045,18 @@ button.dl-owe-row:hover {
   background: var(--pk-working-fill);
   color: var(--pk-working-ink);
 }
+/* In progress with subtasks (2026-11-06, PK Control's look): the cell fills
+   left to right as its subtasks are done; the rest is a light amber fixed in
+   both themes, so the dark amber ink reads on both halves in light and dark. */
+.pk-cell[data-progress="working"][data-bar] {
+  background: linear-gradient(
+    to right,
+    var(--pk-working-fill) var(--pk-pct, 0%),
+    color-mix(in srgb, var(--pk-working-fill) 38%, #fbfcfc) var(--pk-pct, 0%)
+  );
+  color: var(--on-warn);
+  box-shadow: inset 0 0 0 1px var(--pk-working-fill);
+}
 .pk-cell[data-progress="waiting"] {
   background: var(--pk-waiting-fill);
   color: var(--pk-waiting-ink);

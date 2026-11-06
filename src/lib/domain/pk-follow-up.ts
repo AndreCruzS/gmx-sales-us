@@ -79,6 +79,18 @@ export interface PkSubtask {
   position: number;
 }
 
+/** The bar inside an In progress cell (Bianca and João, 2026-11-06: PK
+ *  Control's status cell fills as its subtasks are done). Null for any other
+ *  status, and for an item without subtasks. */
+export function subtaskBar(
+  progress: Progress,
+  subtasks: Pick<PkSubtask, "done_at">[],
+): { done: number; total: number; pct: number } | null {
+  if (progress !== "WORKING_ON_IT" || subtasks.length === 0) return null;
+  const done = subtasks.filter((s) => s.done_at !== null).length;
+  return { done, total: subtasks.length, pct: Math.round((done / subtasks.length) * 100) };
+}
+
 export interface PkRead {
   membership_id: string;
   next_action_id: string;

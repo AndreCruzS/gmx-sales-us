@@ -17,6 +17,7 @@ import {
   PROGRESS_LABEL,
   daysToAlert,
   isAlertPassed,
+  subtaskBar,
   type PkBand,
   type PkItem,
   type PkNote,
@@ -201,6 +202,7 @@ function PkRow({
   onOpen: (itemId: string) => void;
 }) {
   const subsDone = facts.subtasks.filter((s) => s.done_at !== null).length;
+  const bar = subtaskBar(item.progress, facts.subtasks);
   const latest = facts.notes[facts.notes.length - 1];
   const passed = isAlertPassed(item, todayIso);
   const days = daysToAlert(item, todayIso);
@@ -220,8 +222,15 @@ function PkRow({
           </span>
         )}
       </span>
-      <span className="pk-cell" data-progress={PROGRESS_TONE[item.progress]}>
+      <span
+        className="pk-cell"
+        data-progress={PROGRESS_TONE[item.progress]}
+        data-bar={bar ? "" : undefined}
+        style={bar ? ({ "--pk-pct": `${bar.pct}%` } as React.CSSProperties) : undefined}
+        title={bar ? `${bar.done} of ${bar.total} subtasks done` : undefined}
+      >
         {PROGRESS_LABEL[item.progress]}
+        {bar && <> · {bar.pct}%</>}
       </span>
       <span className="pk-c pk-note">
         <span
