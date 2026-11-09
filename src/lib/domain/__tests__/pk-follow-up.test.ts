@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   subtaskBar,
+  alertBase,
   isOnUs,
   canEditItem,
   firstNameOf,
@@ -310,5 +311,22 @@ describe("subtaskBar (2026-11-06: the In progress cell fills with its subtasks)"
     for (const p of ["NOT_STARTED", "WAITING", "STUCK", "DONE"] as const) {
       expect(subtaskBar(p, [sub(true)])).toBeNull();
     }
+  });
+});
+
+describe("alertBase (2026-11-06: classifying an old PK's items must not make them late on arrival)", () => {
+  const none = { priority: null, priority_days: null, due_date: "2026-11-06" };
+  it("a first priority counts from today when the PK is already past", () => {
+    expect(alertBase("2026-10-20", none, "2026-11-09")).toBe("2026-11-09");
+  });
+  it("a first priority on the PK day counts from the PK", () => {
+    expect(alertBase("2026-11-09", none, "2026-11-09")).toBe("2026-11-09");
+  });
+  it("an item that has a priority keeps the base it got", () => {
+    expect(alertBase("2026-10-20", { priority: "PLAN", priority_days: 7, due_date: "2026-11-16" }, "2026-11-20")).toBe("2026-11-09");
+    expect(alertBase("2026-10-20", { priority: "DELEGATE", priority_days: 2, due_date: "2026-10-22" }, "2026-11-09")).toBe("2026-10-20");
+  });
+  it("an eliminated item getting a priority again counts from today", () => {
+    expect(alertBase("2026-10-20", { priority: "ELIMINATE", priority_days: null, due_date: "2026-10-27" }, "2026-11-09")).toBe("2026-11-09");
   });
 });

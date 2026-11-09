@@ -143,6 +143,28 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(text(item)).toContain("hello");
   });
 
+  it("a first priority on an old PK's item counts from today; the board shows subtasks", async () => {
+    const mk = await t.createPk(admin, {
+      dealer_account_id: dealerId,
+      occurred_at: "2026-10-20T17:00:00Z",
+      what_happened: `PK ${run} old`,
+      follow_ups: [fu("oldone", { subtasks: ["a", "b"] })],
+      keep_eliminated: [0],
+    });
+    const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await admin.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const r = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: false, important: true, reason: "r" });
+    expect(r.isError).toBeFalsy();
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: admin.me.timeZone }).format(new Date());
+    const [y, m, d] = today.split("-").map(Number);
+    const plus7 = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
+    const { data: after } = await admin.db.from("next_actions").select("priority, priority_days, due_date").eq("id", id).single();
+    expect(after).toMatchObject({ priority: "PLAN", priority_days: 7, due_date: plus7 });
+
+    const board = text(await t.pkBoard(admin, { open_only: true, limit: 200 }));
+    expect(board).toContain(`oldone ${run} [Plan, To do, alert ${plus7}, subtasks 0/2`);
+  });
+
   it("a PK given with the person's offset keeps the date they said", async () => {
     const r = await t.createPk(admin, {
       dealer_account_id: dealerId,

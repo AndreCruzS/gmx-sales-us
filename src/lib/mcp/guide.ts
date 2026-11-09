@@ -33,7 +33,7 @@ Every record needs the account it belongs to (look it up with find) and a date. 
 PK FOLLOW-UPS: HOW TO PRIORITISE
 ${MATRIX_RULES}
 
-The PK alert rule: the alert date is the PK date plus a number of days that depends on the priority. Default days: ${days("DO_NOW")}, ${days("PLAN")}, ${days("DELEGATE")}. ${PRIORITY_LABEL.ELIMINATE} has no alert and is not saved unless the person says to keep it.
+The PK alert rule: the alert date is the PK date plus a number of days that depends on the priority. An item that gets its first priority after its PK day (for example the October items imported without one) counts the days from the day it gets the priority, so it is not late on arrival. Default days: ${days("DO_NOW")}, ${days("PLAN")}, ${days("DELEGATE")}. ${PRIORITY_LABEL.ELIMINATE} has no alert and is not saved unless the person says to keep it.
 
 WHAT NEEDS CONFIRMATION
 These are never done on the first call. The tool answers "needs confirmation" with a preview and a code; show the preview and only call again with the code after the person says yes:

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  alertBase,
   alertDate,
   daysFrom,
   isUnread,
@@ -119,7 +120,20 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
 
   const notes: PkNote[] = [];
   const reads: PkRead[] = [];
+  const subs: { next_action_id: string; done_at: string | null }[] = [];
   for (const c of chunks(items.map((i) => i.id))) {
+    // Subtasks give each item its done / total (2026-11-06: the agent sees the
+    // progress the board's In progress cell shows, without opening each item).
+    subs.push(
+      ...(await fetchAllPages<{ next_action_id: string; done_at: string | null }>((from, to) =>
+        ctx.db
+          .from("next_action_subtasks")
+          .select("id, next_action_id, done_at")
+          .in("next_action_id", c)
+          .order("id")
+          .range(from, to),
+      )),
+    );
     notes.push(
       ...(await fetchAllPages<PkNote>((from, to) =>
         ctx.db
@@ -140,6 +154,13 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
     reads.push(...(rd ?? []));
   }
   const myRead = new Map(reads.map((r) => [r.next_action_id, r] as const));
+  const subCount = new Map<string, { done: number; total: number }>();
+  for (const s of subs) {
+    const c = subCount.get(s.next_action_id) ?? { done: 0, total: 0 };
+    c.total += 1;
+    if (s.done_at !== null) c.done += 1;
+    subCount.set(s.next_action_id, c);
+  }
 
   const filtered = !!(args.mine_only || args.open_only);
   const bands = visits
@@ -156,6 +177,8 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
           alert_date: i.completed_at === null && i.priority && i.priority !== "ELIMINATE" ? i.due_date : null,
           due_date: i.due_date,
           done: i.completed_at !== null,
+          subtasks_done: subCount.get(i.id)?.done ?? 0,
+          subtasks_total: subCount.get(i.id)?.total ?? 0,
           unread: isUnread(i, notes, myRead.get(i.id), ctx.me.membershipId),
           updated_at: i.updated_at,
         }));
@@ -172,7 +195,7 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
   const text = bands.map((b) => {
     const rows = b.items.map(
       (i) =>
-        `  - ${i.action} [${i.priority_label ?? "no priority"}, ${PROGRESS_LABEL[i.progress]}${i.alert_date ? `, alert ${i.alert_date}` : ""}${i.unread ? ", UNREAD" : ""}] — id ${i.id}, updated_at ${i.updated_at}`,
+        `  - ${i.action} [${i.priority_label ?? "no priority"}, ${PROGRESS_LABEL[i.progress]}${i.alert_date ? `, alert ${i.alert_date}` : ""}${i.subtasks_total ? `, subtasks ${i.subtasks_done}/${i.subtasks_total}` : ""}${i.unread ? ", UNREAD" : ""}] — id ${i.id}, updated_at ${i.updated_at}`,
     );
     return `${b.dealer}, PK of ${b.pk_date}:\n${rows.length ? rows.join("\n") : "  (no follow-ups)"}`;
   });
@@ -403,6 +426,7 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   const eliminate = quadrant === "ELIMINATE";
 
   const patch: Record<string, unknown> = {};
+  const today = calendarDateIn(new Date().toISOString(), ctx.me.timeZone);
   let pkDate: string | null = null;
   if ((quadrant !== null || args.due_date !== undefined) && prior.activity_id) {
     const { data: v } = await ctx.db.rpc("pk_board_visits").select("occurred_at").eq("id", prior.activity_id).maybeSingle();
@@ -410,12 +434,14 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   }
   if (quadrant !== null && !eliminate) {
     if (!pkDate) return fail("This item is not part of a PK, so it has no priority to set.");
-    const days = args.due_date ? Math.max(0, daysFrom(pkDate, args.due_date)) : undefined;
-    Object.assign(patch, priorityPatch(pkDate, quadrant, days));
+    const base = alertBase(pkDate, prior, today);
+    const days = args.due_date ? Math.max(0, daysFrom(base, args.due_date)) : undefined;
+    Object.assign(patch, priorityPatch(base, quadrant, days));
   } else if (args.due_date !== undefined) {
     if (pkDate && prior.priority && prior.priority !== "ELIMINATE") {
-      const days = Math.max(0, daysFrom(pkDate, args.due_date));
-      Object.assign(patch, { priority_days: days, due_date: alertDate(pkDate, days) });
+      const base = alertBase(pkDate, prior, today);
+      const days = Math.max(0, daysFrom(base, args.due_date));
+      Object.assign(patch, { priority_days: days, due_date: alertDate(base, days) });
     } else patch.due_date = args.due_date;
   }
   if (args.progress !== undefined) patch.progress = args.progress;
@@ -561,7 +587,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "The PK follow-up board (Open action items)",
       description:
-        "PK trainings (newest first) with their follow-ups: priority, status, alert date and an unread flag. Reps see their own PKs; the desk sees all. Pages of 50 PKs (max 200): use offset for more. mine_only and open_only filter within each page, so a page can show fewer PKs than the limit: keep paging until a page comes back empty.",
+        "PK trainings (newest first) with their follow-ups: priority, status, alert date, subtasks done/total and an unread flag. Reps see their own PKs; the desk sees all. Pages of 50 PKs (max 200): use offset for more. mine_only and open_only filter within each page, so a page can show fewer PKs than the limit: keep paging until a page comes back empty.",
       inputSchema: z.object({
         mine_only: z.boolean().optional().describe("Only follow-ups owned by the person"),
         dealer_account_id: dbId().optional(),

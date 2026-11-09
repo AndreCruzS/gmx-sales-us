@@ -29,6 +29,7 @@ import {
   PRIORITIES,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
+  alertBase,
   alertDate,
   priorityPatch,
   trapTarget,
@@ -66,6 +67,7 @@ function daysBetween(from: string, to: string): number {
 function alertLine(
   item: PkItem,
   pkDate: string,
+  base: string,
   days: number | null,
   todayIso: string,
 ): { text: string; passed: boolean } {
@@ -78,8 +80,10 @@ function alertLine(
       text: "Type the days after the PK to get an alert",
       passed: false,
     };
-  const at = alertDate(pkDate, days);
-  const sum = `Alert: PK ${shortDate(pkDate)} + ${days} ${days === 1 ? "day" : "days"} = ${shortDate(at)}`;
+  const at = alertDate(base, days);
+  // An old PK's item counts from the day it got its priority (alertBase).
+  const from = base === pkDate ? `PK ${shortDate(pkDate)}` : `prioritised ${shortDate(base)}`;
+  const sum = `Alert: ${from} + ${days} ${days === 1 ? "day" : "days"} = ${shortDate(at)}`;
   if (item.completed_at !== null)
     return { text: `${sum} · done`, passed: false };
   const left = daysBetween(todayIso, at);
@@ -245,15 +249,16 @@ export function PkItemDrawer({
       : null;
   const shownDays = daysDraft !== null ? typed : item.priority_days;
   const live = item.priority !== null && item.priority !== "ELIMINATE";
+  const base = alertBase(band.pkDate, item, todayIso);
 
   function commitDays() {
     if (daysDraft === null) return;
     setDaysDraft(null);
     if (!live || typed === null || typed === item.priority_days) return;
-    write(priorityPatch(band.pkDate, item.priority as Priority, typed));
+    write(priorityPatch(base, item.priority as Priority, typed));
   }
 
-  const alert = alertLine(item, band.pkDate, shownDays, todayIso);
+  const alert = alertLine(item, band.pkDate, base, shownDays, todayIso);
 
   // ── SUGGEST PRIORITY (Bianca, 2026-11-03: the Eisenhower matrix) ────────
   // The AI answers "urgent?" and "important?" with a reason; the reader
@@ -405,7 +410,7 @@ export function PkItemDrawer({
                   onChange={(e) => {
                     setDaysDraft(null);
                     write(
-                      priorityPatch(band.pkDate, e.target.value as Priority),
+                      priorityPatch(base, e.target.value as Priority),
                     );
                   }}
                 >
@@ -462,7 +467,7 @@ export function PkItemDrawer({
                         className="t-action"
                         onClick={() => {
                           setDaysDraft(null);
-                          write(priorityPatch(band.pkDate, guess.priority));
+                          write(priorityPatch(base, guess.priority));
                           setGuess({ state: "idle" });
                         }}
                       >

@@ -149,6 +149,21 @@ export function alertDate(pkDate: string, days: number): string {
   return addDays(pkDate, days);
 }
 
+/** The day an item's alert days count from (2026-11-06). An item keeps the
+ *  base it got with its first priority (its alert minus its days). One getting
+ *  its first priority now counts from today when its PK is already past, so
+ *  classifying an old PK's items (the October import) does not make them late
+ *  on arrival. */
+export function alertBase(
+  pkDate: string,
+  item: { priority: Priority | null; priority_days: number | null; due_date: string },
+  todayIso: string,
+): string {
+  if (item.priority !== null && item.priority !== "ELIMINATE" && item.priority_days !== null)
+    return addDays(item.due_date, -item.priority_days);
+  return todayIso > pkDate ? todayIso : pkDate;
+}
+
 /** Whole days from one calendar date to another. */
 export function daysFrom(from: string, to: string): number {
   const t = (d: string) => {
