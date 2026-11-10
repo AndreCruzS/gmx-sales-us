@@ -448,13 +448,11 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
       today,
       ownerGivesWork: gives,
     });
-    if (plan.suggestDrop) {
-      // Never closed or downgraded on its own: only the date the person said is written.
-      suggestDrop = true;
-      if (args.due_date !== undefined) patch.due_date = args.due_date;
-    } else {
-      Object.assign(patch, { important, priority: plan.priority, due_date: plan.due_date, ...daysSincePk(plan.due_date) });
-    }
+    // As in the drawer: the answers are stored, with the priority that may be
+    // (Plan, or Delegate for an admin/support owner) — never Eliminate. Where
+    // the answers say Eliminate, dropping it is suggested in the receipt.
+    suggestDrop = plan.suggestDrop;
+    Object.assign(patch, { important, priority: plan.priority, due_date: plan.due_date, ...daysSincePk(plan.due_date) });
   } else if (args.due_date !== undefined) {
     patch.due_date = args.due_date;
     if (prior.important !== null && prior.priority !== "ELIMINATE") {
@@ -467,10 +465,8 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   if (args.done !== undefined) patch.completed_at = args.done ? new Date().toISOString() : null;
   if (args.action !== undefined) patch.action = args.action;
 
-  const suggestion = `Suggested to drop (not important, and no deadline within two business days): "${prior.action}" (${args.reason?.trim()}). Its priority was not changed. Ask the person; do not set it yourself.`;
-  if (Object.keys(patch).length === 0) {
-    return suggestDrop ? ok(suggestion, { id: args.id, changed: false }) : fail("Nothing to change — say what should be different.");
-  }
+  const suggestion = `Suggested to drop (not important, and no deadline within two business days): "${prior.action}" (${args.reason?.trim()}). It was kept, as ${PRIORITY_LABEL[patch.priority as keyof typeof PRIORITY_LABEL] ?? "it was"}. Ask the person whether to drop it; do not eliminate it yourself.`;
+  if (Object.keys(patch).length === 0) return fail("Nothing to change — say what should be different.");
 
   const { data, error } = await ctx.db
     .from("next_actions")
@@ -669,7 +665,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Change a PK follow-up",
       description:
-        "Change a PK follow-up's priority, status, deadline, text, or close it. Read it first (pk_board or pk_item) and pass its updated_at; if it changed meanwhile you are told to read again. To change the priority give important (and urgent or asked_by_dealer when said) with a reason: the system caps an urgent deadline at two business days and picks the priority from the answer and the deadline. A new due_date moves the deadline and the priority follows it. If it is not important and not urgent it is suggested to drop and the priority is NOT changed." +
+        "Change a PK follow-up's priority, status, deadline, text, or close it. Read it first (pk_board or pk_item) and pass its updated_at; if it changed meanwhile you are told to read again. To change the priority give important (and urgent or asked_by_dealer when said) with a reason: the system caps an urgent deadline at two business days and picks the priority from the answer and the deadline. A new due_date moves the deadline and the priority follows it. If it is not important and not urgent the answer is recorded and the item kept open (Plan, or Delegate for an admin or assistant owner), and dropping it is suggested: ask the person; never eliminate it yourself." +
         matrixNote +
         writeNote,
       inputSchema: z.object({

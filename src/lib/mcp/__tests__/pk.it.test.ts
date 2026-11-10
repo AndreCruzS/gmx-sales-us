@@ -201,7 +201,7 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(text(await t.pkBoard(tj, { limit: 200 }))).toContain(`theirs2 ${run}`);
   });
 
-  it("update_pk_item takes the answers; not important and not urgent is a suggestion that changes nothing", async () => {
+  it("update_pk_item takes the answers; not important and not urgent is stored (never Eliminate) with a drop suggestion", async () => {
     const mk = await t.createPk(admin, {
       dealer_account_id: dealerId,
       occurred_at: PK_AT,
@@ -217,10 +217,17 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     const drop = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: false, important: false, reason: "nope" });
     expect(drop.isError).toBeFalsy();
     expect(text(drop)).toContain("Suggested to drop");
-    const { data: same } = await admin.db.from("next_actions").select("priority").eq("id", id).single();
-    expect(same!.priority).toBe("PLAN");
-    const up = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true, important: true, reason: "now" });
-    expect(text(up)).toContain("priority: PLAN → DO_NOW");
+    expect(text(drop)).toContain("It was kept, as Delegate");
+    // As in the drawer: "not important, keep it" is recorded; the admin owner's
+    // stored priority is Delegate, never Eliminate, and the item stays open.
+    const { data: kept } = await admin.db
+      .from("next_actions")
+      .select("priority, important, completed_at, updated_at")
+      .eq("id", id)
+      .single();
+    expect(kept).toMatchObject({ priority: "DELEGATE", important: false, completed_at: null });
+    const up = await t.updatePkItem(admin, { id, updated_at: kept!.updated_at, urgent: true, important: true, reason: "now" });
+    expect(text(up)).toContain("priority: DELEGATE → DO_NOW");
     expect(text(up)).toContain(`Due ${plus(2)}`);
   });
 
