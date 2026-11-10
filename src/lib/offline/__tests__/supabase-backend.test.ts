@@ -88,3 +88,77 @@ describe("SupabaseSyncBackend.createOpportunityWithAction — RPC argument shapi
     ).rejects.toBeInstanceOf(SyncRejectionError);
   });
 });
+
+describe("SupabaseSyncBackend.pullWorkingSet — agenda carries what the Home needs", () => {
+  function chain(result: { data: unknown; error: null }) {
+    const c: Record<string, unknown> = {};
+    for (const m of ["select", "or", "order", "limit", "gte"]) c[m] = () => c;
+    c.maybeSingle = () => Promise.resolve(result);
+    c.then = (res: (v: unknown) => unknown) => Promise.resolve(result).then(res);
+    return c;
+  }
+
+  it("selects the owner, priority, importance and named embeds, and flattens them", async () => {
+    const row = {
+      id: "a1",
+      action: "Call Ganahl",
+      due_date: "2026-11-12",
+      due_time: null,
+      completed_at: null,
+      account_id: ACCOUNT,
+      opportunity_id: null,
+      objective: null,
+      kind: "QUOTE_FOLLOW_UP",
+      created_via: null,
+      created_at: "2026-11-10T10:00:00Z",
+      updated_at: "2026-11-10T10:00:00Z",
+      owner_id: OWNER,
+      priority: "DO_NOW",
+      important: true,
+      entered_by: "m-admin",
+      enterer: { users: { full_name: "Bianca Souza" } },
+      activity: { activity_type: "CALL" },
+    };
+    const selects: Record<string, string> = {};
+    const from = vi.fn((table: string) => {
+      const c = chain({
+        data: table === "next_actions" ? [row] : table === "organizations" ? { settings: {} } : [],
+        error: null,
+      });
+      const origSelect = c.select as () => unknown;
+      c.select = (cols: string) => {
+        selects[table] = cols;
+        return origSelect();
+      };
+      return c;
+    });
+    const backend = new SupabaseSyncBackend({ from } as unknown as SupabaseClient);
+
+    const ws = await backend.pullWorkingSet();
+
+    expect(selects.next_actions).toContain("owner_id");
+    expect(selects.next_actions).toContain("important");
+    expect(selects.next_actions).toContain("memberships!next_actions_entered_by_fkey(users(full_name))");
+    expect(selects.next_actions).toContain("activities!next_actions_activity_id_fkey(activity_type)");
+    expect(ws.agenda[0]).toMatchObject({
+      id: "a1",
+      owner_id: OWNER,
+      priority: "DO_NOW",
+      important: true,
+      entered_by: "m-admin",
+      entered_by_name: "Bianca Souza",
+      source_type: "CALL",
+    });
+    expect(ws.agenda[0]).not.toHaveProperty("enterer");
+    expect(ws.agenda[0]).not.toHaveProperty("activity");
+  });
+
+  it("tolerates missing embeds (null enterer, no activity)", async () => {
+    const row = { id: "a2", action: "x", due_date: "2026-11-12", enterer: null, activity: null };
+    const from = vi.fn((table: string) =>
+      chain({ data: table === "next_actions" ? [row] : table === "organizations" ? null : [], error: null }),
+    );
+    const ws = await new SupabaseSyncBackend({ from } as unknown as SupabaseClient).pullWorkingSet();
+    expect(ws.agenda[0]).toMatchObject({ entered_by_name: null, source_type: null });
+  });
+});

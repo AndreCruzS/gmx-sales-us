@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   SyncRejectionError,
+  type CachedAgendaItem,
   type OrgSettings,
   type SyncBackend,
   type WorkingSet,
@@ -116,7 +117,10 @@ export class SupabaseSyncBackend implements SyncBackend {
         // months out — e.g. a display check) are cached regardless of the
         // visit horizon.
         .select(
-          "id, action, due_date, due_time, completed_at, account_id, opportunity_id, objective, kind, created_via, created_at, updated_at",
+          // owner/priority/important + who entered it and where it came from
+          // feed the rep Home and My work. next_actions has several FKs to
+          // memberships and to activities, so each embed names its FK.
+          "id, action, due_date, due_time, completed_at, account_id, opportunity_id, objective, kind, created_via, created_at, updated_at, owner_id, priority, important, entered_by, enterer:memberships!next_actions_entered_by_fkey(users(full_name)), activity:activities!next_actions_activity_id_fkey(activity_type)",
         )
         // Open work, plus anything closed in the last couple of days. Home's
         // day spine has to show what a rep just logged as "done" — caching
@@ -188,10 +192,24 @@ export class SupabaseSyncBackend implements SyncBackend {
     return {
       accounts: accountsRes.data,
       contacts: contactsRes.data,
-      agenda: agendaRes.data,
+      agenda: (agendaRes.data ?? []).map(flattenAgendaRow),
       activities: activitiesRes.data,
       settings,
       pulledAt: new Date().toISOString(),
     };
   }
+}
+
+// Flattens the two embeds into the cached fields; the raw embed objects never
+// reach the cache. PostgREST types a to-one embed loosely, hence the casts.
+function flattenAgendaRow(row: Record<string, unknown>): CachedAgendaItem {
+  const { enterer, activity, ...rest } = row as {
+    enterer?: { users?: { full_name?: string | null } | null } | null;
+    activity?: { activity_type?: string | null } | null;
+  } & Record<string, unknown>;
+  return {
+    ...rest,
+    entered_by_name: enterer?.users?.full_name ?? null,
+    source_type: activity?.activity_type ?? null,
+  } as CachedAgendaItem;
 }

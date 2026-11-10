@@ -58,6 +58,15 @@ export interface CachedAgendaItem {
   kind: string | null; // next_action_kind (D-routine): null until the DB trigger infers it
   due_time?: string | null; // timed commitments (2026-11-04): null = all day
   created_via?: "claude" | "muse" | null; // agent connector: which agent made it; null = made in the app
+  // Rep Home / My work (2026-11-10). Optional: caches filled before this
+  // shipped lack them until the next pull. The account name comes from the
+  // cached accounts, so it is not duplicated here.
+  owner_id?: string | null;
+  priority?: string | null;
+  important?: boolean | null;
+  entered_by?: string | null; // membership id of whoever gave the work
+  entered_by_name?: string | null;
+  source_type?: string | null; // linked activity's activity_type
   created_at: string; // routine's contextDate source (D-routine) — never edited, unlike updated_at
   updated_at: string; // baseVersion source for edits
 }
