@@ -99,22 +99,22 @@ export const debriefDraftSchema = z.object({
           .boolean()
           .nullable()
           .default(null)
-          .describe("PK only: the matrix's URGENT answer; null on any other note"),
+          .describe("urgent: said or implied; null on a VISIT, CALL or MEETING"),
         important: z
           .boolean()
           .nullable()
           .default(null)
-          .describe("PK only: the matrix's IMPORTANT answer; null on any other note"),
+          .describe("the IMPORTANT answer; null on a VISIT, CALL or MEETING"),
         asked_by_dealer: z
           .boolean()
           .nullable()
           .default(null)
-          .describe("PK only: true when the dealer asked for it or GMX promised it to them"),
+          .describe("true when the dealer asked for it or GMX promised it to them"),
         priority_reason: z
           .string()
           .nullable()
           .default(null)
-          .describe('PK only: at most 15 words, "Important: … · Due: …"'),
+          .describe('at most 15 words, "Important: … · Due: …"; null on a VISIT, CALL or MEETING'),
         progress: z
           .enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING"])
           .nullable()
@@ -241,16 +241,20 @@ becomes one contact. Spell e-mails out plainly (lowercase); never guess at or
 complete a detail that was not said. People mentioned only in passing, with
 nothing to reach them by and no stated role, are not contacts.
 
+EVERY follow-up that is a task (not a VISIT, CALL or MEETING being booked) carries
+urgent, important and priority_reason (the rules below), asked_by_dealer (true
+when the dealer asked for it or it was promised to them) and a due_date that is
+ONLY a date said out loud, null when none was said (the code sets the default
+and caps an urgent one). A VISIT, CALL or MEETING keeps the date said and leaves
+urgent, important and priority_reason null.
+
 A note about a product-knowledge training — a "PK", a "treinamento", a training
 given to a dealer's staff — is activity_type PK_TRAINING. On a PK only, each
-next action also carries: urgent, important and priority_reason (the matrix
-below); asked_by_dealer (true when the dealer asked for it or it was promised
-to them); a due_date that is ONLY a date said out loud, null when none was said
-(the code sets the default and caps an urgent one); progress
-(WAITING when the ball is with the dealer, WORKING_ON_IT when already under
-way, else NOT_STARTED); subtasks (only when the rep lists the parts of one
-follow-up — separate follow-ups stay separate actions); and note (context said
-about that item, never invented). On any other note leave them null or empty.
+next action also carries: progress (WAITING when the ball is with the dealer,
+WORKING_ON_IT when already under way, else NOT_STARTED); subtasks (only when the
+rep lists the parts of one follow-up — separate follow-ups stay separate
+actions); and note (context said about that item, never invented). On any other
+note leave those three null or empty.
 
 ${MATRIX_RULES}`;
 

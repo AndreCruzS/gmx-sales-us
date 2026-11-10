@@ -32,6 +32,7 @@
 // activity_id linkage.
 
 import type { EntityType } from "@/lib/domain/schemas";
+import { isTask } from "@/lib/domain/deadline";
 import type { DebriefDraft } from "./draft";
 
 export interface DebriefOp {
@@ -119,6 +120,14 @@ export function buildRoutineOps(
         // drop OTHER rather than trip the check, same as the untyped path.
         objective:
           nextAction.objective === "OTHER" ? null : (nextAction.objective ?? null),
+        // A task carries Important? and the priority the sheet worked out
+        // (never ELIMINATE unless confirmed there); a visit/call/meeting none.
+        ...(isTask(nextAction.kind ?? null)
+          ? {
+              important: nextAction.important ?? null,
+              priority: (nextAction as { priority?: string | null }).priority ?? null,
+            }
+          : {}),
       },
       baseVersion: null,
     });

@@ -167,6 +167,22 @@ export function DebriefSheet({
       };
     }),
   );
+  const importanceField = (na: ActionRow, i: number) => (
+    <ImportanceDeadline
+      important={na.important}
+      due={na.due_date}
+      today={today}
+      ownerGivesWork={ownerGivesWork}
+      stored={na.priority}
+      onChange={(c) =>
+        patchAction(i, {
+          ...(c.important !== undefined ? { important: c.important } : {}),
+          ...(c.due_date ? { due_date: c.due_date } : {}),
+          priority: c.priority,
+        })
+      }
+    />
+  );
   const patchAction = (i: number, p: Partial<ActionRow>) =>
     setActions((prev) => prev.map((x, j) => (j === i ? { ...x, ...p } : x)));
   // Routine confirmations (D-routine, Task 10): pre-checked — the rep
@@ -358,7 +374,7 @@ export function DebriefSheet({
       }
       for (const na of visit ? actions : []) {
         if (!na.action.trim() || !na.due_date) continue;
-        if (pk && !na.keep) continue;
+        if (!na.keep) continue;
         // Typed commitments (a kind set) are created by the routine fan-out
         // below instead, which is where their kind actually gets persisted —
         // except on a PK, where every follow-up goes to the board from here.
@@ -367,17 +383,18 @@ export function DebriefSheet({
         // The PK board's rule: alert = PK date + days, written into due_date.
         // A spoken date sets the days; a date before the PK is the PK day.
         const days = pk && na.priority ? Math.max(0, daysFrom(pkDate, na.due_date)) : null;
+        // Every task carries Important? and its priority; the days are the PK board's.
+        const taskFields = isTask(na.kind) ? { important: na.important, priority: na.priority } : {};
         const pkFields = pk
           ? {
               ...(na.kind ? { kind: na.kind } : {}),
-              important: na.important,
-              priority: na.priority,
+              ...taskFields,
               priority_days: days,
               ...(days !== null ? { due_date: alertDate(pkDate, days) } : {}),
               progress: na.progress,
               source: "VISIT_CAPTURE" as const,
             }
-          : {};
+          : taskFields;
         enqueuedSeqs.push(
           await layer.sync.enqueue({
             clientId: naId,
@@ -490,12 +507,14 @@ export function DebriefSheet({
           next_actions: pk
             ? []
             : actions
-                .filter((na) => na.kind && na.action.trim() && na.due_date)
+                .filter((na) => na.kind && na.keep && na.action.trim() && na.due_date)
                 .map((na) => ({
                   action: na.action,
                   due_date: na.due_date,
                   objective: (na.objective as never) ?? null,
                   kind: na.kind,
+                  important: na.important,
+                  priority: na.priority,
                 })),
           routine_dispositions: dispositions
             .filter((d) => d.confirmed)
@@ -822,10 +841,10 @@ export function DebriefSheet({
                   <XIcon size={14} />
                 </button>
               </div>
-              {activityType === "PK_TRAINING" && na.reason && (
+              {na.reason && isTask(na.kind) && (
                 <p className="pk-row-reason t-hint">{na.reason}</p>
               )}
-              {activityType === "PK_TRAINING" && !na.keep && (
+              {!na.keep && (
                 <label className="pk-row-eliminate t-hint">
                   <input
                     type="checkbox"
@@ -834,6 +853,9 @@ export function DebriefSheet({
                   />
                   Not important and not urgent — not saved. Keep it
                 </label>
+              )}
+              {activityType !== "PK_TRAINING" && na.keep && isTask(na.kind) && (
+                <div className="pk-row-fields">{importanceField(na, i)}</div>
               )}
               {activityType === "PK_TRAINING" && na.keep && (
                 <details className="pk-row-details" open={Boolean(na.priority || na.subtasks.length || na.note || na.progress !== "NOT_STARTED")}>
@@ -847,20 +869,7 @@ export function DebriefSheet({
                       .filter(Boolean)
                       .join(" · ")}
                   </summary>
-                  <ImportanceDeadline
-                    important={na.important}
-                    due={na.due_date}
-                    today={today}
-                    ownerGivesWork={ownerGivesWork}
-                    stored={na.priority}
-                    onChange={(c) =>
-                      patchAction(i, {
-                        ...(c.important !== undefined ? { important: c.important } : {}),
-                        ...(c.due_date ? { due_date: c.due_date } : {}),
-                        priority: c.priority,
-                      })
-                    }
-                  />
+                  {importanceField(na, i)}
                   <div className="pk-row-fields">
                     <select
                       className="field"

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildRoutineOps } from "../fanout";
-import type { DebriefDraft } from "../draft";
+import { draftedAction, type DebriefDraft } from "../draft";
 
 function baseDraft(overrides: Partial<DebriefDraft> = {}): DebriefDraft {
   return {
@@ -319,5 +319,30 @@ describe("buildRoutineOps", () => {
     // DB check constraint, same as the untyped path.
     const other = ops.find((o) => o.payload.action === "Some other visit");
     expect(other?.payload.objective).toBeNull();
+  });
+});
+
+describe("buildRoutineOps: importance and priority on non-PK follow-ups", () => {
+  const rep = { today: "2026-11-10", pkDate: "2026-11-10", isPk: false, ownerGivesWork: false };
+  const build = (na: Record<string, unknown>) =>
+    buildRoutineOps(
+      baseDraft({ next_actions: [na as never] }),
+      ACCOUNT_ID, OWNER_ID, ORG_ID, {}, null, NOW, ACTIVITY_ID,
+    );
+
+  it("a drafted quote follow-up (important, not urgent, no date) is saved due in 2 business days as Do now", () => {
+    const na = { action: "Send the quote", objective: null, kind: "QUOTE_FOLLOW_UP", urgent: false, important: true, due_date: null };
+    const d = draftedAction(na, rep);
+    // 2 business days from Tue 2026-11-10 is Thu 11-12: within the urgent window.
+    expect(d).toMatchObject({ due_date: "2026-11-12", priority: "DO_NOW", important: true });
+    const [op] = build({ ...na, due_date: d.due_date, important: d.important, priority: d.priority });
+    expect(op.payload).toMatchObject({ due_date: "2026-11-12", important: true, priority: "DO_NOW", kind: "QUOTE_FOLLOW_UP" });
+    expect(op.payload).not.toHaveProperty("priority_days");
+  });
+
+  it("a visit carries no importance or priority", () => {
+    const [op] = build({ action: "Visit", objective: null, kind: "VISIT", due_date: "2026-11-20", important: true, priority: "PLAN" });
+    expect(op.payload).not.toHaveProperty("priority");
+    expect(op.payload).not.toHaveProperty("important");
   });
 });
