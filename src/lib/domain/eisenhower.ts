@@ -12,6 +12,7 @@
 
 import { z } from "zod";
 import type { Priority } from "@/lib/domain/pk-follow-up";
+import { urgentCap } from "@/lib/domain/deadline";
 
 /** The quadrant two answers land in; null while either is unknown. */
 export function quadrantOf(
@@ -34,27 +35,43 @@ export function draftedQuadrant(
   return quadrantOf(urgent == null ? urgent : urgent || askedByDealer === true, important);
 }
 
-/** What "urgent" and "important" mean at GMX â€” one text for the voice draft
- *  and for the board's Suggest priority, so they judge alike. */
-export const MATRIX_RULES = `Judge each PK follow-up on two separate questions (the Eisenhower matrix):
-- URGENT: it has to happen within about two days of the PK â€” the dealer is
-  waiting on it to quote, order or sell, a job or a delivery depends on it, or
-  a near date was said. Something the dealer ASKED for, or that GMX promised
-  them, counts as the dealer waiting on it: urgent. Otherwise not urgent.
+/** The deadline a suggestion proposes. A date said is used as said; urgent
+ *  (said or implied) caps it at two business days. */
+export function suggestDeadline(
+  g: { urgent: boolean; said_date: string | null },
+  fallback: string,
+  today: string,
+): string {
+  return g.urgent ? urgentCap(g.said_date ?? fallback, today) : (g.said_date ?? fallback);
+}
+
+/** What "important" and the deadline mean at GMX — one text for the voice
+ *  draft and for the board's Suggest, so they judge alike. */
+export const MATRIX_RULES = `Judge each PK follow-up on one question and one date:
 - IMPORTANT: it moves this dealer toward selling GMX (a stocking order, a
   display, a quote, training their staff, the relationship) AND needs the
   speaker's own knowledge or relationship. Everyday work anyone on the team
   could do (send a PDF, forward a price list, ship a sample book), or a nice-to-have,
   is not important.
-Do not mark everything urgent and important: most follow-ups are not both.
-Give a reason of at most 15 words that names why for each answer, in English,
-shaped "Urgent: â€¦ Â· Not important: â€¦" â€” each half opens with the answer you
-gave ("Urgent" or "Not urgent", "Important" or "Not important").`;
+- DEADLINE: a date that was said is used as said. If it was called "urgent", or
+  the dealer is waiting on it (they asked for it, GMX promised it, a job or a
+  delivery depends on it), answer urgent: true. Otherwise there is no date to
+  give: said_date is null.
+Do not mark everything important: most follow-ups are not.
+Give a reason of at most 15 words, in English, shaped
+"Important: … · Due: …" — the first half opens with "Important" or "Not
+important", the second says why that date.`;
 
-/** The board's Suggest priority answer (and the shape the voice draft uses). */
+/** The board's Suggest answer (and the shape the voice draft uses). `urgent`
+ *  means said or implied urgent; it no longer decides the quadrant directly. */
 export const matrixGuessSchema = z.object({
-  urgent: z.boolean(),
   important: z.boolean(),
-  reason: z.string().describe('at most 15 words, "Urgent: â€¦ Â· Not important: â€¦"'),
+  urgent: z.boolean(),
+  said_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .describe("a date said out loud, YYYY-MM-DD; null when none was said"),
+  reason: z.string().describe('at most 15 words, "Important: … · Due: …"'),
 });
 export type MatrixGuess = z.infer<typeof matrixGuessSchema>;
