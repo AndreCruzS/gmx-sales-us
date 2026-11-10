@@ -125,6 +125,9 @@ export const nextActionUpdateSchema = z.object({
   priority: z.enum(["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"]).nullish(),
   priority_days: z.number().int().min(0).nullish(),
   progress: z.enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"]).optional(),
+  // Deadlines decide urgency (2026-11-10): the one answer a person gives.
+  // Listed here or Zod strips it in the outbox.
+  important: z.boolean().nullish(),
 });
 export type NextActionUpdate = z.infer<typeof nextActionUpdateSchema>;
 

@@ -14,6 +14,7 @@ import {
   mirrorUpdate,
   pkDateOf,
   priorityPatch,
+  shownPriority,
   summarize,
   type PkBand,
   type PkItem,
@@ -31,6 +32,7 @@ function item(over: Partial<PkItem> = {}): PkItem {
     completed_at: null,
     priority: "DELEGATE",
     priority_days: 2,
+    important: false,
     progress: "NOT_STARTED",
     last_changed_by: null,
     last_changed_at: null,
@@ -91,6 +93,41 @@ describe("isAlertPassed / daysToAlert", () => {
     expect(daysToAlert(item({ priority: null }), "2026-11-02")).toBeNull();
     expect(daysToAlert(item({ priority: "ELIMINATE" }), "2026-11-02")).toBeNull();
     expect(daysToAlert(item({ completed_at: "2026-10-23T10:00:00Z" }), "2026-11-02")).toBeNull();
+  });
+});
+
+describe("isAlertPassed / daysToAlert read the deadline (2026-11-10)", () => {
+  it("is passed for an open item with a priority whose deadline is behind today", () => {
+    const i = item({ important: true, priority: "DO_NOW", due_date: "2026-11-09" });
+    expect(isAlertPassed(i, "2026-11-10")).toBe(true);
+    expect(daysToAlert(i, "2026-11-10")).toBe(-1);
+  });
+  it("counts calendar days to the deadline", () => {
+    expect(daysToAlert(item({ important: true, priority: "PLAN", due_date: "2026-11-16" }), "2026-11-10")).toBe(6);
+  });
+});
+
+describe("shownPriority (the tag on a row)", () => {
+  // Tue 2026-11-10: urgent through Thu 2026-11-12.
+  const today = "2026-11-10";
+  it("derives it from Important? and the deadline when Important? is answered", () => {
+    expect(shownPriority(item({ important: true, priority: "PLAN", due_date: "2026-11-11" }), today, false)).toBe("DO_NOW");
+    expect(shownPriority(item({ important: true, priority: "DO_NOW", due_date: "2026-11-20" }), today, false)).toBe("PLAN");
+  });
+  it("is Delegate for urgent and not important when the owner gives work to others", () => {
+    const i = item({ important: false, priority: "PLAN", due_date: "2026-11-12" });
+    expect(shownPriority(i, today, true)).toBe("DELEGATE");
+    expect(shownPriority(i, today, false)).toBe("PLAN");
+  });
+  it("shows Eliminate for not important and not urgent (a hint; the row is not closed)", () => {
+    expect(shownPriority(item({ important: false, priority: "PLAN", due_date: "2026-11-30" }), today, false)).toBe("ELIMINATE");
+  });
+  it("keeps the stored priority while Important? is unanswered (legacy rows)", () => {
+    expect(shownPriority(item({ important: null, priority: "DELEGATE", due_date: "2026-11-30" }), today, false)).toBe("DELEGATE");
+    expect(shownPriority(item({ important: null, priority: null }), today, false)).toBeNull();
+  });
+  it("keeps an Eliminate the person confirmed, whatever the date now says", () => {
+    expect(shownPriority(item({ important: false, priority: "ELIMINATE", due_date: "2026-11-09" }), today, false)).toBe("ELIMINATE");
   });
 });
 

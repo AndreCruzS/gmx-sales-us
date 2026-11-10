@@ -51,6 +51,7 @@ export function PkBoard({
   subtasks,
   reads,
   names,
+  roles = new Map(),
   me,
   desk = true,
   todayIso,
@@ -63,6 +64,8 @@ export function PkBoard({
   subtasks: PkSubtask[];
   reads: PkRead[];
   names: Map<string, string>;
+  /** Membership roles: an owner who gives work to others gets Delegate. */
+  roles?: Map<string, string>;
   /** My membership id. */
   me: string;
   /**
@@ -220,7 +223,7 @@ export function PkBoard({
               <span>Status</span>
               <span>Latest note</span>
               <span>Priority</span>
-              <span>Alert</span>
+              <span>Deadline</span>
               <span>Owner</span>
             </div>
             {bands.map((b, n) => {
@@ -243,6 +246,7 @@ export function PkBoard({
                     unread: unreadIds.has(id),
                   })}
                   names={names}
+                  roles={roles}
                   todayIso={todayIso}
                   folded={folded.has(b.activityId)}
                   filtered={narrowed}

@@ -21,6 +21,7 @@ function item(over: Partial<PkItem> & { id: string }): PkItem {
     completed_at: null,
     priority: "DELEGATE",
     priority_days: 2,
+    important: false,
     progress: "WORKING_ON_IT",
     last_changed_by: null,
     last_changed_at: null,
@@ -73,6 +74,30 @@ describe("pkExportSheets", () => {
     expect(text(head[0])).toBe("BFS Heber · PK Oct 20 · Heber, UT · 0%");
     const row = followUps[2]!.map(text);
     expect(row.slice(0, 6)).toEqual(["Send the price list", "In progress", "Delegate", "2", "2026-10-22", "Bianca"]);
+  });
+
+  it("heads the columns with Days after PK and Deadline", () => {
+    const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [], [], names);
+    expect(followUps[0]!.map(text)).toEqual([
+      "Action",
+      "Status",
+      "Priority",
+      "Days after PK",
+      "Deadline",
+      "Owner",
+      "Subtasks",
+      "Notes",
+    ]);
+  });
+
+  it("works the days after the PK out of the deadline, not the stored days", () => {
+    const { followUps } = pkExportSheets(
+      [band([item({ id: "i1", priority: "PLAN", priority_days: null, due_date: "2026-10-27" })])],
+      [],
+      [],
+      names,
+    );
+    expect(text(followUps[2]![3]!)).toBe("7");
   });
 
   it("writes the one status in the board's words", () => {

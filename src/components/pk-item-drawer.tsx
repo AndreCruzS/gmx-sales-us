@@ -4,12 +4,12 @@
 // beside the board on the desk and over it below that, and reads top to
 // bottom in the order the desk moves an item on:
 //   · whose ball it is and how far along (the two statuses);
-//   · the priority and its days, with the alert worked out in words —
-//     "Alert: PK Oct 20 + 2 days = Oct 22 · deadline passed";
+//   · Important? and the deadline (importance-deadline.tsx), the priority
+//     they give and the deadline in words — "Thu Nov 12 · 2d late";
 //   · the subtasks (pk-subtasks.tsx) and the notes log (pk-notes-log.tsx);
 //   · who has seen it, and when.
 //
-// Opening it marks it read for me. The statuses and the priority go through
+// Opening it marks it read for me. The status and the two answers go through
 // the outbox like every other to-do edit, one at a time — each waits for the
 // one before to land, so it carries the row's newest updated_at (D61) — and
 // the board moves at once (use-pk-item-writes.ts).
@@ -21,24 +21,29 @@ import {
   type NoteVersion,
 } from "@/components/pk-notes-log";
 import { PkSubtasks } from "@/components/pk-subtasks";
+import {
+  ImportanceDeadline,
+  weekdayDate,
+  type DeadlineSuggestion,
+  type ImportanceDeadlineChange,
+} from "@/components/importance-deadline";
 import { shortDate } from "@/components/pk-band";
 import { useOffline } from "@/components/offline-provider";
 import { usePkItemWrites } from "@/components/use-pk-item-writes";
 import { ViaAgent } from "@/components/via-agent";
+import { deadlineLabel } from "@/lib/domain/deadline";
 import {
-  PRIORITIES,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
-  alertBase,
-  alertDate,
-  priorityPatch,
+  daysFrom,
+  shownPriority,
   trapTarget,
   type PkBand,
   type PkItem,
+  type PkItemPatch,
   type PkNote,
   type PkRead,
   type PkSubtask,
-  type Priority,
   type Progress,
 } from "@/lib/domain/pk-follow-up";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -57,42 +62,12 @@ const PROGRESS_TONE = {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function daysBetween(from: string, to: string): number {
-  const t = (s: string) =>
-    Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
-  return Math.round((t(to) - t(from)) / 86_400_000);
-}
-
-/** The alert in words, or why there is none. */
-function alertLine(
-  item: PkItem,
-  pkDate: string,
-  base: string,
-  days: number | null,
-  todayIso: string,
-): { text: string; passed: boolean } {
-  if (item.priority === null)
-    return { text: "Set a priority to get an alert", passed: false };
-  if (item.priority === "ELIMINATE")
-    return { text: "No alert — Eliminate", passed: false };
-  if (days === null)
-    return {
-      text: "Type the days after the PK to get an alert",
-      passed: false,
-    };
-  const at = alertDate(base, days);
-  // An old PK's item counts from the day it got its priority (alertBase).
-  const from = base === pkDate ? `PK ${shortDate(pkDate)}` : `prioritised ${shortDate(base)}`;
-  const sum = `Alert: ${from} + ${days} ${days === 1 ? "day" : "days"} = ${shortDate(at)}`;
-  if (item.completed_at !== null)
-    return { text: `${sum} · done`, passed: false };
-  const left = daysBetween(todayIso, at);
-  if (left < 0) return { text: `${sum} · deadline passed`, passed: true };
-  if (left === 0) return { text: `${sum} · today`, passed: false };
-  return {
-    text: `${sum} · in ${left} ${left === 1 ? "day" : "days"}`,
-    passed: false,
-  };
+/** The deadline in words for the read-only view: "Deadline Thu Nov 12 · 2d late". */
+function deadlineLine(item: PkItem, todayIso: string): { text: string; late: boolean } {
+  const when = weekdayDate(item.due_date);
+  if (item.completed_at !== null) return { text: `Deadline ${when} · done`, late: false };
+  const l = deadlineLabel(item.due_date, todayIso);
+  return { text: `Deadline ${when} · ${l.text}`, late: l.late };
 }
 
 export function PkItemDrawer({
@@ -106,6 +81,7 @@ export function PkItemDrawer({
   desk,
   me,
   todayIso,
+  ownerGivesWork,
   readOnly = false,
   onItem,
   onNotes,
@@ -129,9 +105,12 @@ export function PkItemDrawer({
   /** My membership id. */
   me: string;
   todayIso: string;
+  /** The item's OWNER gives work to others (admin/support): urgent and not
+   *  important is Delegate for them, Plan for a rep. */
+  ownerGivesWork: boolean;
   /**
-   * Someone else's item in my PK (spec 2026-11-03 §2): status, priority and
-   * days show as text, subtasks without boxes; notes and "Seen" work as usual.
+   * Someone else's item in my PK (spec 2026-11-03 §2): status, Important?,
+   * priority and deadline show as text, subtasks without boxes; notes and "Seen" work as usual.
    */
   readOnly?: boolean;
   /** The item as it now stands (an optimistic edit, or the saved row). */
@@ -240,63 +219,50 @@ export function PkItemDrawer({
     onChanged,
   });
 
-  // The days box: the typed value drives the alert line; it is written when
-  // the reader leaves the box or presses Enter.
-  const [daysDraft, setDaysDraft] = useState<string | null>(null);
-  const typed =
-    daysDraft !== null && /^\d{1,3}$/.test(daysDraft.trim())
-      ? Number(daysDraft.trim())
-      : null;
-  const shownDays = daysDraft !== null ? typed : item.priority_days;
-  const live = item.priority !== null && item.priority !== "ELIMINATE";
-  const base = alertBase(band.pkDate, item, todayIso);
-
-  function commitDays() {
-    if (daysDraft === null) return;
-    setDaysDraft(null);
-    if (!live || typed === null || typed === item.priority_days) return;
-    write(priorityPatch(base, item.priority as Priority, typed));
-  }
-
-  const alert = alertLine(item, band.pkDate, base, shownDays, todayIso);
-
-  // ── SUGGEST PRIORITY (Bianca, 2026-11-03: the Eisenhower matrix) ────────
-  // The AI answers "urgent?" and "important?" with a reason; the reader
-  // applies it with the usual priority write, or ignores it.
-  // Held with the item it was asked for, so another item opens without it.
-  const [asked, setAsked] = useState<{
-    id: string;
-    g:
-      | { state: "idle" }
-      | { state: "asking" }
-      | { state: "failed" }
-      | { state: "ready"; priority: Priority; reason: string };
-  }>({ id: item.id, g: { state: "idle" } });
-  const guess = asked.id === item.id ? asked.g : ({ state: "idle" } as const);
-  const forItem = item.id;
-  const setGuess = (g: typeof asked.g) => setAsked({ id: forItem, g });
-  async function suggest() {
-    setGuess({ state: "asking" });
-    try {
-      const res = await fetch("/api/pk/suggest-priority", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: item.action,
-          dealer: band.dealer,
-          pkDate: band.pkDate,
-          today: todayIso,
-          notes: notes.map((n) => n.body).slice(-20),
-          subtasks: subtasks.map((t) => t.title).slice(0, 30),
-        }),
-      });
-      const j = (await res.json()) as { priority?: Priority | null; reason?: string };
-      if (!res.ok || !j.priority) throw new Error("no suggestion");
-      setGuess({ state: "ready", priority: j.priority, reason: j.reason ?? "" });
-    } catch {
-      setGuess({ state: "failed" });
+  // Important? and the deadline: the control emits the priority to store;
+  // the days after the PK follow from the deadline (the export's column).
+  function plan(p: ImportanceDeadlineChange) {
+    if (p.priority === "ELIMINATE") {
+      write({ priority: "ELIMINATE" });
+      return;
     }
+    const important = p.important !== undefined ? p.important : item.important;
+    const due = p.due_date ?? item.due_date;
+    const patch: PkItemPatch = {};
+    if (p.important !== undefined) patch.important = p.important;
+    if (p.due_date !== undefined) patch.due_date = p.due_date;
+    // While Important? is unanswered a new deadline leaves a legacy priority be.
+    const priority = important === null ? item.priority : p.priority;
+    if (important !== null) patch.priority = priority;
+    patch.priority_days = priority === null ? null : Math.max(0, daysFrom(band.pkDate, due));
+    write(patch);
   }
+
+  // ── SUGGEST (Bianca, 2026-11-03: the Eisenhower matrix) ─────────────────
+  // The AI answers Important? and proposes a deadline with a reason; nothing is
+  // written until the reader taps Apply.
+  async function suggest(): Promise<DeadlineSuggestion | null> {
+    const res = await fetch("/api/pk/suggest-priority", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: item.action,
+        dealer: band.dealer,
+        pkDate: band.pkDate,
+        today: todayIso,
+        kind: null,
+        ownerGivesWork,
+        notes: notes.map((n) => n.body).slice(-20),
+        subtasks: subtasks.map((t) => t.title).slice(0, 30),
+      }),
+    });
+    const j = (await res.json()) as Partial<DeadlineSuggestion>;
+    if (!res.ok || typeof j.important !== "boolean" || typeof j.due_date !== "string") return null;
+    return { important: j.important, due_date: j.due_date, reason: j.reason ?? "" };
+  }
+
+  const shown = shownPriority(item, todayIso, ownerGivesWork);
+  const line = deadlineLine(item, todayIso);
 
   // ── WHO HAS SEEN IT ──────────────────────────────────────────────────────
   const readBy = new Map(
@@ -370,16 +336,22 @@ export function PkItemDrawer({
                   </dd>
                 </div>
                 <div>
-                  <dt className="pkd-lbl">Priority</dt>
-                  <dd>{item.priority ? PRIORITY_LABEL[item.priority] : "Not set"}</dd>
+                  <dt className="pkd-lbl">Important?</dt>
+                  <dd>
+                    {item.important === null ? "Not answered" : item.important ? "Yes" : "No"}
+                  </dd>
                 </div>
                 <div>
-                  <dt className="pkd-lbl">Days after the PK</dt>
-                  <dd>{item.priority_days ?? "—"}</dd>
+                  <dt className="pkd-lbl">Priority</dt>
+                  <dd>
+                    {shown
+                      ? `${PRIORITY_LABEL[shown]}${shown === "ELIMINATE" && item.priority !== "ELIMINATE" ? "?" : ""}`
+                      : "No priority"}
+                  </dd>
                 </div>
               </dl>
-              <p className="pkd-calc" data-passed={alert.passed || undefined}>
-                {alert.text}
+              <p className="pkd-calc" data-passed={line.late || undefined}>
+                {line.text}
               </p>
             </>
           ) : (
@@ -400,108 +372,16 @@ export function PkItemDrawer({
             </select>
           </label>
 
-          <div>
-            <div className="pkd-two">
-              <label className="pkd-field">
-                <span className="pkd-lbl">Priority</span>
-                <select
-                  className="pkd-select"
-                  value={item.priority ?? ""}
-                  onChange={(e) => {
-                    setDaysDraft(null);
-                    write(
-                      priorityPatch(base, e.target.value as Priority),
-                    );
-                  }}
-                >
-                  {item.priority === null && (
-                    <option value="" disabled>
-                      Set a priority
-                    </option>
-                  )}
-                  {PRIORITIES.map((p) => (
-                    <option key={p} value={p}>
-                      {PRIORITY_LABEL[p]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="pkd-field">
-                <span className="pkd-lbl">Days after the PK</span>
-                <input
-                  className="pkd-select pkd-days"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={365}
-                  disabled={!live}
-                  value={
-                    daysDraft ??
-                    (item.priority_days === null
-                      ? ""
-                      : String(item.priority_days))
-                  }
-                  onChange={(e) => setDaysDraft(e.target.value)}
-                  onBlur={commitDays}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitDays();
-                    if (e.key === "Escape") setDaysDraft(null);
-                  }}
-                />
-              </label>
-            </div>
-            <p className="pkd-calc" data-passed={alert.passed || undefined}>
-              {alert.text}
-            </p>
-            <div className="pkd-suggest">
-              {guess.state === "ready" ? (
-                <>
-                  <p className="pkd-suggest-text">
-                    <strong>Suggested: {PRIORITY_LABEL[guess.priority]}</strong>
-                    {guess.reason ? ` — ${guess.reason}` : ""}
-                  </p>
-                  {guess.priority !== item.priority ? (
-                    <span className="pkd-suggest-acts">
-                      <button
-                        type="button"
-                        className="t-action"
-                        onClick={() => {
-                          setDaysDraft(null);
-                          write(priorityPatch(base, guess.priority));
-                          setGuess({ state: "idle" });
-                        }}
-                      >
-                        Apply
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-quiet"
-                        onClick={() => setGuess({ state: "idle" })}
-                      >
-                        Dismiss
-                      </button>
-                    </span>
-                  ) : (
-                    <span className="pkd-suggest-acts t-hint">Matches the priority set</span>
-                  )}
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="t-action"
-                  disabled={guess.state === "asking"}
-                  onClick={() => void suggest()}
-                >
-                  {guess.state === "asking"
-                    ? "Weighing urgent and important…"
-                    : "Suggest priority"}
-                </button>
-              )}
-              {guess.state === "failed" && (
-                <span className="t-hint">No suggestion this time — try again.</span>
-              )}
-            </div>
-          </div>
+          <ImportanceDeadline
+            important={item.important}
+            due={item.due_date}
+            today={todayIso}
+            ownerGivesWork={ownerGivesWork}
+            stored={item.priority}
+            done={item.completed_at !== null}
+            onChange={plan}
+            suggest={suggest}
+          />
           </>
           )}
 

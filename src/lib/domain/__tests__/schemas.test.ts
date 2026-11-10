@@ -284,6 +284,11 @@ describe("nextActionUpdateSchema — PK follow-up fields", () => {
   it("rejects negative days", () => {
     expect(nextActionUpdateSchema.safeParse({ ...base, priority_days: -1 }).success).toBe(false);
   });
+  it("keeps Important? (2026-11-10), true, false or cleared", () => {
+    for (const important of [true, false, null]) {
+      expect(nextActionUpdateSchema.parse({ ...base, important })).toEqual({ ...base, important });
+    }
+  });
 });
 
 describe("nextActionCreateSchema dealer fields", () => {

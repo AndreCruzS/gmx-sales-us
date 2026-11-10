@@ -1,11 +1,13 @@
 // PK FOLLOW-UP: the rules behind the PK board. A PK (a visit) is a band; its
-// next_actions are the rows. Each row carries a priority (which sets the alert
-// date), what is required of whom, a progress status, and notes/subtasks.
+// next_actions are the rows. Each row carries "Important?" and a deadline
+// (due_date), the priority they give (deadline.ts), a progress status, and
+// notes/subtasks.
 //
 // Pure: rows in, answers out. Dates are 'YYYY-MM-DD'; timestamps are ISO.
 // A row is "closed" when `completed_at` is set (Eliminate closes it too).
 
 import type { Database } from "@/lib/database.types";
+import { derivePriority } from "@/lib/domain/deadline";
 
 type Enums = Database["public"]["Enums"];
 
@@ -54,6 +56,8 @@ export interface PkItem {
   completed_at: string | null;
   priority: Priority | null;
   priority_days: number | null;
+  /** The one answer a person gives; null until they give it (legacy rows). */
+  important: boolean | null;
   progress: Progress;
   last_changed_by: string | null;
   last_changed_at: string | null;
@@ -188,7 +192,7 @@ function hasAlert(i: PkItem): boolean {
   return i.completed_at === null && i.priority !== null && i.priority !== "ELIMINATE";
 }
 
-/** Open, not ELIMINATE, priority set, due_date < today. */
+/** The deadline has passed: open, not ELIMINATE, priority set, due_date < today. */
 export function isAlertPassed(i: PkItem, today: string): boolean {
   return hasAlert(i) && i.due_date < today;
 }
@@ -201,7 +205,8 @@ function daysBetween(from: string, to: string): number {
   return Math.round((t(to) - t(from)) / 86_400_000);
 }
 
-/** Days from today to the alert: negative = passed. null when no alert. */
+/** Calendar days from today to the deadline: negative = passed. null for an
+ *  item without a priority, Eliminate, or closed. */
 export function daysToAlert(i: PkItem, today: string): number | null {
   return hasAlert(i) ? daysBetween(today, i.due_date) : null;
 }
@@ -268,9 +273,25 @@ export function summarize(
   return s;
 }
 
+/**
+ * The priority tag a row shows (2026-11-10). Once "Important?" is answered it
+ * follows the deadline (derivePriority), so a row turns Do now as its date
+ * comes close without anyone saving it; ELIMINATE here is a hint, not a close.
+ * A legacy row (Important? unanswered) shows what is stored, and an Eliminate
+ * the person confirmed stays Eliminate.
+ */
+export function shownPriority(
+  i: Pick<PkItem, "important" | "priority" | "due_date">,
+  today: string,
+  ownerGivesWork: boolean,
+): Priority | null {
+  if (i.important === null || i.priority === "ELIMINATE") return i.priority;
+  return derivePriority(i.important, i.due_date, today, ownerGivesWork);
+}
+
 /** The fields a PK item's drawer writes. */
 export type PkItemPatch = Partial<
-  Pick<PkItem, "priority" | "priority_days" | "due_date" | "progress" | "completed_at">
+  Pick<PkItem, "priority" | "priority_days" | "due_date" | "important" | "progress" | "completed_at">
 >;
 
 /**

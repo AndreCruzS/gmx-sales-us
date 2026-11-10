@@ -6,18 +6,21 @@
 //
 // A row reads left to right the way the PK Control board did (spec §3):
 // the action and its subtasks · Status · the latest note ·
-// priority and days · the alert · the owner. Both statuses fill their whole
+// priority · the deadline · the owner. Both statuses fill their whole
 // cell, which is the look the client asked to keep. A row opens the item
 // (onOpen); this file never writes.
 
 import { useMemo, useState, type CSSProperties } from "react";
 import { initialsOf, rosterHues } from "@/lib/format";
 import { ChevronDownIcon } from "@/components/icons";
+import { deadlineLabel } from "@/lib/domain/deadline";
+import { givesWorkToOthers } from "@/lib/domain/roles";
 import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   daysToAlert,
   isAlertPassed,
+  shownPriority,
   subtaskBar,
   type PkBand,
   type PkItem,
@@ -61,6 +64,7 @@ export function PkBandView({
   rows,
   rowFacts,
   names,
+  roles,
   todayIso,
   folded,
   filtered,
@@ -78,6 +82,8 @@ export function PkBandView({
   rows: PkItem[];
   rowFacts: (id: string) => RowFacts;
   names: Map<string, string>;
+  /** Membership roles: the owner's decides Plan or Delegate on the tag. */
+  roles?: Map<string, string>;
   todayIso: string;
   folded: boolean;
   /** True when search, owner, status or "Unread only" is narrowing the list. */
@@ -151,6 +157,7 @@ export function PkBandView({
               facts={rowFacts(i.id)}
               owner={names.get(i.owner_id) ?? "Someone"}
               ownerHue={hues.get(i.owner_id)}
+              ownerGivesWork={givesWorkToOthers(roles?.get(i.owner_id))}
               todayIso={todayIso}
               onOpen={onOpen}
             />
@@ -197,6 +204,7 @@ function PkRow({
   facts,
   owner,
   ownerHue,
+  ownerGivesWork,
   todayIso,
   onOpen,
 }: {
@@ -204,6 +212,7 @@ function PkRow({
   facts: RowFacts;
   owner: string;
   ownerHue: string | undefined;
+  ownerGivesWork: boolean;
   todayIso: string;
   onOpen: (itemId: string) => void;
 }) {
@@ -212,6 +221,9 @@ function PkRow({
   const latest = facts.notes[facts.notes.length - 1];
   const passed = isAlertPassed(item, todayIso);
   const days = daysToAlert(item, todayIso);
+  // The tag follows the deadline once Important? is answered (shownPriority).
+  const shown = shownPriority(item, todayIso, ownerGivesWork);
+  const hint = shown === "ELIMINATE" && item.priority !== "ELIMINATE";
 
   return (
     <button
@@ -259,23 +271,23 @@ function PkRow({
         )}
       </span>
       <span className="pk-c">
-        {item.priority ? (
-          // Only the chip: the days live in the drawer and the alert column
-          // already says the date and how far off it is.
-          <span className="pk-prio" data-priority={item.priority}>
-            {PRIORITY_LABEL[item.priority]}
+        {shown ? (
+          // Only the chip: the deadline column says the date and how far off it is.
+          <span className="pk-prio" data-priority={shown}>
+            {PRIORITY_LABEL[shown]}
+            {hint ? "?" : ""}
           </span>
         ) : (
-          <span className="pk-quiet">Set priority</span>
+          <span className="pk-quiet">No priority</span>
         )}
       </span>
       <span className="pk-c pk-alert" data-passed={passed || undefined}>
         {days === null ? (
-          <small>No alert</small>
+          <small>—</small>
         ) : (
           <>
             <b>{shortDate(item.due_date)}</b>
-            <small>{days < 0 ? `${-days}d passed` : days === 0 ? "today" : `in ${days}d`}</small>
+            <small>{deadlineLabel(item.due_date, todayIso).text}</small>
           </>
         )}
       </span>

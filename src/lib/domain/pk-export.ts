@@ -10,6 +10,7 @@ import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   bandProgress,
+  daysFrom,
   pkDateOf,
   type PkBand,
   type PkItem,
@@ -41,8 +42,8 @@ const FOLLOW_UP_HEADS = [
   "Action",
   "Status",
   "Priority",
-  "Days",
-  "Alert date",
+  "Days after PK",
+  "Deadline",
   "Owner",
   "Subtasks",
   "Notes",
@@ -108,7 +109,7 @@ function noteLine(n: PkNote, names: Map<string, string>): string {
   return `${who} · ${stamp(n.created_at)}: ${n.body}${n.edited_at ? " (edited)" : ""}`;
 }
 
-/** The alert belongs to a prioritised item that is not Eliminate. */
+/** The deadline counts for a prioritised item that is not Eliminate. */
 function hasAlert(i: PkItem): boolean {
   return i.priority !== null && i.priority !== "ELIMINATE";
 }
@@ -155,7 +156,7 @@ export function pkExportSheets(
         text(i.action),
         text(PROGRESS_LABEL[i.progress]),
         i.priority ? text(PRIORITY_LABEL[i.priority]) : null,
-        hasAlert(i) && i.priority_days !== null ? { value: i.priority_days } : null,
+        hasAlert(i) ? { value: daysFrom(b.pkDate, i.due_date) } : null,
         hasAlert(i) ? dayCell(i.due_date) : null,
         text(names.get(i.owner_id) ?? "Someone"),
         subs.length > 0

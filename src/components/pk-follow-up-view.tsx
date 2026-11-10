@@ -39,7 +39,7 @@ import {
   type PkRead,
   type PkSubtask,
 } from "@/lib/domain/pk-follow-up";
-import { seesDealersBoard } from "@/lib/domain/roles";
+import { givesWorkToOthers, seesDealersBoard } from "@/lib/domain/roles";
 import { nextActionCreateSchema } from "@/lib/domain/schemas";
 import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer } from "@/lib/offline";
@@ -47,7 +47,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAllPages } from "@/lib/supabase/page";
 
 const ITEM_COLS =
-  "id, action, owner_id, due_date, completed_at, priority, priority_days, progress, last_changed_by, last_changed_at, updated_at, created_via, account_id, activity_id";
+  "id, action, owner_id, due_date, completed_at, priority, priority_days, important, progress, last_changed_by, last_changed_at, updated_at, created_via, account_id, activity_id";
 
 /** Ids per `.in()` request — enough to be few trips, short enough for a URL. */
 const CHUNK = 200;
@@ -118,6 +118,8 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
   const [subtasks, setSubtasks] = useState<PkSubtask[]>([]);
   const [reads, setReads] = useState<PkRead[]>([]);
   const [names, setNames] = useState<Map<string, string>>(new Map());
+  // Roles by membership: the OWNER's role decides Plan or Delegate.
+  const [roles, setRoles] = useState<Map<string, string>>(new Map());
   // The desk's members: "Seen" lists them even before they open an item.
   const [deskIds, setDeskIds] = useState<string[]>([]);
   const [versions, setVersions] = useState<Map<string, NoteVersion[]>>(new Map());
@@ -232,6 +234,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
     setSubtasks(st);
     setReads(rd);
     setNames(new Map(ms.map((m) => [m.id, m.full_name ?? "Someone"] as const)));
+    setRoles(new Map(ms.map((m) => [m.id, m.role] as const)));
     setDeskIds(ms.filter((m) => m.status === "active" && seesDealersBoard(m.role)).map((m) => m.id));
     setTodayIso(isoOf(new Date()));
     setLoadedAt(Date.now());
@@ -399,6 +402,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
             completed_at: null,
             priority: null,
             priority_days: null,
+            important: null,
             progress: "NOT_STARTED",
             last_changed_by: null,
             last_changed_at: null,
@@ -469,6 +473,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         subtasks={subtasks}
         reads={reads}
         names={names}
+        roles={roles}
         me={me}
         desk={desk}
         todayIso={todayIso}
@@ -503,6 +508,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         desk={deskIds}
         me={me}
         todayIso={todayIso}
+        ownerGivesWork={givesWorkToOthers(roles.get(openItem.owner_id))}
         readOnly={!canEditItem(openItem.owner_id, me, desk)}
         onItem={(next) => setItems((list) => list.map((i) => (i.id === next.id ? { ...i, ...next } : i)))}
         onNotes={only(setNotes, openItem.id)}
