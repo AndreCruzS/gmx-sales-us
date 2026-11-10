@@ -7829,7 +7829,7 @@ textarea.pkd-select {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px 14px;
-  align-items: end;
+  align-items: start;
 }
 .idl-field {
   display: block;
@@ -7864,14 +7864,17 @@ textarea.pkd-select {
   background: var(--fill-ink);
   color: var(--on-ink);
 }
+/* The date box never clips its year: below ~400 px Urgent wraps onto its
+   own line under it rather than squeeze it. */
 .idl-due {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
 }
 .idl-date {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 152px;
   min-height: 40px;
   padding: 6px 9px;
   border: 1px solid var(--rule);

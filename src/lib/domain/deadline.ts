@@ -48,6 +48,17 @@ export function todayIn(timeZone: string = "America/Los_Angeles", now: Date = ne
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
+/** A deadline that may be saved: a real calendar day, 'YYYY-MM-DD', in or
+ *  after 2000. A date box being typed into passes through values like
+ *  "0002-11-12"; none of them is ever written. */
+export function isDeadlineDay(v: string | null | undefined): v is string {
+  if (v == null || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  if (y < 2000) return false;
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+
 /** n business days after iso. From a weekend, Monday is the first one. */
 export function addBusinessDays(iso: string, n: number): string {
   let ms = toMs(iso);

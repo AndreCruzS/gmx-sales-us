@@ -6,6 +6,7 @@ import {
   deadlineLabel,
   defaultDeadline,
   derivePriority,
+  isDeadlineDay,
   isTask,
   isUrgent,
   keepsEliminated,
@@ -169,5 +170,20 @@ describe("keepsEliminated: a moved deadline never reopens an eliminated item", (
     expect(keepsEliminated("ELIMINATE", { priority: "ELIMINATE" })).toBe(false);
     expect(keepsEliminated("PLAN", { priority: "DO_NOW" })).toBe(false);
     expect(keepsEliminated(null, { priority: null })).toBe(false);
+  });
+});
+
+describe("isDeadlineDay: what a date box may commit", () => {
+  it("takes a real day in or after 2000", () => {
+    expect(isDeadlineDay("2026-11-12")).toBe(true);
+    expect(isDeadlineDay("2000-01-01")).toBe(true);
+  });
+  it("rejects the values a typed year passes through, and non-days", () => {
+    expect(isDeadlineDay("0002-11-12")).toBe(false);
+    expect(isDeadlineDay("0202-11-12")).toBe(false);
+    expect(isDeadlineDay("1999-12-31")).toBe(false);
+    expect(isDeadlineDay("2026-02-30")).toBe(false);
+    expect(isDeadlineDay("")).toBe(false);
+    expect(isDeadlineDay(undefined)).toBe(false);
   });
 });

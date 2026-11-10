@@ -9,10 +9,16 @@
 // Eliminate). The tag shows the derived one; when that is Eliminate it is a
 // question with its own button, the only way this control writes Eliminate.
 // A suggestion is shown with Apply and is never saved without that tap.
+//
+// The date box keeps a draft while it is typed into: a typed year passes
+// through "0002-…", "0020-…", and none of those may become a write. The draft
+// is committed on blur or Enter, or at once when the native picker sets a
+// whole date; only a real day in or after 2000 (isDeadlineDay) is.
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   derivePriority,
+  isDeadlineDay,
   isUrgent,
   storedPriority,
   urgentCap,
@@ -43,8 +49,6 @@ export function weekdayDate(iso: string): string {
   return `${DAYS[day]} ${MONTHS[m - 1]} ${d}`;
 }
 
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-
 export function ImportanceDeadline({
   important,
   due,
@@ -69,13 +73,25 @@ export function ImportanceDeadline({
   onChange: (p: ImportanceDeadlineChange) => void;
   suggest?: () => Promise<DeadlineSuggestion | null>;
 }) {
-  const derived = derivePriority(important, due, today, ownerGivesWork);
-  const urgent = isUrgent(due, today);
-  const label = deadlineLabel(due, today);
-  const late = label.late && !done;
+  // A row whose date was cleared (the voice sheet) has no deadline yet.
+  const hasDue = isDeadlineDay(due);
+  const derived = hasDue ? derivePriority(important, due, today, ownerGivesWork) : null;
+  const urgent = hasDue && isUrgent(due, today);
+  const label = hasDue ? deadlineLabel(due, today) : null;
+  const late = label !== null && label.late && !done;
   const eliminated = stored === "ELIMINATE";
   const askEliminate = derived === "ELIMINATE" && !eliminated && !done;
   const dateId = useId();
+
+  // The date box's draft, reset whenever the saved deadline changes.
+  const [draft, setDraft] = useState(due);
+  const [draftOf, setDraftOf] = useState(due);
+  if (draftOf !== due) {
+    setDraftOf(due);
+    setDraft(due);
+  }
+  // True while keys are moving the box: its changes wait for blur or Enter.
+  const typing = useRef(false);
 
   const [guess, setGuess] = useState<
     | { state: "idle" }
@@ -86,12 +102,19 @@ export function ImportanceDeadline({
 
   function setImportant(v: boolean) {
     if (v === important) return;
-    onChange({ important: v, priority: storedPriority(v, due, today, ownerGivesWork) });
+    onChange({ important: v, priority: hasDue ? storedPriority(v, due, today, ownerGivesWork) : null });
   }
 
   function setDue(next: string) {
-    if (!ISO_DAY.test(next) || next === due) return;
+    if (!isDeadlineDay(next) || next === due) return;
     onChange({ due_date: next, priority: storedPriority(important, next, today, ownerGivesWork) });
+  }
+
+  // The draft becomes the deadline, or goes back to it when it is no day.
+  function commit(v: string) {
+    typing.current = false;
+    if (isDeadlineDay(v)) setDue(v);
+    else setDraft(due);
   }
 
   async function ask() {
@@ -151,9 +174,22 @@ export function ImportanceDeadline({
               id={dateId}
               className="idl-date"
               type="date"
-              value={due}
+              value={draft}
               required
-              onChange={(e) => setDue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commit(e.currentTarget.value);
+                } else {
+                  typing.current = true;
+                }
+              }}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                // The native picker sets a whole date at once: save it now.
+                if (!typing.current) commit(e.target.value);
+              }}
+              onBlur={(e) => commit(e.currentTarget.value)}
             />
             <button
               type="button"
@@ -161,7 +197,7 @@ export function ImportanceDeadline({
               aria-pressed={urgent}
               disabled={urgent}
               title="Deadline within 2 business days"
-              onClick={() => setDue(urgentCap(due, today))}
+              onClick={() => setDue(urgentCap(hasDue ? due : null, today))}
             >
               Urgent
             </button>
@@ -178,9 +214,13 @@ export function ImportanceDeadline({
         ) : (
           <span className="idl-none">No priority</span>
         )}
-        <span className="idl-when">
-          {weekdayDate(due)} · {done ? "done" : label.text}
-        </span>
+        {label ? (
+          <span className="idl-when">
+            {weekdayDate(due)} · {done ? "done" : label.text}
+          </span>
+        ) : (
+          <span className="idl-none">No deadline</span>
+        )}
       </p>
       {important === null && (
         <p className="t-hint">Answer Important? and the priority follows the deadline.</p>
