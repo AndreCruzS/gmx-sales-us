@@ -35,12 +35,11 @@ import { deadlineLabel } from "@/lib/domain/deadline";
 import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
-  daysFrom,
+  planPatch,
   shownPriority,
   trapTarget,
   type PkBand,
   type PkItem,
-  type PkItemPatch,
   type PkNote,
   type PkRead,
   type PkSubtask,
@@ -220,22 +219,9 @@ export function PkItemDrawer({
   });
 
   // Important? and the deadline: the control emits the priority to store;
-  // the days after the PK follow from the deadline (the export's column).
+  // planPatch adds the days after the PK and keeps an eliminated item closed.
   function plan(p: ImportanceDeadlineChange) {
-    if (p.priority === "ELIMINATE") {
-      write({ priority: "ELIMINATE" });
-      return;
-    }
-    const important = p.important !== undefined ? p.important : item.important;
-    const due = p.due_date ?? item.due_date;
-    const patch: PkItemPatch = {};
-    if (p.important !== undefined) patch.important = p.important;
-    if (p.due_date !== undefined) patch.due_date = p.due_date;
-    // While Important? is unanswered a new deadline leaves a legacy priority be.
-    const priority = important === null ? item.priority : p.priority;
-    if (important !== null) patch.priority = priority;
-    patch.priority_days = priority === null ? null : Math.max(0, daysFrom(band.pkDate, due));
-    write(patch);
+    write(planPatch(item, p, band.pkDate));
   }
 
   // ── SUGGEST (Bianca, 2026-11-03: the Eisenhower matrix) ─────────────────

@@ -7,7 +7,7 @@
 // A row is "closed" when `completed_at` is set (Eliminate closes it too).
 
 import type { Database } from "@/lib/database.types";
-import { derivePriority } from "@/lib/domain/deadline";
+import { derivePriority, keepsEliminated } from "@/lib/domain/deadline";
 
 type Enums = Database["public"]["Enums"];
 
@@ -282,6 +282,30 @@ export function shownPriority(
 export type PkItemPatch = Partial<
   Pick<PkItem, "priority" | "priority_days" | "due_date" | "important" | "progress" | "completed_at">
 >;
+
+/**
+ * The write for a change from the Important?/deadline control (drawer). The
+ * days after the PK follow from the deadline (the export's column). While
+ * Important? is unanswered a new deadline leaves a legacy priority be, and a
+ * deadline moved on an eliminated item leaves it eliminated (closed).
+ */
+export function planPatch(
+  item: Pick<PkItem, "priority" | "important" | "due_date">,
+  change: { important?: boolean | null; due_date?: string; priority: Priority | null },
+  pkDate: string,
+): PkItemPatch {
+  if (change.priority === "ELIMINATE") return { priority: "ELIMINATE" };
+  const patch: PkItemPatch = {};
+  if (change.important !== undefined) patch.important = change.important;
+  if (change.due_date !== undefined) patch.due_date = change.due_date;
+  if (keepsEliminated(item.priority, change)) return patch;
+  const important = change.important !== undefined ? change.important : item.important;
+  const due = change.due_date ?? item.due_date;
+  const priority = important === null ? item.priority : change.priority;
+  if (important !== null) patch.priority = priority;
+  patch.priority_days = priority === null ? null : Math.max(0, daysFrom(pkDate, due));
+  return patch;
+}
 
 /**
  * The item as the database will hold it after `patch` — what the trigger

@@ -17,7 +17,7 @@ import { useOffline } from "@/components/offline-provider";
 import { CheckIcon } from "@/components/icons";
 import { ImportanceDeadline, type ImportanceDeadlineChange } from "@/components/importance-deadline";
 import { GaveYou, SEEN_AT_KEY } from "@/components/your-action-items";
-import { deadlineLabel, isTask, localIsoDate } from "@/lib/domain/deadline";
+import { deadlineLabel, isTask, keepsEliminated, localIsoDate } from "@/lib/domain/deadline";
 import { formatTime } from "@/lib/domain/commitments";
 import { givesWorkToOthers } from "@/lib/domain/roles";
 import type { Priority } from "@/lib/domain/pk-follow-up";
@@ -298,6 +298,7 @@ function Row({
   onDone: () => void;
 }) {
   const task = isTask(item.kind);
+  const stored = (item.priority as Priority | null | undefined) ?? null;
   const isPk = task && item.source_type === PK_SOURCE;
   const box = boxOf(item, today, gives);
   const tag = task ? (box ? BOX_LABEL[box] : null) : (KIND_LABEL[item.kind ?? ""] ?? "Visit");
@@ -387,8 +388,14 @@ function Row({
             due={item.due_date}
             today={today}
             ownerGivesWork={gives}
-            stored={(item.priority as Priority | null | undefined) ?? null}
-            onChange={(p) => onChange(p)}
+            stored={stored}
+            onChange={(p) => {
+              // A deadline moved on an eliminated item leaves it eliminated.
+              if (!keepsEliminated(stored, p)) return onChange(p);
+              const { priority: _kept, ...rest } = p;
+              void _kept;
+              onChange(rest);
+            }}
           />
           <div className="mw-edit-acts">{done}</div>
         </div>

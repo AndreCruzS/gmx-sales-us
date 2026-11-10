@@ -8,6 +8,7 @@ import {
   derivePriority,
   isTask,
   isUrgent,
+  keepsEliminated,
   localIsoDate,
   storedPriority,
   todayIn,
@@ -158,5 +159,15 @@ describe("todayIn", () => {
     const at = new Date("2026-11-11T03:30:00Z");
     expect(todayIn("America/Los_Angeles", at)).toBe("2026-11-10");
     expect(todayIn("UTC", at)).toBe("2026-11-11");
+  });
+});
+
+describe("keepsEliminated: a moved deadline never reopens an eliminated item", () => {
+  it("is true only for a date-only change on an ELIMINATE item", () => {
+    expect(keepsEliminated("ELIMINATE", { due_date: "2026-11-20", priority: "PLAN" })).toBe(true);
+    expect(keepsEliminated("ELIMINATE", { important: true, priority: "PLAN" })).toBe(false);
+    expect(keepsEliminated("ELIMINATE", { priority: "ELIMINATE" })).toBe(false);
+    expect(keepsEliminated("PLAN", { priority: "DO_NOW" })).toBe(false);
+    expect(keepsEliminated(null, { priority: null })).toBe(false);
   });
 });

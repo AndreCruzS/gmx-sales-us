@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  planPatch,
   subtaskBar,
   alertBase,
   isOnUs,
@@ -350,5 +351,46 @@ describe("alertBase (2026-11-06: classifying an old PK's items must not make the
   });
   it("an eliminated item getting a priority again counts from today", () => {
     expect(alertBase("2026-10-20", { priority: "ELIMINATE", priority_days: null, due_date: "2026-10-27" }, "2026-11-09")).toBe("2026-11-09");
+  });
+});
+
+describe("planPatch (the drawer's Important?/deadline write)", () => {
+  const pkDate = "2026-11-02";
+  const item = { priority: "PLAN" as const, important: true, due_date: "2026-11-09" };
+
+  it("a new deadline carries the recomputed priority and the days after the PK", () => {
+    expect(planPatch(item, { due_date: "2026-11-11", priority: "DO_NOW" }, pkDate)).toEqual({
+      due_date: "2026-11-11",
+      priority: "DO_NOW",
+      priority_days: 9,
+    });
+  });
+
+  it("a deadline moved on an ELIMINATED item does not send a priority (it stays closed)", () => {
+    const gone = { priority: "ELIMINATE" as const, important: false, due_date: "2026-11-09" };
+    const patch = planPatch(gone, { due_date: "2026-11-20", priority: "PLAN" }, pkDate);
+    expect(patch).toEqual({ due_date: "2026-11-20" });
+    expect(patch).not.toHaveProperty("priority");
+    expect(patch).not.toHaveProperty("priority_days");
+  });
+
+  it("a new Important? answer on an eliminated item may reopen it", () => {
+    const gone = { priority: "ELIMINATE" as const, important: false, due_date: "2026-11-09" };
+    expect(planPatch(gone, { important: true, priority: "PLAN" }, pkDate)).toMatchObject({
+      important: true,
+      priority: "PLAN",
+    });
+  });
+
+  it("Eliminate confirmed is written alone", () => {
+    expect(planPatch(item, { priority: "ELIMINATE" }, pkDate)).toEqual({ priority: "ELIMINATE" });
+  });
+
+  it("while Important? is unanswered a legacy priority stands and is not sent", () => {
+    const legacy = { priority: "DELEGATE" as const, important: null, due_date: "2026-11-09" };
+    expect(planPatch(legacy, { due_date: "2026-11-12", priority: null }, pkDate)).toEqual({
+      due_date: "2026-11-12",
+      priority_days: 10,
+    });
   });
 });

@@ -127,6 +127,16 @@ export function storedPriority(
   return p;
 }
 
+/** A change that must leave the stored priority be: the item was eliminated
+ *  and only its deadline moved. Writing the recomputed priority would reopen
+ *  it; only a new Important? answer (or Eliminate itself) may. */
+export function keepsEliminated(
+  stored: Priority | null | undefined,
+  change: { important?: boolean | null; due_date?: string; priority: Priority | null },
+): boolean {
+  return stored === "ELIMINATE" && change.important === undefined && change.priority !== "ELIMINATE";
+}
+
 /** "due today", "due in 3d", "2d late". Calendar days in the text. */
 export function deadlineLabel(due: string, today: string): { text: string; late: boolean } {
   const days = Math.round((toMs(due) - toMs(today)) / DAY_MS);
