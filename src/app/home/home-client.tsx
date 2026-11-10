@@ -54,6 +54,8 @@ import { buildDayTimeline, type TimelineStop } from "@/lib/routine/day-timeline"
 import { useReviewCount } from "@/lib/review/count";
 import { DaySpine } from "./day-spine";
 import { YourPksCard } from "@/components/your-pks-card";
+import { YourActionItems } from "@/components/your-action-items";
+import { localIsoDate } from "@/lib/domain/deadline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface OpenQuote {
@@ -113,14 +115,11 @@ const ROUTINE_KIND_LABEL: Record<RoutineItem["kind"], [string, string]> = {
   OTHER: ["other", "other"],
 };
 
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
+// Calendar math on a 'YYYY-MM-DD' at UTC midnight: the date in, the date out.
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
-  return isoDate(d);
+  return d.toISOString().slice(0, 10);
 }
 
 // Monday-anchored calendar week containing `todayIso` — matches the rep
@@ -218,7 +217,8 @@ export default function HomeClient() {
     setContacts(cts);
     setActivities(acts);
     setSettings(parseSettings(settingsRaw));
-    setTodayIso(isoDate(new Date()));
+    // The rep's LOCAL date: after 4 or 5 pm in California the UTC one is tomorrow.
+    setTodayIso(localIsoDate());
   }, []);
 
   useEffect(() => {
@@ -711,6 +711,11 @@ export default function HomeClient() {
               </Link>
             </section>
           )}
+
+          {/* Everything open he owns, in four boxes, under the day (spec
+              2026-11-10): what the day spine does not show — work handed to
+              him, and visits never closed. */}
+          <YourActionItems agenda={agenda} today={todayIso} />
 
           {/* What is still open after his PKs, under the day: it is the next
               thing he owes a dealer (spec 2026-11-03 §4). Hidden when nothing is. */}

@@ -8129,3 +8129,191 @@ textarea.pkd-select {
   max-width: 720px;
   margin-inline: auto;
 }
+
+/* ── Your action items (rep Home) + My work (spec 2026-11-10, option B) ──── */
+
+/* Four boxes and, sometimes, one line. Nothing more (the anti-goal: a wall of
+   numbers). Two by two at phone width, as in the mockup; one row once there
+   is room. Every figure is in the figures face. */
+.ai-block {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+.ai-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ai-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .ai-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.ai-box {
+  display: grid;
+  gap: 1px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  color: var(--ink-primary);
+  text-decoration: none;
+}
+.ai-box:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ai-box[data-box="do"] {
+  background: var(--danger-tint);
+}
+.ai-box[data-box="plan"] {
+  background: var(--surface-accent);
+}
+.ai-box[data-box="none"] {
+  background: var(--warn-tint);
+}
+/* A zero keeps its place, greyed and still a link. */
+.ai-box[data-empty] {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+}
+.ai-lbl {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.ai-n {
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.ai-sub {
+  min-height: 1.4em;
+  font-family: var(--font-fig);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.ai-late {
+  font-weight: 700;
+  color: var(--danger);
+}
+.ai-fig {
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+}
+/* "Bianca gave you 2 items": the one line, on amber, a link to New. */
+.ai-from {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-control);
+  background: var(--warn-tint);
+  color: var(--on-warn);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+.ai-from b {
+  font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+  .ai-from {
+    color: var(--warn-ink);
+  }
+}
+
+.mw-top {
+  display: grid;
+  gap: 10px;
+}
+.mw-from {
+  margin: 0;
+}
+.mw-fig {
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+}
+.mw-group .t-section[data-late] {
+  color: var(--danger);
+}
+.mw-row {
+  flex-wrap: wrap;
+  padding: 11px 14px;
+}
+.mw-toggle {
+  display: block;
+  text-align: left;
+  color: inherit;
+}
+.mw-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.mw-tag {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-family: var(--font-fig);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  background: var(--surface-sunken);
+  color: var(--ink-secondary);
+}
+.mw-tag[data-box="DO_NOW"] {
+  background: var(--danger);
+  color: var(--on-ink);
+}
+.mw-tag[data-box="PLAN"] {
+  background: var(--accent-strong);
+  color: var(--on-accent);
+}
+.mw-tag[data-box="NONE"] {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  box-shadow: inset 0 0 0 1px var(--warn);
+}
+.mw-when {
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+}
+.mw-when[data-late],
+.mw-never {
+  font-weight: 700;
+  color: var(--danger);
+}
+.mw-src {
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: var(--text-2xs);
+}
+.mw-giver {
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+.mw-edit {
+  flex-basis: 100%;
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+.mw-edit-acts {
+  display: flex;
+  justify-content: flex-end;
+}
