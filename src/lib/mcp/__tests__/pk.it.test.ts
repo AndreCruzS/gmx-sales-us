@@ -277,4 +277,21 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     const ids = (r.structuredContent as { follow_up_ids: string[] }).follow_up_ids;
     for (const id of ids) expect(text(r)).toContain(`/visits/pk?item=${id}`);
   });
+
+  it("update_pk_item with importance on a follow-up whose visit is not a PK says so", async () => {
+    // A visit-debrief follow-up has an activity_id, so the board reads it, but its visit is not a PK.
+    const ag = await import("../tools/agenda");
+    const v = await ag.logVisit(admin, {
+      account_id: dealerId,
+      activity_type: "DEALER_VISIT",
+      occurred_at: PK_AT,
+      what_happened: `Visit ${run} notpk`,
+      follow_ups: [{ action: `notpk ${run}`, due_date: plus(8) }],
+    });
+    const id = (v.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await admin.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const r = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, important: true, reason: "r" });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain("not part of a PK");
+  });
 });

@@ -326,4 +326,33 @@ describe.skipIf(!process.env.MCP_IT)("agenda tools (local stack)", () => {
     const { data: after } = await tj.db.from("next_actions").select("priority, due_date").eq("id", id).single();
     expect(after).toMatchObject({ priority: "DO_NOW", due_date: addBusinessDays(today, 2) });
   });
+
+  it("a PK follow-up the October import wrote as MANUAL with a priority is still refused as a PK item", async () => {
+    const pk = await import("../tools/pk");
+    const mk = await pk.createPk(admin, {
+      dealer_account_id: accountId,
+      occurred_at: `${todayIn()}T12:00:00-08:00`,
+      what_happened: `PK ${run} manual`,
+      follow_ups: [{ action: `manual fu ${run}`, important: true, reason: "r" }],
+    });
+    const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const set = await admin.db.from("next_actions").update({ source: "MANUAL" }).eq("id", id);
+    expect(set.error).toBeNull();
+    const { data: row } = await admin.db.from("next_actions").select("updated_at, source, priority").eq("id", id).single();
+    expect(row).toMatchObject({ source: "MANUAL", priority: "PLAN" });
+    const r = await t.updateFollowUp(admin, { id, updated_at: row!.updated_at, important: true, urgent: true });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toBe("This is a PK follow-up — use update_pk_item.");
+  });
+
+  it("importance on an eliminated follow-up with nothing else to change says so", async () => {
+    const c = await t.planFollowUp(tj, { action: `Elim ${run}`, due_date: "2026-12-30" });
+    const id = (c.structuredContent as { id: string }).id;
+    const set = await tj.db.from("next_actions").update({ priority: "ELIMINATE", important: false }).eq("id", id);
+    expect(set.error).toBeNull();
+    const { data: row } = await tj.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const r = await t.updateFollowUp(tj, { id, updated_at: row!.updated_at, important: true });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toBe("It was eliminated; reopen it in the app first.");
+  });
 });

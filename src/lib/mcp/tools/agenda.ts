@@ -250,7 +250,10 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
       }
     }
   }
-  if (Object.keys(patch).length === 0) return ok(notes.join(" "), { id: args.id, changed: false });
+  if (Object.keys(patch).length === 0) {
+    if (notes.length === 0) return fail("It was eliminated; reopen it in the app first.");
+    return ok(notes.join(" "), { id: args.id, changed: false });
+  }
   const keys = Object.keys(patch);
 
   const held = gate(
@@ -286,11 +289,10 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
 /** A PK's follow-up has its own tool (priority, alert days, the board). */
 async function isPkItem(
   ctx: AgentContext,
-  r: { activity_id: string | null; source: string | null },
+  r: { activity_id: string | null },
 ): Promise<boolean> {
   if (!r.activity_id) return false;
-  // A priority no longer says "PK": any follow-up has one now. Only the board knows which visits are PKs.
-  if (r.source !== "VISIT_CAPTURE") return false;
+  // Neither a priority nor a source says "PK" (the October import wrote MANUAL ones): only the board knows which visits are PKs.
   const { data } = await ctx.db.rpc("pk_board_visits").select("id").eq("id", r.activity_id).maybeSingle();
   return !!data;
 }
@@ -451,11 +453,11 @@ const timed = {
   duration_minutes: z.number().int().min(5).max(600).optional(),
 };
 const importance = {
-  important: z.boolean().optional().describe("Tasks only: does it move the account toward selling GMX and need the person's own knowledge or relationship? Judge by MATRIX_RULES in platform_guide"),
+  important: z.boolean().optional().describe("Tasks only (plan_follow_up needs it whenever urgent is given): does it move the account toward selling GMX and need the person's own knowledge or relationship? Judge by MATRIX_RULES in platform_guide"),
   urgent: z.boolean().optional().describe("Tasks only, with important: the person said urgent. It caps the deadline at two business days from today"),
 };
 const importanceNote =
-  " For a task (not a visit, call or meeting) you may give important (and urgent when said): the system sets the priority from the answer and the deadline and the receipt shows the deadline, so tell the person what it says. Never compute a deadline or a priority yourself.";
+  " For a task (not a visit, call or meeting) you may give important (and urgent when said): the system sets the priority from the answer and the deadline and the receipt shows the deadline, so tell the person what it says. On plan_follow_up urgent needs important; on update_follow_up urgent alone works when the follow-up already has its importance. Never compute a deadline or a priority yourself.";
 const writeNote =
   " This writes immediately. Do not guess: ask the person for anything missing. When you finish, tell them in a short list what you recorded.";
 
