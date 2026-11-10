@@ -198,3 +198,12 @@ export function groupForPage(
     items: sorted.filter((i) => groupOf(i.due_date, ctx.today) === key),
   })).filter((g) => g.items.length > 0);
 }
+
+/** The newer of two updated_at stamps (D61): what the device last read back
+ *  after its own write, or the row as the cache holds it now — a later
+ *  refresh may have brought a newer one in. */
+export function newerStamp(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return Date.parse(b) > Date.parse(a) ? b : a;
+}

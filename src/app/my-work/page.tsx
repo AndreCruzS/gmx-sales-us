@@ -32,6 +32,7 @@ import {
   groupForPage,
   groupLabel,
   shortDate,
+  newerStamp,
   type PageFilter,
 } from "@/lib/domain/my-work";
 import { displayAccountName } from "@/lib/format";
@@ -146,7 +147,7 @@ function MyWork() {
           entityType: "next_action",
           op: "update",
           payload: { id: item.id, ...patch },
-          baseVersion: base.current[item.id] ?? item.updated_at,
+          baseVersion: newerStamp(base.current[item.id], item.updated_at),
           blobRef: null,
         });
         await layer.sync.drain();

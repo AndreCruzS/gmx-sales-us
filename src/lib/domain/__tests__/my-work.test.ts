@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CachedAgendaItem } from "@/lib/offline/types";
-import { boxOf, countBoxes, givers, groupForPage, shortDate } from "@/lib/domain/my-work";
+import { boxOf, countBoxes, givers, groupForPage, newerStamp, shortDate } from "@/lib/domain/my-work";
 
 const ME = "m-andre";
 const BIANCA = "m-bianca";
@@ -204,5 +204,19 @@ describe("groupForPage", () => {
 describe("shortDate", () => {
   it("reads like the mockup", () => {
     expect(shortDate("2026-11-17")).toBe("Nov 17");
+  });
+});
+
+describe("newerStamp (the base updated_at of a My work write)", () => {
+  it("takes the cached row's stamp when a refresh brought a newer one", () => {
+    expect(newerStamp("2026-11-10T10:00:00+00:00", "2026-11-10T11:00:00.5Z")).toBe("2026-11-10T11:00:00.5Z");
+  });
+  it("keeps the read-back stamp when it is the newer", () => {
+    expect(newerStamp("2026-11-10T12:00:00Z", "2026-11-10T11:00:00Z")).toBe("2026-11-10T12:00:00Z");
+  });
+  it("uses whichever exists", () => {
+    expect(newerStamp(undefined, "2026-11-10T11:00:00Z")).toBe("2026-11-10T11:00:00Z");
+    expect(newerStamp("2026-11-10T11:00:00Z", null)).toBe("2026-11-10T11:00:00Z");
+    expect(newerStamp(undefined, undefined)).toBeNull();
   });
 });
