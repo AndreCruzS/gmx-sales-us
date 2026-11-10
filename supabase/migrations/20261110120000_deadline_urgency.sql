@@ -100,6 +100,7 @@ begin
            coalesce((select m.role in ('admin', 'support')
                        from public.memberships m where m.id = a.owner_id), false))
    where a.completed_at is null
+     and (a.kind is null or a.kind not in ('VISIT', 'CALL', 'MEETING'))
      and a.important is not null
      and a.priority is distinct from 'ELIMINATE'
      and a.priority is distinct from private.stored_priority(
@@ -116,8 +117,8 @@ revoke execute on function private.recompute_priorities() from public, anon, aut
 
 -- Backfill: Do now and Plan were the important ones; Delegate was not.
 alter table next_actions disable trigger set_updated_at;
-update next_actions set important = true where priority in ('DO_NOW', 'PLAN');
-update next_actions set important = false where priority = 'DELEGATE';
+update next_actions set important = true where priority in ('DO_NOW', 'PLAN') and (kind is null or kind not in ('VISIT', 'CALL', 'MEETING'));
+update next_actions set important = false where priority = 'DELEGATE' and (kind is null or kind not in ('VISIT', 'CALL', 'MEETING'));
 alter table next_actions enable trigger set_updated_at;
 
 select private.recompute_priorities();

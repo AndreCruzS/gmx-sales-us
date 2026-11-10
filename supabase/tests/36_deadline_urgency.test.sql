@@ -6,7 +6,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(22);
 
 select has_column('public', 'next_actions', 'important', 'next_actions has important');
 
@@ -49,9 +49,15 @@ insert into next_actions (id, org_id, action, owner_id, due_date, kind, priority
   ('e3600000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111',
    'Undecided', 'c0000000-0000-0000-0000-000000000003',
    (now() at time zone 'America/Los_Angeles')::date + 1, 'OTHER', null, null);
-
-select set_config('t.stamp_before',
-  (select updated_at::text from next_actions where id = 'e3600000-0000-0000-0000-000000000002'), true);
+insert into next_actions (id, org_id, action, owner_id, due_date, kind, priority, important) values
+  ('e3600000-0000-0000-0000-000000000006', '11111111-1111-1111-1111-111111111111',
+   'A visit has no priority', 'c0000000-0000-0000-0000-000000000003',
+   (now() at time zone 'America/Los_Angeles')::date + 1, 'VISIT', null, true);
+-- The trigger only fires on UPDATE, so an explicit old stamp survives the insert.
+insert into next_actions (id, org_id, action, owner_id, due_date, kind, priority, important, updated_at) values
+  ('e3600000-0000-0000-0000-000000000007', '11111111-1111-1111-1111-111111111111',
+   'Stamp check', 'c0000000-0000-0000-0000-000000000003',
+   (now() at time zone 'America/Los_Angeles')::date + 1, 'OTHER', 'PLAN', true, '2020-01-01');
 
 select ok(private.recompute_priorities() >= 3, 'recompute returns the rows it changed');
 
@@ -73,8 +79,12 @@ select is(
   (select priority::text from next_actions where id = 'e3600000-0000-0000-0000-000000000005'),
   null, 'important unknown stays without a priority');
 select is(
-  (select updated_at::text from next_actions where id = 'e3600000-0000-0000-0000-000000000002'),
-  current_setting('t.stamp_before'), 'recompute leaves updated_at alone');
+  (select updated_at::text from next_actions where id = 'e3600000-0000-0000-0000-000000000007'),
+  '2020-01-01 00:00:00+00', 'recompute leaves updated_at alone');
+
+select is(
+  (select priority::text from next_actions where id = 'e3600000-0000-0000-0000-000000000006'),
+  null, 'a visit with an answer and a near deadline gets no priority');
 
 select ok(
   not exists (select 1 from pg_extension where extname = 'pg_cron')
