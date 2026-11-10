@@ -232,9 +232,17 @@ describe("draftedAction: the code, not the model, sets the deadline and priority
       .toMatchObject({ due_date: "2026-11-11", priority: "DELEGATE" });
   });
 
-  it("neither urgent nor important is not stored on its own", () => {
+  it("neither important nor urgent: an everyday (non-PK) follow-up is still kept, Plan stored", () => {
     const r = draftedAction({ urgent: false, important: false, due_date: null, kind: null }, rep);
-    expect(r).toMatchObject({ due_date: "2026-11-17", priority: "PLAN", keep: false });
+    expect(r).toMatchObject({ due_date: "2026-11-17", priority: "PLAN", keep: true });
+    expect(draftedAction({ due_date: "2026-11-20", kind: "QUOTE_FOLLOW_UP", priority: "ELIMINATE" }, rep).keep).toBe(true);
+  });
+
+  it("neither important nor urgent on a PK: not kept until the person keeps it", () => {
+    const pk = { ...rep, isPk: true };
+    expect(draftedAction({ urgent: false, important: false, due_date: null, kind: null }, pk))
+      .toMatchObject({ due_date: "2026-11-17", priority: "PLAN", keep: false });
+    expect(draftedAction({ due_date: "2026-11-20", kind: null, priority: "ELIMINATE" }, pk).keep).toBe(false);
   });
 
   it("the dealer waiting makes it urgent", () => {

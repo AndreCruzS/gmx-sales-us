@@ -175,11 +175,15 @@ export function DebriefSheet({
       ownerGivesWork={ownerGivesWork}
       stored={na.priority}
       onChange={(c) =>
-        patchAction(i, {
-          ...(c.important !== undefined ? { important: c.important } : {}),
-          ...(c.due_date ? { due_date: c.due_date } : {}),
-          priority: c.priority,
-        })
+        // "Eliminate" on a sheet row means: do not save it (the row offers
+        // "Keep it" back). Nothing is created closed.
+        c.priority === "ELIMINATE"
+          ? patchAction(i, { keep: false })
+          : patchAction(i, {
+              ...(c.important !== undefined ? { important: c.important } : {}),
+              ...(c.due_date ? { due_date: c.due_date } : {}),
+              priority: c.priority,
+            })
       }
     />
   );

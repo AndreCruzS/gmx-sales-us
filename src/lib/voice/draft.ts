@@ -297,7 +297,9 @@ export interface DraftedAction {
   important: boolean | null;
   /** What may be stored; never ELIMINATE. */
   priority: Priority | null;
-  /** False when the answers say Eliminate: not saved unless the person keeps it. */
+  /** False on a PK when the answers say Eliminate: not saved unless the person
+   *  keeps it. Everyday (non-PK) follow-ups are always kept, as before
+   *  2026-11-10; the sheet only asks "Eliminate?" and the person decides. */
   keep: boolean;
 }
 
@@ -328,12 +330,17 @@ export function draftedAction(
   if (important === null) {
     // An older draft carried its own priority: it stands.
     const legacy = na.priority ?? null;
-    return { due_date: due, important: null, priority: legacy === "ELIMINATE" ? null : legacy, keep: legacy !== "ELIMINATE" };
+    return {
+      due_date: due,
+      important: null,
+      priority: legacy === "ELIMINATE" ? null : legacy,
+      keep: !ctx.isPk || legacy !== "ELIMINATE",
+    };
   }
   return {
     due_date: due,
     important,
     priority: storedPriority(important, due, ctx.today, ctx.ownerGivesWork),
-    keep: derivePriority(important, due, ctx.today, ctx.ownerGivesWork) !== "ELIMINATE",
+    keep: !ctx.isPk || derivePriority(important, due, ctx.today, ctx.ownerGivesWork) !== "ELIMINATE",
   };
 }
