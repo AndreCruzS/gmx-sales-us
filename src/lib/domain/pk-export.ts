@@ -63,9 +63,9 @@ function longDate(iso: string): string {
   return `${monthDay(iso)}, ${y}`;
 }
 
-/** The file's name for the day: `Open action items · Nov 2, 2026.xlsx`. */
+/** The file's name for the day: `Action items · Nov 2, 2026.xlsx`. */
 export function pkExportFileName(today: string): string {
-  return `Open action items · ${longDate(today)}.xlsx`;
+  return `Action items · ${longDate(today)}.xlsx`;
 }
 
 /** A calendar day as a date cell: UTC midnight, so no zone can move the day. */

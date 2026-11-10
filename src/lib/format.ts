@@ -214,3 +214,22 @@ export function avatarLetter(name: string): string {
   }
   return "?";
 }
+
+/** "Jason Benford" → "JB"; a single name keeps its first two letters. Two
+ *  letters, because these sit in lists (the agenda wall, the Action items
+ *  owner column) where they tell one person from the next. */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  return words.length >= 2
+    ? `${[...words[0]][0]}${[...words[words.length - 1]][0]}`.toUpperCase()
+    : [...words[0]].slice(0, 2).join("").toUpperCase();
+}
+
+/** A person's categorical hue (--cat-1..8), by place in the name-sorted
+ *  roster, so the same person keeps the same colour on every screen that
+ *  passes the same roster. The hue only reinforces; the initials carry it. */
+export function rosterHues(people: Iterable<[string, string]>): Map<string, string> {
+  const roster = [...people].sort((a, b) => a[1].localeCompare(b[1]));
+  return new Map(roster.map(([id], i) => [id, `var(--cat-${(i % 8) + 1})`]));
+}

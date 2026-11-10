@@ -61,7 +61,7 @@ function text(c: Cell): string {
 
 describe("pkExportFileName", () => {
   it("names the file by the day", () => {
-    expect(pkExportFileName("2026-11-02")).toBe("Open action items · Nov 2, 2026.xlsx");
+    expect(pkExportFileName("2026-11-02")).toBe("Action items · Nov 2, 2026.xlsx");
   });
 });
 
@@ -144,11 +144,11 @@ describe("pkExportSheets", () => {
       names,
     );
     const buf = await writeXlsxFile([
-      { data: followUps, sheet: "Open action items" },
+      { data: followUps, sheet: "Action items" },
       { data: subtasks, sheet: "Subtasks" },
     ]).toBuffer();
     const sheets = await readXlsxFile(buf);
-    expect(sheets.map((s) => s.sheet)).toEqual(["Open action items", "Subtasks"]);
+    expect(sheets.map((s) => s.sheet)).toEqual(["Action items", "Subtasks"]);
     const [fu, st] = sheets.map((s) => s.data);
     expect(fu![0]![0]).toBe("Action");
     expect(fu![2]![0]).toBe("Send the price list");

@@ -28,6 +28,7 @@
 // why it reads rows and knows nothing about where they came from beyond the
 // one query below.
 
+import { initialsOf } from "@/lib/format";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckIcon } from "@/components/icons";
@@ -58,14 +59,6 @@ interface CalRow {
 // The hue is REINFORCEMENT, not the message: the initials carry the name
 // (Andre, 2026-09-02 — "assim eu reconheço sem precisar decorar cores").
 const REP_HUES = 8;
-
-/** "Jason Benford" → "JB"; a single name keeps its first two letters. */
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/);
-  return words.length >= 2
-    ? `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase()
-    : name.slice(0, 2).toUpperCase();
-}
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH = new Intl.DateTimeFormat("en-US", {

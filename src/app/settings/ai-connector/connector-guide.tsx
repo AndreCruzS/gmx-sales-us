@@ -40,7 +40,7 @@ function steps(tab: Tab, address: string): { list: ReactNode[]; note: ReactNode 
 const TRY_SAYING = [
   "What's on my agenda this week?",
   "Just left a PK at Big Creek Boise — six people, I promised the Ipe catalog.",
-  "Which open action items are past their alert?",
+  "Which action items are past their alert?",
 ];
 
 export function ConnectorGuide({ address }: { address: string }) {

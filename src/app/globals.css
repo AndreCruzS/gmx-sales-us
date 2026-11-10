@@ -7110,8 +7110,26 @@ button.dl-owe-row:hover {
   color: var(--danger);
 }
 .pk-owner {
-  font-size: var(--text-sm);
-  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+}
+/* The owner as a circle with initials (Andre, 2026-11-10); the hue is the
+   person's roster colour, as on the agenda wall. */
+.pk-ini {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-family: var(--font-fig);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--rep-hue) 16%, var(--surface-card));
+  color: color-mix(in srgb, var(--rep-hue) 78%, var(--ink-primary));
+  border: 1px solid color-mix(in srgb, var(--rep-hue) 30%, transparent);
 }
 
 /* On a phone each follow-up is a card, not a table row (Andre, 2026-11-03):

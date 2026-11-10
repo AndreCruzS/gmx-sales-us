@@ -10,7 +10,8 @@
 // cell, which is the look the client asked to keep. A row opens the item
 // (onOpen); this file never writes.
 
-import { useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { initialsOf, rosterHues } from "@/lib/format";
 import { ChevronDownIcon } from "@/components/icons";
 import {
   PRIORITY_LABEL,
@@ -90,6 +91,8 @@ export function PkBandView({
   onAdd: (activityId: string, action: string) => void;
 }) {
   const [draft, setDraft] = useState("");
+  // Same roster, same colour per person on every band.
+  const hues = useMemo(() => rosterHues(names), [names]);
   const pct = facts.progress === null ? null : Math.round(facts.progress * 100);
   // Eliminate is on the board but out of the count, as it is out of the %.
   const total = band.items.filter((i) => i.priority !== "ELIMINATE").length;
@@ -147,6 +150,7 @@ export function PkBandView({
               item={i}
               facts={rowFacts(i.id)}
               owner={names.get(i.owner_id) ?? "Someone"}
+              ownerHue={hues.get(i.owner_id)}
               todayIso={todayIso}
               onOpen={onOpen}
             />
@@ -192,12 +196,14 @@ function PkRow({
   item,
   facts,
   owner,
+  ownerHue,
   todayIso,
   onOpen,
 }: {
   item: PkItem;
   facts: RowFacts;
   owner: string;
+  ownerHue: string | undefined;
   todayIso: string;
   onOpen: (itemId: string) => void;
 }) {
@@ -226,7 +232,7 @@ function PkRow({
         className="pk-cell"
         data-progress={PROGRESS_TONE[item.progress]}
         data-bar={bar ? "" : undefined}
-        style={bar ? ({ "--pk-pct": `${bar.pct}%` } as React.CSSProperties) : undefined}
+        style={bar ? ({ "--pk-pct": `${bar.pct}%` } as CSSProperties) : undefined}
         title={bar ? `${bar.done} of ${bar.total} subtasks done` : undefined}
       >
         {PROGRESS_LABEL[item.progress]}
@@ -273,7 +279,18 @@ function PkRow({
           </>
         )}
       </span>
-      <span className="pk-c pk-owner">{owner}</span>
+      <span className="pk-c pk-owner">
+        {/* Initials in a circle (Andre, 11-10); the full name for hover and
+            screen readers. */}
+        <i
+          className="pk-ini"
+          title={owner}
+          aria-label={`Owner: ${owner}`}
+          style={{ "--rep-hue": ownerHue ?? "var(--cat-rest)" } as CSSProperties}
+        >
+          {initialsOf(owner)}
+        </i>
+      </span>
     </button>
   );
 }
