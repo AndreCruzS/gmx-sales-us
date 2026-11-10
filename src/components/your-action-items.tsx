@@ -39,13 +39,17 @@ function SubLine({ box, c }: { box: Box; c: BoxCount }) {
   if (box !== "NONE" && c.late > 0) {
     return (
       <span className="ai-late">
-        {c.late} {box === "SCHEDULED" ? "overdue" : "late"}
+        <span className="ai-fig">{c.late}</span> {box === "SCHEDULED" ? "overdue" : "late"}
       </span>
     );
   }
   if (box === "NONE") return <>classify them</>;
-  if (box === "DO_NOW" && c.soon > 0) return <>{c.soon} due ≤ 2d</>;
-  return c.next ? <>next {shortDate(c.next)}</> : null;
+  if (box === "DO_NOW" && c.soon > 0) return (
+      <>
+        <span className="ai-fig">{c.soon}</span> due <span className="ai-fig">≤ 2d</span>
+      </>
+    );
+  return c.next ? <>next <span className="ai-fig">{shortDate(c.next)}</span></> : null;
 }
 
 /** "**Bianca** gave you 2 items" / "**Bianca** and 1 other gave you 3 items". */

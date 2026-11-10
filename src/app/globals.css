@@ -8198,9 +8198,9 @@ textarea.pkd-select {
   font-weight: 800;
   line-height: 1.1;
 }
+/* Words in the text face; the figures in it are wrapped in .ai-fig. */
 .ai-sub {
   min-height: 1.4em;
-  font-family: var(--font-fig);
   font-size: var(--text-xs);
   color: var(--ink-muted);
 }
@@ -8266,10 +8266,10 @@ textarea.pkd-select {
   font-size: var(--text-xs);
   color: var(--ink-muted);
 }
+/* The tag is a word ("Do now", "Visit"): the text face. */
 .mw-tag {
   padding: 3px 7px;
   border-radius: 999px;
-  font-family: var(--font-fig);
   font-size: var(--text-2xs);
   font-weight: 700;
   line-height: 1.1;
