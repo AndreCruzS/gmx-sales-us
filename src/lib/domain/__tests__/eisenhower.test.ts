@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftedQuadrant, quadrantOf, suggestDeadline } from "@/lib/domain/eisenhower";
+import { MATRIX_RULES, draftedQuadrant, quadrantOf, suggestDeadline } from "@/lib/domain/eisenhower";
 
 describe("the Eisenhower matrix (Bianca, 2026-11-03)", () => {
   it("puts each pair of answers in its quadrant", () => {
@@ -33,5 +33,12 @@ describe("suggestDeadline", () => {
   it("uses a said date as said when not urgent, else the fallback", () => {
     expect(suggestDeadline({ urgent: false, said_date: "2026-11-20" }, fallback, today)).toBe("2026-11-20");
     expect(suggestDeadline({ urgent: false, said_date: null }, fallback, today)).toBe(fallback);
+  });
+});
+
+describe("MATRIX_RULES", () => {
+  it("carries the reason shape with real characters", () => {
+    expect(MATRIX_RULES).toContain("Important: … · Due: …");
+    expect(MATRIX_RULES).not.toContain("\uFFFD");
   });
 });

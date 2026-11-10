@@ -45,7 +45,7 @@ export function suggestDeadline(
   return g.urgent ? urgentCap(g.said_date ?? fallback, today) : (g.said_date ?? fallback);
 }
 
-/** What "important" and the deadline mean at GMX — one text for the voice
+/** What "important" and the deadline mean at GMX â€” one text for the voice
  *  draft and for the board's Suggest, so they judge alike. */
 export const MATRIX_RULES = `Judge each PK follow-up on one question and one date:
 - IMPORTANT: it moves this dealer toward selling GMX (a stocking order, a
@@ -59,7 +59,7 @@ export const MATRIX_RULES = `Judge each PK follow-up on one question and one dat
   give: said_date is null.
 Do not mark everything important: most follow-ups are not.
 Give a reason of at most 15 words, in English, shaped
-"Important: … · Due: …" — the first half opens with "Important" or "Not
+"Important: â€¦ Â· Due: â€¦" â€” the first half opens with "Important" or "Not
 important", the second says why that date.`;
 
 /** The board's Suggest answer (and the shape the voice draft uses). `urgent`
@@ -72,6 +72,6 @@ export const matrixGuessSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable()
     .describe("a date said out loud, YYYY-MM-DD; null when none was said"),
-  reason: z.string().describe('at most 15 words, "Important: … · Due: …"'),
+  reason: z.string().describe('at most 15 words, "Important: â€¦ Â· Due: â€¦"'),
 });
 export type MatrixGuess = z.infer<typeof matrixGuessSchema>;
