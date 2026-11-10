@@ -119,8 +119,9 @@ export class SupabaseSyncBackend implements SyncBackend {
         .select(
           // owner/priority/important + who entered it and where it came from
           // feed the rep Home and My work. next_actions has several FKs to
-          // memberships and to activities, so each embed names its FK.
-          "id, action, due_date, due_time, completed_at, account_id, opportunity_id, objective, kind, created_via, created_at, updated_at, owner_id, priority, important, entered_by, enterer:memberships!next_actions_entered_by_fkey(users(full_name)), activity:activities!next_actions_activity_id_fkey(activity_type)",
+          // activities, so the embed names its FK. The enterer's name comes
+          // from pk_member_names (a rep reads no colleague's membership row).
+          "id, action, due_date, due_time, completed_at, account_id, opportunity_id, objective, kind, created_via, created_at, updated_at, owner_id, priority, important, entered_by, activity:activities!next_actions_activity_id_fkey(activity_type)",
         )
         // Open work, plus anything closed in the last couple of days. Home's
         // day spine has to show what a rep just logged as "done" — caching
@@ -189,10 +190,20 @@ export class SupabaseSyncBackend implements SyncBackend {
       .limit(500);
     if (contactsRes.error) throw new Error(contactsRes.error.message);
 
+    // Names of whoever gave the work. Best effort: a failed call leaves the
+    // names null rather than failing the whole pull.
+    const names = new Map<string, string>();
+    try {
+      const { data: people } = await this.supabase.rpc("pk_member_names");
+      for (const p of people ?? []) if (p.full_name) names.set(p.id, p.full_name);
+    } catch {
+      /* names stay null */
+    }
+
     return {
       accounts: accountsRes.data,
       contacts: contactsRes.data,
-      agenda: (agendaRes.data ?? []).map(flattenAgendaRow),
+      agenda: (agendaRes.data ?? []).map((r) => flattenAgendaRow(r, names)),
       activities: activitiesRes.data,
       settings,
       pulledAt: new Date().toISOString(),
@@ -200,16 +211,18 @@ export class SupabaseSyncBackend implements SyncBackend {
   }
 }
 
-// Flattens the two embeds into the cached fields; the raw embed objects never
-// reach the cache. PostgREST types a to-one embed loosely, hence the casts.
-function flattenAgendaRow(row: Record<string, unknown>): CachedAgendaItem {
-  const { enterer, activity, ...rest } = row as {
-    enterer?: { users?: { full_name?: string | null } | null } | null;
+// Flattens the activity embed and the enterer's name into the cached fields;
+// the raw embed never reaches the cache. PostgREST types a to-one embed loosely, hence the casts.
+function flattenAgendaRow(
+  row: Record<string, unknown>,
+  names: Map<string, string>,
+): CachedAgendaItem {
+  const { activity, ...rest } = row as {
     activity?: { activity_type?: string | null } | null;
   } & Record<string, unknown>;
   return {
     ...rest,
-    entered_by_name: enterer?.users?.full_name ?? null,
+    entered_by_name: names.get(rest.entered_by as string) ?? null,
     source_type: activity?.activity_type ?? null,
   } as CachedAgendaItem;
 }

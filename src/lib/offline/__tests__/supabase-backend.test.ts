@@ -116,7 +116,6 @@ describe("SupabaseSyncBackend.pullWorkingSet — agenda carries what the Home ne
       priority: "DO_NOW",
       important: true,
       entered_by: "m-admin",
-      enterer: { users: { full_name: "Bianca Souza" } },
       activity: { activity_type: "CALL" },
     };
     const selects: Record<string, string> = {};
@@ -132,13 +131,17 @@ describe("SupabaseSyncBackend.pullWorkingSet — agenda carries what the Home ne
       };
       return c;
     });
-    const backend = new SupabaseSyncBackend({ from } as unknown as SupabaseClient);
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ id: "m-admin", full_name: "Bianca Souza", role: "admin", status: "active" }],
+      error: null,
+    });
+    const backend = new SupabaseSyncBackend({ from, rpc } as unknown as SupabaseClient);
 
     const ws = await backend.pullWorkingSet();
 
     expect(selects.next_actions).toContain("owner_id");
     expect(selects.next_actions).toContain("important");
-    expect(selects.next_actions).toContain("memberships!next_actions_entered_by_fkey(users(full_name))");
+    expect(selects.next_actions).not.toContain("memberships");
     expect(selects.next_actions).toContain("activities!next_actions_activity_id_fkey(activity_type)");
     expect(ws.agenda[0]).toMatchObject({
       id: "a1",
@@ -149,16 +152,17 @@ describe("SupabaseSyncBackend.pullWorkingSet — agenda carries what the Home ne
       entered_by_name: "Bianca Souza",
       source_type: "CALL",
     });
-    expect(ws.agenda[0]).not.toHaveProperty("enterer");
+    expect(rpc).toHaveBeenCalledWith("pk_member_names");
     expect(ws.agenda[0]).not.toHaveProperty("activity");
   });
 
-  it("tolerates missing embeds (null enterer, no activity)", async () => {
-    const row = { id: "a2", action: "x", due_date: "2026-11-12", enterer: null, activity: null };
+  it("leaves names null when the RPC fails and there is no activity", async () => {
+    const row = { id: "a2", action: "x", due_date: "2026-11-12", entered_by: "gone", activity: null };
     const from = vi.fn((table: string) =>
       chain({ data: table === "next_actions" ? [row] : table === "organizations" ? null : [], error: null }),
     );
-    const ws = await new SupabaseSyncBackend({ from } as unknown as SupabaseClient).pullWorkingSet();
+    const rpc = vi.fn().mockRejectedValue(new Error("down"));
+    const ws = await new SupabaseSyncBackend({ from, rpc } as unknown as SupabaseClient).pullWorkingSet();
     expect(ws.agenda[0]).toMatchObject({ entered_by_name: null, source_type: null });
   });
 });
