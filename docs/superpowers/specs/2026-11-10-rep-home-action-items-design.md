@@ -1,6 +1,6 @@
 # Rep Home: "Your action items" — design
 
-Date: 2026-11-10 · Owner: Andre · Status: draft for approval
+Date: 2026-11-10 · Owner: Andre · Status: approved 2026-11-10
 Mockup: `.superpowers/mockups/rep-home-action-items.html` (option B chosen)
 
 ## Why
@@ -261,6 +261,61 @@ rep **is Plan**.
 - A rep-owned item already stored as `DELEGATE` counts under **Plan** on
   the rep's Home and page.
 
+## Suggested deadlines (Andre, 11-10: "vamos nessa")
+
+A deadline can be suggested from three sources. All three follow one rule,
+and **the code applies the final rule, not the model**.
+
+1. **The person's own agent (Muse or Claude, through the connector).**
+   - The platform guide tells the agent how to choose a deadline:
+     - a date the person said ("by Friday", "before the open house on the
+       20th") is used as is;
+     - "urgent", or the dealer waiting on it, means today + 2 business
+       days.
+   - The tools take `due_date`. The receipt shows the deadline, and the
+     agent asks "Anything to correct?" as it does today.
+2. **Say it and the board's Suggest button.**
+   - The model already judges urgency with a reason. It now returns a
+     suggested deadline (a date) and a reason of at most 15 words, for
+     example "dealer is waiting to quote".
+   - The person sees "Suggested: Thu Nov 12 · dealer is waiting to quote"
+     and can accept it with one tap or change it.
+3. **The system, when nobody gave a date.** The default deadline depends on
+   the kind of item, counted in business days from the day it is created
+   (or, for a PK item, from the day of the PK):
+
+   | Kind | Default |
+   |---|---|
+   | QUOTE_FOLLOW_UP | 2 business days |
+   | SAMPLE_FOLLOW_UP | 3 business days |
+   | DISPLAY_CHECK | 10 business days |
+   | PK follow-up (any kind, linked to a PK activity) | 5 business days |
+   | OTHER, or kind null | 5 business days |
+
+   These are Andre's starting values. Keep them in one table in
+   `src/lib/domain/` so they can be tuned.
+
+The final rule, applied in code to every suggestion:
+
+- When the item is marked urgent, the deadline is the earlier of the
+  suggested date and today + 2 business days.
+- A suggestion is never saved on its own. It shows as "Suggested: …" until
+  the person confirms it or changes it.
+- The one exception is an item that arrives with no deadline at all (made
+  by an import, or by a path that does not ask). It gets the default, so no
+  open item is ever without a date.
+- VISIT, CALL and MEETING keep the date they were booked for. They have no
+  suggestion.
+
+## Scope note
+
+The deadline rules apply to the PK board too (Bianca's Action items):
+
+- the board shows the derived priority;
+- the drawer asks only "important?" and the deadline.
+
+Andre approved the design including this on 11-10.
+
 ## Done means
 
 - A rep with the 11-10 data sees the following. Today is 11-10 for the
@@ -279,6 +334,9 @@ rep **is Plan**.
 - A Plan item whose deadline comes within 2 business days shows in Do now
   the next day, with no edit.
 - A rep never sees Delegate as an outcome. An admin still does.
+- Suggest (board and Say it) offers a date and a reason. Accepting it saves
+  that date, capped by the urgent rule.
+- An item created with no date gets the default for its kind.
 - Tests:
   - unit tests for the counting and grouping (pure functions in
     `src/lib/domain/`);
