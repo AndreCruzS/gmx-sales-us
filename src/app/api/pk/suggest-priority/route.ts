@@ -8,8 +8,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { MATRIX_RULES, matrixGuessSchema, suggestDeadline } from "@/lib/domain/eisenhower";
-import { defaultDeadline, derivePriority, storedPriority, todayIn } from "@/lib/domain/deadline";
+import {
+  MATRIX_RULES,
+  matrixGuessSchema,
+  suggestDeadline,
+  suggestFallback,
+} from "@/lib/domain/eisenhower";
+import { derivePriority, storedPriority, todayIn } from "@/lib/domain/deadline";
 
 export const maxDuration = 30;
 
@@ -21,6 +26,8 @@ const bodySchema = z.object({
   action: z.string().trim().min(1).max(500),
   dealer: z.string().max(200).default(""),
   pkDate: day,
+  // The item's deadline as it stands: what an undated suggestion falls back to.
+  dueDate: day.optional(),
   // The device's local date; absent, the server falls back to Los Angeles.
   today: day.optional(),
   kind: z.string().max(60).nullable().default(null),
@@ -61,7 +68,7 @@ ${MATRIX_RULES}
 
 ${facts}`,
     });
-    const due = suggestDeadline(object, defaultDeadline(b.kind, true, b.pkDate), today);
+    const due = suggestDeadline(object, suggestFallback(b.dueDate, b.kind, b.pkDate), today);
     return NextResponse.json({
       important: object.important,
       due_date: due,

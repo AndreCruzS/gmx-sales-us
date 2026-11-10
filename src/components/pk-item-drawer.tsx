@@ -249,6 +249,7 @@ export function PkItemDrawer({
         action: item.action,
         dealer: band.dealer,
         pkDate: band.pkDate,
+        dueDate: item.due_date,
         today: todayIso,
         kind: null,
         ownerGivesWork,

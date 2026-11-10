@@ -7,7 +7,7 @@
 // back as a suggestion the person has to keep or drop.
 
 import { z } from "zod";
-import { urgentCap } from "@/lib/domain/deadline";
+import { defaultDeadline, urgentCap } from "@/lib/domain/deadline";
 
 /** The deadline a suggestion proposes. A date said is used as said; urgent
  *  (said or implied) caps it at two business days. */
@@ -17,6 +17,13 @@ export function suggestDeadline(
   today: string,
 ): string {
   return g.urgent ? urgentCap(g.said_date ?? fallback, today) : (g.said_date ?? fallback);
+}
+
+/** The date a board suggestion falls back to when none was said: the item's
+ *  own deadline as it stands, so an old PK is never offered a date long past
+ *  just because its PK day was; the PK default only when it has none. */
+export function suggestFallback(currentDue: string | null | undefined, kind: string | null, pkDate: string): string {
+  return currentDue ?? defaultDeadline(kind, true, pkDate);
 }
 
 /** What "important" and the deadline mean at GMX — one text for the voice
