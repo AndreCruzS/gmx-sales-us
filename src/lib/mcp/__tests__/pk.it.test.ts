@@ -1,10 +1,16 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AgentContext } from "../context";
+import { addBusinessDays, todayIn } from "@/lib/domain/deadline";
+import { daysFrom } from "@/lib/domain/pk-follow-up";
 import { contextFor, useLocalStack } from "./it-helpers";
 
 const run = Date.now().toString(36);
 const text = (r: { content: { text: string }[] }) => r.content[0].text;
-const PK_AT = "2026-11-03T17:00:00Z";
+// The tools read "today" in Los Angeles, so the PK is dated today there and every
+// expected date is computed with the same rule.
+const TODAY = todayIn();
+const PK_AT = `${TODAY}T12:00:00-08:00`;
+const plus = (n: number) => addBusinessDays(TODAY, n);
 
 describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
   let admin: AgentContext;
@@ -14,10 +20,8 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
 
   const fu = (action: string, o: Record<string, unknown> = {}) => ({
     action: `${action} ${run}`,
-    urgent: false,
     important: false,
     reason: "r",
-    asked_by_dealer: false,
     ...o,
   });
 
@@ -30,7 +34,7 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     dealerId = data!.id;
   });
 
-  it("create_pk without due dates uses the matrix days", async () => {
+  it("create_pk without due dates uses the default deadline; urgent caps it at two business days", async () => {
     const r = await t.createPk(admin, {
       dealer_account_id: dealerId,
       occurred_at: PK_AT,
@@ -46,12 +50,15 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(ids).toHaveLength(3);
     const { data: rows } = await admin.db
       .from("next_actions")
-      .select("id, priority, priority_days, due_date, source, activity_id, created_via")
+      .select("id, priority, important, priority_days, due_date, source, activity_id, created_via")
       .in("id", ids);
     const by = new Map(rows!.map((x) => [x.id, x]));
-    expect(by.get(ids[0])).toMatchObject({ priority: "DO_NOW", priority_days: 1, due_date: "2026-11-04", source: "VISIT_CAPTURE", created_via: "claude" });
-    expect(by.get(ids[1])).toMatchObject({ priority: "PLAN", priority_days: 7, due_date: "2026-11-10" });
-    expect(by.get(ids[2])).toMatchObject({ priority: "DELEGATE", priority_days: 2, due_date: "2026-11-05" });
+    expect(by.get(ids[0])).toMatchObject({ priority: "DO_NOW", priority_days: daysFrom(TODAY, plus(2)), due_date: plus(2), source: "VISIT_CAPTURE", created_via: "claude" });
+    expect(by.get(ids[1])).toMatchObject({ priority: "PLAN", priority_days: daysFrom(TODAY, plus(5)), due_date: plus(5) });
+    // Bianca is an admin: urgent but not important is Delegate for her.
+    expect(by.get(ids[2])).toMatchObject({ priority: "DELEGATE", priority_days: daysFrom(TODAY, plus(2)), due_date: plus(2) });
+    expect(by.get(ids[0])).toMatchObject({ important: true });
+    expect(text(r)).toContain(`due ${plus(2)}`);
     expect(text(r)).toContain(`/visits/pk?item=${ids[0]}`);
     expect(text(r)).toContain("Do now");
     const item = await t.pkItem(admin, { id: ids[0] });
@@ -59,14 +66,14 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(text(item)).toContain("one");
   });
 
-  it("eliminate is not saved and is listed; keep_eliminated saves it without a priority", async () => {
+  it("a drop suggestion is not saved and is listed; keep_eliminated saves it as a stored priority, never Eliminate", async () => {
     const a = await t.createPk(admin, {
       dealer_account_id: dealerId,
       occurred_at: PK_AT,
       what_happened: `PK ${run} b`,
       follow_ups: [fu("keepme"), fu("real", { important: true })],
     });
-    expect(text(a)).toContain("Suggested to drop (neither urgent nor important)");
+    expect(text(a)).toContain("Suggested to drop (not important, and no deadline within two business days)");
     expect(text(a)).toContain(`keepme ${run}`);
     expect((a.structuredContent as { follow_up_ids: string[] }).follow_up_ids).toHaveLength(1);
     const { data: none } = await admin.db.from("next_actions").select("id").eq("action", `keepme ${run}`);
@@ -81,9 +88,8 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     });
     const ids = (b.structuredContent as { follow_up_ids: string[] }).follow_up_ids;
     expect(ids).toHaveLength(2);
-    const { data: kept } = await admin.db.from("next_actions").select("priority, priority_days, due_date").eq("id", ids[0]).single();
-    expect(kept).toMatchObject({ priority: null, priority_days: null });
-    expect(kept!.due_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const { data: kept } = await admin.db.from("next_actions").select("priority, important, due_date, completed_at").eq("id", ids[0]).single();
+    expect(kept).toMatchObject({ priority: "DELEGATE", important: false, due_date: plus(5), completed_at: null });
   });
 
   it("another owner needs a confirmation and writes nothing", async () => {
@@ -117,12 +123,12 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     const r = await t.updatePkItem(tj, { id, updated_at: row!.updated_at, progress: "WORKING_ON_IT" });
     expect(r.isError).toBe(true);
     expect(text(r)).toBe("You can't change this item.");
-    const ok = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true, important: true, reason: "x" });
+    const ok = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true, important: true, reason: "Important: x · Due: y" });
     expect(ok.isError).toBeFalsy();
     const stale = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, progress: "WAITING" });
     expect(text(stale)).toBe("This changed since you read it — read it again.");
     const { data: after } = await admin.db.from("next_actions").select("priority, priority_days").eq("id", id).single();
-    expect(after).toMatchObject({ priority: "DO_NOW", priority_days: 1 });
+    expect(after).toMatchObject({ priority: "DO_NOW", priority_days: daysFrom(TODAY, plus(2)) });
   });
 
   it("notes, subtasks and reads work", async () => {
@@ -143,39 +149,38 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(text(item)).toContain("hello");
   });
 
-  it("a first priority on an old PK's item counts from today; the board shows subtasks", async () => {
+  it("an old PK's item is late on arrival; a new deadline moves it and the priority follows; the board shows it", async () => {
     const mk = await t.createPk(admin, {
       dealer_account_id: dealerId,
-      occurred_at: "2026-10-20T17:00:00Z",
+      occurred_at: "2026-10-20T17:00:00-07:00",
       what_happened: `PK ${run} old`,
-      follow_ups: [fu("oldone", { subtasks: ["a", "b"] })],
-      keep_eliminated: [0],
+      follow_ups: [fu("oldone", { important: true, subtasks: ["a", "b"] })],
     });
     const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
-    const { data: row } = await admin.db.from("next_actions").select("updated_at").eq("id", id).single();
-    const r = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: false, important: true, reason: "r" });
+    const first = await admin.db.from("next_actions").select("updated_at, priority, due_date").eq("id", id).single();
+    // Five business days after 20 Oct is past: important and past is Do now.
+    expect(first.data).toMatchObject({ priority: "DO_NOW", due_date: "2026-10-27" });
+    const r = await t.updatePkItem(admin, { id, updated_at: first.data!.updated_at, due_date: plus(5) });
     expect(r.isError).toBeFalsy();
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: admin.me.timeZone }).format(new Date());
-    const [y, m, d] = today.split("-").map(Number);
-    const plus7 = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
+    expect(text(r)).toContain(`Due ${plus(5)}`);
     const { data: after } = await admin.db.from("next_actions").select("priority, priority_days, due_date").eq("id", id).single();
-    expect(after).toMatchObject({ priority: "PLAN", priority_days: 7, due_date: plus7 });
+    expect(after).toMatchObject({ priority: "PLAN", priority_days: daysFrom("2026-10-20", plus(5)), due_date: plus(5) });
 
     const board = text(await t.pkBoard(admin, { open_only: true, limit: 200 }));
-    expect(board).toContain(`oldone ${run} [Plan, To do, alert ${plus7}, subtasks 0/2`);
+    expect(board).toContain(`oldone ${run} [Plan, To do, due ${plus(5)}, subtasks 0/2`);
   });
 
   it("a PK given with the person's offset keeps the date they said", async () => {
     const r = await t.createPk(admin, {
       dealer_account_id: dealerId,
-      occurred_at: "2026-11-04T18:30:00-08:00",
+      occurred_at: `${TODAY}T23:30:00-08:00`,
       what_happened: `PK ${run} g`,
       follow_ups: [fu("late", { urgent: true, important: true })],
     });
     const id = (r.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
     const { data: row } = await admin.db.from("next_actions").select("due_date, priority_days").eq("id", id).single();
-    expect(row).toMatchObject({ due_date: "2026-11-05", priority_days: 1 });
-    expect(text(r)).toContain("PK logged on 2026-11-04");
+    expect(row).toMatchObject({ due_date: plus(2), priority_days: daysFrom(TODAY, plus(2)) });
+    expect(text(r)).toContain(`PK logged on ${TODAY}`);
   });
 
   it("a rep reads a colleague's follow-up on their own PK, as the board does", async () => {
@@ -196,7 +201,7 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(text(await t.pkBoard(tj, { limit: 200 }))).toContain(`theirs2 ${run}`);
   });
 
-  it("update_pk_item takes the matrix answers; both no is a suggestion that changes nothing", async () => {
+  it("update_pk_item takes the answers; not important and not urgent is a suggestion that changes nothing", async () => {
     const mk = await t.createPk(admin, {
       dealer_account_id: dealerId,
       occurred_at: PK_AT,
@@ -208,6 +213,7 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(row!.priority).toBe("PLAN");
     const half = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true });
     expect(half.isError).toBe(true);
+    expect(text(half)).toContain("reason");
     const drop = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: false, important: false, reason: "nope" });
     expect(drop.isError).toBeFalsy();
     expect(text(drop)).toContain("Suggested to drop");
@@ -215,6 +221,32 @@ describe.skipIf(!process.env.MCP_IT)("PK board tools (local stack)", () => {
     expect(same!.priority).toBe("PLAN");
     const up = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, urgent: true, important: true, reason: "now" });
     expect(text(up)).toContain("priority: PLAN → DO_NOW");
+    expect(text(up)).toContain(`Due ${plus(2)}`);
+  });
+
+  it("a rep's PK item: urgent but not important is Plan (Delegate only for an admin owner)", async () => {
+    const mk = await t.createPk(tj, {
+      dealer_account_id: dealerId,
+      occurred_at: PK_AT,
+      what_happened: `PK ${run} rep`,
+      follow_ups: [fu("repurgent", { urgent: true })],
+    });
+    const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await tj.db.from("next_actions").select("priority, due_date").eq("id", id).single();
+    expect(row).toMatchObject({ priority: "PLAN", due_date: plus(2) });
+  });
+
+  it("a PK item's deadline moved by hand: the priority follows the date", async () => {
+    const mk = await t.createPk(admin, {
+      dealer_account_id: dealerId,
+      occurred_at: PK_AT,
+      what_happened: `PK ${run} move`,
+      follow_ups: [fu("mover", { important: true })],
+    });
+    const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const { data: row } = await admin.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const near = await t.updatePkItem(admin, { id, updated_at: row!.updated_at, due_date: plus(1) });
+    expect(text(near)).toContain("priority: PLAN → DO_NOW");
   });
 
   it("a failure after the PK is saved names what exists and says not to call create_pk again", async () => {

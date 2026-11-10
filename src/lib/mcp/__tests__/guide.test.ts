@@ -6,8 +6,13 @@ describe("agent guide", () => {
   it("carries the matrix rules verbatim", () => {
     expect(PLATFORM_GUIDE).toContain(MATRIX_RULES);
   });
-  it("states the default alert days", () => {
-    for (const s of ["Do now 1", "Plan 7", "Delegate 2"]) expect(PLATFORM_GUIDE).toContain(s);
+  it("states the urgent cap, the defaults and that the receipt shows the deadline", () => {
+    expect(PLATFORM_GUIDE).toContain("FOLLOW-UPS: IMPORTANCE AND DEADLINES");
+    expect(PLATFORM_GUIDE).toContain("no more than 2 business days away");
+    expect(PLATFORM_GUIDE).toContain("caps the deadline at 2 business days from today");
+    expect(PLATFORM_GUIDE).toContain("quote follow-up 2, sample follow-up 3, display check 10, a PK follow-up 5 from the PK date, anything else 5");
+    expect(PLATFORM_GUIDE).toContain("Show the deadline in the receipt");
+    expect(PLATFORM_GUIDE).not.toContain("HOW TO PRIORITISE");
   });
   it("covers call/meeting fields, phase 2 and naming", () => {
     expect(PLATFORM_GUIDE).toContain("not available through the agent yet — use the app");

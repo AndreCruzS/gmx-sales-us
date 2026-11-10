@@ -1,40 +1,58 @@
 import { describe, expect, it } from "vitest";
-import { alertDate, calendarDateIn } from "@/lib/domain/pk-follow-up";
-import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
+import { calendarDateIn } from "@/lib/domain/pk-follow-up";
+import { pkMoment, planDeadline, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
 
-const PK = "2026-11-03";
+const PK = "2026-11-10";
+const TODAY = "2026-11-10"; // a Tuesday: two business days on is Thursday the 12th
 const f = (o: Partial<PkFollowUpInput>): PkFollowUpInput => ({
   action: "x",
-  urgent: false,
   important: false,
   reason: "r",
-  asked_by_dealer: false,
   ...o,
 });
+const plan = (o: Partial<PkFollowUpInput>, gives = false, pk = PK) => planPkFollowUp(pk, f(o), TODAY, gives);
 
-describe("planPkFollowUp (the Say it rule)", () => {
-  it("urgent and important, no date: DO_NOW, 1 day", () => {
-    expect(planPkFollowUp(PK, f({ urgent: true, important: true }))).toMatchObject({
-      save: true, priority: "DO_NOW", priority_days: 1, due_date: alertDate(PK, 1),
-    });
+describe("planPkFollowUp (deadlines decide urgency)", () => {
+  it("urgent and not important: Plan for a rep, due in two business days", () => {
+    expect(plan({ urgent: true, important: false })).toMatchObject({ save: true, priority: "PLAN", due_date: "2026-11-12" });
   });
-  it("important only: PLAN, 7 days", () => {
-    expect(planPkFollowUp(PK, f({ important: true }))).toMatchObject({ priority: "PLAN", priority_days: 7, due_date: alertDate(PK, 7) });
+  it("the same for an admin owner is Delegate", () => {
+    expect(plan({ urgent: true, important: false }, true)).toMatchObject({ save: true, priority: "DELEGATE", due_date: "2026-11-12" });
   });
-  it("urgent only: DELEGATE, 2 days", () => {
-    expect(planPkFollowUp(PK, f({ urgent: true }))).toMatchObject({ priority: "DELEGATE", priority_days: 2, due_date: alertDate(PK, 2) });
+  it("important and urgent: Do now, days counted from the PK date", () => {
+    expect(plan({ urgent: true, important: true })).toMatchObject({ priority: "DO_NOW", due_date: "2026-11-12", priority_days: 2 });
   });
-  it("neither: not saved", () => {
-    expect(planPkFollowUp(PK, f({}))).toEqual({ save: false, reason: "r" });
+  it("important, no date: Plan, 5 business days after the PK", () => {
+    expect(plan({ important: true })).toMatchObject({ priority: "PLAN", due_date: "2026-11-17", priority_days: 7 });
   });
-  it("neither but the dealer asked: DELEGATE", () => {
-    expect(planPkFollowUp(PK, f({ asked_by_dealer: true }))).toMatchObject({ save: true, priority: "DELEGATE" });
+  it("neither: suggested to drop, and the stored value is never Eliminate", () => {
+    expect(plan({})).toMatchObject({ save: false, suggestDrop: true, priority: "PLAN", reason: "r" });
+    expect(plan({}, true)).toMatchObject({ save: false, priority: "DELEGATE" });
   });
-  it("a said date sets the days", () => {
-    expect(planPkFollowUp(PK, f({ important: true, due_date: "2026-11-10" }))).toMatchObject({ priority_days: 7, due_date: "2026-11-10" });
+  it("the dealer asking counts as urgent: saved, never dropped", () => {
+    expect(plan({ asked_by_dealer: true })).toMatchObject({ save: true, priority: "PLAN", due_date: "2026-11-12" });
   });
-  it("a said date before the PK is the PK day", () => {
-    expect(planPkFollowUp(PK, f({ important: true, due_date: "2026-11-01" }))).toMatchObject({ priority_days: 0, due_date: PK });
+  it("a said date is used as said when not urgent", () => {
+    expect(plan({ important: true, due_date: "2026-11-30" })).toMatchObject({ priority: "PLAN", due_date: "2026-11-30" });
+  });
+  it("a said date inside two business days makes it Do now", () => {
+    expect(plan({ important: true, due_date: "2026-11-11" })).toMatchObject({ priority: "DO_NOW", due_date: "2026-11-11" });
+  });
+  it("urgent caps a said date that is too far", () => {
+    expect(plan({ important: true, urgent: true, due_date: "2026-11-30" })).toMatchObject({ priority: "DO_NOW", due_date: "2026-11-12" });
+  });
+  it("a said date before the PK has 0 days", () => {
+    expect(plan({ important: true, due_date: "2026-11-01" })).toMatchObject({ priority_days: 0, due_date: "2026-11-01" });
+  });
+});
+
+describe("planDeadline", () => {
+  const base = { today: TODAY, fallback: "2026-12-01", ownerGivesWork: false };
+  it("is not urgent without the flag: the fallback stands", () => {
+    expect(planDeadline({ ...base, important: true })).toEqual({ due_date: "2026-12-01", priority: "PLAN", suggestDrop: false });
+  });
+  it("urgent caps the fallback", () => {
+    expect(planDeadline({ ...base, important: false, urgent: true })).toEqual({ due_date: "2026-11-12", priority: "PLAN", suggestDrop: false });
   });
 });
 

@@ -1,29 +1,26 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
-  alertBase,
-  alertDate,
   daysFrom,
   isUnread,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   calendarDateIn,
-  priorityPatch,
   type PkItem,
   type PkNote,
   type PkRead,
   type Progress,
 } from "@/lib/domain/pk-follow-up";
-import { draftedQuadrant } from "@/lib/domain/eisenhower";
+import { storedPriority, todayIn } from "@/lib/domain/deadline";
 import { activityCreateSchema, nextActionCreateSchema } from "@/lib/domain/schemas";
 import { fetchAllPages } from "@/lib/supabase/page";
 import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
-import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
+import { pkMoment, planDeadline, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
-import { dbProblem, dbRow, gate, idMaker, ONLY_ADMINS_ASSIGN, STALE, validCode, dbId } from "./shared";
+import { dbProblem, dbRow, gate, idMaker, ONLY_ADMINS_ASSIGN, ownerGivesWork, STALE, validCode, dbId } from "./shared";
 import { givesWorkToOthers } from "@/lib/domain/roles";
 
 const PROGRESSES = ["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"] as const;
@@ -52,6 +49,7 @@ export type CreatePkArgs = {
 export type UpdatePkItemArgs = {
   id: string;
   updated_at: string;
+  /** Said urgent, or the dealer is waiting: caps the deadline at two business days. */
   urgent?: boolean;
   important?: boolean;
   asked_by_dealer?: boolean;
@@ -105,7 +103,7 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
       let iq = ctx.db
         .rpc("pk_board_items")
         .select(
-          "id, activity_id, action, owner_id, due_date, completed_at, priority, priority_days, progress, last_changed_by, last_changed_at, updated_at",
+          "id, activity_id, action, owner_id, due_date, completed_at, priority, priority_days, important, progress, last_changed_by, last_changed_at, updated_at",
         )
         .in("activity_id", c);
       if (args.open_only) iq = iq.is("completed_at", null);
@@ -175,7 +173,9 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
           priority: i.priority,
           priority_label: i.priority ? PRIORITY_LABEL[i.priority] : null,
           progress: i.progress,
+          important: i.important,
           alert_date: i.completed_at === null && i.priority && i.priority !== "ELIMINATE" ? i.due_date : null,
+          deadline: i.due_date,
           due_date: i.due_date,
           done: i.completed_at !== null,
           subtasks_done: subCount.get(i.id)?.done ?? 0,
@@ -196,7 +196,7 @@ export async function pkBoard(ctx: AgentContext, args: PkBoardArgs): Promise<Cal
   const text = bands.map((b) => {
     const rows = b.items.map(
       (i) =>
-        `  - ${i.action} [${i.priority_label ?? "no priority"}, ${PROGRESS_LABEL[i.progress]}${i.alert_date ? `, alert ${i.alert_date}` : ""}${i.subtasks_total ? `, subtasks ${i.subtasks_done}/${i.subtasks_total}` : ""}${i.unread ? ", UNREAD" : ""}] — id ${i.id}, updated_at ${i.updated_at}`,
+        `  - ${i.action} [${i.priority_label ?? "no priority"}, ${PROGRESS_LABEL[i.progress]}${i.done ? "" : `, due ${i.deadline}`}${i.subtasks_total ? `, subtasks ${i.subtasks_done}/${i.subtasks_total}` : ""}${i.unread ? ", UNREAD" : ""}] — id ${i.id}, updated_at ${i.updated_at}`,
     );
     return `${b.dealer}, PK of ${b.pk_date}:\n${rows.length ? rows.join("\n") : "  (no follow-ups)"}`;
   });
@@ -210,7 +210,7 @@ export async function pkItem(ctx: AgentContext, args: { id: string }): Promise<C
   // As the app's board does: the item through pk_board_items (a rep's table policy does not reach a colleague's follow-up on their PK).
   const { data: item, error } = await ctx.db
     .rpc("pk_board_items")
-    .select("id, action, owner_id, due_date, completed_at, priority, priority_days, progress, activity_id, account_id, updated_at")
+    .select("id, action, owner_id, due_date, completed_at, priority, priority_days, important, progress, activity_id, account_id, updated_at")
     .eq("id", args.id)
     .maybeSingle();
   if (error) throw error;
@@ -222,7 +222,7 @@ export async function pkItem(ctx: AgentContext, args: { id: string }): Promise<C
   if (notes.error) throw notes.error;
   if (subs.error) throw subs.error;
   const lines = [
-    `${item.action} [${item.priority ? PRIORITY_LABEL[item.priority] : "no priority"}, ${PROGRESS_LABEL[item.progress]}${item.priority_days !== null ? `, ${item.priority_days} days` : ""}] — alert ${item.due_date}${item.completed_at ? " (closed)" : ""}. updated_at ${item.updated_at}`,
+    `${item.action} [${item.priority ? PRIORITY_LABEL[item.priority] : "no priority"}, ${PROGRESS_LABEL[item.progress]}${item.important === null ? "" : item.important ? ", important" : ", not important"}] — due ${item.due_date}${item.completed_at ? " (closed)" : ""}. updated_at ${item.updated_at}`,
     ...(subs.data ?? []).map((s) => `  [${s.done_at ? "x" : " "}] ${s.title} — id ${s.id}`),
     ...(notes.data ?? []).map((n) => `  Note ${n.created_at.slice(0, 10)}: ${n.body}`),
   ];
@@ -239,7 +239,11 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
   const fus = args.follow_ups ?? [];
   const asRecord = args as unknown as Record<string, unknown>;
   const { instant, pkDate } = pkMoment(args.occurred_at, args.time_zone ?? ctx.me.timeZone);
-  const plans = fus.map((f) => planPkFollowUp(pkDate, f));
+  const today = todayIn();
+  // The OWNER's role decides Delegate vs Plan, so ask once per owner.
+  const gives = new Map<string, boolean>();
+  for (const id of new Set(fus.map((f) => f.owner_id ?? ctx.me.membershipId))) gives.set(id, await ownerGivesWork(ctx, id));
+  const plans = fus.map((f) => planPkFollowUp(pkDate, f, today, gives.get(f.owner_id ?? ctx.me.membershipId)!));
   const keep = new Set(args.keep_eliminated ?? []);
   for (const k of keep) {
     if (!Number.isInteger(k) || k < 0 || k >= fus.length || plans[k].save) {
@@ -307,9 +311,8 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
       step = `saving the follow-up "${f.action}"`;
       const base = 1 + i * 100;
       const itemId = nextId(base);
-      const fields = plan.save
-        ? { priority: plan.priority, priority_days: plan.priority_days, due_date: plan.due_date }
-        : { priority: null, priority_days: null, due_date: f.due_date ?? alertDate(pkDate, 7) };
+      // A kept one (suggested to drop, the person said keep it) is stored like any other: Plan, or Delegate for a desk owner.
+      const fields = { priority: plan.priority, priority_days: plan.priority_days, due_date: plan.due_date, important: plan.important };
       const row = nextActionCreateSchema.parse({
         id: itemId,
         org_id: ctx.me.orgId,
@@ -331,8 +334,8 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
         throw r.error;
       }
       // The item exists now; list it before its subtasks and note so a failure there still names it.
-      const label = plan.save ? PRIORITY_LABEL[plan.priority] : "kept, no priority";
-      saved.push({ id: itemId, text: `- ${f.action} — ${label}, alert ${fields.due_date}.` });
+      const label = plan.save ? PRIORITY_LABEL[plan.priority] : `kept, ${PRIORITY_LABEL[plan.priority]}`;
+      saved.push({ id: itemId, text: `- ${f.action} — ${label}, due ${fields.due_date}.` });
       if ((r.data ?? []).length > 0) {
         await quiet({ tool: "create_pk", entity: "next_actions", entityId: itemId, op: "create" });
       }
@@ -393,7 +396,7 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
   ];
   if (dropped.length) {
     lines.push(
-      `Suggested to drop (neither urgent nor important): ${dropped.join("; ")}. They were not saved. Do not call create_pk again for them (that would log the PK twice); tell the person.`,
+      `Suggested to drop (not important, and no deadline within two business days): ${dropped.join("; ")}. They were not saved. Do not call create_pk again for them (that would log the PK twice); tell the person.`,
     );
   }
   lines.push(...new Set(notes));
@@ -411,48 +414,62 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
 export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): Promise<CallToolResult> {
   const { data: prior, error: readErr } = await ctx.db
     .rpc("pk_board_items")
-    .select("action, due_date, priority, priority_days, progress, completed_at, activity_id, updated_at")
+    .select("action, owner_id, due_date, priority, priority_days, important, progress, completed_at, activity_id, updated_at")
     .eq("id", args.id)
     .maybeSingle();
   if (readErr) throw readErr;
   if (!prior) return fail(CANT);
 
-  // A new priority comes only from the two matrix answers, as in create_pk.
-  const answering = args.urgent !== undefined || args.important !== undefined;
-  let quadrant: ReturnType<typeof draftedQuadrant> = null;
+  // The priority follows two things: the answer to Important? and the deadline.
+  const answering = args.urgent !== undefined || args.important !== undefined || args.asked_by_dealer === true;
+  const important = args.important ?? prior.important;
   if (answering) {
-    if (args.urgent === undefined || args.important === undefined) return fail("Give both answers: urgent and important.");
-    if (!args.reason?.trim()) return fail("Give a short reason for the urgent / important answers.");
-    quadrant = draftedQuadrant(args.urgent, args.important, args.asked_by_dealer ?? false);
+    if (important === null) return fail("Give important (true or false) too: the priority rests on it.");
+    if (!args.reason?.trim()) return fail("Give a short reason for the important / urgent answers.");
   }
-  const eliminate = quadrant === "ELIMINATE";
 
   const patch: Record<string, unknown> = {};
-  const today = calendarDateIn(new Date().toISOString(), ctx.me.timeZone);
+  const today = todayIn();
+  const gives = await ownerGivesWork(ctx, prior.owner_id);
   let pkDate: string | null = null;
-  if ((quadrant !== null || args.due_date !== undefined) && prior.activity_id) {
+  if ((answering || args.due_date !== undefined) && prior.activity_id) {
     const { data: v } = await ctx.db.rpc("pk_board_visits").select("occurred_at").eq("id", prior.activity_id).maybeSingle();
     if (v) pkDate = calendarDateIn((v as { occurred_at: string }).occurred_at, ctx.me.timeZone);
   }
-  if (quadrant !== null && !eliminate) {
+  const daysSincePk = (due: string) => (pkDate ? { priority_days: Math.max(0, daysFrom(pkDate, due)) } : {});
+  let suggestDrop = false;
+  if (answering) {
     if (!pkDate) return fail("This item is not part of a PK, so it has no priority to set.");
-    const base = alertBase(pkDate, prior, today);
-    const days = args.due_date ? Math.max(0, daysFrom(base, args.due_date)) : undefined;
-    Object.assign(patch, priorityPatch(base, quadrant, days));
+    const plan = planDeadline({
+      important: important as boolean,
+      urgent: args.urgent === true || args.asked_by_dealer === true,
+      said_date: args.due_date,
+      fallback: prior.due_date,
+      today,
+      ownerGivesWork: gives,
+    });
+    if (plan.suggestDrop) {
+      // Never closed or downgraded on its own: only the date the person said is written.
+      suggestDrop = true;
+      if (args.due_date !== undefined) patch.due_date = args.due_date;
+    } else {
+      Object.assign(patch, { important, priority: plan.priority, due_date: plan.due_date, ...daysSincePk(plan.due_date) });
+    }
   } else if (args.due_date !== undefined) {
-    if (pkDate && prior.priority && prior.priority !== "ELIMINATE") {
-      const base = alertBase(pkDate, prior, today);
-      const days = Math.max(0, daysFrom(base, args.due_date));
-      Object.assign(patch, { priority_days: days, due_date: alertDate(base, days) });
-    } else patch.due_date = args.due_date;
+    patch.due_date = args.due_date;
+    if (prior.important !== null && prior.priority !== "ELIMINATE") {
+      // Urgency follows the date.
+      patch.priority = storedPriority(prior.important, args.due_date, today, gives);
+      Object.assign(patch, daysSincePk(args.due_date));
+    } else if (prior.priority && prior.priority !== "ELIMINATE") Object.assign(patch, daysSincePk(args.due_date));
   }
   if (args.progress !== undefined) patch.progress = args.progress;
   if (args.done !== undefined) patch.completed_at = args.done ? new Date().toISOString() : null;
   if (args.action !== undefined) patch.action = args.action;
 
-  const suggestion = `Suggested to drop (neither urgent nor important): "${prior.action}" (${args.reason?.trim()}). Its priority was not changed. Ask the person; do not set it yourself.`;
+  const suggestion = `Suggested to drop (not important, and no deadline within two business days): "${prior.action}" (${args.reason?.trim()}). Its priority was not changed. Ask the person; do not set it yourself.`;
   if (Object.keys(patch).length === 0) {
-    return eliminate ? ok(suggestion, { id: args.id, changed: false }) : fail("Nothing to change — say what should be different.");
+    return suggestDrop ? ok(suggestion, { id: args.id, changed: false }) : fail("Nothing to change — say what should be different.");
   }
 
   const { data, error } = await ctx.db
@@ -468,8 +485,8 @@ export async function updatePkItem(ctx: AgentContext, args: UpdatePkItemArgs): P
   }
   if ((data ?? []).length === 0) return fail(prior.updated_at !== args.updated_at ? STALE : CANT);
   const before = Object.fromEntries(Object.keys(patch).map((k) => [k, (prior as Record<string, unknown>)[k] ?? null]));
-  const lines = [`Updated PK item ${args.id}. ${changes(before, patch)}.`];
-  if (eliminate) lines.push(suggestion);
+  const lines = [`Updated PK item ${args.id}. ${changes(before, patch)}. Due ${String(patch.due_date ?? prior.due_date)}.`];
+  if (suggestDrop) lines.push(suggestion);
   const note = await logActionQuiet(ctx, { tool: "update_pk_item", entity: "next_actions", entityId: args.id, op: "update", before });
   if (note) lines.push(note);
   return ok(receipt(lines, [{ id: args.id, path: link(args.id) }]), { id: args.id });
@@ -579,7 +596,7 @@ export async function markPkRead(ctx: AgentContext, args: { next_action_id: stri
 // ---- registration ---------------------------------------------------------
 
 const matrixNote =
-  " Never pick a priority yourself: ask the person two separate questions per follow-up, 'does it have to happen within about two days?' (urgent) and 'does it move this dealer toward selling GMX and need their own knowledge or relationship?' (important), judged by the MATRIX_RULES in platform_guide, and give a short reason. The system turns the answers into the priority and the alert date.";
+  " Never pick a priority or compute a date yourself: ask the person 'does it move this dealer toward selling GMX and need their own knowledge or relationship?' (important) and whether it is urgent ('does it have to happen within about two days, or is the dealer waiting?'), judged by the MATRIX_RULES in platform_guide, and give a short reason. Give due_date only when the person said a date. The system caps an urgent deadline at two business days, turns the answers into the priority, and the receipt shows the deadline: tell the person what it says.";
 const writeNote =
   " This writes immediately. Do not guess: ask the person for anything missing. When you finish, tell them in a short list what you recorded.";
 
@@ -616,9 +633,9 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Log a PK training with its follow-ups",
       description:
-        "Record a product-knowledge training at a dealer and the follow-ups it produced, exactly as Say it would. For EVERY follow-up give urgent, important, a reason and whether the dealer asked for it." +
+        "Record a product-knowledge training at a dealer and the follow-ups it produced, exactly as Say it would. For EVERY follow-up give important and a reason; give urgent when it was said (or the dealer asked for it, which counts as urgent)." +
         matrixNote +
-        " If both answers for a follow-up are no, it is suggested to drop and is NOT saved: ASK the person about those BEFORE calling, and if they want one kept pass its index (0-based, in follow_ups) in keep_eliminated in this same single call. Never call create_pk twice for one PK (it would be logged twice). A said due_date sets the alert; without one the matrix days apply. Giving a follow-up to a colleague (owner_id) is only for an admin or an assistant, as in the app; that, or five or more follow-ups, needs the person's yes first." +
+        " If a follow-up is not important and not urgent it is suggested to drop and is NOT saved: ASK the person about those BEFORE calling, and if they want one kept pass its index (0-based, in follow_ups) in keep_eliminated in this same single call. Never call create_pk twice for one PK (it would be logged twice). A said due_date is the deadline; without one the default is 5 business days after the PK (urgent caps it at two business days from today). Giving a follow-up to a colleague (owner_id) is only for an admin or an assistant, as in the app; that, or five or more follow-ups, needs the person's yes first." +
         writeNote,
       inputSchema: z.object({
         dealer_account_id: dbId().describe("Look the dealer up with find; never guess an id"),
@@ -629,10 +646,10 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
         follow_ups: z.array(
           z.object({
             action: z.string().min(1),
-            urgent: z.boolean(),
             important: z.boolean(),
-            reason: z.string().min(1).describe('At most 15 words, "Urgent: … · Not important: …"'),
-            asked_by_dealer: z.boolean().describe("The dealer asked for it, or GMX promised it"),
+            urgent: z.boolean().optional().describe("Only when the person said urgent: it caps the deadline at two business days"),
+            reason: z.string().min(1).describe('At most 15 words, "Important: … · Due: …" (opens with Important or Not important)'),
+            asked_by_dealer: z.boolean().optional().describe("The dealer asked for it, or GMX promised it: counts as urgent"),
             due_date: z.string().regex(DATE).optional().describe("Only a date the person said"),
             progress: z.enum(PROGRESSES).optional(),
             owner_id: dbId().optional().describe("Membership id of a colleague; default the person"),
@@ -652,19 +669,19 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Change a PK follow-up",
       description:
-        "Change a PK follow-up's priority, status, alert date, text, or close it. Read it first (pk_board or pk_item) and pass its updated_at; if it changed meanwhile you are told to read again. To change the priority give urgent and important (and asked_by_dealer) with a reason: the system picks the priority and sets the alert date by the matrix days. If both answers are no it is suggested to drop and the priority is NOT changed." +
+        "Change a PK follow-up's priority, status, deadline, text, or close it. Read it first (pk_board or pk_item) and pass its updated_at; if it changed meanwhile you are told to read again. To change the priority give important (and urgent or asked_by_dealer when said) with a reason: the system caps an urgent deadline at two business days and picks the priority from the answer and the deadline. A new due_date moves the deadline and the priority follows it. If it is not important and not urgent it is suggested to drop and the priority is NOT changed." +
         matrixNote +
         writeNote,
       inputSchema: z.object({
         id: dbId(),
         updated_at: z.string().describe("The updated_at you read"),
-        urgent: z.boolean().optional().describe("To change the priority: does it have to happen within about two days? (give with important and reason)"),
-        important: z.boolean().optional().describe("To change the priority: does it move this dealer toward selling GMX?"),
-        asked_by_dealer: z.boolean().optional().describe("The dealer asked for it, or GMX promised it"),
-        reason: z.string().optional().describe('Required with urgent/important; at most 15 words, "Urgent: ... / Not important: ..."'),
+        important: z.boolean().optional().describe("Does it move this dealer toward selling GMX? (give with a reason)"),
+        urgent: z.boolean().optional().describe("Said urgent: caps the deadline at two business days"),
+        asked_by_dealer: z.boolean().optional().describe("The dealer asked for it, or GMX promised it: counts as urgent"),
+        reason: z.string().optional().describe('Required with important/urgent; at most 15 words, "Important: … · Due: …"'),
         progress: z.enum(PROGRESSES).optional(),
         done: z.boolean().optional(),
-        due_date: z.string().regex(DATE).optional(),
+        due_date: z.string().regex(DATE).optional().describe("Only a date the person said: the new deadline"),
         action: z.string().min(1).optional(),
       }),
     },

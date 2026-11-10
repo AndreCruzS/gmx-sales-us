@@ -13,7 +13,6 @@ import {
   isUnread,
   mirrorUpdate,
   pkDateOf,
-  priorityPatch,
   shownPriority,
   summarize,
   type PkBand,
@@ -57,20 +56,6 @@ describe("alertDate", () => {
   });
   it("rolls the month", () => {
     expect(alertDate("2026-10-30", 7)).toBe("2026-11-06");
-  });
-});
-
-describe("priorityPatch", () => {
-  it("uses the default days", () => {
-    expect(priorityPatch("2026-10-20", "DELEGATE")).toEqual({ priority: "DELEGATE", priority_days: 2, due_date: "2026-10-22" });
-  });
-  it("takes explicit days", () => {
-    expect(priorityPatch("2026-10-20", "DELEGATE", 5)).toEqual({ priority: "DELEGATE", priority_days: 5, due_date: "2026-10-25" });
-  });
-  it("leaves the due date alone for ELIMINATE", () => {
-    const p = priorityPatch("2026-10-20", "ELIMINATE");
-    expect(p).toEqual({ priority: "ELIMINATE", priority_days: null });
-    expect("due_date" in p).toBe(false);
   });
 });
 
@@ -216,7 +201,7 @@ describe("mirrorUpdate", () => {
   });
 
   it("Eliminate closes it and drops the days; the due date stays", () => {
-    const n = mirrorUpdate(item(), priorityPatch("2026-10-20", "ELIMINATE"), "me", NOW);
+    const n = mirrorUpdate(item(), { priority: "ELIMINATE" as const, priority_days: null }, "me", NOW);
     expect(n.completed_at).toBe(NOW);
     expect(n.priority_days).toBeNull();
     expect(n.due_date).toBe("2026-10-22");
@@ -225,7 +210,7 @@ describe("mirrorUpdate", () => {
   it("leaving Eliminate reopens it unless it is Done", () => {
     const open = mirrorUpdate(
       item({ priority: "ELIMINATE", priority_days: null, completed_at: "2026-10-30T00:00:00Z" }),
-      priorityPatch("2026-10-20", "PLAN"),
+      { priority: "PLAN" as const, priority_days: 7, due_date: "2026-10-27" },
       "me",
       NOW,
     );
@@ -233,7 +218,7 @@ describe("mirrorUpdate", () => {
     expect(open.due_date).toBe("2026-10-27");
     const done = mirrorUpdate(
       item({ priority: "ELIMINATE", priority_days: null, progress: "DONE", completed_at: "2026-10-30T00:00:00Z" }),
-      priorityPatch("2026-10-20", "PLAN"),
+      { priority: "PLAN" as const, priority_days: 7, due_date: "2026-10-27" },
       "me",
       NOW,
     );
@@ -268,7 +253,7 @@ describe("mirrorUpdate", () => {
   });
 
   it("a priority change on an open item leaves it open", () => {
-    const n = mirrorUpdate(item(), priorityPatch("2026-10-20", "PLAN"), "me", NOW);
+    const n = mirrorUpdate(item(), { priority: "PLAN" as const, priority_days: 7, due_date: "2026-10-27" }, "me", NOW);
     expect(n.completed_at).toBeNull();
     expect(n.due_date).toBe("2026-10-27");
   });
@@ -276,7 +261,7 @@ describe("mirrorUpdate", () => {
   it("sending Eliminate again does not restamp the close", () => {
     const n = mirrorUpdate(
       item({ priority: "ELIMINATE", priority_days: null, completed_at: "2026-10-30T00:00:00Z" }),
-      priorityPatch("2026-10-20", "ELIMINATE"),
+      { priority: "ELIMINATE" as const, priority_days: null },
       "me",
       NOW,
     );

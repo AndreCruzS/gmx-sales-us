@@ -10,6 +10,7 @@ import {
   isUrgent,
   localIsoDate,
   storedPriority,
+  todayIn,
   urgentCap,
 } from "@/lib/domain/deadline";
 
@@ -149,5 +150,13 @@ describe("isTask", () => {
   it("is true for everything else", () => {
     expect(isTask("QUOTE_FOLLOW_UP")).toBe(true);
     expect(isTask(null)).toBe(true);
+  });
+});
+
+describe("todayIn", () => {
+  it("reads the calendar date in the zone, not UTC", () => {
+    const at = new Date("2026-11-11T03:30:00Z");
+    expect(todayIn("America/Los_Angeles", at)).toBe("2026-11-10");
+    expect(todayIn("UTC", at)).toBe("2026-11-11");
   });
 });

@@ -177,17 +177,6 @@ export function daysFrom(from: string, to: string): number {
   return Math.round((t(to) - t(from)) / 86_400_000);
 }
 
-/** The patch a priority pick writes: priority, priority_days (default), due_date (alert). Eliminate leaves the due date alone. */
-export function priorityPatch(
-  pkDate: string,
-  priority: Priority,
-  days?: number,
-): { priority: Priority; priority_days: number | null; due_date?: string } {
-  const d = days ?? DEFAULT_DAYS[priority];
-  if (priority === "ELIMINATE" || d === null) return { priority, priority_days: null };
-  return { priority, priority_days: d, due_date: alertDate(pkDate, d) };
-}
-
 function hasAlert(i: PkItem): boolean {
   return i.completed_at === null && i.priority !== null && i.priority !== "ELIMINATE";
 }

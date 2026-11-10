@@ -1,12 +1,16 @@
-import { draftedQuadrant } from "@/lib/domain/eisenhower";
-import { alertDate, calendarDateIn, DEFAULT_DAYS, daysFrom, type Priority, type Progress } from "@/lib/domain/pk-follow-up";
+import { defaultDeadline, derivePriority, storedPriority } from "@/lib/domain/deadline";
+import { suggestDeadline } from "@/lib/domain/eisenhower";
+import { calendarDateIn, daysFrom, type Priority, type Progress } from "@/lib/domain/pk-follow-up";
 
 export interface PkFollowUpInput {
   action: string;
-  urgent: boolean;
   important: boolean;
+  /** The person said urgent, or the dealer is waiting. Never a priority by itself: it caps the deadline. */
+  urgent?: boolean;
   reason: string;
-  asked_by_dealer: boolean;
+  /** The dealer asked for it, or GMX promised it: the dealer is waiting, so it counts as urgent. */
+  asked_by_dealer?: boolean;
+  /** Only a date the person said. */
   due_date?: string;
   progress?: Progress;
   owner_id?: string;
@@ -14,16 +18,62 @@ export interface PkFollowUpInput {
   note?: string;
 }
 
-export type PkRowPlan =
-  | { save: true; priority: Exclude<Priority, "ELIMINATE">; priority_days: number; due_date: string; reason: string }
-  | { save: false; reason: string };
+/** What the deadline rule decides for one answer: the date, and the priority
+ *  that may be STORED (never Eliminate on its own). */
+export interface DeadlinePlan {
+  due_date: string;
+  /** Plan for a rep and Delegate for admin/support where the answers say Eliminate. */
+  priority: Exclude<Priority, "ELIMINATE">;
+  /** Both answers say no: suggest dropping it; it is saved only when the person asks to keep it. */
+  suggestDrop: boolean;
+}
 
-/** The same rule as Say it's debrief sheet: the matrix picks the priority, a said date (or the default days) the alert. */
-export function planPkFollowUp(pkDate: string, f: PkFollowUpInput): PkRowPlan {
-  const q = draftedQuadrant(f.urgent, f.important, f.asked_by_dealer);
-  if (q === null || q === "ELIMINATE") return { save: false, reason: f.reason };
-  const days = f.due_date ? Math.max(0, daysFrom(pkDate, f.due_date)) : (DEFAULT_DAYS[q] as number);
-  return { save: true, priority: q, priority_days: days, due_date: alertDate(pkDate, days), reason: f.reason };
+/**
+ * The one rule behind every tool that records importance: urgent (said, or the
+ * dealer waiting) caps the date at two business days; the priority follows the
+ * date and the OWNER's role. `today` is the server's Los Angeles date.
+ */
+export function planDeadline(a: {
+  important: boolean;
+  urgent?: boolean;
+  said_date?: string | null;
+  fallback: string;
+  today: string;
+  ownerGivesWork: boolean;
+}): DeadlinePlan {
+  const due_date = suggestDeadline({ urgent: a.urgent === true, said_date: a.said_date ?? null }, a.fallback, a.today);
+  return {
+    due_date,
+    priority: storedPriority(a.important, due_date, a.today, a.ownerGivesWork) as DeadlinePlan["priority"],
+    suggestDrop: derivePriority(a.important, due_date, a.today, a.ownerGivesWork) === "ELIMINATE",
+  };
+}
+
+export type PkRowPlan = DeadlinePlan & {
+  /** False when it is suggested to drop: create_pk then skips it unless kept. */
+  save: boolean;
+  important: boolean;
+  priority_days: number;
+  reason: string;
+};
+
+/** The same rule as Say it's debrief sheet, from the PK's own date: the default is 5 business days after the PK. */
+export function planPkFollowUp(pkDate: string, f: PkFollowUpInput, today: string, ownerGivesWork: boolean): PkRowPlan {
+  const p = planDeadline({
+    important: f.important,
+    urgent: f.urgent === true || f.asked_by_dealer === true,
+    said_date: f.due_date,
+    fallback: defaultDeadline(null, true, pkDate),
+    today,
+    ownerGivesWork,
+  });
+  return {
+    ...p,
+    save: !p.suggestDrop,
+    important: f.important,
+    priority_days: Math.max(0, daysFrom(pkDate, p.due_date)),
+    reason: f.reason,
+  };
 }
 
 const OFFSET = /[+-]\d{2}(:?\d{2})?$/;

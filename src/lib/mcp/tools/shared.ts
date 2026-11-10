@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { givesWorkToOthers } from "@/lib/domain/roles";
 import { checkConfirmation, confirmationReason, issueConfirmation } from "../confirm";
 import type { AgentContext } from "../context";
 import { fail, needsConfirmation, type CallToolResult } from "../result";
@@ -81,3 +82,14 @@ export function dbProblem(e: { code?: string; message?: string }, kind?: string)
  */
 export const dbId = () =>
   z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "not a GMX Sales id");
+
+/**
+ * Whether the OWNER of an item gives work to others (admin or assistant): the
+ * owner's role decides the priority, not the caller's. A colleague the caller
+ * cannot read counts as a rep (the plainer answer).
+ */
+export async function ownerGivesWork(ctx: AgentContext, ownerId: string): Promise<boolean> {
+  if (ownerId === ctx.me.membershipId) return givesWorkToOthers(ctx.me.role);
+  const { data } = await ctx.db.from("memberships").select("role").eq("id", ownerId).maybeSingle();
+  return givesWorkToOthers(data?.role);
+}

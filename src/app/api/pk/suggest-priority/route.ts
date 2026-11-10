@@ -9,7 +9,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { MATRIX_RULES, matrixGuessSchema, suggestDeadline } from "@/lib/domain/eisenhower";
-import { defaultDeadline, derivePriority, localIsoDate, storedPriority } from "@/lib/domain/deadline";
+import { defaultDeadline, derivePriority, storedPriority, todayIn } from "@/lib/domain/deadline";
 
 export const maxDuration = 30;
 
@@ -39,9 +39,7 @@ export async function POST(req: NextRequest) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad request" }, { status: 400 });
   const b = parsed.data;
-  const today =
-    b.today ??
-    localIsoDate(new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" })));
+  const today = b.today ?? todayIn();
 
   const facts = [
     `Follow-up: ${b.action}`,

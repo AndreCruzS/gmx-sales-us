@@ -4,8 +4,11 @@ import { ACTIVITY_OUTCOMES, ACTIVITY_TYPES, VISIT_OBJECTIVES } from "@/lib/domai
 import { activityCreateSchema, nextActionCreateSchema, nextActionUpdateSchema } from "@/lib/domain/schemas";
 import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
-import { dbProblem, dbRow, gate, idMaker, ONLY_ADMINS_ASSIGN, STALE, validCode, dbId } from "./shared";
+import { dbProblem, dbRow, gate, idMaker, ONLY_ADMINS_ASSIGN, ownerGivesWork, STALE, validCode, dbId } from "./shared";
 import { givesWorkToOthers } from "@/lib/domain/roles";
+import { isTask, todayIn } from "@/lib/domain/deadline";
+import { PRIORITY_LABEL } from "@/lib/domain/pk-follow-up";
+import { planDeadline } from "../pk-rows";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
@@ -19,7 +22,14 @@ export type TimedArgs = {
   time_zone?: string;
   duration_minutes?: number;
 };
-export type PlanFollowUpArgs = TimedArgs & {
+/** Importance and urgency of a task follow-up (not a visit, call or meeting). */
+export type ImportanceArgs = {
+  /** Does it move the account toward selling GMX and need the person's own knowledge or relationship? */
+  important?: boolean;
+  /** Said urgent: caps the deadline at two business days from today. */
+  urgent?: boolean;
+};
+export type PlanFollowUpArgs = TimedArgs & ImportanceArgs & {
   action: string;
   due_date: string;
   account_id?: string;
@@ -27,7 +37,7 @@ export type PlanFollowUpArgs = TimedArgs & {
   objective?: (typeof VISIT_OBJECTIVES)[number];
   confirmation?: string;
 };
-export type UpdateFollowUpArgs = {
+export type UpdateFollowUpArgs = ImportanceArgs & {
   id: string;
   updated_at: string;
   due_date?: string;
@@ -51,6 +61,11 @@ export type LogVisitArgs = {
   confirmation?: string;
 };
 export type ListAgendaArgs = { from: string; to: string; owner_id?: string; limit?: number; offset?: number };
+
+const NO_PRIORITY = "Visits, calls and meetings have no priority: important and urgent are for tasks.";
+const NEEDS_IMPORTANT = "Give important (true or false) too: the priority rests on it.";
+const DROP_NOTE =
+  "It is not important and has no deadline within two business days, so the app would suggest dropping it. Ask the person whether to keep it.";
 
 function timedProblem(t: TimedArgs): string | null {
   const timed = t.kind === "CALL" || t.kind === "MEETING";
@@ -107,6 +122,21 @@ export async function planFollowUp(ctx: AgentContext, args: PlanFollowUpArgs): P
   if (bad) return fail(bad);
   const owner = args.owner_id ?? ctx.me.membershipId;
   if (owner !== ctx.me.membershipId && !givesWorkToOthers(ctx.me.role)) return fail(ONLY_ADMINS_ASSIGN);
+  // Importance, if given: the deadline and the priority come from the rule, with the OWNER's role.
+  const answering = args.important !== undefined || args.urgent !== undefined;
+  if (answering && !isTask(args.kind ?? null)) return fail(NO_PRIORITY);
+  if (answering && args.important === undefined) return fail(NEEDS_IMPORTANT);
+  const plan = answering
+    ? planDeadline({
+        important: args.important as boolean,
+        urgent: args.urgent === true,
+        said_date: args.due_date,
+        fallback: args.due_date,
+        today: todayIn(),
+        ownerGivesWork: await ownerGivesWork(ctx, owner),
+      })
+    : null;
+  const dueDate = plan?.due_date ?? args.due_date;
   const held = gate(ctx, "plan_follow_up", args, () => `plan "${args.action}" for ${when(args.due_date, args.due_time)}, owned by someone else.`);
   if (held) return held;
 
@@ -116,7 +146,9 @@ export async function planFollowUp(ctx: AgentContext, args: PlanFollowUpArgs): P
     org_id: ctx.me.orgId,
     action: args.action,
     owner_id: owner,
-    due_date: args.due_date,
+    due_date: dueDate,
+    important: plan ? args.important : undefined,
+    priority: plan?.priority,
     account_id: args.account_id,
     objective: args.objective,
     kind: args.kind,
@@ -134,7 +166,11 @@ export async function planFollowUp(ctx: AgentContext, args: PlanFollowUpArgs): P
     if (known) return known;
     throw error;
   }
-  const lines = [`Planned: ${args.action}, ${when(args.due_date, args.due_time)}. Record ${id}.`];
+  const lines = [`Planned: ${args.action}, ${when(dueDate, args.due_time)}. Record ${id}.`];
+  if (plan) {
+    lines.push(`Priority: ${PRIORITY_LABEL[plan.priority]}. Deadline: ${dueDate}${dueDate !== args.due_date ? ` (urgent: at most two business days from today, so not ${args.due_date})` : ""}.`);
+    if (plan.suggestDrop) lines.push(DROP_NOTE);
+  }
   if ((data ?? []).length > 0) {
     const note = await logActionQuiet(ctx, { tool: "plan_follow_up", entity: "next_actions", entityId: id, op: "create" });
     if (note) lines.push(note);
@@ -158,13 +194,15 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
   if (args.due_time !== undefined) patch.due_time = args.due_time;
   if (args.time_zone !== undefined) patch.time_zone = args.time_zone;
   if (args.duration_minutes !== undefined) patch.duration_minutes = args.duration_minutes;
-  if (Object.keys(patch).length === 0) return fail("Nothing to change — say what should be different.");
+  const answering = args.important !== undefined || args.urgent !== undefined;
+  if (Object.keys(patch).length === 0 && !answering) return fail("Nothing to change — say what should be different.");
 
   // Read the row before anything: who owns it decides whether this needs a yes.
-  const keys = Object.keys(patch);
   const { data: row, error: readErr } = await ctx.db
     .from("next_actions")
-    .select([...new Set(["owner_id", "account_id", "activity_id", "source", "priority", ...keys])].join(", "))
+    .select(
+      [...new Set(["owner_id", "account_id", "activity_id", "source", "priority", "kind", "important", "due_date", ...Object.keys(patch)])].join(", "),
+    )
     .eq("id", args.id)
     .maybeSingle();
   if (readErr) throw readErr;
@@ -175,11 +213,45 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
     activity_id: string | null;
     source: string | null;
     priority: string | null;
+    kind: string | null;
+    important: boolean | null;
+    due_date: string;
   };
 
   if (await isPkItem(ctx, prior)) return fail("This is a PK follow-up — use update_pk_item.");
   if (args.owner_id !== undefined && args.owner_id !== prior.owner_id && !givesWorkToOthers(ctx.me.role))
     return fail(ONLY_ADMINS_ASSIGN);
+
+  // Importance and the deadline, with the OWNER's role (the new owner, if it moves).
+  const notes: string[] = [];
+  const important = args.important ?? prior.important;
+  if (answering) {
+    if (!isTask(prior.kind)) return fail(NO_PRIORITY);
+    if (important === null) return fail(NEEDS_IMPORTANT);
+  }
+  if ((answering || args.due_date !== undefined) && isTask(prior.kind) && important !== null && prior.priority !== "ELIMINATE") {
+    const plan = planDeadline({
+      important,
+      urgent: args.urgent === true,
+      said_date: args.due_date,
+      fallback: prior.due_date,
+      today: todayIn(),
+      ownerGivesWork: await ownerGivesWork(ctx, args.owner_id ?? prior.owner_id),
+    });
+    if (answering && plan.suggestDrop) {
+      // Never changed on its own: only a date the person said is written.
+      notes.push(`${DROP_NOTE} Its priority was not changed.`);
+    } else {
+      if (answering) patch.important = important;
+      patch.priority = plan.priority;
+      patch.due_date = plan.due_date;
+      if (args.urgent === true && plan.due_date !== args.due_date) {
+        notes.push(`Urgent: the deadline is ${plan.due_date} (at most two business days from today).`);
+      }
+    }
+  }
+  if (Object.keys(patch).length === 0) return ok(notes.join(" "), { id: args.id, changed: false });
+  const keys = Object.keys(patch);
 
   const held = gate(
     ctx,
@@ -204,6 +276,8 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
   if ((data ?? []).length === 0) return fail(STALE);
   const before = Object.fromEntries(keys.map((k) => [k, prior[k] ?? null]));
   const lines = [`${args.done ? "Marked done" : "Updated"}: follow-up ${args.id}. ${changes(before, patch)}.`];
+  if (isTask(prior.kind)) lines.push(`Deadline: ${String(patch.due_date ?? prior.due_date)}.`);
+  lines.push(...notes);
   const note = await logActionQuiet(ctx, { tool: "update_follow_up", entity: "next_actions", entityId: args.id, op: "update", before });
   if (note) lines.push(note);
   return ok(receipt(lines, [{ id: args.id, path: followUpPath(prior.account_id) }]), { id: args.id });
@@ -212,10 +286,10 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
 /** A PK's follow-up has its own tool (priority, alert days, the board). */
 async function isPkItem(
   ctx: AgentContext,
-  r: { activity_id: string | null; source: string | null; priority: string | null },
+  r: { activity_id: string | null; source: string | null },
 ): Promise<boolean> {
   if (!r.activity_id) return false;
-  if (r.priority !== null) return true;
+  // A priority no longer says "PK": any follow-up has one now. Only the board knows which visits are PKs.
   if (r.source !== "VISIT_CAPTURE") return false;
   const { data } = await ctx.db.rpc("pk_board_visits").select("id").eq("id", r.activity_id).maybeSingle();
   return !!data;
@@ -376,6 +450,12 @@ const timed = {
   time_zone: z.string().optional().describe("IANA zone, e.g. America/Los_Angeles"),
   duration_minutes: z.number().int().min(5).max(600).optional(),
 };
+const importance = {
+  important: z.boolean().optional().describe("Tasks only: does it move the account toward selling GMX and need the person's own knowledge or relationship? Judge by MATRIX_RULES in platform_guide"),
+  urgent: z.boolean().optional().describe("Tasks only, with important: the person said urgent. It caps the deadline at two business days from today"),
+};
+const importanceNote =
+  " For a task (not a visit, call or meeting) you may give important (and urgent when said): the system sets the priority from the answer and the deadline and the receipt shows the deadline, so tell the person what it says. Never compute a deadline or a priority yourself.";
 const writeNote =
   " This writes immediately. Do not guess: ask the person for anything missing. When you finish, tell them in a short list what you recorded.";
 
@@ -403,6 +483,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
       title: "Plan a follow-up",
       description:
         "Add a follow-up, visit, call or meeting to the agenda. Ask the person for the date, and for the account (look it up with find; never guess an id). For a CALL or MEETING also ask for the time, the time zone and the duration; do not assume them. Giving it to a colleague (owner_id) is only for an admin or an assistant, as in the app, and needs the person's yes first." +
+        importanceNote +
         writeNote,
       inputSchema: z.object({
         action: z.string().min(1).describe("What to do, in a short sentence"),
@@ -410,6 +491,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
         account_id: dbId().optional(),
         owner_id: dbId().optional().describe("Membership id of the colleague; default is the person themselves"),
         objective: z.enum(VISIT_OBJECTIVES).optional(),
+        ...importance,
         confirmation: z.string().optional().describe("Only the code this tool gave you, after the person said yes"),
         ...timed,
       }),
@@ -423,6 +505,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
       title: "Change or complete a follow-up",
       description:
         "Move, rename, reassign or complete a follow-up. Read it first with list_agenda and pass its updated_at; if it changed meanwhile you are told to read again. done: true completes it. Reassigning it is only for an admin or an assistant, as in the app; reassigning it or changing a follow-up that belongs to someone else needs the person's yes first. A PK follow-up is changed with update_pk_item." +
+        importanceNote +
         writeNote,
       inputSchema: z.object({
         id: dbId(),
@@ -434,6 +517,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
         action: z.string().min(1).optional(),
         owner_id: dbId().optional(),
         done: z.boolean().optional(),
+        ...importance,
         confirmation: z.string().optional(),
       }),
     },

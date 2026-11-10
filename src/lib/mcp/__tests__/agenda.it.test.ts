@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { ACTIVITY_OUTCOMES } from "@/lib/domain/enums";
 import type { AgentContext } from "../context";
+import { addBusinessDays, todayIn } from "@/lib/domain/deadline";
 import { contextFor, useLocalStack } from "./it-helpers";
 
 const run = Date.now().toString(36);
@@ -259,14 +260,70 @@ describe.skipIf(!process.env.MCP_IT)("agenda tools (local stack)", () => {
     const pk = await import("../tools/pk");
     const mk = await pk.createPk(admin, {
       dealer_account_id: accountId,
-      occurred_at: "2026-11-03T17:00:00Z",
+      occurred_at: `${todayIn()}T12:00:00-08:00`,
       what_happened: `PK ${run} refuse`,
-      follow_ups: [{ action: `pk fu ${run}`, urgent: true, important: true, reason: "r", asked_by_dealer: false }],
+      follow_ups: [{ action: `pk fu ${run}`, urgent: true, important: true, reason: "r" }],
     });
     const id = (mk.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
     const { data: row } = await admin.db.from("next_actions").select("updated_at").eq("id", id).single();
     const r = await t.updateFollowUp(admin, { id, updated_at: row!.updated_at, action: "renamed" });
     expect(r.isError).toBe(true);
     expect(text(r)).toBe("This is a PK follow-up — use update_pk_item.");
+  });
+
+  it("importance: urgent caps the deadline, the OWNER's role picks Plan or Delegate, the receipt shows the deadline", async () => {
+    const today = todayIn();
+    const cap = addBusinessDays(today, 2);
+    const mine = await t.planFollowUp(tj, { action: `Imp ${run} a`, due_date: "2026-12-30", important: false, urgent: true });
+    expect(mine.isError).toBeFalsy();
+    expect(text(mine)).toContain(`Deadline: ${cap}`);
+    const id = (mine.structuredContent as { id: string }).id;
+    const { data: row } = await tj.db.from("next_actions").select("priority, important, due_date").eq("id", id).single();
+    expect(row).toMatchObject({ priority: "PLAN", important: false, due_date: cap });
+
+    // Bianca (admin) plans the same for herself: Delegate.
+    const hers = await t.planFollowUp(admin, { action: `Imp ${run} b`, due_date: "2026-12-30", important: false, urgent: true });
+    const { data: b } = await admin.db.from("next_actions").select("priority").eq("id", (hers.structuredContent as { id: string }).id).single();
+    expect(b!.priority).toBe("DELEGATE");
+
+    // Bianca plans for tj: tj is a rep, so Plan, not Delegate.
+    const args = { action: `Imp ${run} c`, due_date: "2026-12-30", important: false, urgent: true, owner_id: tj.me.membershipId };
+    const held = await t.planFollowUp(admin, args);
+    const done = await t.planFollowUp(admin, { ...args, confirmation: held.structuredContent!.confirmation as string });
+    const { data: c } = await admin.db.from("next_actions").select("priority, owner_id").eq("id", (done.structuredContent as { id: string }).id).single();
+    expect(c).toMatchObject({ priority: "PLAN", owner_id: tj.me.membershipId });
+  });
+
+  it("importance: a visit has none, and urgent alone is not enough", async () => {
+    const v = await t.planFollowUp(tj, { action: `Imp ${run} v`, due_date: "2026-12-30", kind: "VISIT", important: true });
+    expect(v.isError).toBe(true);
+    expect(text(v)).toContain("have no priority");
+    const u = await t.planFollowUp(tj, { action: `Imp ${run} u`, due_date: "2026-12-30", urgent: true });
+    expect(u.isError).toBe(true);
+    expect(text(u)).toContain("Give important");
+  });
+
+  it("update_follow_up applies the same rule, and is not refused as a PK item when a visit debrief follow-up has a priority", async () => {
+    const today = todayIn();
+    // A follow-up from a plain visit debrief (Say it): it has a priority and an activity_id, and is not a PK.
+    const visit = await t.logVisit(tj, {
+      account_id: accountId,
+      activity_type: "DEALER_VISIT",
+      occurred_at: `${today}T12:00:00-08:00`,
+      what_happened: `Debrief ${run}`,
+      follow_ups: [{ action: `Debrief fu ${run}`, due_date: "2026-12-30" }],
+    });
+    const id = (visit.structuredContent as { follow_up_ids: string[] }).follow_up_ids[0];
+    const set = await tj.db.from("next_actions").update({ priority: "PLAN", important: true, source: "VISIT_CAPTURE" }).eq("id", id);
+    expect(set.error).toBeNull();
+    const { data: row } = await tj.db.from("next_actions").select("updated_at, activity_id, priority").eq("id", id).single();
+    expect(row!.activity_id).toBeTruthy();
+    expect(row!.priority).toBe("PLAN");
+
+    const r = await t.updateFollowUp(tj, { id, updated_at: row!.updated_at, important: true, urgent: true });
+    expect(r.isError).toBeFalsy();
+    expect(text(r)).toContain(`Deadline: ${addBusinessDays(today, 2)}`);
+    const { data: after } = await tj.db.from("next_actions").select("priority, due_date").eq("id", id).single();
+    expect(after).toMatchObject({ priority: "DO_NOW", due_date: addBusinessDays(today, 2) });
   });
 });

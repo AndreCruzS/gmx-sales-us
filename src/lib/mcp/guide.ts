@@ -1,7 +1,8 @@
 import { MATRIX_RULES } from "@/lib/domain/eisenhower";
-import { DEFAULT_DAYS, PRIORITY_LABEL } from "@/lib/domain/pk-follow-up";
+import { DEFAULT_DEADLINE_DAYS } from "@/lib/domain/deadline";
+import { PRIORITY_LABEL } from "@/lib/domain/pk-follow-up";
 
-const days = (p: keyof typeof DEFAULT_DAYS) => `${PRIORITY_LABEL[p]} ${DEFAULT_DAYS[p]}`;
+const D = DEFAULT_DEADLINE_DAYS;
 
 /** Read by the agent when it connects (MCP `instructions`). Short on purpose. */
 export const SERVER_INSTRUCTIONS = `You are acting inside GMX Sales as the person who signed you in. Everything you read or write is limited to what that person may see and do.
@@ -30,10 +31,12 @@ WHAT YOU CAN RECORD
 REQUIRED FIELDS
 Every record needs the account it belongs to (look it up with find) and a date. A follow-up also needs what is to be done. A call or meeting needs a time, zone and duration. A contact needs a name and an account. Ask the person for anything missing in one short question.
 
-PK FOLLOW-UPS: HOW TO PRIORITISE
+FOLLOW-UPS: IMPORTANCE AND DEADLINES
 ${MATRIX_RULES}
 
-The PK alert rule: the alert date is the PK date plus a number of days that depends on the priority. An item that gets its first priority after its PK day (for example the October items imported without one) counts the days from the day it gets the priority, so it is not late on arrival. Default days: ${days("DO_NOW")}, ${days("PLAN")}, ${days("DELEGATE")}. ${PRIORITY_LABEL.ELIMINATE} has no alert and is not saved unless the person says to keep it.
+The deadline decides urgency. Urgent means the deadline is no more than 2 business days away (Monday to Friday, no holidays) or already past. Saying "urgent" never sets a priority by itself: the system caps the deadline at 2 business days from today and the priority follows it. For a rep, important and urgent is ${PRIORITY_LABEL.DO_NOW}, important is ${PRIORITY_LABEL.PLAN}, urgent but not important is ${PRIORITY_LABEL.PLAN}; for an admin or an assistant urgent but not important is ${PRIORITY_LABEL.DELEGATE}. That rule uses the role of whoever OWNS the item. Not important and not urgent is only ever a suggestion to drop it: it is not saved on its own (create_pk) or changed (the update tools), so ask the person.
+
+Never compute a deadline or a priority yourself. Give important (and urgent only when it was said, or the dealer is waiting), and due_date only when the person said a date. Without a date the default deadline is, in business days: quote follow-up ${D.QUOTE_FOLLOW_UP}, sample follow-up ${D.SAMPLE_FOLLOW_UP}, display check ${D.DISPLAY_CHECK}, a PK follow-up ${D.PK} from the PK date, anything else ${D.OTHER}. Visits, calls and meetings have a time instead and no priority. "Today" is the date in Los Angeles. Show the deadline in the receipt: every tool tells you the deadline it set, so say it to the person.
 
 WHAT NEEDS CONFIRMATION
 These are never done on the first call. The tool answers "needs confirmation" with a preview and a code; show the preview and only call again with the code after the person says yes:

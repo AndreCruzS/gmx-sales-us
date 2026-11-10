@@ -42,6 +42,12 @@ export function localIsoDate(d: Date = new Date()): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+/** The calendar date right now in an IANA zone: what the server uses for
+ *  "today" (the agent's tools, the suggest route) where there is no device. */
+export function todayIn(timeZone: string = "America/Los_Angeles", now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
 /** n business days after iso. From a weekend, Monday is the first one. */
 export function addBusinessDays(iso: string, n: number): string {
   let ms = toMs(iso);

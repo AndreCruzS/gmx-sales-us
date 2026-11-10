@@ -59,6 +59,6 @@ describe.skipIf(!process.env.MCP_IT)("discovery tools (local stack)", () => {
 
   it("platform_guide returns the guide", async () => {
     const r = await t.platformGuide();
-    expect(r.content[0].text).toContain("Do now 1");
+    expect(r.content[0].text).toContain("FOLLOW-UPS: IMPORTANCE AND DEADLINES");
   });
 });

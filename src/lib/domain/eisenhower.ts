@@ -1,39 +1,13 @@
-// THE EISENHOWER MATRIX on a PK follow-up (Bianca, 2026-11-03: "tudo que eu
-// vou fazer eu vou achar que é importante ou urgente" — so the system asks the
-// two questions separately and the priority falls out of the answers):
-//
-//                 important      not important
-//   urgent        Do now         Delegate
-//   not urgent    Plan           Eliminate
-//
-// The AI answers both questions with a reason the person can read; the code,
-// not the model, turns them into the priority. Eliminate is never saved on its
-// own: it comes back as a suggestion the person has to keep or drop.
+// THE EISENHOWER MATRIX on a follow-up (Bianca, 2026-11-03: "tudo que eu vou
+// fazer eu vou achar que é importante ou urgente"). Since 2026-11-10 the person
+// answers one question, Important?, and urgency comes from the deadline
+// (lib/domain/deadline.ts: derivePriority). The AI answers Important? and
+// proposes a date, with a reason the person can read; the code, not the model,
+// turns them into the priority. Eliminate is never saved on its own: it comes
+// back as a suggestion the person has to keep or drop.
 
 import { z } from "zod";
-import type { Priority } from "@/lib/domain/pk-follow-up";
 import { urgentCap } from "@/lib/domain/deadline";
-
-/** The quadrant two answers land in; null while either is unknown. */
-export function quadrantOf(
-  urgent: boolean | null | undefined,
-  important: boolean | null | undefined,
-): Priority | null {
-  if (urgent == null || important == null) return null;
-  if (urgent) return important ? "DO_NOW" : "DELEGATE";
-  return important ? "PLAN" : "ELIMINATE";
-}
-
-/** A voice-drafted item's quadrant. Guarded in code, not left to the prompt
- *  (it slipped 1 run in 2): what the dealer asked for, or GMX promised, has
- *  the dealer waiting on it, so it is urgent and never lands in Eliminate. */
-export function draftedQuadrant(
-  urgent: boolean | null | undefined,
-  important: boolean | null | undefined,
-  askedByDealer: boolean | null | undefined,
-): Priority | null {
-  return quadrantOf(urgent == null ? urgent : urgent || askedByDealer === true, important);
-}
 
 /** The deadline a suggestion proposes. A date said is used as said; urgent
  *  (said or implied) caps it at two business days. */
