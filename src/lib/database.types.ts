@@ -3485,6 +3485,7 @@ export type Database = {
           entered_by: string | null
           hubspot_id: string | null
           id: string
+          important: boolean | null
           item_type: Database["public"]["Enums"]["next_action_type"] | null
           kind: Database["public"]["Enums"]["next_action_kind"] | null
           last_changed_at: string | null
@@ -3519,6 +3520,7 @@ export type Database = {
           entered_by?: string | null
           hubspot_id?: string | null
           id?: string
+          important?: boolean | null
           item_type?: Database["public"]["Enums"]["next_action_type"] | null
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
           last_changed_at?: string | null
@@ -3553,6 +3555,7 @@ export type Database = {
           entered_by?: string | null
           hubspot_id?: string | null
           id?: string
+          important?: boolean | null
           item_type?: Database["public"]["Enums"]["next_action_type"] | null
           kind?: Database["public"]["Enums"]["next_action_kind"] | null
           last_changed_at?: string | null
@@ -8742,6 +8745,7 @@ export type Database = {
           entered_by: string | null
           hubspot_id: string | null
           id: string
+          important: boolean | null
           item_type: Database["public"]["Enums"]["next_action_type"] | null
           kind: Database["public"]["Enums"]["next_action_kind"] | null
           last_changed_at: string | null
