@@ -4,8 +4,12 @@
 -- the deadline (no more than 2 business days away, Mon-Fri, or already past).
 -- The priority is derived from the two and re-derived every night, because a
 -- deadline that was far yesterday is near today.
+--
+-- Safe to run twice: the column is added if missing, the functions are
+-- replaced, the backfill touches only rows not yet answered, and the nightly
+-- job is unscheduled before it is scheduled again.
 
-alter table next_actions add column important boolean;
+alter table next_actions add column if not exists important boolean;
 
 -- n business days after d. From a weekend, Monday is the first one.
 create or replace function private.add_business_days(d date, n int)
@@ -117,8 +121,10 @@ revoke execute on function private.recompute_priorities() from public, anon, aut
 
 -- Backfill: Do now and Plan were the important ones; Delegate was not.
 alter table next_actions disable trigger set_updated_at;
-update next_actions set important = true where priority in ('DO_NOW', 'PLAN') and (kind is null or kind not in ('VISIT', 'CALL', 'MEETING'));
-update next_actions set important = false where priority = 'DELEGATE' and (kind is null or kind not in ('VISIT', 'CALL', 'MEETING'));
+update next_actions set important = true
+ where important is null and priority in ('DO_NOW', 'PLAN') and (kind is null or kind not in ('VISIT', 'CALL', 'MEETING'));
+update next_actions set important = false
+ where important is null and priority = 'DELEGATE' and (kind is null or kind not in ('VISIT', 'CALL', 'MEETING'));
 alter table next_actions enable trigger set_updated_at;
 
 select private.recompute_priorities();
@@ -127,6 +133,9 @@ select private.recompute_priorities();
 do $$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if exists (select 1 from cron.job where jobname = 'recompute-priorities') then
+      perform cron.unschedule('recompute-priorities');
+    end if;
     perform cron.schedule('recompute-priorities', '0 9 * * *',
                           'select private.recompute_priorities()');
   end if;
