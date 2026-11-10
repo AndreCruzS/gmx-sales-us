@@ -223,7 +223,7 @@ export function PkBoard({
               <span>Status</span>
               <span>Latest note</span>
               <span>Priority</span>
-              <span>Deadline</span>
+              <span>Alert</span>
               <span>Owner</span>
             </div>
             {bands.map((b, n) => {

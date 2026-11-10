@@ -7109,6 +7109,17 @@ button.dl-owe-row:hover {
 .pk-alert[data-passed] small {
   color: var(--danger);
 }
+/* PK Control's red alert dot: the deadline has passed. */
+.pk-alert[data-passed] b::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--danger);
+  vertical-align: middle;
+}
 .pk-owner {
   display: flex;
   align-items: center;
@@ -7355,6 +7366,12 @@ button.dl-owe-row:hover {
 .pkd-two {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+/* Priority · Days · Deadline, the PK Control order (2026-11-10). */
+.pkd-three {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.6fr) minmax(0, 1.4fr);
   gap: 10px;
 }
 .pkd-field {

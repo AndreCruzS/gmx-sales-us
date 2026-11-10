@@ -7,7 +7,13 @@
 // A row is "closed" when `completed_at` is set (Eliminate closes it too).
 
 import type { Database } from "@/lib/database.types";
-import { derivePriority, keepsEliminated } from "@/lib/domain/deadline";
+import {
+  addBusinessDays,
+  derivePriority,
+  keepsEliminated,
+  storedPriority,
+  urgentCap,
+} from "@/lib/domain/deadline";
 
 type Enums = Database["public"]["Enums"];
 
@@ -284,15 +290,65 @@ export type PkItemPatch = Partial<
 >;
 
 /**
- * The write for a change from the Important?/deadline control (drawer). The
- * days after the PK follow from the deadline (the export's column). While
+ * A priority picked in the drawer (2026-11-10: the PK Control structure stays —
+ * Priority, Days, Alert — and the deadline rule runs under it). The pick
+ * answers Important? (Do now and Plan yes, Delegate no) and sets the deadline
+ * from its default days, counted from `base` (alertBase), so the priority the
+ * deadline gives is the one picked:
+ *   · Do now and Delegate are urgent: never later than today + 2 business days;
+ *   · Plan is not: never sooner than today + 3 business days.
+ * A rep owner has no Delegate; were it picked, the rule stores Plan.
+ * Eliminate is written alone (it closes the item).
+ */
+export function pickPatch(
+  pick: Priority,
+  base: string,
+  today: string,
+  ownerGivesWork: boolean,
+): PkItemPatch {
+  if (pick === "ELIMINATE") return { priority: "ELIMINATE" };
+  const important = pick !== "DELEGATE";
+  let due = alertDate(base, DEFAULT_DAYS[pick] as number);
+  if (pick === "PLAN") {
+    const floor = addBusinessDays(today, 3);
+    if (due < floor) due = floor;
+  } else {
+    due = urgentCap(due, today);
+  }
+  return {
+    important,
+    due_date: due,
+    priority: storedPriority(important, due, today, ownerGivesWork),
+    priority_days: Math.max(0, daysFrom(base, due)),
+  };
+}
+
+/**
+ * A new deadline from the drawer's Days or date box: the priority follows it
+ * (prazo define a urgência) through planPatch.
+ */
+export function deadlinePatch(
+  item: Pick<PkItem, "priority" | "important" | "due_date">,
+  due: string,
+  base: string,
+  today: string,
+  ownerGivesWork: boolean,
+): PkItemPatch {
+  const priority =
+    item.important === null ? null : storedPriority(item.important, due, today, ownerGivesWork);
+  return planPatch(item, { due_date: due, priority }, base);
+}
+
+/**
+ * The write for a change of Important? and/or the deadline (drawer, Suggest).
+ * The days follow from the deadline, counted from `base` (alertBase). While
  * Important? is unanswered a new deadline leaves a legacy priority be, and a
  * deadline moved on an eliminated item leaves it eliminated (closed).
  */
 export function planPatch(
   item: Pick<PkItem, "priority" | "important" | "due_date">,
   change: { important?: boolean | null; due_date?: string; priority: Priority | null },
-  pkDate: string,
+  base: string,
 ): PkItemPatch {
   if (change.priority === "ELIMINATE") return { priority: "ELIMINATE" };
   const patch: PkItemPatch = {};
@@ -303,7 +359,7 @@ export function planPatch(
   const due = change.due_date ?? item.due_date;
   const priority = important === null ? item.priority : change.priority;
   if (important !== null) patch.priority = priority;
-  patch.priority_days = priority === null ? null : Math.max(0, daysFrom(pkDate, due));
+  patch.priority_days = priority === null ? null : Math.max(0, daysFrom(base, due));
   return patch;
 }
 

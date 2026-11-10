@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   planPatch,
+  pickPatch,
+  deadlinePatch,
   subtaskBar,
   alertBase,
   isOnUs,
@@ -390,6 +392,86 @@ describe("planPatch (the drawer's Important?/deadline write)", () => {
     const legacy = { priority: "DELEGATE" as const, important: null, due_date: "2026-11-09" };
     expect(planPatch(legacy, { due_date: "2026-11-12", priority: null }, pkDate)).toEqual({
       due_date: "2026-11-12",
+      priority_days: 10,
+    });
+  });
+});
+
+describe("pickPatch (the drawer's Priority select, 2026-11-10)", () => {
+  // Tue 2026-11-10; today + 2 business days = Thu 11-12; + 3 = Fri 11-13.
+  const today = "2026-11-10";
+
+  it("Do now from a fresh PK: 1 day, important, Do now", () => {
+    expect(pickPatch("DO_NOW", "2026-11-10", today, true)).toEqual({
+      important: true,
+      due_date: "2026-11-11",
+      priority: "DO_NOW",
+      priority_days: 1,
+    });
+  });
+
+  it("Plan keeps its 7 days and stays Plan", () => {
+    expect(pickPatch("PLAN", "2026-11-10", today, true)).toEqual({
+      important: true,
+      due_date: "2026-11-17",
+      priority: "PLAN",
+      priority_days: 7,
+    });
+  });
+
+  it("Plan on an old base is pushed past the urgent window, so it is not Do now", () => {
+    const p = pickPatch("PLAN", "2026-11-01", today, true);
+    expect(p.due_date).toBe("2026-11-13");
+    expect(p.priority).toBe("PLAN");
+    expect(p.priority_days).toBe(12);
+  });
+
+  it("Delegate is not important and urgent: Delegate for an admin owner", () => {
+    expect(pickPatch("DELEGATE", "2026-11-10", today, true)).toMatchObject({
+      important: false,
+      due_date: "2026-11-12",
+      priority: "DELEGATE",
+    });
+  });
+
+  it("Delegate on a rep's item stores Plan (a rep has no Delegate)", () => {
+    expect(pickPatch("DELEGATE", "2026-11-10", today, false).priority).toBe("PLAN");
+  });
+
+  it("Do now on a far-off PK is capped at today + 2 business days", () => {
+    expect(pickPatch("DO_NOW", "2026-11-30", today, true)).toMatchObject({
+      due_date: "2026-11-12",
+      priority: "DO_NOW",
+      priority_days: 0,
+    });
+  });
+
+  it("Eliminate is written alone", () => {
+    expect(pickPatch("ELIMINATE", "2026-11-10", today, true)).toEqual({ priority: "ELIMINATE" });
+  });
+});
+
+describe("deadlinePatch (Days or date moved in the drawer)", () => {
+  const today = "2026-11-10";
+
+  it("moving a Do now item two weeks out makes it Plan; the days count from the base", () => {
+    const it0 = { priority: "DO_NOW" as const, important: true, due_date: "2026-11-11" };
+    expect(deadlinePatch(it0, "2026-11-24", "2026-11-10", today, true)).toEqual({
+      due_date: "2026-11-24",
+      priority: "PLAN",
+      priority_days: 14,
+    });
+  });
+
+  it("moving a Plan item close makes it Do now", () => {
+    const it0 = { priority: "PLAN" as const, important: true, due_date: "2026-11-17" };
+    expect(deadlinePatch(it0, "2026-11-11", "2026-11-10", today, true).priority).toBe("DO_NOW");
+  });
+
+  it("a legacy item (Important? unanswered) keeps its priority", () => {
+    const legacy = { priority: "DELEGATE" as const, important: null, due_date: "2026-11-12" };
+    expect(deadlinePatch(legacy, "2026-11-20", "2026-11-10", today, true)).toEqual({
+      due_date: "2026-11-20",
       priority_days: 10,
     });
   });

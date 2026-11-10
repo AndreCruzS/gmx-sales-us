@@ -4,8 +4,11 @@
 // beside the board on the desk and over it below that, and reads top to
 // bottom in the order the desk moves an item on:
 //   · whose ball it is and how far along (the two statuses);
-//   · Important? and the deadline (importance-deadline.tsx), the priority
-//     they give and the deadline in words — "Thu Nov 12 · 2d late";
+//   · the priority, its days and the deadline, as the PK Control board had
+//     them (kept on purpose, 2026-11-10), with the alert worked out in words —
+//     "Alert: PK Oct 20 + 2 days = Thu Oct 22 · 2d late". The deadline rule runs
+//     under them (pickPatch / deadlinePatch): the pick answers Important?, and
+//     a deadline that comes within 2 business days moves the item to Do now;
 //   · the subtasks (pk-subtasks.tsx) and the notes log (pk-notes-log.tsx);
 //   · who has seen it, and when.
 //
@@ -21,20 +24,26 @@ import {
   type NoteVersion,
 } from "@/components/pk-notes-log";
 import { PkSubtasks } from "@/components/pk-subtasks";
-import {
-  ImportanceDeadline,
-  weekdayDate,
-  type DeadlineSuggestion,
-  type ImportanceDeadlineChange,
-} from "@/components/importance-deadline";
+import { weekdayDate } from "@/components/importance-deadline";
 import { shortDate } from "@/components/pk-band";
 import { useOffline } from "@/components/offline-provider";
 import { usePkItemWrites } from "@/components/use-pk-item-writes";
 import { ViaAgent } from "@/components/via-agent";
-import { deadlineLabel } from "@/lib/domain/deadline";
 import {
+  deadlineLabel,
+  derivePriority,
+  isDeadlineDay,
+  isUrgent,
+  storedPriority,
+} from "@/lib/domain/deadline";
+import {
+  PRIORITIES,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
+  alertBase,
+  alertDate,
+  deadlinePatch,
+  pickPatch,
   planPatch,
   shownPriority,
   trapTarget,
@@ -43,6 +52,7 @@ import {
   type PkNote,
   type PkRead,
   type PkSubtask,
+  type Priority,
   type Progress,
 } from "@/lib/domain/pk-follow-up";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -67,6 +77,32 @@ function deadlineLine(item: PkItem, todayIso: string): { text: string; late: boo
   if (item.completed_at !== null) return { text: `Deadline ${when} · done`, late: false };
   const l = deadlineLabel(item.due_date, todayIso);
   return { text: `Deadline ${when} · ${l.text}`, late: l.late };
+}
+
+interface Suggestion {
+  important: boolean;
+  due_date: string;
+  priority: Priority | null;
+  reason: string;
+}
+
+/** The alert in words, or why there is none: "Alert: PK Oct 20 + 2 days = Thu Oct 22 · 2d late". */
+function alertLine(
+  item: PkItem,
+  pkDate: string,
+  base: string,
+  days: number | null,
+  todayIso: string,
+): { text: string; passed: boolean } {
+  if (item.priority === null) return { text: "Set a priority to get an alert", passed: false };
+  if (item.priority === "ELIMINATE") return { text: "No alert — Eliminate", passed: false };
+  if (days === null) return { text: "Type the days to get an alert", passed: false };
+  const at = alertDate(base, days);
+  const from = base === pkDate ? `PK ${shortDate(pkDate)}` : `prioritised ${shortDate(base)}`;
+  const sum = `Alert: ${from} + ${days} ${days === 1 ? "day" : "days"} = ${weekdayDate(at)}`;
+  if (item.completed_at !== null) return { text: `${sum} · done`, passed: false };
+  const l = deadlineLabel(at, todayIso);
+  return { text: `${sum} · ${l.text}`, passed: l.late };
 }
 
 export function PkItemDrawer({
@@ -218,16 +254,84 @@ export function PkItemDrawer({
     onChanged,
   });
 
-  // Important? and the deadline: the control emits the priority to store;
-  // planPatch adds the days after the PK and keeps an eliminated item closed.
-  function plan(p: ImportanceDeadlineChange) {
-    write(planPatch(item, p, band.pkDate));
+  // ── PRIORITY · DAYS · DEADLINE (the PK Control structure) ───────────────
+  // The days count from the base (alertBase: the PK, or the day an old PK's
+  // item got its first priority). The Days box and the date box each keep a
+  // draft and write on blur or Enter; the date picker writes at once.
+  const base = alertBase(band.pkDate, item, todayIso);
+  const live = item.priority !== null && item.priority !== "ELIMINATE";
+  const [daysDraft, setDaysDraft] = useState<string | null>(null);
+  const typedDays =
+    daysDraft !== null && /^\d{1,3}$/.test(daysDraft.trim()) ? Number(daysDraft.trim()) : null;
+  const shownDays = daysDraft !== null ? typedDays : item.priority_days;
+  const [dateDraft, setDateDraft] = useState<string | null>(null);
+  const dateTyping = useRef(false);
+
+  function pick(p: Priority) {
+    setDaysDraft(null);
+    setDateDraft(null);
+    write(pickPatch(p, base, todayIso, ownerGivesWork));
   }
+
+  function moveDeadline(due: string) {
+    if (!isDeadlineDay(due) || due === item.due_date) return;
+    write(deadlinePatch(item, due, base, todayIso, ownerGivesWork));
+  }
+
+  function commitDays() {
+    if (daysDraft === null) return;
+    setDaysDraft(null);
+    if (!live || typedDays === null || typedDays === item.priority_days) return;
+    moveDeadline(alertDate(base, typedDays));
+  }
+
+  function commitDate(v: string) {
+    dateTyping.current = false;
+    setDateDraft(null);
+    moveDeadline(v);
+  }
+
+  const alert = alertLine(item, band.pkDate, base, shownDays, todayIso);
 
   // ── SUGGEST (Bianca, 2026-11-03: the Eisenhower matrix) ─────────────────
   // The AI answers Important? and proposes a deadline with a reason; nothing is
-  // written until the reader taps Apply.
-  async function suggest(): Promise<DeadlineSuggestion | null> {
+  // written until the reader taps Apply. Held with the item it was asked for.
+  const [asked, setAsked] = useState<{
+    id: string;
+    g: { state: "idle" } | { state: "asking" } | { state: "failed" } | ({ state: "ready" } & Suggestion);
+  }>({ id: item.id, g: { state: "idle" } });
+  const guess = asked.id === item.id ? asked.g : ({ state: "idle" } as const);
+  const forItem = item.id;
+  const setGuess = (g: typeof asked.g) => setAsked({ id: forItem, g });
+
+  async function suggest() {
+    setGuess({ state: "asking" });
+    try {
+      const s = await fetchSuggestion();
+      setGuess(s ? { state: "ready", ...s } : { state: "failed" });
+    } catch {
+      setGuess({ state: "failed" });
+    }
+  }
+
+  function applySuggestion(s: Suggestion) {
+    setDaysDraft(null);
+    setDateDraft(null);
+    write(
+      planPatch(
+        item,
+        {
+          important: s.important,
+          due_date: s.due_date,
+          priority: storedPriority(s.important, s.due_date, todayIso, ownerGivesWork),
+        },
+        base,
+      ),
+    );
+    setGuess({ state: "idle" });
+  }
+
+  async function fetchSuggestion(): Promise<Suggestion | null> {
     const res = await fetch("/api/pk/suggest-priority", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -243,13 +347,33 @@ export function PkItemDrawer({
         subtasks: subtasks.map((t) => t.title).slice(0, 30),
       }),
     });
-    const j = (await res.json()) as Partial<DeadlineSuggestion>;
+    const j = (await res.json()) as Partial<Suggestion>;
     if (!res.ok || typeof j.important !== "boolean" || typeof j.due_date !== "string") return null;
-    return { important: j.important, due_date: j.due_date, reason: j.reason ?? "" };
+    return {
+      important: j.important,
+      due_date: j.due_date,
+      priority: derivePriority(j.important, j.due_date, todayIso, ownerGivesWork),
+      reason: j.reason ?? "",
+    };
   }
 
   const shown = shownPriority(item, todayIso, ownerGivesWork);
   const line = deadlineLine(item, todayIso);
+  // The select shows what the board shows; an Eliminate hint is asked below it.
+  const hintEliminate =
+    shown === "ELIMINATE" && item.priority !== "ELIMINATE" && item.completed_at === null;
+  const selectValue = hintEliminate ? item.priority : shown;
+  // The deadline moved the item on its own (a Plan whose date came close).
+  const moved =
+    !hintEliminate &&
+    shown !== null &&
+    item.priority !== null &&
+    shown !== item.priority &&
+    item.completed_at === null;
+  // A rep's item has no Delegate (unless it already holds one).
+  const options = PRIORITIES.filter(
+    (p) => p !== "DELEGATE" || ownerGivesWork || item.priority === "DELEGATE",
+  );
 
   // ── WHO HAS SEEN IT ──────────────────────────────────────────────────────
   const readBy = new Map(
@@ -323,18 +447,16 @@ export function PkItemDrawer({
                   </dd>
                 </div>
                 <div>
-                  <dt className="pkd-lbl">Important?</dt>
-                  <dd>
-                    {item.important === null ? "Not answered" : item.important ? "Yes" : "No"}
-                  </dd>
-                </div>
-                <div>
                   <dt className="pkd-lbl">Priority</dt>
                   <dd>
                     {shown
                       ? `${PRIORITY_LABEL[shown]}${shown === "ELIMINATE" && item.priority !== "ELIMINATE" ? "?" : ""}`
-                      : "No priority"}
+                      : "Not set"}
                   </dd>
+                </div>
+                <div>
+                  <dt className="pkd-lbl">Days</dt>
+                  <dd>{item.priority_days ?? "—"}</dd>
                 </div>
               </dl>
               <p className="pkd-calc" data-passed={line.late || undefined}>
@@ -359,16 +481,141 @@ export function PkItemDrawer({
             </select>
           </label>
 
-          <ImportanceDeadline
-            important={item.important}
-            due={item.due_date}
-            today={todayIso}
-            ownerGivesWork={ownerGivesWork}
-            stored={item.priority}
-            done={item.completed_at !== null}
-            onChange={plan}
-            suggest={suggest}
-          />
+          <div>
+            <div className="pkd-three">
+              <label className="pkd-field">
+                <span className="pkd-lbl">Priority</span>
+                <select
+                  className="pkd-select"
+                  value={selectValue ?? ""}
+                  onChange={(e) => pick(e.target.value as Priority)}
+                >
+                  {selectValue === null && (
+                    <option value="" disabled>
+                      Set a priority
+                    </option>
+                  )}
+                  {options.map((p) => (
+                    <option key={p} value={p}>
+                      {PRIORITY_LABEL[p]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="pkd-field">
+                <span className="pkd-lbl">Days</span>
+                <input
+                  className="pkd-select pkd-days"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={365}
+                  disabled={!live}
+                  value={daysDraft ?? (item.priority_days === null ? "" : String(item.priority_days))}
+                  onChange={(e) => setDaysDraft(e.target.value)}
+                  onBlur={commitDays}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitDays();
+                    if (e.key === "Escape") setDaysDraft(null);
+                  }}
+                />
+              </label>
+              <label className="pkd-field">
+                <span className="pkd-lbl">Deadline</span>
+                <input
+                  className="pkd-select pkd-days"
+                  type="date"
+                  required
+                  disabled={!live}
+                  value={dateDraft ?? item.due_date}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitDate(e.currentTarget.value);
+                    } else if (e.key === "Escape") {
+                      dateTyping.current = false;
+                      setDateDraft(null);
+                    } else {
+                      dateTyping.current = true;
+                    }
+                  }}
+                  onChange={(e) => {
+                    setDateDraft(e.target.value);
+                    // The native picker sets a whole date at once: save it now.
+                    if (!dateTyping.current) commitDate(e.target.value);
+                  }}
+                  onBlur={(e) => {
+                    if (dateDraft !== null) commitDate(e.currentTarget.value);
+                  }}
+                />
+              </label>
+            </div>
+            <p className="pkd-calc" data-passed={alert.passed || undefined}>
+              {alert.text}
+            </p>
+            {moved && shown && (
+              <p className="t-hint">
+                Now {PRIORITY_LABEL[shown]}: the deadline is{" "}
+                {isUrgent(item.due_date, todayIso)
+                  ? "within 2 business days"
+                  : "more than 2 business days away"}
+                .
+              </p>
+            )}
+            {hintEliminate && (
+              <p className="idl-elim">
+                <span>Not important and not urgent.</span>
+                <button type="button" className="btn-quiet" onClick={() => pick("ELIMINATE")}>
+                  Eliminate
+                </button>
+              </p>
+            )}
+            <div className="pkd-suggest">
+              {guess.state === "ready" ? (
+                <>
+                  <p className="pkd-suggest-text">
+                    <strong>
+                      Suggested: {guess.priority ? PRIORITY_LABEL[guess.priority] : "—"} ·{" "}
+                      {weekdayDate(guess.due_date)}
+                    </strong>
+                    {guess.reason ? ` — ${guess.reason}` : ""}
+                  </p>
+                  {guess.important === item.important && guess.due_date === item.due_date ? (
+                    <span className="pkd-suggest-acts t-hint">Matches what is set</span>
+                  ) : (
+                    <span className="pkd-suggest-acts">
+                      <button
+                        type="button"
+                        className="t-action"
+                        onClick={() => applySuggestion(guess)}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-quiet"
+                        onClick={() => setGuess({ state: "idle" })}
+                      >
+                        Dismiss
+                      </button>
+                    </span>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="t-action"
+                  disabled={guess.state === "asking"}
+                  onClick={() => void suggest()}
+                >
+                  {guess.state === "asking" ? "Weighing it…" : "Suggest priority"}
+                </button>
+              )}
+              {guess.state === "failed" && (
+                <span className="t-hint">No suggestion this time — try again.</span>
+              )}
+            </div>
+          </div>
           </>
           )}
 
