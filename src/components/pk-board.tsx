@@ -3,9 +3,9 @@
 // THE PK FOLLOW-UP BOARD (spec 2026-11-02 §3, the approved mockup): what the
 // desk owes after each PK, one band per PK, newest first.
 //
-// Top to bottom: the six figures (summarize), the toolbar (search, owner,
-// status, "Unread only", "Show done"), then the bands. "Show done"
-// off hides closed items (done, and Eliminate, which the database closes) —
+// Top to bottom: the toolbar (search, owner, status, "Unread only", "Show
+// done"), then the bands. Bianca asked for no figures strip on top (11-10).
+// "Show done" off hides closed items (done, and Eliminate, which the database closes) —
 // they still count in the band's %, which is worked out over the whole band,
 // never over what the filters leave. Everything here is read-only: a row
 // calls onOpen, the band's foot calls onAdd, and the page does the writing.
@@ -19,7 +19,6 @@ import {
   isAlertPassed,
   isUnread,
   firstNameOf,
-  summarize,
   type PkBand,
   type PkItem,
   type PkNote,
@@ -114,11 +113,6 @@ export function PkBoard({
     return s;
   }, [bands, notesBy, myReads, me]);
 
-  const summary = useMemo(
-    () => summarize(bands, (i) => unreadIds.has(i.id), todayIso),
-    [bands, unreadIds, todayIso],
-  );
-
   const owners = useMemo(() => {
     const ids = new Set<string>();
     for (const b of bands) for (const i of b.items) ids.add(i.owner_id);
@@ -158,27 +152,8 @@ export function PkBoard({
       return next;
     });
 
-  const figures: { k: string; v: number; s: string; bad?: boolean }[] = [
-    { k: "PKs open", v: summary.pksOpen, s: "with something open" },
-    { k: "Follow-ups", v: summary.followUps, s: "not done" },
-    { k: "Alert passed", v: summary.alertPassed, s: "past PK date + days", bad: true },
-    { k: "On us", v: summary.onUs, s: "to do, in progress or stuck" },
-    { k: "Waiting on them", v: summary.waiting, s: "waiting on the dealer" },
-    { k: "New for you", v: summary.newForMe, s: "since you last looked" },
-  ];
-
   return (
     <>
-      <section className="pk-summary" aria-label="Open action items in figures">
-        {figures.map((f) => (
-          <div key={f.k} className="pk-stat" data-bad={(f.bad && f.v > 0) || undefined}>
-            <span className="pk-stat-k">{f.k}</span>
-            <span className="pk-stat-v">{f.v}</span>
-            <span className="pk-stat-s">{f.s}</span>
-          </div>
-        ))}
-      </section>
-
       <section className="pk-tools" aria-label="Filters">
         <input
           type="search"
@@ -258,7 +233,7 @@ export function PkBoard({
                   facts={{
                     progress: bandProgress(b.items, b.items.flatMap((i) => subsBy.get(i.id) ?? [])),
                     alertsPassed: b.items.filter((i) => isAlertPassed(i, todayIso)).length,
-                    // Open items only, as the summary's "New for you" counts them.
+                    // Open items only, as the Home card's "new" counts them.
                     unread: b.items.filter((i) => i.completed_at === null && unreadIds.has(i.id)).length,
                   }}
                   rows={rows}

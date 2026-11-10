@@ -414,20 +414,12 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
     [profile, todayIso, bands],
   );
 
-  // SHAPE WITHOUT VALUES — blocks where the figures will be, never a zero.
+  // SHAPE WITHOUT VALUES — a block where the board will be.
   if (loadedAt === null && !loadFailed) {
     return (
       <div className="stack pt-2" aria-busy="true">
         <section>
           {title}
-        </section>
-        <section className="pk-summary" aria-hidden="true">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <span key={i} className="pk-stat">
-              <span className="skel" style={{ width: "50%", height: 10 }} />
-              <span className="skel mt-2" style={{ width: "30%", height: 22 }} />
-            </span>
-          ))}
         </section>
         <section>
           <span className="skel" style={{ width: "100%", height: 320 }} />
