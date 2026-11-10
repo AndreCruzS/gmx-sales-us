@@ -25,7 +25,6 @@ import {
   BuildingIcon,
   CalendarIcon,
   FileIcon,
-  CheckIcon,
   MicrophoneIcon,
   PlusIcon,
   SearchIcon,
