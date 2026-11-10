@@ -5,6 +5,8 @@ import { contextFor, useLocalStack } from "./it-helpers";
 
 const run = Date.now().toString(36);
 const text = (r: { content: { text: string }[] }) => r.content[0].text;
+const ONLY_ADMINS =
+  "In GMX Sales only an admin gives work to someone else, so I can't either. I can plan it for you instead, or an admin can hand it over.";
 
 describe.skipIf(!process.env.MCP_IT)("agenda tools (local stack)", () => {
   let tj: AgentContext;
@@ -80,19 +82,38 @@ describe.skipIf(!process.env.MCP_IT)("agenda tools (local stack)", () => {
     expect(log).toHaveLength(1);
   });
 
-  it("a rep cannot hand work to an admin", async () => {
+  it("a rep cannot hand work to anyone, and is told so before any yes", async () => {
     const args = { action: `Nope ${run}`, due_date: "2026-12-03", owner_id: otherMembership };
     const r = await t.planFollowUp(tj, args);
-    const r2 = await t.planFollowUp(tj, { ...args, confirmation: r.structuredContent!.confirmation as string });
-    expect(r2.isError).toBe(true);
-    expect(text(r2)).toBe("You are not allowed to do that.");
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent?.needs_confirmation).toBeUndefined();
+    expect(text(r)).toBe(ONLY_ADMINS);
+  });
+
+  it("a manager cannot either, as in the app (the database would let them, within their team)", async () => {
+    const joao = await contextFor("joao@gmxgroup.com");
+    expect(joao.me.role).toBe("manager");
+    const args = { action: `Team ${run}`, due_date: "2026-12-03", owner_id: tj.me.membershipId };
+    const r = await t.planFollowUp(joao, args);
+    expect(text(r)).toBe(ONLY_ADMINS);
+    const { data: none } = await admin.db.from("next_actions").select("id").eq("action", args.action);
+    expect(none ?? []).toHaveLength(0);
+  });
+
+  it("a manager cannot reassign a follow-up", async () => {
+    const joao = await contextFor("joao@gmxgroup.com");
+    const r = await t.planFollowUp(joao, { action: `Mine ${run}`, due_date: "2026-12-04" });
+    const id = (r.structuredContent as { id: string }).id;
+    const { data: row } = await joao.db.from("next_actions").select("updated_at").eq("id", id).single();
+    const u = await t.updateFollowUp(joao, { id, updated_at: row!.updated_at, owner_id: tj.me.membershipId });
+    expect(text(u)).toBe(ONLY_ADMINS);
   });
 
   it("a wrong code gets a fresh needs-confirmation", async () => {
-    const r = await t.planFollowUp(tj, {
+    const r = await t.planFollowUp(admin, {
       action: `x ${run}`,
       due_date: "2026-12-03",
-      owner_id: otherMembership,
+      owner_id: tj.me.membershipId,
       confirmation: "bad.code",
     });
     expect(r.structuredContent?.needs_confirmation).toBe(true);

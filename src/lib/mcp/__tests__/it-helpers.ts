@@ -15,7 +15,6 @@ export function useLocalStack() {
 }
 
 export async function contextFor(email: string): Promise<AgentContext> {
-  process.env.MCP_ALLOWED_EMAILS = email;
   const { verifyAgentToken, contextFrom } = await import("../context");
   const { data, error } = await createClient(IT_URL, IT_ANON).auth.signInWithPassword({ email, password: "password123" });
   if (error) throw error;

@@ -1,20 +1,19 @@
 import { headers } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/mcp/auth";
+import { hasActiveMembership } from "@/lib/mcp/access";
 import { configuredOrigin } from "@/lib/mcp/metadata";
 import { connectorAddress, originFromHeaders } from "@/lib/mcp/connector-guide";
 import { ConnectorGuide } from "./connector-guide";
 
-// How a person connects their own AI agent (Meta Muse, Claude). The allow-list
-// is a server env, so it is decided here; the client only gets the verdict
-// and the address to paste.
+// How a person connects their own AI agent (Meta Muse, Claude). Any active
+// member may; it is decided here and the client only gets the address to paste.
 export default async function AiConnectorPage() {
   const supabase = await getSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!isAllowedEmail(user?.email)) {
+  if (!(await hasActiveMembership(supabase, user?.id))) {
     return (
       <div className="card card-pad aic-refuse">
         <p>Agent access isn&apos;t open for your account yet.</p>

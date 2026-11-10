@@ -1,16 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getUser = vi.fn();
+const memberships = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
-  getSupabaseServerClient: async () => ({ auth: { getUser } }),
+  getSupabaseServerClient: async () => ({
+    auth: { getUser },
+    from: () => {
+      const q = {
+        select: () => q,
+        eq: () => q,
+        limit: () => memberships(),
+      };
+      return q;
+    },
+  }),
 }));
 
 import { GET } from "../route";
 
 describe("GET /api/agent-access", () => {
   beforeEach(() => {
-    process.env.MCP_ALLOWED_EMAILS = "tj@gmxgroup.com, Bianca@gmxgroup.com";
     getUser.mockReset();
+    memberships.mockReset();
   });
 
   it("401 and false when signed out", async () => {
@@ -20,12 +31,21 @@ describe("GET /api/agent-access", () => {
     expect(await res.json()).toEqual({ allowed: false });
   });
 
-  it("true for a listed email, false otherwise, never leaks the list", async () => {
-    getUser.mockResolvedValue({ data: { user: { email: "bianca@gmxgroup.com" } } });
+  it("true for anyone with an active membership, whatever the role", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1", email: "deonn.deford@gmxgroup.com" } } });
+    memberships.mockResolvedValue({ data: [{ id: "m1" }], error: null });
     expect(await (await GET()).json()).toEqual({ allowed: true });
-    getUser.mockResolvedValue({ data: { user: { email: "deon@gmxgroup.com" } } });
-    const body = await (await GET()).json();
-    expect(body).toEqual({ allowed: false });
-    expect(JSON.stringify(body)).not.toContain("tj@");
+  });
+
+  it("false without an active membership (a Google login nobody added)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u2", email: "someone@gmail.com" } } });
+    memberships.mockResolvedValue({ data: [], error: null });
+    expect(await (await GET()).json()).toEqual({ allowed: false });
+  });
+
+  it("false when the lookup fails", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u3", email: "x@gmxgroup.com" } } });
+    memberships.mockResolvedValue({ data: null, error: { message: "boom" } });
+    expect(await (await GET()).json()).toEqual({ allowed: false });
   });
 });

@@ -4,7 +4,8 @@ import { ACTIVITY_OUTCOMES, ACTIVITY_TYPES, VISIT_OBJECTIVES } from "@/lib/domai
 import { activityCreateSchema, nextActionCreateSchema, nextActionUpdateSchema } from "@/lib/domain/schemas";
 import { logActionQuiet } from "../actions-log";
 import type { AgentContext } from "../context";
-import { dbProblem, dbRow, gate, idMaker, STALE, validCode, dbId } from "./shared";
+import { dbProblem, dbRow, gate, idMaker, ONLY_ADMINS_ASSIGN, STALE, validCode, dbId } from "./shared";
+import { givesWorkToOthers } from "@/lib/domain/roles";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
@@ -105,6 +106,7 @@ export async function planFollowUp(ctx: AgentContext, args: PlanFollowUpArgs): P
   const bad = timedProblem(args);
   if (bad) return fail(bad);
   const owner = args.owner_id ?? ctx.me.membershipId;
+  if (owner !== ctx.me.membershipId && !givesWorkToOthers(ctx.me.role)) return fail(ONLY_ADMINS_ASSIGN);
   const held = gate(ctx, "plan_follow_up", args, () => `plan "${args.action}" for ${when(args.due_date, args.due_time)}, owned by someone else.`);
   if (held) return held;
 
@@ -176,6 +178,8 @@ export async function updateFollowUp(ctx: AgentContext, args: UpdateFollowUpArgs
   };
 
   if (await isPkItem(ctx, prior)) return fail("This is a PK follow-up — use update_pk_item.");
+  if (args.owner_id !== undefined && args.owner_id !== prior.owner_id && !givesWorkToOthers(ctx.me.role))
+    return fail(ONLY_ADMINS_ASSIGN);
 
   const held = gate(
     ctx,
@@ -398,7 +402,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Plan a follow-up",
       description:
-        "Add a follow-up, visit, call or meeting to the agenda. Ask the person for the date, and for the account (look it up with find; never guess an id). For a CALL or MEETING also ask for the time, the time zone and the duration; do not assume them. Giving it to a colleague (owner_id) needs the person's yes first." +
+        "Add a follow-up, visit, call or meeting to the agenda. Ask the person for the date, and for the account (look it up with find; never guess an id). For a CALL or MEETING also ask for the time, the time zone and the duration; do not assume them. Giving it to a colleague (owner_id) is only for an admin or an assistant, as in the app, and needs the person's yes first." +
         writeNote,
       inputSchema: z.object({
         action: z.string().min(1).describe("What to do, in a short sentence"),
@@ -418,7 +422,7 @@ export function registerAgendaTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Change or complete a follow-up",
       description:
-        "Move, rename, reassign or complete a follow-up. Read it first with list_agenda and pass its updated_at; if it changed meanwhile you are told to read again. done: true completes it. Reassigning it, or changing a follow-up that belongs to someone else, needs the person's yes first. A PK follow-up is changed with update_pk_item." +
+        "Move, rename, reassign or complete a follow-up. Read it first with list_agenda and pass its updated_at; if it changed meanwhile you are told to read again. done: true completes it. Reassigning it is only for an admin or an assistant, as in the app; reassigning it or changing a follow-up that belongs to someone else needs the person's yes first. A PK follow-up is changed with update_pk_item." +
         writeNote,
       inputSchema: z.object({
         id: dbId(),

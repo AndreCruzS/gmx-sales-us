@@ -90,7 +90,7 @@ export function NavBar() {
     };
   }, [profile?.territoryId]);
 
-  // Only people on the agent allow-list get a menu under their name.
+  // Every active member may connect an agent, so they get a menu under their name.
   const agentAccess = useAgentAccess(profile?.email);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

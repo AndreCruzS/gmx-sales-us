@@ -1,7 +1,7 @@
 "use client";
 
-// Whether this person may connect an AI agent. The allow-list is server-only,
-// so the nav and the Home card ask /api/agent-access once and remember the
+// Whether this person may connect an AI agent (any active member, decided on
+// the server), so the nav and the Home card ask /api/agent-access once and remember the
 // answer (in memory, and in sessionStorage so a reload does not flash). The
 // answer is stored WITH the email it belongs to — a different person signing
 // in on the same tab never inherits it.

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { isAllowedEmail } from "@/lib/mcp/auth";
+import { hasActiveMembership } from "@/lib/mcp/access";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-// Whether the signed-in person may connect an AI agent. The allow-list is a
-// server env and never leaves it: the client gets one boolean.
+// Whether the signed-in person may connect an AI agent: any active member.
+// The client gets one boolean.
 export async function GET() {
   const supabase = await getSupabaseServerClient();
   const {
@@ -16,7 +16,7 @@ export async function GET() {
     );
   }
   return NextResponse.json(
-    { allowed: isAllowedEmail(user.email) },
+    { allowed: await hasActiveMembership(supabase, user.id) },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

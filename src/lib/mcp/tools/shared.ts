@@ -9,6 +9,10 @@ export function dbRow(r: object): never {
   return r as never;
 }
 
+/** The app's rule (roles.ts givesWorkToOthers), said to the person. */
+export const ONLY_ADMINS_ASSIGN =
+  "In GMX Sales only an admin gives work to someone else, so I can't either. I can plan it for you instead, or an admin can hand it over.";
+
 export const STALE = "This changed since you read it — read it again.";
 
 // ---- shared helpers -------------------------------------------------------

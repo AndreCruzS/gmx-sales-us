@@ -16,19 +16,6 @@ export function agentSourceOf(
   return clientId && ids.includes(clientId) ? "muse" : "claude";
 }
 
-export function isAllowedEmail(
-  email: string | undefined,
-  list: string | undefined = process.env.MCP_ALLOWED_EMAILS,
-): boolean {
-  const e = email?.trim().toLowerCase();
-  if (!e || !list) return false;
-  return list
-    .split(",")
-    .map((x) => x.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(e);
-}
-
 /** Structural twin of the MCP SDK AuthInfo (the SDK lands in a later task). */
 export interface AuthInfo {
   token: string;

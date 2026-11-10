@@ -44,3 +44,16 @@ export function isAdmin(role: string | null | undefined): boolean {
 export function seesDealersBoard(role: string | null | undefined): boolean {
   return manages(role) || role === "support";
 }
+
+/**
+ * Who may give work to someone else — make a follow-up owned by another person,
+ * or move one to another owner. In the app that is the admin's (the agenda's
+ * Assign, the Dealers board's owner picker) and the assistant's, who enters an
+ * item "for" the executive they support. RLS is wider — a manager may write
+ * for their own team — so the agent connector checks this too, to do what the
+ * person can do in the app and no more (Andre, 2026-11-10). Which colleague an
+ * assistant may enter for is still RLS's (support_assignments).
+ */
+export function givesWorkToOthers(role: string | null | undefined): boolean {
+  return role === "admin" || role === "support";
+}

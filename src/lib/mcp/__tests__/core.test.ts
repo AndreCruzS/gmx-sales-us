@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentSourceOf, isAllowedEmail, isKnownAgentRedirect } from "../auth";
+import { agentSourceOf, isKnownAgentRedirect } from "../auth";
 import { checkConfirmation, confirmationReason, issueConfirmation } from "../confirm";
 import { linkTo, receipt } from "../receipt";
 import { fail, needsConfirmation, ok } from "../result";
@@ -21,14 +21,6 @@ describe("auth", () => {
     expect(agentSourceOf("id-c", l)).toBe("muse");
     expect(agentSourceOf("id-d", l)).toBe("claude");
     expect(agentSourceOf("", ",,")).toBe("claude");
-  });
-  it("isAllowedEmail", () => {
-    const l = "andre.cruz@gmxgroup.com,bianca@gmxgroup.us";
-    expect(isAllowedEmail("Bianca@GMXgroup.us", l)).toBe(true);
-    expect(isAllowedEmail("tj@gmxgroup.com", l)).toBe(false);
-    expect(isAllowedEmail(undefined, l)).toBe(false);
-    expect(isAllowedEmail("a@b.c", "")).toBe(false);
-    expect(isAllowedEmail("a@b.c", undefined)).toBe(false);
   });
 });
 

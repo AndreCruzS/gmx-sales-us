@@ -23,7 +23,8 @@ import { pkMoment, planPkFollowUp, type PkFollowUpInput } from "../pk-rows";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
-import { dbProblem, dbRow, gate, idMaker, STALE, validCode, dbId } from "./shared";
+import { dbProblem, dbRow, gate, idMaker, ONLY_ADMINS_ASSIGN, STALE, validCode, dbId } from "./shared";
+import { givesWorkToOthers } from "@/lib/domain/roles";
 
 const PROGRESSES = ["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"] as const;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -247,6 +248,7 @@ export async function createPk(ctx: AgentContext, args: CreatePkArgs): Promise<C
   }
 
   const other = fus.some((f) => f.owner_id !== undefined && f.owner_id !== ctx.me.membershipId);
+  if (other && !givesWorkToOthers(ctx.me.role)) return fail(ONLY_ADMINS_ASSIGN);
   const reason = other ? "This acts in someone else's name." : fus.length >= 5 ? "This changes 5 or more records at once." : null;
   const held = gate(
     ctx,
@@ -616,7 +618,7 @@ export function registerPkTools(server: McpServer, getCtx: GetCtx) {
       description:
         "Record a product-knowledge training at a dealer and the follow-ups it produced, exactly as Say it would. For EVERY follow-up give urgent, important, a reason and whether the dealer asked for it." +
         matrixNote +
-        " If both answers for a follow-up are no, it is suggested to drop and is NOT saved: ASK the person about those BEFORE calling, and if they want one kept pass its index (0-based, in follow_ups) in keep_eliminated in this same single call. Never call create_pk twice for one PK (it would be logged twice). A said due_date sets the alert; without one the matrix days apply. Giving a follow-up to a colleague (owner_id) or five or more follow-ups needs the person's yes first." +
+        " If both answers for a follow-up are no, it is suggested to drop and is NOT saved: ASK the person about those BEFORE calling, and if they want one kept pass its index (0-based, in follow_ups) in keep_eliminated in this same single call. Never call create_pk twice for one PK (it would be logged twice). A said due_date sets the alert; without one the matrix days apply. Giving a follow-up to a colleague (owner_id) is only for an admin or an assistant, as in the app; that, or five or more follow-ups, needs the person's yes first." +
         writeNote,
       inputSchema: z.object({
         dealer_account_id: dbId().describe("Look the dealer up with find; never guess an id"),

@@ -3,7 +3,6 @@ import type { Database } from "@/lib/database.types";
 import {
   AgentAuthError,
   agentSourceOf,
-  isAllowedEmail,
   type AgentSource,
   type AuthInfo,
 } from "./auth";
@@ -90,7 +89,7 @@ export async function loadMe(
   };
 }
 
-/** Validates the bearer (JWKS) and the allow-list. Never throws. */
+/** Validates the bearer (JWKS). Never throws. Membership is checked in loadMe. */
 export async function verifyAgentToken(
   _req: Request,
   bearer?: string,
@@ -102,7 +101,6 @@ export async function verifyAgentToken(
     if (error || !data?.claims) return undefined;
     const claims = data.claims as Record<string, unknown>;
     if (claims.role !== "authenticated") return undefined;
-    if (!isAllowedEmail(typeof claims.email === "string" ? claims.email : undefined)) return undefined;
     return {
       token: bearer,
       clientId: typeof claims.client_id === "string" ? claims.client_id : "",

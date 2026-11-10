@@ -26,23 +26,26 @@ describe.skipIf(!process.env.MCP_IT)("agent token (local stack)", () => {
     token = data.session!.access_token;
   });
 
-  it("accepts an allowed user", async () => {
-    process.env.MCP_ALLOWED_EMAILS = "tj@gmxgroup.com";
+  it("accepts any member, with no allow-list", async () => {
+    delete process.env.MCP_ALLOWED_EMAILS;
     const info = await verifyAgentToken(req, token);
     expect(info?.token).toBe(token);
     expect((info?.extra?.claims as { email: string }).email).toBe("tj@gmxgroup.com");
   });
-  it("refuses a user not on the list", async () => {
-    process.env.MCP_ALLOWED_EMAILS = "someone@else.com";
-    expect(await verifyAgentToken(req, token)).toBeUndefined();
+  it("refuses a signed-in person with no membership", async () => {
+    const { contextFrom } = await import("../context");
+    const stranger = `stranger-${Date.now()}@example.com`;
+    const { data, error } = await createClient(URL_, ANON).auth.signUp({ email: stranger, password: "password123" });
+    if (error) throw error;
+    const info = await verifyAgentToken(req, data.session!.access_token);
+    expect(info).toBeDefined();
+    await expect(contextFrom(info!)).rejects.toThrow(/no active organisation/);
   });
   it("refuses garbage and missing tokens", async () => {
-    process.env.MCP_ALLOWED_EMAILS = "tj@gmxgroup.com";
     expect(await verifyAgentToken(req, "garbage")).toBeUndefined();
     expect(await verifyAgentToken(req, undefined)).toBeUndefined();
   });
   it("loads tj as a rep of the seeded org", async () => {
-    process.env.MCP_ALLOWED_EMAILS = "tj@gmxgroup.com";
     const info = await verifyAgentToken(req, token);
     const me = await loadMe(dbForToken(token), info!.extra!.claims as Record<string, unknown>);
     expect(me.role).toBe("rep");

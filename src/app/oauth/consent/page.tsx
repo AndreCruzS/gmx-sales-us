@@ -1,10 +1,10 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/mcp/auth";
+import { hasActiveMembership } from "@/lib/mcp/access";
 import { ConsentClient } from "./consent-client";
 
 // Where Supabase's OAuth server sends a person to approve an agent (Claude,
-// Meta Muse...) acting as them. The allow-list is a server env, so it is
-// decided here and passed down as a plain boolean.
+// Meta Muse...) acting as them. Any active member may; it is decided here
+// and passed down as a plain boolean.
 export default async function ConsentPage({
   searchParams,
 }: {
@@ -18,7 +18,7 @@ export default async function ConsentPage({
   return (
     <ConsentClient
       authorizationId={authorization_id ?? null}
-      allowed={isAllowedEmail(user?.email)}
+      allowed={await hasActiveMembership(supabase, user?.id)}
     />
   );
 }
