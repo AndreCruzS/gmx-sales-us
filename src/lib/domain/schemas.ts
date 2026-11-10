@@ -96,6 +96,7 @@ export const nextActionCreateSchema = z.object({
   // PK by voice (2026-11-04): a PK follow-up arrives with its priority, the
   // days that set its alert, and its status. Listed or Zod strips them.
   priority: z.enum(["DO_NOW", "PLAN", "DELEGATE", "ELIMINATE"]).nullish(),
+  important: z.boolean().nullish(),
   priority_days: z.number().int().min(0).nullish(),
   progress: z.enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING", "STUCK", "DONE"]).nullish(),
 

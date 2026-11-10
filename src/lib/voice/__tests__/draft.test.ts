@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   debriefDraftSchema,
+  draftedAction,
   extractionPrompt,
   sanitizeDraft,
   type DebriefDraft,
@@ -206,5 +207,48 @@ describe("the prompt that asks for it", () => {
     );
     expect(p).toContain("Ganahl Anaheim");
     expect(p).toContain("Check the wall");
+  });
+});
+
+describe("draftedAction: the code, not the model, sets the deadline and priority", () => {
+  const rep = { today: "2026-11-10", pkDate: "2026-11-10", isPk: false, ownerGivesWork: false };
+
+  it("urgent, not important, no date said: the 2-day default, Plan for a rep", () => {
+    expect(
+      draftedAction({ urgent: true, important: false, due_date: null, kind: "QUOTE_FOLLOW_UP" }, rep),
+    ).toMatchObject({ due_date: "2026-11-12", priority: "PLAN", keep: true });
+  });
+
+  it("urgent caps a far date said; not urgent keeps it as said", () => {
+    expect(draftedAction({ urgent: true, important: true, due_date: "2026-11-30", kind: null }, rep))
+      .toMatchObject({ due_date: "2026-11-12", priority: "DO_NOW" });
+    expect(draftedAction({ urgent: false, important: true, due_date: "2026-11-30", kind: null }, rep))
+      .toMatchObject({ due_date: "2026-11-30", priority: "PLAN" });
+  });
+
+  it("a PK counts its default from the PK date; an admin owner delegates", () => {
+    const pk = { today: "2026-11-10", pkDate: "2026-11-04", isPk: true, ownerGivesWork: true };
+    expect(draftedAction({ urgent: true, important: false, due_date: null, kind: null }, pk))
+      .toMatchObject({ due_date: "2026-11-11", priority: "DELEGATE" });
+  });
+
+  it("neither urgent nor important is not stored on its own", () => {
+    const r = draftedAction({ urgent: false, important: false, due_date: null, kind: null }, rep);
+    expect(r).toMatchObject({ due_date: "2026-11-17", priority: "PLAN", keep: false });
+  });
+
+  it("the dealer waiting makes it urgent", () => {
+    expect(draftedAction({ urgent: false, important: false, asked_by_dealer: true, due_date: null, kind: null }, rep).keep)
+      .toBe(true);
+  });
+
+  it("a visit keeps its booked date and takes no priority", () => {
+    expect(draftedAction({ urgent: true, important: true, due_date: "2026-11-20", kind: "VISIT" }, rep))
+      .toEqual({ due_date: "2026-11-20", important: null, priority: null, keep: true });
+  });
+
+  it("important unknown: no priority, an older draft's own priority stands", () => {
+    expect(draftedAction({ urgent: null, important: null, due_date: "2026-11-20", kind: null }, rep).priority).toBeNull();
+    expect(draftedAction({ due_date: "2026-11-20", kind: null, priority: "DELEGATE" }, rep).priority).toBe("DELEGATE");
   });
 });

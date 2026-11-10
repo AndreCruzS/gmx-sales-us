@@ -24,9 +24,9 @@ import { displayAccountName } from "@/lib/format";
 import { getOfflineLayer, type CachedAccount, type CachedAgendaItem } from "@/lib/offline";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildRoutineOps } from "@/lib/voice/fanout";
+import { draftedAction } from "@/lib/voice/draft";
 import { hasVisit, type SayStoredDraft } from "@/lib/voice/say";
 import {
-  DEFAULT_DAYS,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   alertDate,
@@ -34,35 +34,13 @@ import {
   pkDateOf,
   type Priority,
 } from "@/lib/domain/pk-follow-up";
-import { draftedQuadrant } from "@/lib/domain/eisenhower";
+import { defaultDeadline, isTask, localIsoDate, storedPriority } from "@/lib/domain/deadline";
+import { givesWorkToOthers } from "@/lib/domain/roles";
+import { ImportanceDeadline } from "@/components/importance-deadline";
 
-/** The priorities a person may pick on a voice-drafted PK item. Eliminate is
- *  not one: an item worth eliminating is simply not saved (keep unticked). */
-const PICKABLE: Priority[] = ["DO_NOW", "PLAN", "DELEGATE"];
 /** The statuses a new item can start in. */
 const STARTS = ["NOT_STARTED", "WORKING_ON_IT", "WAITING"] as const;
 type Start = (typeof STARTS)[number];
-
-/** The matrix's answer for a drafted row (Bianca, 2026-11-03). An older
- *  draft's own `priority` stands; Eliminate becomes "not saved unless kept". */
-function matrixRow(na: {
-  urgent?: boolean | null;
-  important?: boolean | null;
-  asked_by_dealer?: boolean | null;
-  priority_reason?: string | null;
-}): Pick<ActionRow, "priority" | "reason" | "keep"> {
-  const legacy = (na as { priority?: Priority | null }).priority ?? null;
-  const q = draftedQuadrant(na.urgent, na.important, na.asked_by_dealer) ?? legacy;
-  return {
-    priority: q === "ELIMINATE" ? null : q,
-    // When the dealer-asked guard overruled "Not urgent", the reason says so.
-    reason:
-      na.asked_by_dealer && na.urgent === false && na.priority_reason
-        ? na.priority_reason.replace(/^Not urgent:[^·]*/, "Urgent: the dealer asked for it ")
-        : (na.priority_reason ?? null),
-    keep: q !== "ELIMINATE",
-  };
-}
 
 /** A follow-up row as the sheet edits it: the draft's fields, defaulted. */
 interface ActionRow {
@@ -71,9 +49,11 @@ interface ActionRow {
   objective: string | null;
   kind: "SAMPLE_FOLLOW_UP" | "QUOTE_FOLLOW_UP" | "VISIT" | "OTHER" | null;
   priority: Priority | null;
-  /** Why the matrix put it there, as the AI read it ("Urgent: … · Not important: …"). */
+  /** Important? - the person's one answer; null while unknown. */
+  important: boolean | null;
+  /** Why the AI weighed it so ("Important: … · Due: …"). */
   reason: string | null;
-  /** False for an item the matrix says to eliminate, until the person keeps it. */
+  /** False for an item that is neither important nor urgent, until the person keeps it. */
   keep: boolean;
   progress: Start;
   subtasks: string[];
@@ -159,19 +139,34 @@ export function DebriefSheet({
   const [followUp, setFollowUp] = useState(draft.follow_up_required);
   // PK by voice (2026-11-04): a PK's follow-ups carry priority, status,
   // checklist and note to the PK board. Old drafts lack them: defaulted here.
-  const [actions, setActions] = useState<ActionRow[]>(() =>
-    (draft.next_actions ?? []).map((na) => ({
-      action: na.action,
-      due_date: na.due_date,
-      objective: na.objective ?? null,
-      kind: na.kind ?? null,
-      ...matrixRow(na),
-      progress: na.progress ?? "NOT_STARTED",
-      subtasks: na.subtasks ?? [],
-      note: na.note ?? "",
-    })),
-  );
+  // "Today" is the device's local date; the owner is the speaker, so the
+  // speaker's role decides Delegate.
+  const [today] = useState(() => localIsoDate());
+  const ownerGivesWork = givesWorkToOthers(profile?.role);
   const pkDate = pkDateOf(capture.created_at);
+  const [actions, setActions] = useState<ActionRow[]>(() =>
+    (draft.next_actions ?? []).map((na) => {
+      const d = draftedAction(na, {
+        today,
+        pkDate,
+        isPk: draft.activity_type === "PK_TRAINING",
+        ownerGivesWork,
+      });
+      return {
+        action: na.action,
+        due_date: d.due_date,
+        objective: na.objective ?? null,
+        kind: na.kind ?? null,
+        priority: d.priority,
+        important: d.important,
+        reason: na.priority_reason ?? null,
+        keep: d.keep,
+        progress: na.progress ?? "NOT_STARTED",
+        subtasks: na.subtasks ?? [],
+        note: na.note ?? "",
+      };
+    }),
+  );
   const patchAction = (i: number, p: Partial<ActionRow>) =>
     setActions((prev) => prev.map((x, j) => (j === i ? { ...x, ...p } : x)));
   // Routine confirmations (D-routine, Task 10): pre-checked — the rep
@@ -375,6 +370,7 @@ export function DebriefSheet({
         const pkFields = pk
           ? {
               ...(na.kind ? { kind: na.kind } : {}),
+              important: na.important,
               priority: na.priority,
               priority_days: days,
               ...(days !== null ? { due_date: alertDate(pkDate, days) } : {}),
@@ -802,13 +798,16 @@ export function DebriefSheet({
                 <input
                   type="date"
                   value={na.due_date}
-                  onChange={(e) =>
-                    setActions((prev) =>
-                      prev.map((x, j) =>
-                        j === i ? { ...x, due_date: e.target.value } : x,
-                      ),
-                    )
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // A task's priority follows its deadline.
+                    patchAction(i, {
+                      due_date: v,
+                      ...(v && isTask(na.kind) && na.important !== null
+                        ? { priority: storedPriority(na.important, v, today, ownerGivesWork) }
+                        : {}),
+                    });
+                  }}
                   className="field"
                   // .field is width:100%; beside the action it must keep to its own size.
                   style={{ width: "auto", flex: "0 0 auto" }}
@@ -833,7 +832,7 @@ export function DebriefSheet({
                     checked={false}
                     onChange={() => patchAction(i, { keep: true })}
                   />
-                  Neither urgent nor important — not saved. Keep it
+                  Not important and not urgent — not saved. Keep it
                 </label>
               )}
               {activityType === "PK_TRAINING" && na.keep && (
@@ -848,26 +847,21 @@ export function DebriefSheet({
                       .filter(Boolean)
                       .join(" · ")}
                   </summary>
+                  <ImportanceDeadline
+                    important={na.important}
+                    due={na.due_date}
+                    today={today}
+                    ownerGivesWork={ownerGivesWork}
+                    stored={na.priority}
+                    onChange={(c) =>
+                      patchAction(i, {
+                        ...(c.important !== undefined ? { important: c.important } : {}),
+                        ...(c.due_date ? { due_date: c.due_date } : {}),
+                        priority: c.priority,
+                      })
+                    }
+                  />
                   <div className="pk-row-fields">
-                    <select
-                      className="field"
-                      aria-label="Priority"
-                      value={na.priority ?? ""}
-                      onChange={(e) => {
-                        const p = (e.target.value || null) as Priority | null;
-                        // As on the board: picking a priority resets the alert
-                        // to the PK date + that priority's days.
-                        const d = p ? DEFAULT_DAYS[p] : null;
-                        patchAction(i, { priority: p, ...(d !== null ? { due_date: alertDate(pkDate, d) } : {}) });
-                      }}
-                    >
-                      <option value="">No priority</option>
-                      {PICKABLE.map((p) => (
-                        <option key={p} value={p}>
-                          {PRIORITY_LABEL[p]}
-                        </option>
-                      ))}
-                    </select>
                     <select
                       className="field"
                       aria-label="Status"
@@ -925,10 +919,11 @@ export function DebriefSheet({
                   ...prev,
                   {
                     action: "",
-                    due_date: "",
+                    due_date: defaultDeadline(null, activityType === "PK_TRAINING", activityType === "PK_TRAINING" ? pkDate : today),
                     objective: null,
                     kind: null,
                     priority: null,
+                    important: null,
                     reason: null,
                     keep: true,
                     progress: "NOT_STARTED",

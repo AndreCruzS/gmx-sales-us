@@ -3,7 +3,14 @@
 // This is a DRAFT — nothing becomes a record until the rep reviews it (D9).
 
 import { z } from "zod";
-import { MATRIX_RULES } from "@/lib/domain/eisenhower";
+import { MATRIX_RULES, suggestDeadline } from "@/lib/domain/eisenhower";
+import {
+  defaultDeadline,
+  derivePriority,
+  isTask,
+  storedPriority,
+} from "@/lib/domain/deadline";
+import type { Priority } from "@/lib/domain/pk-follow-up";
 import {
   ACTIVITY_OUTCOMES,
   ACTIVITY_TYPES,
@@ -73,17 +80,21 @@ export const debriefDraftSchema = z.object({
         due_date: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .describe("concrete date; resolve relative mentions from the capture date"),
+          .nullable()
+          .describe(
+            "ONLY a date that was said, resolved from the capture date; null when " +
+              "none was said (the code sets the default and the urgent cap)",
+          ),
         objective: z.enum(VISIT_OBJECTIVES).nullable(),
         kind: z
           .enum(["SAMPLE_FOLLOW_UP", "QUOTE_FOLLOW_UP", "VISIT", "OTHER"])
           .nullable(),
         // PK by voice (spec 2026-11-04 one-mic §4, part A), drafted only when
         // the note is a PK. Defaults keep every draft stored before them valid.
-        // The priority is NOT drafted: the model answers the Eisenhower
-        // matrix's two questions and lib/domain/eisenhower.ts (quadrantOf)
-        // turns them into Do now / Plan / Delegate / Eliminate (Bianca,
-        // 2026-11-03). Drafts stored before it may still carry a `priority`.
+        // The priority is NOT drafted: the model says whether it is important
+        // and whether it was urgent (said or implied); draftedAction() below
+        // turns those and the deadline into the priority. Drafts stored
+        // before it may still carry a `priority`.
         urgent: z
           .boolean()
           .nullable()
@@ -103,7 +114,7 @@ export const debriefDraftSchema = z.object({
           .string()
           .nullable()
           .default(null)
-          .describe('PK only: at most 15 words, "Urgent: … · Not important: …"'),
+          .describe('PK only: at most 15 words, "Important: … · Due: …"'),
         progress: z
           .enum(["NOT_STARTED", "WORKING_ON_IT", "WAITING"])
           .nullable()
@@ -218,8 +229,8 @@ produce all output fields in English, keeping proper nouns as spoken.
 
 Extract ONLY what was actually said — do not invent commitments, dates, or
 assessments. Resolve relative dates ("next Friday", "in two weeks") against the
-capture date. Every follow-up or promise gets a next action with a concrete
-date. If no follow-ups were mentioned, return an empty next_actions array and
+capture date. Every follow-up or promise gets a next action; its due_date is a concrete date
+only when one was said, otherwise null. If no follow-ups were mentioned, return an empty next_actions array and
 follow_up_required=false.
 
 When the note names PEOPLE with details worth keeping — an e-mail address, a
@@ -234,9 +245,8 @@ A note about a product-knowledge training — a "PK", a "treinamento", a trainin
 given to a dealer's staff — is activity_type PK_TRAINING. On a PK only, each
 next action also carries: urgent, important and priority_reason (the matrix
 below); asked_by_dealer (true when the dealer asked for it or it was promised
-to them); a due_date that is the date said, or when none was said the capture
-date + 1 day (urgent and important), + 2 days (urgent only) or + 7 days
-(otherwise); progress
+to them); a due_date that is ONLY a date said out loud, null when none was said
+(the code sets the default and caps an urgent one); progress
 (WAITING when the ball is with the dealer, WORKING_ON_IT when already under
 way, else NOT_STARTED); subtasks (only when the rep lists the parts of one
 follow-up — separate follow-ups stay separate actions); and note (context said
@@ -272,4 +282,54 @@ Propose a disposition ONLY for items the rep explicitly mentioned. Never invent 
   }
 
   return parts.join("\n\n");
+}
+
+/** What a drafted follow-up becomes in the debrief sheet: its deadline and its
+ *  priority, worked out by the code (never the model) from what was said.
+ *  VISIT/CALL/MEETING keep their booked date and take no priority. `today` is
+ *  the device's local date; `pkDate` the PK's own date (PK defaults count from it). */
+export interface DraftedAction {
+  due_date: string;
+  important: boolean | null;
+  /** What may be stored; never ELIMINATE. */
+  priority: Priority | null;
+  /** False when the answers say Eliminate: not saved unless the person keeps it. */
+  keep: boolean;
+}
+
+export function draftedAction(
+  na: {
+    due_date?: string | null;
+    kind?: string | null;
+    urgent?: boolean | null;
+    important?: boolean | null;
+    asked_by_dealer?: boolean | null;
+    priority?: Priority | null;
+  },
+  ctx: { today: string; pkDate: string; isPk: boolean; ownerGivesWork: boolean },
+): DraftedAction {
+  const kind = na.kind ?? null;
+  const fallback = defaultDeadline(kind, ctx.isPk, ctx.isPk ? ctx.pkDate : ctx.today);
+  if (!isTask(kind)) {
+    return { due_date: na.due_date ?? fallback, important: null, priority: null, keep: true };
+  }
+  // What the dealer asked for, or GMX promised, has them waiting: urgent.
+  const urgent = na.urgent === true || na.asked_by_dealer === true;
+  const due = suggestDeadline(
+    { urgent, said_date: na.due_date ?? null },
+    fallback,
+    ctx.today,
+  );
+  const important = na.important ?? null;
+  if (important === null) {
+    // An older draft carried its own priority: it stands.
+    const legacy = na.priority ?? null;
+    return { due_date: due, important: null, priority: legacy === "ELIMINATE" ? null : legacy, keep: legacy !== "ELIMINATE" };
+  }
+  return {
+    due_date: due,
+    important,
+    priority: storedPriority(important, due, ctx.today, ctx.ownerGivesWork),
+    keep: derivePriority(important, due, ctx.today, ctx.ownerGivesWork) !== "ELIMINATE",
+  };
 }
