@@ -820,12 +820,16 @@ export default function RepsPage() {
         </div>
       )}
 
+      {/* In the rollout's own slot: a bare <p> fell into one narrow grid
+          column on the desk and broke after every two words. */}
       {counts === null && (
-        <p className="t-sub">
-          {at
-            ? "No dealer is on this patch yet, so there is no rollout to read."
-            : "No dealer account is on the books yet."}
-        </p>
+        <div className="adapt" data-desk="gates" data-span={span("gates")}>
+          <p className="t-sub">
+            {at
+              ? "No dealer is on this patch yet, so there is no rollout to read."
+              : "No dealer account is on the books yet."}
+          </p>
+        </div>
       )}
     </div>
   );
