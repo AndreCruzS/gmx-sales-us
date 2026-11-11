@@ -42,8 +42,8 @@ const FOLLOW_UP_HEADS = [
   "Action",
   "Status",
   "Priority",
-  "Days after PK",
-  "Deadline",
+  "Days",
+  "Alert date",
   "Owner",
   "Subtasks",
   "Notes",
@@ -109,7 +109,7 @@ function noteLine(n: PkNote, names: Map<string, string>): string {
   return `${who} · ${stamp(n.created_at)}: ${n.body}${n.edited_at ? " (edited)" : ""}`;
 }
 
-/** The deadline counts for a prioritised item that is not Eliminate. */
+/** The alert belongs to a prioritised item that is not Eliminate. */
 function hasAlert(i: PkItem): boolean {
   return i.priority !== null && i.priority !== "ELIMINATE";
 }
@@ -156,7 +156,9 @@ export function pkExportSheets(
         text(i.action),
         text(PROGRESS_LABEL[i.progress]),
         i.priority ? text(PRIORITY_LABEL[i.priority]) : null,
-        hasAlert(i) ? { value: daysFrom(b.pkDate, i.due_date) } : null,
+        // The drawer's Days: counted from the PK, or from the day an old PK's
+        // item was prioritised. Worked out from the PK only when never stored.
+        hasAlert(i) ? { value: i.priority_days ?? daysFrom(b.pkDate, i.due_date) } : null,
         hasAlert(i) ? dayCell(i.due_date) : null,
         text(names.get(i.owner_id) ?? "Someone"),
         subs.length > 0

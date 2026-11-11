@@ -76,21 +76,31 @@ describe("pkExportSheets", () => {
     expect(row.slice(0, 6)).toEqual(["Send the price list", "In progress", "Delegate", "2", "2026-10-22", "Bianca"]);
   });
 
-  it("heads the columns with Days after PK and Deadline", () => {
+  it("heads the columns with the board's Days and Alert date", () => {
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [], [], names);
     expect(followUps[0]!.map(text)).toEqual([
       "Action",
       "Status",
       "Priority",
-      "Days after PK",
-      "Deadline",
+      "Days",
+      "Alert date",
       "Owner",
       "Subtasks",
       "Notes",
     ]);
   });
 
-  it("works the days after the PK out of the deadline, not the stored days", () => {
+  it("writes the drawer's Days for an old PK prioritised later, not the days since the PK", () => {
+    const { followUps } = pkExportSheets(
+      [band([item({ id: "i1", priority: "DO_NOW", priority_days: 2, due_date: "2026-11-12" })])],
+      [],
+      [],
+      names,
+    );
+    expect(text(followUps[2]![3]!)).toBe("2");
+  });
+
+  it("works the days out of the PK and the alert when none were stored", () => {
     const { followUps } = pkExportSheets(
       [band([item({ id: "i1", priority: "PLAN", priority_days: null, due_date: "2026-10-27" })])],
       [],
