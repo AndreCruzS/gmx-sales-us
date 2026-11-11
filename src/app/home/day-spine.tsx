@@ -90,6 +90,8 @@ function Debrief({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="One line — what happened?"
+          // Opened by a tap on "Type it", so the keyboard is what was asked for.
+          autoFocus
           aria-label={`What happened at ${account ? displayAccountName(account.name) : "this stop"}`}
           enterKeyHint="done"
         />
@@ -129,6 +131,33 @@ function Debrief({
         {logged ? "Logged" : busy ? "Logging…" : "Log & continue"}
       </button>
     </form>
+  );
+}
+
+// A stop that owes a debrief shows two small buttons, not the whole form
+// (Andre, 2026-11-11: two open forms took the Home). Talking goes straight to
+// Say it on this stop; "Type it" opens the one-line form in place.
+function OwedDebrief({
+  stop,
+  account,
+  onDebrief,
+}: {
+  stop: TimelineStop;
+  account: CachedAccount | undefined;
+  onDebrief: (stop: TimelineStop, note: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  if (open) return <Debrief stop={stop} account={account} onDebrief={onDebrief} />;
+  return (
+    <span className="fu-acts mt-2">
+      <Link href={`/say?visit=${stop.id}`} className="fu-act" title="Say how it went">
+        <MicrophoneIcon size={14} />
+        Log it
+      </Link>
+      <button type="button" className="fu-act" onClick={() => setOpen(true)}>
+        Type it
+      </button>
+    </span>
   );
 }
 
@@ -178,7 +207,7 @@ function Stop({
             someone to another screen to type one line is the friction this
             app exists to remove. */}
         {stop.state === "flagged" && onDebrief && (
-          <Debrief stop={stop} account={account} onDebrief={onDebrief} />
+          <OwedDebrief stop={stop} account={account} onDebrief={onDebrief} />
         )}
       </div>
     </li>
