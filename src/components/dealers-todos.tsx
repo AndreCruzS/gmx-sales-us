@@ -6,7 +6,7 @@
 // visit reports (Action, To coordinate, Follow-up, Promise, Deadline) are a
 // tag on each row and a filter with its count, not a page each.
 //
-// A PK's follow-ups have their own board (/dealers/pk); here they are one
+// A PK's follow-ups are on Tasks (/tasks); here they are one
 // line at the foot that leads there, so the same item is never told twice in
 // two vocabularies.
 //
@@ -266,7 +266,7 @@ export function DealersTodos({
       )}
 
       {pk.length > 0 && (
-        <Link href="/dealers/pk" className="dl-owe-pk">
+        <Link href="/tasks" className="dl-owe-pk">
           <span>
             {QTY.format(pk.length)} PK {pk.length === 1 ? "follow-up" : "follow-ups"}
             {pkLate > 0 && (

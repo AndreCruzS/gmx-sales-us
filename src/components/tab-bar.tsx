@@ -78,6 +78,10 @@ const REPS_TAB = { href: "/reps", label: "Reps", Icon: UsersIcon } as const;
 // link on the Accounts board, and the Accounts tab stays lit while on it.
 const DEALERS_TAB = { href: "/dealers", label: "Dealers", Icon: FileIcon } as const;
 
+// TASKS (Andre, 2026-11-13): SALES | TASKS | DEALERS | REPS | ACCOUNTS. Every
+// task the team owes, PK or not, on one board — it left Dealers' tabs.
+const TASKS_TAB = { href: "/tasks", label: "Tasks", Icon: CheckIcon } as const;
+
 // Listed nearest-thumb first: the menu unfolds upward, so the first entry ends
 // up closest to the button that opened it. The order is how often a rep
 // actually reaches for each — notes daily, visits weekly, quotes when the
@@ -295,7 +299,7 @@ export function TabBar() {
         </>
       )}
 
-      <nav className="tabbar" aria-label="Primary">
+      <nav className="tabbar" aria-label="Primary" data-six={desk || undefined}>
         {[today].map(({ href, label, Icon }) => {
           const TabIcon = iconOf(label, Icon);
           return (
@@ -312,7 +316,18 @@ export function TabBar() {
           );
         })}
 
-        {/* Second in the bar, straight after Sales (Andre, 2026-10-30). */}
+        {/* Tasks, then Dealers, straight after Sales (Andre, 2026-11-13). */}
+        {desk && (
+          <Link
+            href={TASKS_TAB.href}
+            className="tab"
+            data-active={isActive(TASKS_TAB.href)}
+            aria-current={isActive(TASKS_TAB.href) ? "page" : undefined}
+          >
+            <TASKS_TAB.Icon size={21} />
+            {TASKS_TAB.label}
+          </Link>
+        )}
         {desk && (
           <Link
             href={DEALERS_TAB.href}

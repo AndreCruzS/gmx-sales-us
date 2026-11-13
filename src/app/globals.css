@@ -2999,6 +2999,11 @@ input[type="datetime-local"] {
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--rule);
 }
+/* The desk's bar holds six since Tasks joined it (2026-11-13): Sales · Tasks
+   · Dealers · Add · Reps · Accounts. A rep's stays at five. */
+.tabbar[data-six] {
+  grid-template-columns: repeat(6, 1fr);
+}
 
 .tab {
   display: flex;

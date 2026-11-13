@@ -9,6 +9,7 @@
 import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
+  bandOrigin,
   bandProgress,
   daysFrom,
   pkDateOf,
@@ -88,7 +89,7 @@ function stamp(iso: string): string {
 }
 
 function bandTitle(b: PkBand, p: number | null): string {
-  const parts = [b.dealer, `PK ${monthDay(b.pkDate)}`];
+  const parts = [b.dealer, bandOrigin(b, monthDay)];
   if (b.location) parts.push(b.location);
   if (p !== null) parts.push(`${Math.round(p * 100)}%`);
   return parts.join(" · ");
@@ -166,7 +167,7 @@ export function pkExportSheets(
           : null,
         lines.length > 0 ? { value: lines.join("\n"), wrap: true } : null,
       ]);
-      const pk = `${b.dealer} · PK ${monthDay(b.pkDate)}`;
+      const pk = `${b.dealer} · ${bandOrigin(b, monthDay)}`;
       for (const s of subs) {
         subRows.push([text(pk), text(i.action), text(s.title), s.done_at ? dayCell(pkDateOf(s.done_at)) : null]);
       }

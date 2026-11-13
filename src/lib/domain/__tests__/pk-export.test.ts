@@ -191,3 +191,13 @@ describe("pkExportSheets", () => {
     expect(st![1]![2]).toBe("Mail it");
   });
 });
+
+describe("a dealer's own tasks (no PK)", () => {
+  it("names the band and the subtasks' PK column No PK, not a PK date", () => {
+    const dealer: PkBand = { ...band([item({ id: "d1" })]), activityId: "dealer:acc9", kind: "dealer", location: null };
+    const subs: PkSubtask[] = [{ id: "s1", next_action_id: "d1", title: "Call the architect", done_at: null, position: 0 }];
+    const out = pkExportSheets([dealer], [], subs, names);
+    expect(text(out.followUps[1]![0]!)).toBe("BFS Heber · No PK · 0%");
+    expect(text(out.subtasks[1]![0]!)).toBe("BFS Heber · No PK");
+  });
+});

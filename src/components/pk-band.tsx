@@ -16,6 +16,7 @@ import { ChevronDownIcon } from "@/components/icons";
 import { deadlineLabel } from "@/lib/domain/deadline";
 import { givesWorkToOthers } from "@/lib/domain/roles";
 import {
+  bandOrigin,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   daysToAlert,
@@ -121,7 +122,7 @@ export function PkBandView({
         <ChevronDownIcon size={12} className="pk-chev" />
         <span className="pk-band-name">{band.dealer}</span>
         <span className="pk-band-pk">
-          PK {shortDate(band.pkDate)}
+          {bandOrigin(band, shortDate)}
           {band.location ? ` · ${band.location}` : ""}
         </span>
         <span className="pk-band-meta">
@@ -165,7 +166,9 @@ export function PkBandView({
           {rows.length === 0 && (
             <p className="pk-foot pk-empty">
               {band.items.length === 0
-                ? "No follow-ups from this PK yet."
+                ? band.kind === "dealer"
+                  ? "No tasks here yet."
+                  : "No follow-ups from this PK yet."
                 : filtered
                   ? "No actions here match the filters."
                   : "Everything here is done · tick Show done to see it."}
@@ -184,7 +187,7 @@ export function PkBandView({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="+ Add action"
-              aria-label={`Add an action to the PK at ${band.dealer}`}
+              aria-label={`Add an action to ${band.kind === "dealer" ? "" : "the PK at "}${band.dealer}`}
             />
             {draft.trim() && (
               <button type="submit" className="pk-btn">

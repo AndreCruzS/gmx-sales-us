@@ -41,6 +41,7 @@ import {
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   alertBase,
+  bandOrigin,
   alertDate,
   deadlinePatch,
   pickPatch,
@@ -91,6 +92,7 @@ function alertLine(
   item: PkItem,
   pkDate: string,
   base: string,
+  dealerBand: boolean,
   days: number | null,
   todayIso: string,
 ): { text: string; passed: boolean } {
@@ -98,7 +100,12 @@ function alertLine(
   if (item.priority === "ELIMINATE") return { text: "No alert — Eliminate", passed: false };
   if (days === null) return { text: "Type the days to get an alert", passed: false };
   const at = alertDate(base, days);
-  const from = base === pkDate ? `PK ${shortDate(pkDate)}` : `prioritised ${shortDate(base)}`;
+  // A dealer's own task counts from the day it was added (or prioritised).
+  const from = dealerBand
+    ? `added ${shortDate(base)}`
+    : base === pkDate
+      ? `PK ${shortDate(pkDate)}`
+      : `prioritised ${shortDate(base)}`;
   const sum = `Alert: ${from} + ${days} ${days === 1 ? "day" : "days"} = ${weekdayDate(at)}`;
   if (item.completed_at !== null) return { text: `${sum} · done`, passed: false };
   const l = deadlineLabel(at, todayIso);
@@ -291,7 +298,7 @@ export function PkItemDrawer({
     moveDeadline(v);
   }
 
-  const alert = alertLine(item, band.pkDate, base, shownDays, todayIso);
+  const alert = alertLine(item, band.pkDate, base, band.kind === "dealer", shownDays, todayIso);
 
   // ── SUGGEST (Bianca, 2026-11-03: the Eisenhower matrix) ─────────────────
   // The AI answers Important? and proposes a deadline with a reason; nothing is
@@ -404,7 +411,7 @@ export function PkItemDrawer({
         <header className="pkd-head">
           <div className="pkd-head-text">
             <p className="pkd-crumb">
-              {band.dealer} · PK {shortDate(band.pkDate)}
+              {band.dealer} · {bandOrigin(band, shortDate)}
               {band.location ? ` · ${band.location}` : ""}
             </p>
             <h2 className="pkd-title">{item.action}</h2>

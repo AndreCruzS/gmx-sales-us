@@ -107,9 +107,14 @@ export interface PkRead {
   last_read_at: string;
 }
 
-/** One PK on the board: the visit and its follow-up rows. */
+/** One band on the board: a PK and its follow-ups, or (kind "dealer") a
+ *  dealer's tasks that came from no PK (Andre, 2026-11-13: a task is a task,
+ *  wherever it was born — they all live on Tasks). */
 export interface PkBand {
+  /** The PK's activity id, or `dealer:<account id>` for a dealer band. */
   activityId: string;
+  /** "pk" when absent. A dealer band's pkDate is its oldest task's day. */
+  kind?: "pk" | "dealer";
   accountId: string | null;
   dealer: string;
   pkDate: string;
@@ -415,4 +420,10 @@ export function trapTarget(count: number, at: number, back: boolean): number | n
   if (back && at === 0) return count - 1;
   if (!back && at === count - 1) return 0;
   return null;
+}
+
+/** Where a band's tasks came from, after the dealer's name: "PK Oct 20", or
+ *  "No PK" for a dealer's own tasks. `date` formats the PK's day. */
+export function bandOrigin(b: Pick<PkBand, "kind" | "pkDate">, date: (iso: string) => string): string {
+  return b.kind === "dealer" ? "No PK" : `PK ${date(b.pkDate)}`;
 }

@@ -32,6 +32,7 @@ import { PkItemDrawer } from "@/components/pk-item-drawer";
 import type { NoteVersion } from "@/components/pk-notes-log";
 import {
   canEditItem,
+  daysFrom,
   pkDateOf,
   type PkBand,
   type PkItem,
@@ -61,7 +62,22 @@ interface PkVisit {
   account: { name: string } | null;
 }
 
-type ItemRow = PkItem & { account_id: string | null; activity_id: string };
+type ItemRow = PkItem & { account_id: string | null; activity_id: string | null };
+
+/** A task born outside any PK (on an account, by voice, by an agent): it is
+ *  on Tasks too, in its dealer's band (Andre, 2026-11-13). */
+type DealerTaskRow = ItemRow & {
+  created_at: string;
+  account: { name: string } | null;
+  activity: { activity_type: string } | null;
+};
+
+const DEALER_TASK_COLS = `${ITEM_COLS}, created_at, account:accounts!next_actions_account_id_fkey(name), activity:activities!next_actions_activity_id_fkey(activity_type)`;
+
+/** The band key of a dealer's own tasks. */
+function dealerKey(accountId: string | null): string {
+  return `dealer:${accountId ?? "none"}`;
+}
 
 interface MemberName {
   id: string;
@@ -114,6 +130,10 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
 
   const [visits, setVisits] = useState<PkVisit[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
+  // The dealer bands' names and first days, by band key.
+  const [dealerBands, setDealerBands] = useState<
+    { key: string; accountId: string | null; dealer: string; since: string }[]
+  >([]);
   const [notes, setNotes] = useState<PkNote[]>([]);
   const [subtasks, setSubtasks] = useState<PkSubtask[]>([]);
   const [reads, setReads] = useState<PkRead[]>([]);
@@ -191,6 +211,47 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         ),
     );
 
+    // Every other task the reader may see: a to-do (it has an item_type; a
+    // visit has none) that was not taken at a PK. RLS decides whose.
+    const dt = (
+      await fetchAllPages<DealerTaskRow>((from, to) =>
+        supabase
+          .from("next_actions")
+          .select(DEALER_TASK_COLS)
+          .not("item_type", "is", null)
+          .order("due_date")
+          .order("id")
+          .range(from, to)
+          .then((r) => ({ data: r.data as unknown as DealerTaskRow[] | null, error: r.error })),
+      )
+    ).filter((t) => t.activity?.activity_type !== "PK_TRAINING");
+    // Never twice: a PK item whose visit this reader cannot open comes back
+    // with no activity, but pk_board_items already brought it.
+    const onPk = new Set(na.map((i) => i.id));
+    const own = dt.filter((t) => !onPk.has(t.id));
+    const dBands = new Map<string, { key: string; accountId: string | null; dealer: string; since: string }>();
+    for (const t of own) {
+      const key = dealerKey(t.account_id);
+      const day = pkDateOf(t.created_at);
+      const b = dBands.get(key);
+      if (!b)
+        dBands.set(key, {
+          key,
+          accountId: t.account_id,
+          dealer: t.account ? displayAccountName(t.account.name) : "No dealer",
+          since: day,
+        });
+      else if (day < b.since) b.since = day;
+    }
+    // A task from outside a PK carries a deadline but rarely its days: count
+    // them from the day it was added, so the Days box and the alert line read
+    // like a PK item's ("added Nov 10 + 2 days"). Shown only; saved on an edit.
+    for (const t of own) {
+      if (t.priority_days === null && t.priority !== null && t.priority !== "ELIMINATE")
+        t.priority_days = Math.max(0, daysFrom(pkDateOf(t.created_at), t.due_date));
+    }
+    na.push(...own);
+
     const ids = na.map((i) => i.id);
     const [nt, st, rd] = await Promise.all([
       inChunks(ids, (chunk) =>
@@ -230,6 +291,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
 
     setVisits(vs);
     setItems(na);
+    setDealerBands([...dBands.values()]);
     setNotes(nt);
     setSubtasks(st);
     setReads(rd);
@@ -255,14 +317,22 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
     return () => clearTimeout(timer);
   }, [profile, attempt]);
 
+  // Which band an item sits in: its PK, or its dealer's band.
+  const pkIds = useMemo(() => new Set(visits.map((v) => v.id)), [visits]);
+  const bandKeyOf = useCallback(
+    (i: ItemRow) => (i.activity_id && pkIds.has(i.activity_id) ? i.activity_id : dealerKey(i.account_id)),
+    [pkIds],
+  );
+
   const bands = useMemo<PkBand[]>(() => {
     const byVisit = new Map<string, PkItem[]>();
     for (const i of items) {
-      const list = byVisit.get(i.activity_id);
+      const key = bandKeyOf(i);
+      const list = byVisit.get(key);
       if (list) list.push(i);
-      else byVisit.set(i.activity_id, [i]);
+      else byVisit.set(key, [i]);
     }
-    return visits.map((v) => ({
+    const pk: PkBand[] = visits.map((v) => ({
       activityId: v.id,
       accountId: v.primary_account_id,
       dealer: v.account ? displayAccountName(v.account.name) : "Dealer",
@@ -271,11 +341,23 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
       items: byVisit.get(v.id) ?? [],
       ranBy: v.owner_id,
     }));
-  }, [visits, items]);
+    const dealer: PkBand[] = dealerBands.map((d) => ({
+      activityId: d.key,
+      kind: "dealer",
+      accountId: d.accountId,
+      dealer: d.dealer,
+      pkDate: d.since,
+      location: null,
+      items: byVisit.get(d.key) ?? [],
+      ranBy: null,
+    }));
+    // One list, newest first: a dealer band stands at its oldest task's day.
+    return [...pk, ...dealer].sort((a, b) => b.pkDate.localeCompare(a.pkDate));
+  }, [visits, items, dealerBands, bandKeyOf]);
 
   // ── THE OPEN ITEM ────────────────────────────────────────────────────────
   const openItem = openId ? (items.find((i) => i.id === openId) ?? null) : null;
-  const openBand = openItem ? (bands.find((b) => b.activityId === openItem.activity_id) ?? null) : null;
+  const openBand = openItem ? (bands.find((b) => b.activityId === bandKeyOf(openItem)) ?? null) : null;
 
   // The earlier texts of its edited notes, read when it opens (and after an edit).
   const editedNoteIds = useMemo(
@@ -329,7 +411,13 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
     const supabase = getSupabaseBrowserClient();
     try {
       const [row, nt, st, rd] = await Promise.all([
-        supabase.rpc("pk_board_items").select(ITEM_COLS).eq("id", id).maybeSingle(),
+        // pk_board_items carries a PK's items; a dealer's own task is read
+        // from the table, where RLS already lets its reader see it.
+        supabase.rpc("pk_board_items").select(ITEM_COLS).eq("id", id).maybeSingle().then(async (pkRow) =>
+          pkRow.data || pkRow.error
+            ? pkRow
+            : supabase.from("next_actions").select(ITEM_COLS).eq("id", id).maybeSingle(),
+        ),
         supabase.from("next_action_notes").select(NOTE_COLS).eq("next_action_id", id).order("created_at").order("id"),
         supabase.from("next_action_subtasks").select(SUB_COLS).eq("next_action_id", id).order("position").order("id"),
         supabase.from("next_action_reads").select(READ_COLS).eq("next_action_id", id).order("membership_id"),
@@ -371,7 +459,8 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         owner_id: profile.membershipId,
         due_date: plusDays(todayIso, 7),
         account_id: band.accountId,
-        activity_id: activityId,
+        // A dealer band's task belongs to no PK.
+        activity_id: band.kind === "dealer" ? null : activityId,
         item_type: "ACTION" as const,
         source: "MANUAL" as const,
         entered_by: profile.membershipId,
@@ -408,7 +497,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
             last_changed_at: null,
             updated_at: new Date().toISOString(),
             account_id: band.accountId,
-            activity_id: activityId,
+            activity_id: payload.activity_id,
           },
         ]);
       } catch {
@@ -438,7 +527,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         <section>
           {title}
           <p className="t-sub mt-2" style={{ maxWidth: "52ch" }}>
-            The PK follow-ups live on the server and this device can&rsquo;t reach it right now.
+            The tasks live on the server and this device can&rsquo;t reach it right now.
             Nothing is lost &mdash; try again when you&rsquo;re back online.
           </p>
         </section>
@@ -456,8 +545,8 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         {title}
         <p className="t-sub mt-2" style={{ maxWidth: "62ch" }}>
           {desk
-            ? "What we still owe after each PK, newest first. Open a line to move it on; fold a PK to set it aside."
-            : "What is still open after your PKs, newest first — yours and what the desk took on. Open a line to move yours on or leave a note."}
+            ? "Every task the team owes, newest first: what came out of each PK, and each dealer's other tasks. Open a line to move it on; fold a band to set it aside."
+            : "What is still open for you, newest first: your PKs' follow-ups and your other tasks. Open a line to move yours on or leave a note."}
         </p>
       </section>
 
