@@ -25,6 +25,8 @@ import {
   type PkRead,
   type PkSubtask,
   type Progress,
+  bandOrder,
+  taskOrder,
 } from "@/lib/domain/pk-follow-up";
 
 function groupBy<T>(rows: readonly T[], key: (r: T) => string): Map<string, T[]> {
@@ -38,12 +40,8 @@ function groupBy<T>(rows: readonly T[], key: (r: T) => string): Map<string, T[]>
   return m;
 }
 
-/** Open before closed, then the nearest alert, then by name. */
-function rowOrder(a: PkItem, b: PkItem): number {
-  const ca = a.completed_at === null ? 0 : 1;
-  const cb = b.completed_at === null ? 0 : 1;
-  return ca - cb || a.due_date.localeCompare(b.due_date) || a.action.localeCompare(b.action);
-}
+// Rows and bands by priority (taskOrder, bandOrder in pk-follow-up.ts).
+const rowOrder = taskOrder;
 
 export function PkBoard({
   bands,
@@ -90,6 +88,8 @@ export function PkBoard({
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [folded, setFolded] = useState<Set<string>>(() => new Set());
+  // The most urgent band first: a dealer rises with its nearest Do now.
+  const ordered = useMemo(() => [...bands].sort(bandOrder), [bands]);
 
   // ── WHAT EACH ITEM CARRIES ──────────────────────────────────────────────
   const notesBy = useMemo(() => {
@@ -143,7 +143,7 @@ export function PkBoard({
 
   // What the filters leave, for the export: each PK with the rows showing.
   // A PK with no row left drops out once a filter is on.
-  const visible = bands
+  const visible = ordered
     .map((b) => ({ ...b, items: b.items.filter((i) => passes(b, i)).sort(rowOrder) }))
     .filter((b) => b.items.length > 0 || !narrowed);
 
@@ -224,9 +224,10 @@ export function PkBoard({
               <span>Latest note</span>
               <span>Priority</span>
               <span>Alert</span>
+              <span>Days open</span>
               <span>Owner</span>
             </div>
-            {bands.map((b, n) => {
+            {ordered.map((b, n) => {
               const rows = b.items.filter((i) => passes(b, i)).sort(rowOrder);
               return (
                 <PkBandView

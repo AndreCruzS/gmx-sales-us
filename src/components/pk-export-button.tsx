@@ -38,7 +38,7 @@ export function PkExportButton({
           bandProgress(b.items, subtasks.filter((s) => b.items.some((i) => i.id === s.next_action_id))),
         ]),
       );
-      const { followUps, subtasks: subRows } = pkExportSheets(visible, notes, subtasks, names, progress);
+      const { followUps, subtasks: subRows } = pkExportSheets(visible, notes, subtasks, names, progress, todayIso);
       // The package has no root entry: the browser build is its own path.
       const { default: writeXlsxFile } = await import("write-excel-file/browser");
       await writeXlsxFile([

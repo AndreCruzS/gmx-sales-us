@@ -17,6 +17,7 @@ import { deadlineLabel } from "@/lib/domain/deadline";
 import { givesWorkToOthers } from "@/lib/domain/roles";
 import {
   bandOrigin,
+  daysOpen,
   PRIORITY_LABEL,
   PROGRESS_LABEL,
   daysToAlert,
@@ -224,6 +225,7 @@ function PkRow({
   const latest = facts.notes[facts.notes.length - 1];
   const passed = isAlertPassed(item, todayIso);
   const days = daysToAlert(item, todayIso);
+  const open = daysOpen(item, todayIso);
   // The tag follows the deadline once Important? is answered (shownPriority).
   const shown = shownPriority(item, todayIso, ownerGivesWork);
   const hint = shown === "ELIMINATE" && item.priority !== "ELIMINATE";
@@ -291,6 +293,17 @@ function PkRow({
           <>
             <b>{shortDate(item.due_date)}</b>
             <small>{deadlineLabel(item.due_date, todayIso).text}</small>
+          </>
+        )}
+      </span>
+      {/* How long it has sat there (Andre, 2026-11-13). */}
+      <span className="pk-c pk-open" title="Days since it was written">
+        {open === null ? (
+          <small>—</small>
+        ) : (
+          <>
+            <b>{open}</b>
+            <small>{open === 1 ? "day open" : "days open"}</small>
           </>
         )}
       </span>

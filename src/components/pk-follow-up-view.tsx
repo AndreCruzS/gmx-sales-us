@@ -48,7 +48,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { fetchAllPages } from "@/lib/supabase/page";
 
 const ITEM_COLS =
-  "id, action, owner_id, due_date, completed_at, priority, priority_days, important, progress, last_changed_by, last_changed_at, updated_at, created_via, account_id, activity_id";
+  "id, action, owner_id, due_date, completed_at, priority, priority_days, important, progress, last_changed_by, last_changed_at, updated_at, created_via, account_id, activity_id, created_at";
 
 /** Ids per `.in()` request — enough to be few trips, short enough for a URL. */
 const CHUNK = 200;
@@ -72,7 +72,7 @@ type DealerTaskRow = ItemRow & {
   activity: { activity_type: string } | null;
 };
 
-const DEALER_TASK_COLS = `${ITEM_COLS}, created_at, account:accounts!next_actions_account_id_fkey(name), activity:activities!next_actions_activity_id_fkey(activity_type)`;
+const DEALER_TASK_COLS = `${ITEM_COLS}, account:accounts!next_actions_account_id_fkey(name), activity:activities!next_actions_activity_id_fkey(activity_type)`;
 
 /** The band key of a dealer's own tasks. */
 function dealerKey(accountId: string | null): string {
@@ -496,6 +496,7 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
             last_changed_by: null,
             last_changed_at: null,
             updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
             account_id: band.accountId,
             activity_id: payload.activity_id,
           },
@@ -545,8 +546,8 @@ function PkFollowUpViewInner({ title }: { title: ReactNode }) {
         {title}
         <p className="t-sub mt-2" style={{ maxWidth: "62ch" }}>
           {desk
-            ? "Every task the team owes, newest first: what came out of each PK, and each dealer's other tasks. Open a line to move it on; fold a band to set it aside."
-            : "What is still open for you, newest first: your PKs' follow-ups and your other tasks. Open a line to move yours on or leave a note."}
+            ? "Every task the team owes, most urgent first: Do now by the nearest deadline, then Plan and Delegate, then what nobody prioritised, oldest first. A PK or a dealer rises with its most urgent task. Open a line to move it on; fold a band to set it aside."
+            : "What is still open for you, most urgent first: your PKs' follow-ups and your other tasks. Open a line to move yours on or leave a note."}
         </p>
       </section>
 

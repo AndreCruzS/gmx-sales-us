@@ -11,6 +11,7 @@ import {
   PROGRESS_LABEL,
   bandOrigin,
   bandProgress,
+  daysOpen,
   daysFrom,
   pkDateOf,
   type PkBand,
@@ -45,6 +46,7 @@ const FOLLOW_UP_HEADS = [
   "Priority",
   "Days",
   "Alert date",
+  "Days open",
   "Owner",
   "Subtasks",
   "Notes",
@@ -88,6 +90,11 @@ function stamp(iso: string): string {
   return `${monthDay(pkDateOf(iso))}, ${h % 12 === 0 ? 12 : h % 12}:${min} ${h < 12 ? "AM" : "PM"}`;
 }
 
+function daysOpenCell(i: PkItem, today: string | undefined): Cell {
+  const n = today ? daysOpen(i, today) : null;
+  return n === null ? null : { value: n };
+}
+
 function bandTitle(b: PkBand, p: number | null): string {
   const parts = [b.dealer, bandOrigin(b, monthDay)];
   if (b.location) parts.push(b.location);
@@ -128,6 +135,8 @@ export function pkExportSheets(
   subtasks: PkSubtask[],
   names: Map<string, string>,
   progress?: Map<string, number | null>,
+  /** The reader's date: Days open counts to it. Without it the column is empty. */
+  today?: string,
 ): PkExportSheets {
   const notesBy = groupBy(
     [...notes].sort((a, b) => a.created_at.localeCompare(b.created_at)),
@@ -161,6 +170,7 @@ export function pkExportSheets(
         // item was prioritised. Worked out from the PK only when never stored.
         hasAlert(i) ? { value: i.priority_days ?? daysFrom(b.pkDate, i.due_date) } : null,
         hasAlert(i) ? dayCell(i.due_date) : null,
+        daysOpenCell(i, today),
         text(names.get(i.owner_id) ?? "Someone"),
         subs.length > 0
           ? { value: `${subs.filter((s) => s.done_at !== null).length}/${subs.length}` }

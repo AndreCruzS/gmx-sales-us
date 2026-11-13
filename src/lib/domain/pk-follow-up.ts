@@ -69,6 +69,8 @@ export interface PkItem {
   last_changed_at: string | null;
   updated_at: string;
   created_via?: "claude" | "muse" | null;
+  /** When it was written: Days open counts from it. */
+  created_at?: string;
 }
 
 export interface PkNote {
@@ -426,4 +428,49 @@ export function trapTarget(count: number, at: number, back: boolean): number | n
  *  "No PK" for a dealer's own tasks. `date` formats the PK's day. */
 export function bandOrigin(b: Pick<PkBand, "kind" | "pkDate">, date: (iso: string) => string): string {
   return b.kind === "dealer" ? "No PK" : `PK ${date(b.pkDate)}`;
+}
+
+/** Days a task has been open: from the day it was written to the day it was
+ *  done, or to today (Andre, 2026-11-13: "só pra sabermos quantos dias isso
+ *  está ali parado"). Null when the row carries no creation time. */
+export function daysOpen(i: Pick<PkItem, "created_at" | "completed_at">, today: string): number | null {
+  if (!i.created_at) return null;
+  const end = i.completed_at ? pkDateOf(i.completed_at) : today;
+  return Math.max(0, daysFrom(pkDateOf(i.created_at), end));
+}
+
+// THE ORDER OF THE BOARD (Andre, 2026-11-13): by priority, not by date of the
+// PK. Do now first, then Plan, then Delegate (the matrix's own order), each by
+// its nearest deadline; then the tasks nobody prioritised, oldest first so
+// they get looked at; Eliminate and done last. A band (a PK or a dealer)
+// stands where its most urgent open task stands.
+const RANK: Record<Priority, number> = { DO_NOW: 0, PLAN: 1, DELEGATE: 2, ELIMINATE: 4 };
+
+/** The sort key of one task; compare with `compareKeys`. */
+export function taskKey(i: PkItem): [number, string, string] {
+  if (i.completed_at !== null) return [5, i.due_date, i.action];
+  if (i.priority === null) return [3, i.created_at ?? i.due_date, i.action];
+  return [RANK[i.priority], i.due_date, i.action];
+}
+
+export function compareKeys(a: [number, string, string], b: [number, string, string]): number {
+  return a[0] - b[0] || a[1].localeCompare(b[1]) || a[2].localeCompare(b[2]);
+}
+
+/** Tasks in board order. */
+export function taskOrder(a: PkItem, b: PkItem): number {
+  return compareKeys(taskKey(a), taskKey(b));
+}
+
+/** Bands in board order: by their most urgent task; an empty band last,
+ *  newest first among the empty ones. */
+export function bandOrder(a: PkBand, b: PkBand): number {
+  const best = (x: PkBand) =>
+    x.items.length === 0 ? null : x.items.map(taskKey).sort(compareKeys)[0];
+  const ka = best(a);
+  const kb = best(b);
+  if (ka && kb) return compareKeys(ka, kb) || b.pkDate.localeCompare(a.pkDate);
+  if (ka) return -1;
+  if (kb) return 1;
+  return b.pkDate.localeCompare(a.pkDate);
 }

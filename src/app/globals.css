@@ -6847,7 +6847,7 @@ button.dl-owe-row:hover {
 .pk-row {
   display: grid;
   grid-template-columns:
-    minmax(260px, 2.3fr) 168px minmax(260px, 2.6fr) 124px 104px minmax(96px, 0.8fr);
+    minmax(260px, 2.3fr) 168px minmax(260px, 2.6fr) 124px 104px 88px minmax(96px, 0.8fr);
   align-items: stretch;
   gap: 0;
 }
@@ -7110,6 +7110,20 @@ button.dl-owe-row:hover {
   font-size: var(--text-xs);
   color: var(--ink-muted);
 }
+/* Days open: the figure, and what it counts, as the Alert cell reads. */
+.pk-open {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  font-family: var(--font-fig);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+.pk-open small {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
 .pk-alert[data-passed] b,
 .pk-alert[data-passed] small {
   color: var(--danger);
@@ -7160,12 +7174,12 @@ button.dl-owe-row:hover {
     display: none;
   }
   .pk-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "task task task"
-      "status status status"
-      "note note note"
-      "prio alert owner";
+      "task task task task"
+      "status status status status"
+      "note note note note"
+      "prio alert open owner";
     gap: 10px 10px;
     padding: 14px 14px 12px;
     align-items: center;
@@ -7194,6 +7208,12 @@ button.dl-owe-row:hover {
     flex-direction: row;
     align-items: baseline;
     gap: 6px;
+  }
+  .pk-row > .pk-open {
+    grid-area: open;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 4px;
   }
   .pk-row > .pk-owner {
     grid-area: owner;

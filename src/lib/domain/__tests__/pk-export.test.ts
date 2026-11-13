@@ -70,10 +70,10 @@ describe("pkExportSheets", () => {
   it("heads each PK with a bold row, then one row per follow-up", () => {
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [], [], names);
     const head = followUps[1]!;
-    expect(head[0]).toMatchObject({ fontWeight: "bold", columnSpan: 8 });
+    expect(head[0]).toMatchObject({ fontWeight: "bold", columnSpan: 9 });
     expect(text(head[0])).toBe("BFS Heber · PK Oct 20 · Heber, UT · 0%");
     const row = followUps[2]!.map(text);
-    expect(row.slice(0, 6)).toEqual(["Send the price list", "In progress", "Delegate", "2", "2026-10-22", "Bianca"]);
+    expect(row.slice(0, 7)).toEqual(["Send the price list", "In progress", "Delegate", "2", "2026-10-22", "", "Bianca"]);
   });
 
   it("heads the columns with the board's Days and Alert date", () => {
@@ -84,6 +84,7 @@ describe("pkExportSheets", () => {
       "Priority",
       "Days",
       "Alert date",
+      "Days open",
       "Owner",
       "Subtasks",
       "Notes",
@@ -144,7 +145,7 @@ describe("pkExportSheets", () => {
     const later = note("n2", { body: "Sent it", created_at: new Date(2026, 9, 22, 9, 30).toISOString() });
     const first = note("n1", { edited_at: new Date(2026, 9, 21, 15, 0).toISOString() });
     const { followUps } = pkExportSheets([band([item({ id: "i1" })])], [later, first], [], names);
-    expect(text(followUps[2]![7]!)).toBe(
+    expect(text(followUps[2]![8]!)).toBe(
       "Joao · Oct 21, 2:05 PM: Called them (edited)\nJoao · Oct 22, 9:30 AM: Sent it",
     );
   });
@@ -155,7 +156,7 @@ describe("pkExportSheets", () => {
       { id: "s2", next_action_id: "i1", title: "Mail it", done_at: null, position: 2 },
     ];
     const out = pkExportSheets([band([item({ id: "i1" })])], [], subs, names);
-    expect(text(out.followUps[2]![6]!)).toBe("1/2");
+    expect(text(out.followUps[2]![7]!)).toBe("1/2");
     // Column labels, then one row per subtask.
     expect(out.subtasks.map((r) => r.map(text))).toEqual([
       ["PK", "Action", "Subtask", "Done"],
@@ -199,5 +200,19 @@ describe("a dealer's own tasks (no PK)", () => {
     const out = pkExportSheets([dealer], [], subs, names);
     expect(text(out.followUps[1]![0]!)).toBe("BFS Heber · No PK · 0%");
     expect(text(out.subtasks[1]![0]!)).toBe("BFS Heber · No PK");
+  });
+});
+
+describe("Days open in the export", () => {
+  it("counts from the day the task was written to the export's day", () => {
+    const { followUps } = pkExportSheets(
+      [band([item({ id: "i1", created_at: "2026-11-01T15:00:00Z" })])],
+      [],
+      [],
+      names,
+      undefined,
+      "2026-11-13",
+    );
+    expect(text(followUps[2]![5]!)).toBe("12");
   });
 });
