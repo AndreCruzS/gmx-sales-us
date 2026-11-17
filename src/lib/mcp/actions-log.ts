@@ -9,7 +9,8 @@ export type LoggedEntity =
   | "accounts"
   | "contacts"
   | "account_notes"
-  | "account_relationships";
+  | "account_relationships"
+  | "opportunities";
 
 /**
  * One row per agent write; it backs undo. `before` holds the prior values of

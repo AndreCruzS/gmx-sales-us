@@ -19,6 +19,7 @@ const LABEL: Record<string, string> = {
   accounts: "account",
   contacts: "contact",
   account_notes: "account note",
+  opportunities: "quote",
 };
 
 const label = (a: LoggedAction) =>
@@ -48,6 +49,9 @@ async function reverse(ctx: AgentContext, a: LoggedAction): Promise<Outcome> {
       .eq("updated_at", (cur as { updated_at: string }).updated_at)
       .select("id");
     if (error) {
+      // A quote put back to an open stage needs an open follow-up (the stage gate).
+      if (table === "opportunities" && error.code === "23514")
+        return { problem: fail("Putting the quote back needs an open follow-up on it — plan one with plan_follow_up, then undo again.") };
       const known = dbProblem(error);
       if (known) return { problem: known };
       throw error;

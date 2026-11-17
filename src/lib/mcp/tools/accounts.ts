@@ -73,7 +73,7 @@ export async function getAccount(ctx: AgentContext, args: GetAccountArgs): Promi
   if (error) throw error;
   if (!acc) return fail("I can't find that account — look it up with find.");
 
-  const [c, na, nt, th] = await Promise.all([
+  const [c, na, nt, th, qs] = await Promise.all([
     ctx.db
       .from("contacts")
       .select("id, name, job_title, email, phone, is_champion, updated_at")
@@ -98,8 +98,15 @@ export async function getAccount(ctx: AgentContext, args: GetAccountArgs): Promi
       .eq("matched_account_id", args.id)
       .order("last_message_at", { ascending: false })
       .limit(5),
+    ctx.db
+      .from("opportunities")
+      .select("id, name, stage, estimated_revenue, product, estimated_quantity, quantity_unit, current_status, updated_at")
+      .eq("primary_account_id", args.id)
+      .order("updated_at", { ascending: false })
+      .limit(20),
   ]);
-  for (const r of [c, na, nt, th]) if (r.error) throw r.error;
+  for (const r of [c, na, nt, th, qs]) if (r.error) throw r.error;
+  const quotes = qs.data ?? [];
   const contacts = c.data ?? [];
   const items = na.data ?? [];
   const notes = nt.data ?? [];
@@ -118,8 +125,13 @@ export async function getAccount(ctx: AgentContext, args: GetAccountArgs): Promi
     ...notes.map((x) => `- ${x.created_at.slice(0, 10)}: ${x.body}`),
     `Last email threads (${threads.length}):`,
     ...threads.map((x) => `- ${x.last_message_at?.slice(0, 10) ?? "?"}: ${x.subject ?? "(no subject)"}`),
+    `Quotes and deals (${quotes.length}):`,
+    ...quotes.map(
+      (x) =>
+        `- ${x.name} — ${x.stage}${x.estimated_revenue !== null ? `, $${Math.round(x.estimated_revenue).toLocaleString("en-US")}` : ""}${x.current_status ? `; ${x.current_status}` : ""} — id ${x.id}, updated_at ${x.updated_at}`,
+    ),
   ];
-  return ok(lines.join("\n"), { account: acc, contacts, open_items: items, notes, email_threads: threads });
+  return ok(lines.join("\n"), { account: acc, contacts, open_items: items, notes, email_threads: threads, quotes });
 }
 
 // ---- create_account -------------------------------------------------------

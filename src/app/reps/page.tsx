@@ -49,7 +49,13 @@ import {
   sortQuotes,
   totalValue,
 } from "@/lib/domain/quotes";
-import { accountsWorked, quoteSummary, type SummaryEvent } from "@/lib/domain/quote-summary";
+import {
+  accountsWorked,
+  quoteProduct,
+  quoteSummary,
+  type QuoteLine,
+  type SummaryEvent,
+} from "@/lib/domain/quote-summary";
 import { manages } from "@/lib/domain/roles";
 import { QuoteScoreboard, type WinDetail } from "@/components/quote-scoreboard";
 import {
@@ -186,7 +192,7 @@ export default function RepsPage() {
         .sort()
         .reverse()[0] ?? null;
     const none = Promise.resolve({ data: [] as SellThroughRow[], error: null });
-    const [sc, na, qt, gs, ev, dw, st, sy, ef, se] = await Promise.all([
+    const [sc, na, qt, gs, ev, dw, st, sy, ef, se, qi] = await Promise.all([
       supabase
         .from("dashboard_rep_scorecard")
         .select(
@@ -271,6 +277,18 @@ export default function RepsPage() {
         (data) => ({ data, error: null }),
         (error: unknown) => ({ data: [] as SummaryEvent[], error }),
       ),
+      // WHAT EACH QUOTE IS FOR, when the app's quote flow wrote it: its
+      // survey lines. A quote the agent wrote carries it on the deal itself.
+      fetchAllPages<QuoteLine & { opportunity_id: string }>((from, to) =>
+        supabase
+          .from("quote_items")
+          .select("opportunity_id, description, species, nominal_size, lf")
+          .order("created_at")
+          .range(from, to),
+      ).then(
+        (data) => ({ data, error: null }),
+        (error: unknown) => ({ data: [] as (QuoteLine & { opportunity_id: string })[], error }),
+      ),
     ]);
     setSellRows([
       ...(st.error ? [] : ((st.data as SellThroughRow[]) ?? [])),
@@ -281,7 +299,18 @@ export default function RepsPage() {
     setEffort(ef.error ? [] : ((ef.data as unknown as EffortRow[]) ?? []));
     setReps(sc.error ? [] : ((sc.data as unknown as RepRow[]) ?? []));
     setActions(na.error ? [] : ((na.data as unknown as ActionRow[]) ?? []));
-    setDeals(qt.error ? [] : ((qt.data as unknown as QuoteRow[]) ?? []));
+    const lines = new Map<string, QuoteLine[]>();
+    for (const l of qi.error ? [] : qi.data) {
+      const list = lines.get(l.opportunity_id) ?? [];
+      list.push(l);
+      lines.set(l.opportunity_id, list);
+    }
+    setDeals(
+      (qt.error ? [] : ((qt.data as unknown as QuoteRow[]) ?? [])).map((d) => {
+        const p = quoteProduct(d, lines.get(d.id) ?? []);
+        return { ...d, product: p.product, estimated_quantity: p.quantity, quantity_unit: p.unit };
+      }),
+    );
     setStageEvents(se.error ? [] : se.data);
     setGates(gs.error ? [] : ((gs.data as unknown as GateRow[]) ?? []));
     setEvidence(ev.error ? [] : ((ev.data as unknown as EvidenceRow[]) ?? []));

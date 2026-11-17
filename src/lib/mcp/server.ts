@@ -7,6 +7,7 @@ import { registerAgendaTools } from "./tools/agenda";
 import { registerDiscoveryTools } from "./tools/discovery";
 import { registerAccountTools } from "./tools/accounts";
 import { registerPkTools } from "./tools/pk";
+import { registerQuoteTools } from "./tools/quotes";
 import { registerUndoTools } from "./tools/undo";
 import { registerViewTools } from "./tools/views";
 
@@ -58,6 +59,7 @@ export function buildMcpServer(server: McpServer, getContext: GetCtx = getCtx) {
   registerAgendaTools(server, getContext);
   registerPkTools(server, getContext);
   registerAccountTools(server, getContext);
+  registerQuoteTools(server, getContext);
   registerViewTools(server, getContext);
   registerUndoTools(server, getContext);
 }

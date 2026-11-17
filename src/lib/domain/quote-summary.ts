@@ -174,3 +174,34 @@ export function accountsWorked(
   }
   return set.size;
 }
+
+/** A line of a quote's survey (quote_items), as far as naming it goes. */
+export interface QuoteLine {
+  description: string;
+  species: string | null;
+  nominal_size: string | null;
+  lf: number;
+}
+
+/**
+ * What a quote is FOR, in one line. Two writers fill it differently: the
+ * app's quote flow keeps its products as survey lines (quote_items, priced by
+ * SKU), the agent — which has no catalogue — writes the product and its LF on
+ * the deal itself. The deal's own words win; else the lines speak.
+ */
+export function quoteProduct(
+  deal: { product: string | null; estimated_quantity: number | null; quantity_unit: string | null },
+  lines: readonly QuoteLine[],
+): { product: string | null; quantity: number | null; unit: string | null } {
+  if (deal.product) {
+    return { product: deal.product, quantity: deal.estimated_quantity, unit: deal.quantity_unit };
+  }
+  if (lines.length === 0) {
+    return { product: null, quantity: deal.estimated_quantity, unit: deal.estimated_quantity ? deal.quantity_unit : null };
+  }
+  const first = lines[0];
+  const name = [first.species, first.nominal_size].filter(Boolean).join(" ") || first.description;
+  const more = lines.length > 1 ? ` +${lines.length - 1}` : "";
+  const lf = lines.reduce((n, l) => n + Number(l.lf || 0), 0);
+  return { product: `${name}${more}`, quantity: lf > 0 ? lf : null, unit: lf > 0 ? "LF" : null };
+}

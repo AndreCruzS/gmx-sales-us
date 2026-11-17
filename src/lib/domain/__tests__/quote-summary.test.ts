@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountsWorked, quoteSummary, type SummaryEvent, type SummaryOpp } from "../quote-summary";
+import { accountsWorked, quoteProduct, quoteSummary, type SummaryEvent, type SummaryOpp } from "../quote-summary";
 
 const opp = (id: string, stage: string, v: number | null, owner = "r1"): SummaryOpp => ({
   id,
@@ -82,5 +82,30 @@ describe("accountsWorked", () => {
     expect(accountsWorked(effort, null, "2026-11-01")).toBe(2);
     expect(accountsWorked(effort, "r1", "2026-11-01")).toBe(1);
     expect(accountsWorked(effort, "r1", null)).toBe(2);
+  });
+});
+
+describe("quoteProduct", () => {
+  it("prefers what the deal itself says", () => {
+    expect(
+      quoteProduct({ product: "Thermo-Ash Decking", estimated_quantity: 20000, quantity_unit: "LF" }, []),
+    ).toEqual({ product: "Thermo-Ash Decking", quantity: 20000, unit: "LF" });
+  });
+
+  it("reads the survey lines when the deal carries no product", () => {
+    expect(
+      quoteProduct({ product: null, estimated_quantity: null, quantity_unit: null }, [
+        { description: "Thermo Ash 5/4x6 GRV", species: "Thermo-Ash", nominal_size: "5/4x6", lf: 1200 },
+        { description: "Ipe 1x6", species: "Ipe", nominal_size: "1x6", lf: 300 },
+      ]),
+    ).toEqual({ product: "Thermo-Ash 5/4x6 +1", quantity: 1500, unit: "LF" });
+  });
+
+  it("says nothing when neither exists", () => {
+    expect(quoteProduct({ product: null, estimated_quantity: null, quantity_unit: null }, [])).toEqual({
+      product: null,
+      quantity: null,
+      unit: null,
+    });
   });
 });
