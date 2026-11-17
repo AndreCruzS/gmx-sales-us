@@ -79,7 +79,7 @@ export async function searchCatalog(q: string): Promise<{
 
 // One fetch, one fold, every consumer — the typeahead, the voice agent's
 // tool, and the favourites all read the catalog through here.
-async function fetchAndFold(params: URLSearchParams): Promise<{
+async function fetchAndFold(params: URLSearchParams, max = 25): Promise<{
   items: CatalogItem[];
   refreshedAt: string | null;
 }> {
@@ -136,9 +136,30 @@ async function fetchAndFold(params: URLSearchParams): Promise<{
         a.description.length - b.description.length ||
         a.description.localeCompare(b.description),
     )
-    .slice(0, 25);
+    .slice(0, max);
 
   return { items, refreshedAt };
+}
+
+/**
+ * Exact SKUs, for checking a list someone already has (the agent connector's
+ * create_quote): every sku that exists comes back folded across branches;
+ * one that does not is simply absent. Not filtered to the quotable universe —
+ * a sku out of stock today is still the product the customer asked for.
+ */
+export async function catalogBySkus(skus: readonly string[]): Promise<{
+  items: CatalogItem[];
+  refreshedAt: string | null;
+}> {
+  const unique = [...new Set(skus.map((s) => s.trim()).filter(Boolean))];
+  if (unique.length === 0) return { items: [], refreshedAt: null };
+  const params = new URLSearchParams({
+    select: SELECT,
+    sku: `in.(${unique.map((s) => `"${s.replace(/["\\]/g, "")}"`).join(",")})`,
+    order: "sku",
+    limit: "2000",
+  });
+  return fetchAndFold(params, unique.length);
 }
 
 // ── The counter's favourites ─────────────────────────────────────────────────

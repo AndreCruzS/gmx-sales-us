@@ -23,6 +23,14 @@ import {
   type QuoteLine,
   type SummaryEvent,
 } from "@/lib/domain/quote-summary";
+import {
+  CATALOG_FAVORITES,
+  catalogBySkus,
+  catalogConfigured,
+  favoriteCatalog,
+  searchCatalog,
+  type CatalogItem,
+} from "@/lib/catalog/search";
 import { displayAccountName, formatMoney } from "@/lib/format";
 import { fetchAllPages } from "@/lib/supabase/page";
 import { logActionQuiet } from "../actions-log";
@@ -47,6 +55,9 @@ const STAGE_WORDS: Record<QuoteStage, string> = {
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const QTY = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
+const CATALOG_OFF = "The product catalog is not connected on this server — the quote's products can be added in the app.";
+const CATALOG_DOWN = "The product catalog did not answer — try again in a minute. Nothing was saved.";
+
 const NEEDS_ACTION =
   "An open quote needs an open follow-up, and I could not plan one. Plan it with plan_follow_up, then try again.";
 
@@ -55,7 +66,8 @@ const qty = (n: number | null, unit: string | null) => (n && n > 0 ? `${QTY.form
 
 export type CreateQuoteArgs = {
   account_id: string;
-  product: string;
+  lines?: LineInput[];
+  product?: string;
   quantity_lf?: number;
   price_per_lf?: number;
   value?: number;
@@ -88,11 +100,149 @@ function valueOf(a: { value?: number; quantity_lf?: number; price_per_lf?: numbe
   return null;
 }
 
+// ---- search_catalog -------------------------------------------------------
+
+export type SearchCatalogArgs = { query?: string; favorite?: string };
+
+/** The product catalog, through the same door as the app's picker. */
+export async function searchCatalogTool(_ctx: AgentContext, args: SearchCatalogArgs): Promise<CallToolResult> {
+  if (!catalogConfigured()) return fail(CATALOG_OFF);
+  const q = args.query?.trim() ?? "";
+  if (!args.favorite && q.length < 2)
+    return fail("Give a search of at least two letters (species and size work best, e.g. 'ayous 1x6').");
+  let result: Awaited<ReturnType<typeof searchCatalog>> | null;
+  try {
+    result = args.favorite ? await favoriteCatalog(args.favorite) : await searchCatalog(q);
+  } catch {
+    return fail(CATALOG_DOWN);
+  }
+  if (!result)
+    return fail(`No favourite called "${args.favorite}". The favourites are: ${CATALOG_FAVORITES.map((f) => f.id).join(", ")}.`);
+  const items = result.items;
+  if (items.length === 0)
+    return ok(`Nothing in the catalog matches "${q || args.favorite}". Try fewer words: the species and the size.`, { items: [] });
+  const out = [
+    `${items.length} product${items.length === 1 ? "" : "s"}${items.length === 25 ? " (the first 25 — narrow the search for others)" : ""}:`,
+    ...items.map(
+      (i) =>
+        `- ${i.sku}: ${i.description}${i.randomLength ? " — random length, quoted in LF only" : i.lf_per_piece ? ` — ${i.lf_per_piece} LF per piece` : ""}; ${i.randomLength ? "no stock figure (random length)" : `${QTY.format(i.lfAvailable)} LF available in ${i.branches} branch${i.branches === 1 ? "" : "es"}`}`,
+    ),
+  ];
+  return ok(out.join("\n"), {
+    items: items.map((i) => ({
+      sku: i.sku,
+      description: i.description,
+      species: i.species,
+      profile: i.profile,
+      nominal_size: i.nominal_size,
+      random_length: i.randomLength,
+      lf_per_piece: i.lf_per_piece,
+      lf_available: i.lfAvailable,
+      pieces_available: i.piecesAvailable,
+    })),
+    refreshed_at: result.refreshedAt,
+  });
+}
+
 // ---- create_quote ---------------------------------------------------------
 
+export type LineInput = { sku: string; quantity: number; unit: "LF" | "PC"; price_per_lf?: number };
+
+export type BuiltLine = {
+  sku: string;
+  description: string;
+  species: string | null;
+  profile: string | null;
+  nominal_size: string | null;
+  lf_per_piece: number | null;
+  qty_input: number;
+  input_uom: "LF" | "PC";
+  lf: number;
+  price_per_lf: number | null;
+};
+
+/**
+ * The catalog is the authority on every line (the voice-quote rule): identity
+ * fields come from the catalog row, never from what the agent typed, and
+ * pieces become LF by the catalog's own LF per piece. A sku the catalog does
+ * not have, or pieces of a random-length product, refuse the whole list.
+ */
+export function buildQuoteLines(
+  input: readonly LineInput[],
+  catalog: readonly CatalogItem[],
+): { lines: BuiltLine[]; unknown: string[]; problems: string[] } {
+  const bySku = new Map(catalog.map((i) => [i.sku.toUpperCase(), i] as const));
+  const lines: BuiltLine[] = [];
+  const unknown: string[] = [];
+  const problems: string[] = [];
+  for (const l of input) {
+    const item = bySku.get(l.sku.trim().toUpperCase());
+    if (!item) {
+      unknown.push(l.sku);
+      continue;
+    }
+    const perPiece = item.randomLength ? null : item.lf_per_piece;
+    if (l.unit === "PC" && !perPiece) {
+      problems.push(`${item.sku} (${item.description}) is sold by the linear foot: give its quantity in LF.`);
+      continue;
+    }
+    lines.push({
+      sku: item.sku,
+      description: item.description,
+      species: item.species,
+      profile: item.profile,
+      nominal_size: item.nominal_size,
+      lf_per_piece: perPiece,
+      qty_input: l.quantity,
+      input_uom: l.unit,
+      lf: Math.round((l.unit === "LF" ? l.quantity : l.quantity * (perPiece as number)) * 100) / 100,
+      price_per_lf: l.price_per_lf !== undefined && l.price_per_lf > 0 ? l.price_per_lf : null,
+    });
+  }
+  return { lines, unknown, problems };
+}
+
 export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Promise<CallToolResult> {
-  if (args.price_per_lf !== undefined && args.quantity_lf === undefined && args.value === undefined)
-    return fail("A price per LF needs the quantity in LF too, or give the quote's total value instead.");
+  const given = args.lines ?? [];
+  const catalogOn = catalogConfigured();
+  if (given.length === 0) {
+    // With the catalog wired up, products are catalog lines, as in the app.
+    if (catalogOn)
+      return fail(
+        "Give the products as catalog lines (lines: sku, quantity, unit, price per LF). Find each sku with search_catalog first — never guess one.",
+      );
+    if (!args.product?.trim()) return fail("Say what is quoted: the product.");
+    if (args.price_per_lf !== undefined && args.quantity_lf === undefined && args.value === undefined)
+      return fail("A price per LF needs the quantity in LF too, or give the quote's total value instead.");
+  }
+
+  // Every sku checked before anything is written.
+  let built: BuiltLine[] = [];
+  if (given.length > 0) {
+    if (!catalogOn) return fail(CATALOG_OFF);
+    let catalog: CatalogItem[];
+    try {
+      catalog = (await catalogBySkus(given.map((l) => l.sku))).items;
+    } catch {
+      return fail(CATALOG_DOWN);
+    }
+    const r = buildQuoteLines(given, catalog);
+    if (r.unknown.length > 0 || r.problems.length > 0) {
+      return fail(
+        [
+          "Nothing was saved.",
+          r.unknown.length > 0
+            ? `Not in the catalog: ${r.unknown.join(", ")}. Look each one up with search_catalog and use the sku it returns.`
+            : "",
+          ...r.problems,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        { unknown_skus: r.unknown, problems: r.problems },
+      );
+    }
+    built = r.lines;
+  }
 
   const [acc, me] = await Promise.all([
     ctx.db.from("accounts").select("id, name, territory_id").eq("id", args.account_id).maybeSingle(),
@@ -114,8 +264,22 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
 
   const today = todayIn();
   const stage = args.stage ?? "QUOTE";
-  const value = valueOf(args);
-  const product = args.product.trim();
+  // As the app: the estimate is arithmetic — Σ LF × price over the priced
+  // lines — unless the person gave the total.
+  const priced = built.reduce((n, l) => n + (l.price_per_lf ? l.lf * l.price_per_lf : 0), 0);
+  const value =
+    args.value !== undefined
+      ? Math.round(args.value)
+      : built.length > 0
+        ? priced > 0
+          ? Math.round(priced)
+          : null
+        : valueOf(args);
+  const unpriced = built.filter((l) => !l.price_per_lf).length;
+  const product =
+    built.length > 0
+      ? `${[built[0].species, built[0].nominal_size].filter(Boolean).join(" ") || built[0].description}${built.length > 1 ? ` +${built.length - 1}` : ""}`
+      : (args.product ?? "").trim();
   const name = `Quote — ${displayAccountName(acc.data.name)} · ${product} · ${DAY.format(new Date(`${today}T00:00:00Z`))}`;
   const due = args.follow_up_date ?? defaultDeadline("QUOTE_FOLLOW_UP", false, today);
   const action = args.follow_up?.trim() || `Follow up on the ${product} quote`;
@@ -152,35 +316,59 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
     throw error;
   }
 
-  // The create RPC names its columns and the product is not one of them.
-  const { error: pErr } = await ctx.db
-    .from("opportunities")
-    .update(
-      dbRow({
-        product,
-        estimated_quantity: args.quantity_lf ?? null,
-        quantity_unit: args.quantity_lf !== undefined ? "LF" : null,
-      }),
-    )
-    .eq("id", id);
-
-  const lines = [
-    `Opened the quote "${name}" (${STAGE_WORDS[stage]}): ${[product, qty(args.quantity_lf ?? null, "LF")].filter(Boolean).join(", ")}, ${money(value)}${args.price_per_lf !== undefined && args.value === undefined ? ` (${QTY.format(args.quantity_lf!)} LF × $${args.price_per_lf}/LF)` : ""}.`,
+  const lines = [`Opened the quote "${name}" (${STAGE_WORDS[stage]}), ${money(value)}.`];
+  if (built.length > 0) {
+    // The lines reference the deal, so they follow it — as in the app.
+    const { error: iErr } = await ctx.db.from("quote_items").insert(
+      built.map((l) =>
+        dbRow({ ...l, org_id: ctx.me.orgId, opportunity_id: id, account_id: args.account_id, created_by: ctx.me.membershipId }),
+      ),
+    );
+    if (iErr) {
+      console.error("[mcp] create_quote: lines not saved", iErr);
+      lines.push("The quote is open but its product lines did NOT save — tell the person to add them in the app; do not create the quote again.");
+    } else {
+      lines.push(
+        "Lines (checked against the catalog):",
+        ...built.map(
+          (l) =>
+            `- ${l.sku} ${l.description}: ${QTY.format(l.qty_input)} ${l.input_uom}${l.input_uom === "PC" ? ` = ${QTY.format(l.lf)} LF` : ""}${l.price_per_lf ? ` × $${l.price_per_lf}/LF = ${money(l.lf * l.price_per_lf)}` : ", no price"}`,
+        ),
+      );
+      if (unpriced > 0 && args.value === undefined)
+        lines.push(
+          `${unpriced} line${unpriced === 1 ? " has" : "s have"} no price, so the value counts only the priced ones. If the person has the total, set it with update_quote (value).`,
+        );
+    }
+  } else {
+    // No catalog on this server: the product in words, on the deal (the
+    // create RPC names its columns and the product is not one of them).
+    const { error: pErr } = await ctx.db
+      .from("opportunities")
+      .update(
+        dbRow({
+          product,
+          estimated_quantity: args.quantity_lf ?? null,
+          quantity_unit: args.quantity_lf !== undefined ? "LF" : null,
+        }),
+      )
+      .eq("id", id);
+    lines.push(`Product: ${[product, qty(args.quantity_lf ?? null, "LF")].filter(Boolean).join(", ")} (not checked: no catalog is connected).`);
+    if (pErr) lines.push("The product and LF did not save on the quote — set them with update_quote.");
+  }
+  lines.push(
     `Where it stands: ${args.status.trim()}.`,
     `Follow-up planned: ${action}, due ${due}${args.follow_up_date ? "" : " (the default for a quote follow-up)"}.`,
     `Quote ${id}.`,
-  ];
-  if (pErr) {
-    console.error("[mcp] create_quote: product not saved", pErr);
-    lines.push("The product and LF did not save on the quote — set them with update_quote.");
-  }
-  lines.push("A new quote can't be undone from here: fix it with update_quote, or mark it lost.");
+    "A new quote can't be undone from here: fix it with update_quote, or mark it lost.",
+  );
   return ok(receipt(lines, [{ id, path: `/accounts/${args.account_id}` }]), {
     id,
     follow_up_id: actionId,
     name,
     stage,
     estimated_revenue: value,
+    lines: built,
     follow_up_due: due,
   });
 }
@@ -196,6 +384,19 @@ export async function updateQuote(ctx: AgentContext, args: UpdateQuoteArgs): Pro
   if (readErr) throw readErr;
   if (!q) return fail("I can't find that quote — read it with quote_summary or get_account.");
   if (q.updated_at !== args.updated_at) return fail(STALE);
+
+  // A quote made of catalog lines keeps them: words on the deal would hide them.
+  if (args.product !== undefined || args.quantity_lf !== undefined || args.price_per_lf !== undefined) {
+    const { count, error } = await ctx.db
+      .from("quote_items")
+      .select("id", { count: "exact", head: true })
+      .eq("opportunity_id", q.id);
+    if (error) throw error;
+    if ((count ?? 0) > 0)
+      return fail(
+        "This quote's products are catalog lines, so they are changed in the app. Here you can change its total (value), stage and where it stands.",
+      );
+  }
 
   const patch: Record<string, unknown> = {};
   if (args.stage !== undefined && args.stage !== q.stage) patch.stage = args.stage;
@@ -429,18 +630,45 @@ const stageNote =
 
 export function registerQuoteTools(server: McpServer, getCtx: GetCtx) {
   server.registerTool(
+    "search_catalog",
+    {
+      title: "Search the product catalog",
+      description:
+        "Search GMX's live product catalog (the same search as the app's quote form): up to 25 products with sku, description, species, size, LF per piece, whether it is random length (quoted in LF only) and availability. Short searches work best: the species and the size, e.g. 'ayous 1x6' or 'thermo ash 5/4x6'. favorite opens one of the reps' usual families: " +
+        CATALOG_FAVORITES.map((f) => `${f.id} (${f.label})`).join(", ") +
+        ". Use it to find the sku of every product before create_quote; if several fit, ask the person which one. Read-only.",
+      inputSchema: z.object({
+        query: z.string().optional().describe("Species and size, e.g. 'ayous 1x6 v-joint'"),
+        favorite: z.string().optional().describe("One of the favourite ids, instead of a query"),
+      }),
+    },
+    tool<SearchCatalogArgs>(getCtx, (ctx, a) => searchCatalogTool(ctx, a)),
+  );
+
+  server.registerTool(
     "create_quote",
     {
       title: "Open a quote",
       description:
-        "Record a quote the person priced for an account: the product, the quantity in LF, and the value (give value, or quantity_lf with price_per_lf and the value is LF × price). Look the account up with find first; never guess an id. status is where it stands, in the person's words (e.g. 'Priced, waiting on the buyer'). Every open quote gets a follow-up: by default 'Follow up on the <product> quote' at the quote follow-up deadline; pass follow_up / follow_up_date when the person said what or when. Ask for the product and either the value or the LF and price if they are missing; never invent a price. The quote is the person's own. It counts on the Reps board's 'Quotes on the platform'." +
+        "Record a quote the person priced for an account. Look the account up with find first; never guess an id. Products go in lines, one per product: the sku (from search_catalog — never invent or guess one), the quantity, its unit (LF or PC, as the person said it; random-length products are LF only) and the price per LF when the person gave it. When the person already has the list (an email, a spreadsheet, a message), send it all in one call: the server checks every sku against the catalog, converts pieces to LF by the catalog's own LF per piece, and saves nothing if any sku is unknown. The value is the sum of LF × price over the priced lines, unless value (the total) is given; never invent a price. status is where it stands, in the person's words. Every open quote gets a follow-up: by default 'Follow up on the <product> quote' at the quote follow-up deadline; pass follow_up / follow_up_date when the person said what or when. The quote is the person's own and counts on the Reps board's 'Quotes on the platform'." +
         writeNote,
       inputSchema: z.object({
         account_id: dbId(),
-        product: z.string().min(1).describe("What is quoted, e.g. 'Thermo-Ash Decking 5/4x6'"),
-        quantity_lf: z.number().positive().optional().describe("Quantity in linear feet"),
-        price_per_lf: z.number().nonnegative().optional().describe("Price per LF the person quoted, in USD"),
-        value: z.number().nonnegative().optional().describe("The quote's total in USD; wins over LF × price"),
+        lines: z
+          .array(
+            z.object({
+              sku: z.string().min(1).describe("A sku returned by search_catalog"),
+              quantity: z.number().positive(),
+              unit: z.enum(["LF", "PC"]).describe("Linear feet or pieces, as the person said it"),
+              price_per_lf: z.number().nonnegative().optional().describe("USD per LF, when the person gave it"),
+            }),
+          )
+          .max(40)
+          .optional(),
+        product: z.string().min(1).optional().describe("Only when the server says no catalog is connected: the product in words"),
+        quantity_lf: z.number().positive().optional().describe("Only with product"),
+        price_per_lf: z.number().nonnegative().optional().describe("Only with product"),
+        value: z.number().nonnegative().optional().describe("The quote's total in USD; wins over the lines' arithmetic"),
         status: z.string().min(1).describe("Where it stands, in a short line"),
         stage: z.enum(["QUOTE", "DECISION"]).optional().describe("Default QUOTE. " + stageNote),
         contact_id: dbId().optional().describe("Who the quote is for: a contact of the account, from find"),
