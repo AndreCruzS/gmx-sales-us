@@ -49,7 +49,9 @@ import {
   sortQuotes,
   totalValue,
 } from "@/lib/domain/quotes";
+import { accountsWorked, quoteSummary, type SummaryEvent } from "@/lib/domain/quote-summary";
 import { manages } from "@/lib/domain/roles";
+import { QuoteScoreboard, type WinDetail } from "@/components/quote-scoreboard";
 import {
   conversion,
   housesMissing,
@@ -100,8 +102,13 @@ interface QuoteRow {
   estimated_revenue: number | null;
   expected_close_date: string | null;
   updated_at: string | null;
+  created_at: string;
   owner_id: string;
   primary_account_id: string;
+  product: string | null;
+  estimated_quantity: number | null;
+  quantity_unit: string | null;
+  current_status: string | null;
   account: { name: string } | null;
 }
 
@@ -136,7 +143,10 @@ export default function RepsPage() {
 
   const [reps, setReps] = useState<RepRow[]>([]);
   const [actions, setActions] = useState<ActionRow[]>([]);
-  const [quotes, setQuotes] = useState<QuoteRow[]>([]);
+  // EVERY deal, not only the open ones: the scoreboard reads the won and the
+  // lost too. The open list below is derived from the same rows.
+  const [deals, setDeals] = useState<QuoteRow[]>([]);
+  const [stageEvents, setStageEvents] = useState<SummaryEvent[]>([]);
   // Stamped when the data lands, never read during a render.
   const [todayIso, setTodayIso] = useState("");
   const [gates, setGates] = useState<GateRow[]>([]);
@@ -176,7 +186,7 @@ export default function RepsPage() {
         .sort()
         .reverse()[0] ?? null;
     const none = Promise.resolve({ data: [] as SellThroughRow[], error: null });
-    const [sc, na, qt, gs, ev, dw, st, sy, ef] = await Promise.all([
+    const [sc, na, qt, gs, ev, dw, st, sy, ef, se] = await Promise.all([
       supabase
         .from("dashboard_rep_scorecard")
         .select(
@@ -198,10 +208,9 @@ export default function RepsPage() {
       supabase
         .from("opportunities")
         .select(
-          "id, name, stage, estimated_revenue, expected_close_date, updated_at, owner_id, primary_account_id, account:accounts!opportunities_primary_account_id_fkey(name)",
+          "id, name, stage, estimated_revenue, expected_close_date, updated_at, created_at, owner_id, primary_account_id, product, estimated_quantity, quantity_unit, current_status, account:accounts!opportunities_primary_account_id_fkey(name)",
         )
-        .in("stage", ACTIVE_QUOTE_STAGES as unknown as string[])
-        .limit(500),
+        .limit(1000),
       // The gates, with the owner — this is what makes the book a REP's book
       // rather than a list of 136 dealers nobody is standing next to.
       supabase
@@ -251,6 +260,17 @@ export default function RepsPage() {
         .from("rep_effort")
         .select("account_id, membership_id, happened_at")
         .limit(2000),
+      // THE DAY EACH DEAL MOVED — when it was priced, when it was won.
+      fetchAllPages<SummaryEvent>((from, to) =>
+        supabase
+          .from("opportunity_stage_events")
+          .select("opportunity_id, to_stage, occurred_at")
+          .order("occurred_at")
+          .range(from, to),
+      ).then(
+        (data) => ({ data, error: null }),
+        (error: unknown) => ({ data: [] as SummaryEvent[], error }),
+      ),
     ]);
     setSellRows([
       ...(st.error ? [] : ((st.data as SellThroughRow[]) ?? [])),
@@ -261,7 +281,8 @@ export default function RepsPage() {
     setEffort(ef.error ? [] : ((ef.data as unknown as EffortRow[]) ?? []));
     setReps(sc.error ? [] : ((sc.data as unknown as RepRow[]) ?? []));
     setActions(na.error ? [] : ((na.data as unknown as ActionRow[]) ?? []));
-    setQuotes(qt.error ? [] : ((qt.data as unknown as QuoteRow[]) ?? []));
+    setDeals(qt.error ? [] : ((qt.data as unknown as QuoteRow[]) ?? []));
+    setStageEvents(se.error ? [] : se.data);
     setGates(gs.error ? [] : ((gs.data as unknown as GateRow[]) ?? []));
     setEvidence(ev.error ? [] : ((ev.data as unknown as EvidenceRow[]) ?? []));
     setWalls(dw.error ? [] : ((dw.data as unknown as WallRow[]) ?? []));
@@ -342,6 +363,11 @@ export default function RepsPage() {
     [owed, todayIso],
   );
   const everOne = actions.length > 0;
+
+  const quotes = useMemo(
+    () => deals.filter((d) => (ACTIVE_QUOTE_STAGES as readonly string[]).includes(d.stage)),
+    [deals],
+  );
 
   const myQuotes = useMemo(
     () => sortQuotes(at ? quotes.filter((q) => q.owner_id === at) : quotes, todayIso),
@@ -434,6 +460,33 @@ export default function RepsPage() {
     () => new Map(reps.map((r) => [r.membership_id, r.rep_name] as const)),
     [reps],
   );
+
+  // THE SCOREBOARD (João, 2026-11-17) — the platform's quotes, read for the
+  // scope the chip row set. "Accounts worked" counts from the week the first
+  // quote was priced, so the two halves of the board cover the same window.
+  const summary = useMemo(
+    () => quoteSummary(deals, stageEvents, at, todayIso),
+    [deals, stageEvents, at, todayIso],
+  );
+  const worked = useMemo(
+    () => accountsWorked(effort, at, summary.curve[0]?.week ?? null),
+    [effort, at, summary],
+  );
+  const winDetails = useMemo(() => {
+    const m = new Map<string, WinDetail>();
+    for (const d of deals) {
+      if (d.stage !== "WON") continue;
+      m.set(d.id, {
+        name: d.name,
+        account: d.account?.name ?? null,
+        product: d.product,
+        quantity: d.estimated_quantity,
+        unit: d.quantity_unit,
+        rep: names.get(d.owner_id) ?? null,
+      });
+    }
+    return m;
+  }, [deals, names]);
 
   const myGates = useMemo(
     () => (at ? gates.filter((g) => g.owner_id === at) : gates),
@@ -674,6 +727,16 @@ export default function RepsPage() {
           ))}
         </div>
       </section>
+
+      {/* THE EXECUTIVE SUMMARY on top (meeting of 2026-10-30: one atop every
+          page), in the shape João asked for. */}
+      <QuoteScoreboard
+        summary={summary}
+        worked={worked}
+        details={winDetails}
+        who={chosen?.rep_name ?? null}
+        span="full"
+      />
 
       {/* THE THREE FIGURES, the ones the Rep lens used to show on Sales and
           that came here by name (Andre, 2026-10-06): what is out for a
@@ -1046,6 +1109,22 @@ function QuoteList({
                       {" · "}
                       {quoteStageLabel(r.stage)}
                     </span>
+                    {/* WHAT the price is for and WHERE it stands — the
+                        "formal quotes in progress" table João showed. */}
+                    {(r.product || r.current_status) && (
+                      <span className="t-hint qs-quote-line">
+                        {[
+                          r.product,
+                          r.estimated_quantity && r.estimated_quantity > 0
+                            ? `${QTY.format(r.estimated_quantity)} ${r.quantity_unit ?? ""}`.trim()
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        {r.product && r.current_status ? " — " : ""}
+                        {r.current_status && <span className="qs-status">{r.current_status}</span>}
+                      </span>
+                    )}
                   </span>
                   <span className="fu-side">
                     <span className="sales-move" data-dir={over ? "down" : undefined}>

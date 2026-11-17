@@ -8362,3 +8362,180 @@ textarea.pkd-select {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ── THE QUOTE SCOREBOARD (Reps, João 2026-11-17) ─────────────────────────── */
+.qs-board {
+  padding-bottom: 16px;
+}
+.qs-board > .quiet-head {
+  padding-bottom: 4px;
+}
+.qs-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 0 16px;
+}
+.qs-tile {
+  padding: 14px 16px 14px 0;
+  border-top: 1px solid var(--rule);
+}
+.qs-tile .fig-xl {
+  overflow-wrap: anywhere;
+}
+.qs-board > .t-sub {
+  padding: 0 16px;
+}
+.qs-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding: 14px 16px 0;
+  border-top: 1px solid var(--rule);
+  margin: 0 16px;
+  padding-inline: 0;
+}
+.qs-curve {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 180px auto;
+  column-gap: 8px;
+  margin-top: 10px;
+}
+.qs-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-fig);
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+  text-align: right;
+  transform: translateY(-0.5em);
+  height: calc(100% + 1em);
+}
+.qs-plot {
+  position: relative;
+}
+.qs-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--rule);
+}
+.qs-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.qs-area {
+  fill: var(--accent);
+  opacity: 0.16;
+}
+.qs-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+.qs-cross {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--ink-muted);
+  pointer-events: none;
+}
+.qs-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface-card);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.qs-tip {
+  position: absolute;
+  top: -6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+.qs-hits {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.qs-hit {
+  flex: 1;
+  cursor: crosshair;
+}
+.qs-xaxis {
+  grid-column: 2;
+  position: relative;
+  height: 18px;
+  margin-top: 6px;
+  font-family: var(--font-fig);
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+.qs-xaxis > span {
+  position: absolute;
+  white-space: nowrap;
+}
+.qs-win-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.qs-win {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+.qs-win:first-child {
+  border-top: 0;
+}
+.qs-status {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+@media (min-width: 900px) {
+  .qs-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .qs-lower {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+@media (min-width: 1280px) {
+  .reps-board > [data-desk="scoreboard"] {
+    grid-column: 1 / -1;
+  }
+  .qs-tiles {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.qs-quote-line {
+  display: block;
+  margin-top: 2px;
+}
+@media (max-width: 699px) {
+  .qs-xaxis > .qs-minor {
+    display: none;
+  }
+}
