@@ -250,6 +250,10 @@ export function TabBar() {
   const tabActive = (href: string) =>
     isActive(href) || (desk && href === "/accounts" && pathname.startsWith("/contacts"));
   const deskOnly = (label: string) => !desk && label === "Contacts";
+  // ACCOUNTS LEFT THE DESK'S PHONE BAR (Andre, 2026-11-17): with Tasks in it
+  // the + was off-centre. The phone reads Sales · Tasks · + · Dealers · Reps;
+  // accounts are one tap away through the search in the nav bar, and the
+  // desktop top bar keeps the Accounts tab.
   // For the desk's roles every destination IS a dashboard, and every tab
   // OPENS on its own overview — so the first tab is named for its subject,
   // SALES, not for the word "overview" (Bianca, 2026-09-08: "cada um desses,
@@ -299,7 +303,7 @@ export function TabBar() {
         </>
       )}
 
-      <nav className="tabbar" aria-label="Primary" data-six={desk || undefined}>
+      <nav className="tabbar" aria-label="Primary">
         {[today].map(({ href, label, Icon }) => {
           const TabIcon = iconOf(label, Icon);
           return (
@@ -316,7 +320,7 @@ export function TabBar() {
           );
         })}
 
-        {/* Tasks, then Dealers, straight after Sales (Andre, 2026-11-13). */}
+        {/* Tasks straight after Sales (Andre, 2026-11-13). */}
         {desk && (
           <Link
             href={TASKS_TAB.href}
@@ -326,17 +330,6 @@ export function TabBar() {
           >
             <TASKS_TAB.Icon size={21} />
             {TASKS_TAB.label}
-          </Link>
-        )}
-        {desk && (
-          <Link
-            href={DEALERS_TAB.href}
-            className="tab"
-            data-active={isActive(DEALERS_TAB.href)}
-            aria-current={isActive(DEALERS_TAB.href) ? "page" : undefined}
-          >
-            <DEALERS_TAB.Icon size={21} />
-            {DEALERS_TAB.label}
           </Link>
         )}
 
@@ -371,6 +364,20 @@ export function TabBar() {
           <span className="tab-capture-label">Add</span>
         </button>
 
+        {/* Dealers after Add on the phone: Sales · Tasks · + · Dealers · Reps
+            (Andre, 2026-11-17). The desk's top bar places Add by CSS order. */}
+        {desk && (
+          <Link
+            href={DEALERS_TAB.href}
+            className="tab"
+            data-active={isActive(DEALERS_TAB.href)}
+            aria-current={isActive(DEALERS_TAB.href) ? "page" : undefined}
+          >
+            <DEALERS_TAB.Icon size={21} />
+            {DEALERS_TAB.label}
+          </Link>
+        )}
+
         {/* Reps, straight after Add so Add sits in the middle of the five
             (Andre, 2026-11-03). Lit on the Agenda and the Quotes too, because for a
             desk role those are this board's readings, not destinations of
@@ -391,7 +398,7 @@ export function TabBar() {
           <Link
             key={href}
             href={href}
-            className={deskOnly(label) ? "tab tab-desk" : "tab"}
+            className={deskOnly(label) || (desk && href === "/accounts") ? "tab tab-desk" : "tab"}
             data-active={tabActive(href)}
             aria-current={tabActive(href) ? "page" : undefined}
           >
