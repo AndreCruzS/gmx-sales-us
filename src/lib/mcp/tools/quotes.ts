@@ -38,6 +38,7 @@ import type { AgentContext } from "../context";
 import { changes, receipt } from "../receipt";
 import { fail, ok, type CallToolResult } from "../result";
 import { tool, type GetCtx } from "../server";
+import { givesWorkToOthers } from "@/lib/domain/roles";
 import { dbId, dbRow, gate, STALE } from "./shared";
 
 /** The stages a quote walks through, in the words the agent is given. */
@@ -61,6 +62,29 @@ const CATALOG_DOWN = "The product catalog did not answer — try again in a minu
 const NEEDS_ACTION =
   "An open quote needs an open follow-up, and I could not plan one. Plan it with plan_follow_up, then try again.";
 
+// Whose quote it is (Andre, 2026-11-24): Bianca recorded three quotes for
+// Anthony Peca through the agent and they all landed in her name, because
+// neither tool had an owner. Same rule as a follow-up: only an admin (or an
+// assistant) gives one to a colleague, and only after the person's yes.
+const ONLY_ADMINS_GIVE =
+  "In GMX Sales only an admin gives a quote to someone else, so I can't either. I can record it in your name, or an admin can hand it over.";
+const GIVES = "This records a quote in someone else's name.";
+
+/** An active colleague's name, or null when the id is not one. */
+async function colleagueName(ctx: AgentContext, id: string): Promise<string | null> {
+  const { data, error } = await ctx.db
+    .from("memberships")
+    .select("id, users!inner(full_name, email)")
+    .eq("id", id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const u = data.users as { full_name: string | null; email: string } | { full_name: string | null; email: string }[] | null;
+  const user = Array.isArray(u) ? u[0] : u;
+  return user ? user.full_name || user.email : null;
+}
+
 const money = (v: number | null | undefined) => (v === null || v === undefined ? "no value" : formatMoney(Math.round(v)));
 const qty = (n: number | null, unit: string | null) => (n && n > 0 ? `${QTY.format(n)} ${unit ?? "LF"}` : null);
 
@@ -76,6 +100,8 @@ export type CreateQuoteArgs = {
   contact_id?: string;
   follow_up?: string;
   follow_up_date?: string;
+  owner_id?: string;
+  confirmation?: string;
 };
 
 export type UpdateQuoteArgs = {
@@ -88,6 +114,7 @@ export type UpdateQuoteArgs = {
   quantity_lf?: number;
   price_per_lf?: number;
   reason?: string;
+  owner_id?: string;
   confirmation?: string;
 };
 
@@ -244,13 +271,21 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
     built = r.lines;
   }
 
+  const owner = args.owner_id ?? ctx.me.membershipId;
+  let ownerName: string | null = null;
+  if (owner !== ctx.me.membershipId) {
+    if (!givesWorkToOthers(ctx.me.role)) return fail(ONLY_ADMINS_GIVE);
+    ownerName = await colleagueName(ctx, owner);
+    if (!ownerName) return fail("I can't find that person — look them up with find.");
+  }
+
   const [acc, me] = await Promise.all([
     ctx.db.from("accounts").select("id, name, territory_id").eq("id", args.account_id).maybeSingle(),
-    ctx.db.from("memberships").select("territory_id").eq("id", ctx.me.membershipId).maybeSingle(),
+    ctx.db.from("memberships").select("territory_id").eq("id", owner).maybeSingle(),
   ]);
   if (acc.error) throw acc.error;
   if (!acc.data) return fail("I can't find that account — look it up with find.");
-  // As the app's deal form: the account's patch, else the person's.
+  // As the app's deal form: the account's patch, else the owner's.
   const territory = acc.data.territory_id ?? me.data?.territory_id ?? null;
   if (!territory)
     return fail(
@@ -283,6 +318,15 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
   const name = `Quote — ${displayAccountName(acc.data.name)} · ${product} · ${DAY.format(new Date(`${today}T00:00:00Z`))}`;
   const due = args.follow_up_date ?? defaultDeadline("QUOTE_FOLLOW_UP", false, today);
   const action = args.follow_up?.trim() || `Follow up on the ${product} quote`;
+  const held = gate(
+    ctx,
+    "create_quote",
+    args as unknown as Record<string, unknown>,
+    () => `open the quote "${name}" (${money(value)}) in ${ownerName}'s name, with its follow-up.`,
+    ownerName ? GIVES : null,
+  );
+  if (held) return held;
+
   const id = randomUUID();
   const actionId = randomUUID();
 
@@ -293,7 +337,7 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
       name,
       primary_account_id: args.account_id,
       territory_id: territory,
-      owner_id: ctx.me.membershipId,
+      owner_id: owner,
       stage,
       current_status: args.status.trim(),
       estimated_revenue: value,
@@ -303,7 +347,7 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
       id: actionId,
       org_id: ctx.me.orgId,
       action,
-      owner_id: ctx.me.membershipId,
+      owner_id: owner,
       due_date: due,
       account_id: args.account_id,
       opportunity_id: id,
@@ -316,7 +360,7 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
     throw error;
   }
 
-  const lines = [`Opened the quote "${name}" (${STAGE_WORDS[stage]}), ${money(value)}.`];
+  const lines = [`Opened the quote "${name}" (${STAGE_WORDS[stage]}), ${money(value)}${ownerName ? `, in ${ownerName}'s name` : ""}.`];
   if (built.length > 0) {
     // The lines reference the deal, so they follow it — as in the app.
     const { error: iErr } = await ctx.db.from("quote_items").insert(
@@ -358,12 +402,13 @@ export async function createQuote(ctx: AgentContext, args: CreateQuoteArgs): Pro
   }
   lines.push(
     `Where it stands: ${args.status.trim()}.`,
-    `Follow-up planned: ${action}, due ${due}${args.follow_up_date ? "" : " (the default for a quote follow-up)"}.`,
+    `Follow-up planned: ${action}, due ${due}${args.follow_up_date ? "" : " (the default for a quote follow-up)"}${ownerName ? `, for ${ownerName}` : ""}.`,
     `Quote ${id}.`,
     "A new quote can't be undone from here: fix it with update_quote, or mark it lost.",
   );
   return ok(receipt(lines, [{ id, path: `/accounts/${args.account_id}` }]), {
     id,
+    owner_id: owner,
     follow_up_id: actionId,
     name,
     stage,
@@ -412,15 +457,26 @@ export async function updateQuote(ctx: AgentContext, args: UpdateQuoteArgs): Pro
     return fail("A price per LF needs the quantity in LF — give it, or the quote's total value instead.");
   const value = valueOf({ value: args.value, quantity_lf: lf || undefined, price_per_lf: args.price_per_lf });
   if (value !== null) patch.estimated_revenue = value;
+  let newOwner: string | null = null;
+  if (args.owner_id !== undefined && args.owner_id !== q.owner_id) {
+    if (!givesWorkToOthers(ctx.me.role)) return fail(ONLY_ADMINS_GIVE);
+    newOwner = await colleagueName(ctx, args.owner_id);
+    if (!newOwner) return fail("I can't find that person — look them up with find.");
+    patch.owner_id = args.owner_id;
+  }
   if (Object.keys(patch).length === 0) return fail("Nothing to change — say what should be different.");
 
   const mine = q.owner_id === ctx.me.membershipId;
+  const rest = Object.fromEntries(Object.entries(patch).filter(([k]) => k !== "owner_id"));
   const held = gate(
     ctx,
     "update_quote",
     args,
-    () => `change "${q.name}" (${changes(q as Record<string, unknown>, patch)}), a quote that belongs to someone else.`,
-    mine ? null : "This changes a colleague's quote.",
+    () =>
+      newOwner
+        ? `hand "${q.name}" to ${newOwner}, with its open follow-ups${Object.keys(rest).length > 0 ? `, and change ${changes(q as Record<string, unknown>, rest)}` : ""}.`
+        : `change "${q.name}" (${changes(q as Record<string, unknown>, patch)}), a quote that belongs to someone else.`,
+    newOwner ? "This hands a quote to someone else." : mine ? null : "This changes a colleague's quote.",
   );
   if (held) return held;
 
@@ -444,7 +500,7 @@ export async function updateQuote(ctx: AgentContext, args: UpdateQuoteArgs): Pro
           id: nid,
           org_id: q.org_id,
           action: `Follow up on ${q.product ? `the ${q.product} quote` : "the quote"}`,
-          owner_id: q.owner_id,
+          owner_id: (patch.owner_id as string | undefined) ?? q.owner_id,
           due_date: due,
           account_id: q.primary_account_id,
           opportunity_id: q.id,
@@ -478,6 +534,34 @@ export async function updateQuote(ctx: AgentContext, args: UpdateQuoteArgs): Pro
   if ((data ?? []).length === 0) return fail(STALE);
 
   const lines = [`Changed "${q.name}": ${changes(before, patch)}.`];
+  if (newOwner) {
+    // The quote's open follow-ups go with it: the new owner is the one chasing it.
+    const { data: open, error: oErr } = await ctx.db
+      .from("next_actions")
+      .select("id, action")
+      .eq("opportunity_id", q.id)
+      .eq("owner_id", q.owner_id)
+      .is("completed_at", null);
+    if (oErr) throw oErr;
+    const moved: string[] = [];
+    for (const n of open ?? []) {
+      const { data: m, error: mErr } = await ctx.db
+        .from("next_actions")
+        .update(dbRow({ owner_id: args.owner_id }))
+        .eq("id", n.id)
+        .eq("owner_id", q.owner_id)
+        .select("id");
+      if (mErr || (m ?? []).length === 0) continue;
+      moved.push(n.action);
+      await logActionQuiet(ctx, { tool: "update_quote", entity: "next_actions", entityId: n.id, op: "update", before: { owner_id: q.owner_id } });
+    }
+    lines.push(
+      `It is now ${newOwner}'s quote.`,
+      moved.length > 0
+        ? `Its open follow-up${moved.length === 1 ? "" : "s"} moved to ${newOwner} too: ${moved.join("; ")}.`
+        : "It had no open follow-up of the previous owner to move.",
+    );
+  }
   if (patch.stage === "WON") lines.push(`Won at ${money((patch.estimated_revenue as number | undefined) ?? q.estimated_revenue)} — it counts on the Reps scoreboard from today.`);
   if (planned) lines.push(`An open quote needs a follow-up, so I planned one: due ${planned.due} (the default for a quote follow-up). Record ${planned.id}.`);
   if (patch.stage === "WON" || patch.stage === "LOST") {
@@ -650,7 +734,7 @@ export function registerQuoteTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Open a quote",
       description:
-        "Record a quote the person priced for an account. Look the account up with find first; never guess an id. Products go in lines, one per product: the sku (from search_catalog — never invent or guess one), the quantity, its unit (LF or PC, as the person said it; random-length products are LF only) and the price per LF when the person gave it. When the person already has the list (an email, a spreadsheet, a message), send it all in one call: the server checks every sku against the catalog, converts pieces to LF by the catalog's own LF per piece, and saves nothing if any sku is unknown. The value is the sum of LF × price over the priced lines, unless value (the total) is given; never invent a price. status is where it stands, in the person's words. Every open quote gets a follow-up: by default 'Follow up on the <product> quote' at the quote follow-up deadline; pass follow_up / follow_up_date when the person said what or when. The quote is the person's own and counts on the Reps board's 'Quotes on the platform'." +
+        "Record a quote the person priced for an account. Look the account up with find first; never guess an id. Products go in lines, one per product: the sku (from search_catalog — never invent or guess one), the quantity, its unit (LF or PC, as the person said it; random-length products are LF only) and the price per LF when the person gave it. When the person already has the list (an email, a spreadsheet, a message), send it all in one call: the server checks every sku against the catalog, converts pieces to LF by the catalog's own LF per piece, and saves nothing if any sku is unknown. The value is the sum of LF × price over the priced lines, unless value (the total) is given; never invent a price. status is where it stands, in the person's words. Every open quote gets a follow-up: by default 'Follow up on the <product> quote' at the quote follow-up deadline; pass follow_up / follow_up_date when the person said what or when. The quote is the person's own unless owner_id names the rep it belongs to: only an admin or an assistant records a quote in a colleague's name (look the rep up with find), and that needs the person's yes first — the quote and its follow-up then belong to that rep. It counts on the Reps board's 'Quotes on the platform' for its owner." +
         writeNote,
       inputSchema: z.object({
         account_id: dbId(),
@@ -674,6 +758,8 @@ export function registerQuoteTools(server: McpServer, getCtx: GetCtx) {
         contact_id: dbId().optional().describe("Who the quote is for: a contact of the account, from find"),
         follow_up: z.string().min(1).optional().describe("The next step, if the person said one"),
         follow_up_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Only when the person said a date"),
+        owner_id: dbId().optional().describe("The rep the quote belongs to (membership id from find); default the person. Admins and assistants only"),
+        confirmation: z.string().optional().describe("Only the code this tool gave you, after the person said yes"),
       }),
     },
     tool<CreateQuoteArgs>(getCtx, (ctx, a) => createQuote(ctx, a)),
@@ -686,7 +772,7 @@ export function registerQuoteTools(server: McpServer, getCtx: GetCtx) {
       description:
         "Move a quote to its next stage (" +
         stageNote +
-        ") or change its value, product, LF or where it stands. Read it first with quote_summary or get_account and pass its id and updated_at; if it changed meanwhile you are told to read again. For a lost quote give reason (why they said no). Moving a quote back to an open stage plans a follow-up if it has none. After WON or LOST the tool lists follow-ups still open on it: ask the person whether to close them. Changing a colleague's quote needs the person's yes first." +
+        ") or change its value, product, LF or where it stands. Read it first with quote_summary or get_account and pass its id and updated_at; if it changed meanwhile you are told to read again. For a lost quote give reason (why they said no). Moving a quote back to an open stage plans a follow-up if it has none. After WON or LOST the tool lists follow-ups still open on it: ask the person whether to close them. owner_id hands the quote to another rep (admins and assistants only, as in the app); its open follow-ups move with it. Changing a colleague's quote or handing one over needs the person's yes first." +
         writeNote,
       inputSchema: z.object({
         id: dbId(),
@@ -698,6 +784,7 @@ export function registerQuoteTools(server: McpServer, getCtx: GetCtx) {
         quantity_lf: z.number().positive().optional(),
         price_per_lf: z.number().nonnegative().optional().describe("Recomputes the value as LF × price"),
         reason: z.string().optional().describe("Why it was lost or is on hold"),
+        owner_id: dbId().optional().describe("Hand the quote to this rep (membership id from find). Admins and assistants only"),
         confirmation: z.string().optional().describe("Only the code this tool gave you, after the person said yes"),
       }),
     },

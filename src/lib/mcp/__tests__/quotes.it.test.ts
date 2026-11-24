@@ -192,6 +192,66 @@ describe.skipIf(!process.env.MCP_IT)("quotes through the agent (local stack)", (
     expect(await read(tj)).toMatchObject({ stage: "LOST", current_blocker: "Went with composite" });
   });
 
+  // Bianca, 2026-11-24: three quotes for Peca all landed in her name.
+  it("a rep can't open a quote in a colleague's name", async () => {
+    const r = await q.createQuote(tj, {
+      account_id: accountId,
+      lines: [{ sku: "TA546-RL", quantity: 100, unit: "LF" }],
+      status: "x",
+      owner_id: admin.me.membershipId,
+    });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain("only an admin");
+  });
+
+  it("an admin opens a quote in a rep's name after a yes; quote and follow-up are the rep's", async () => {
+    const args = {
+      account_id: accountId,
+      lines: [{ sku: "TA546-RL", quantity: 1000, unit: "LF" as const, price_per_lf: 3 }],
+      status: "Priced for tj",
+      owner_id: tj.me.membershipId,
+    };
+    const held = await q.createQuote(admin, args);
+    expect(held.structuredContent).toMatchObject({ needs_confirmation: true });
+    const code = held.structuredContent!.confirmation as string;
+    const r = await q.createQuote(admin, { ...args, confirmation: code });
+    expect(r.isError).toBeFalsy();
+    const id = (r.structuredContent as { id: string }).id;
+    expect(text(r)).toContain("'s name");
+    expect(sql(`select owner_id from opportunities where id = '${id}'`)).toBe(tj.me.membershipId);
+    expect(sql(`select string_agg(owner_id::text, ',') from next_actions where opportunity_id = '${id}' and completed_at is null`)).toBe(tj.me.membershipId);
+    expect(sql(`select created_by from quote_items where opportunity_id = '${id}'`)).toBe(admin.me.membershipId);
+  });
+
+  it("an admin hands a quote over with update_quote; its follow-up moves; undo gives the quote back", async () => {
+    const mk = await q.createQuote(admin, {
+      account_id: accountId,
+      lines: [{ sku: "TA546-RL", quantity: 500, unit: "LF", price_per_lf: 3 }],
+      status: "Bianca's for now",
+    });
+    const id = (mk.structuredContent as { id: string }).id;
+    const { data: d } = await admin.db.from("opportunities").select("updated_at").eq("id", id).single();
+    const args = { id, updated_at: d!.updated_at as string, owner_id: tj.me.membershipId };
+    const held = await q.updateQuote(admin, args);
+    expect(held.structuredContent).toMatchObject({ needs_confirmation: true });
+    expect(sql(`select owner_id from opportunities where id = '${id}'`)).toBe(admin.me.membershipId);
+    const r = await q.updateQuote(admin, { ...args, confirmation: held.structuredContent!.confirmation as string });
+    expect(r.isError).toBeFalsy();
+    expect(text(r)).toContain("moved to");
+    expect(sql(`select owner_id from opportunities where id = '${id}'`)).toBe(tj.me.membershipId);
+    expect(sql(`select string_agg(owner_id::text, ',') from next_actions where opportunity_id = '${id}' and completed_at is null`)).toBe(tj.me.membershipId);
+
+    const un = await u.undoLast(admin, {});
+    expect(un.isError).toBeFalsy();
+    expect(sql(`select owner_id from opportunities where id = '${id}'`)).toBe(admin.me.membershipId);
+  });
+
+  it("a rep can't hand a quote over", async () => {
+    const d = await read(tj);
+    const r = await q.updateQuote(tj, { id: quoteId, updated_at: d.updated_at, owner_id: admin.me.membershipId });
+    expect(text(r)).toContain("only an admin");
+  });
+
   it("quote_summary: the admin reads tj's board; get_account lists the quote", async () => {
     const s = await q.quoteSummaryTool(admin, { owner_id: tj.me.membershipId });
     expect(s.isError).toBeFalsy();
