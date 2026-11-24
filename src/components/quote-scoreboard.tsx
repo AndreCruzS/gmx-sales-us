@@ -35,14 +35,11 @@ function compactMoney(v: number): string {
 
 export function QuoteScoreboard({
   summary,
-  worked,
   details,
   who,
   span,
 }: {
   summary: QuoteSummary;
-  /** Accounts with work on the record since the first quote. */
-  worked: number;
   details: ReadonlyMap<string, WinDetail>;
   /** The rep being read, or null for the team. */
   who: string | null;
@@ -77,13 +74,9 @@ export function QuoteScoreboard({
           ? `${QTY.format(s.wonCount)} won of ${QTY.format(s.decided)} decided`
           : "no quote has been won or lost yet",
     },
-    {
-      label: "Accounts worked",
-      value: none ? "—" : QTY.format(worked),
-      hint: none
-        ? "counted from the first quote"
-        : "a visit, a quote, a note or a PK class on record",
-    },
+    // "Accounts worked" moved to the effort layer above (Bianca's spec,
+    // 2026-11-24): it is work at the dealer, counted by period, not a figure
+    // that waits for the first quote.
     {
       label: "Quotes sent",
       value: none ? "—" : QTY.format(s.quotesSent),

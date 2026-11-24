@@ -50,7 +50,6 @@ import {
   totalValue,
 } from "@/lib/domain/quotes";
 import {
-  accountsWorked,
   quoteProduct,
   quoteSummary,
   type QuoteLine,
@@ -58,6 +57,16 @@ import {
 } from "@/lib/domain/quote-summary";
 import { manages } from "@/lib/domain/roles";
 import { QuoteScoreboard, type WinDetail } from "@/components/quote-scoreboard";
+import { RepWorkBoard } from "@/components/rep-work-board";
+import {
+  accountsWorkedIn,
+  followUpKeeping,
+  periodStart,
+  touches,
+  workingNotSelling,
+  type FollowUpRow,
+  type WorkPeriod,
+} from "@/lib/domain/rep-work";
 import {
   conversion,
   housesMissing,
@@ -134,6 +143,7 @@ interface EffortRow {
   account_id: string | null;
   membership_id: string | null;
   happened_at: string | null;
+  kind: string | null;
 }
 
 const SELL_COLS =
@@ -167,6 +177,12 @@ export default function RepsPage() {
   const [latest, setLatest] = useState<string | null>(null);
   const [previous, setPrevious] = useState<string | null>(null);
   const [effort, setEffort] = useState<EffortRow[]>([]);
+  // The effort layer (Bianca's spec, 2026-11-24): every follow-up of the
+  // year, kept or not, and the newest three monthly returns for the alert.
+  const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
+  const [quietRows, setQuietRows] = useState<SellThroughRow[]>([]);
+  const [quietMonths, setQuietMonths] = useState<string[]>([]);
+  const [workPeriod, setWorkPeriod] = useState<WorkPeriod>("month");
   const [pick, setPick] = useState<Pick>(undefined);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -187,12 +203,16 @@ export default function RepsPage() {
       .sort()
       .reverse();
     const wantedMonths = monthsAvail.slice(0, 2);
+    // The alert reads three months — the 90 days the spec names, at the
+    // month-behind cadence the returns arrive at.
+    const alertMonths = monthsAvail.slice(0, 3);
+    const yearStart = `${isoToday().slice(0, 4)}-01-01`;
     const ytdPeriod =
       [...new Set(periodRows.filter((r) => r.period_kind === "YTD").map((r) => r.period))]
         .sort()
         .reverse()[0] ?? null;
     const none = Promise.resolve({ data: [] as SellThroughRow[], error: null });
-    const [sc, na, qt, gs, ev, dw, st, sy, ef, se, qi] = await Promise.all([
+    const [sc, na, qt, gs, ev, dw, st, sy, ef, se, qi, fu] = await Promise.all([
       supabase
         .from("dashboard_rep_scorecard")
         .select(
@@ -238,12 +258,12 @@ export default function RepsPage() {
         .limit(500),
       // The pair of months, every row — paged, because PostgREST caps a
       // query at 1,000 rows without saying so.
-      wantedMonths.length > 0
+      alertMonths.length > 0
         ? fetchAllPages<SellThroughRow>((from, to) =>
             supabase
               .from("sell_through_rows")
               .select(SELL_COLS)
-              .in("period", wantedMonths)
+              .in("period", alertMonths)
               .order("row_id")
               .range(from, to),
           ).then((data) => ({ data, error: null }))
@@ -262,10 +282,19 @@ export default function RepsPage() {
       // THE WORK ON THE RECORD: a dealer's return only counts for a rep when
       // something they did is against that dealer. rep_effort unions the
       // visits, planned actions, notes, quotes and PK classes.
-      supabase
-        .from("rep_effort")
-        .select("account_id, membership_id, happened_at")
-        .limit(2000),
+      // Paged: PostgREST caps every read at 1,000 rows without a word.
+      fetchAllPages<EffortRow>((from, to) =>
+        supabase
+          .from("rep_effort")
+          .select("account_id, membership_id, happened_at, kind")
+          .order("happened_at")
+          .order("account_id")
+          .order("kind")
+          .range(from, to),
+      ).then(
+        (data) => ({ data, error: null }),
+        (error: unknown) => ({ data: [] as EffortRow[], error }),
+      ),
       // THE DAY EACH DEAL MOVED — when it was priced, when it was won.
       fetchAllPages<SummaryEvent>((from, to) =>
         supabase
@@ -289,14 +318,33 @@ export default function RepsPage() {
         (data) => ({ data, error: null }),
         (error: unknown) => ({ data: [] as (QuoteLine & { opportunity_id: string })[], error }),
       ),
+      // EVERY FOLLOW-UP OF THE YEAR, kept or not, and every one still open:
+      // the kept ones are work at the dealer, and the year is the widest
+      // period the board reads.
+      fetchAllPages<FollowUpRow & { id: string }>((from, to) =>
+        supabase
+          .from("next_actions")
+          .select("id, account_id, owner_id, due_date, completed_at, kind")
+          .or(`due_date.gte.${yearStart},completed_at.gte.${yearStart},completed_at.is.null`)
+          .order("id")
+          .range(from, to),
+      ).then(
+        (data) => ({ data, error: null }),
+        (error: unknown) => ({ data: [] as (FollowUpRow & { id: string })[], error }),
+      ),
     ]);
+    const monthly = st.error ? [] : ((st.data as SellThroughRow[]) ?? []);
     setSellRows([
-      ...(st.error ? [] : ((st.data as SellThroughRow[]) ?? [])),
+      // The month pair keeps reading exactly two months, as it always has.
+      ...monthly.filter((r) => wantedMonths.includes(r.period)),
       ...(sy.error ? [] : ((sy.data as SellThroughRow[]) ?? [])),
     ]);
+    setQuietRows(monthly);
+    setQuietMonths(st.error ? [] : alertMonths);
+    setFollowUps(fu.error ? [] : fu.data);
     setLatest(wantedMonths[0] ?? null);
     setPrevious(wantedMonths[1] ?? null);
-    setEffort(ef.error ? [] : ((ef.data as unknown as EffortRow[]) ?? []));
+    setEffort(ef.error ? [] : ef.data);
     setReps(sc.error ? [] : ((sc.data as unknown as RepRow[]) ?? []));
     setActions(na.error ? [] : ((na.data as unknown as ActionRow[]) ?? []));
     const lines = new Map<string, QuoteLine[]>();
@@ -497,10 +545,33 @@ export default function RepsPage() {
     () => quoteSummary(deals, stageEvents, at, todayIso),
     [deals, stageEvents, at, todayIso],
   );
-  const worked = useMemo(
-    () => accountsWorked(effort, at, summary.curve[0]?.week ?? null),
-    [effort, at, summary],
+  // THE WORK AT THE DEALERS (Bianca's spec, 2026-11-24): metric 1, metric
+  // 3 and the alert, for the scope the chip row set and the period chosen.
+  const allTouches = useMemo(() => touches(effort, followUps), [effort, followUps]);
+  const dealerNames = useMemo(() => new Map(gates.map((g) => [g.account_id, g.name] as const)), [gates]);
+  const dealerIds = useMemo(() => new Set(dealerNames.keys()), [dealerNames]);
+  const workFrom = todayIso ? periodStart(workPeriod, todayIso) : "";
+  const workedIn = useMemo(
+    () => (todayIso ? accountsWorkedIn(allTouches, dealerIds, at, workFrom, todayIso) : 0),
+    [allTouches, dealerIds, at, workFrom, todayIso],
   );
+  const keeping = useMemo(
+    () => followUpKeeping(followUps, at, workFrom, todayIso),
+    [followUps, at, workFrom, todayIso],
+  );
+  const quiet = useMemo(
+    () =>
+      quietMonths.length === 0 || !todayIso
+        ? null
+        : workingNotSelling(allTouches, dealerNames, quietRows, quietMonths, at, todayIso),
+    [allTouches, dealerNames, quietRows, quietMonths, at, todayIso],
+  );
+  const quietNote = useMemo(() => {
+    if (quietMonths.length === 0) return null;
+    const range = `LF read from ${periodLabel([...quietMonths].sort()[0])} to ${periodLabel(quietMonths[0])}`;
+    const blind = noDetailSentence(noDetailHouses(quietRows, quietMonths));
+    return blind ? `${range}; ${blind}` : range;
+  }, [quietRows, quietMonths]);
   const winDetails = useMemo(() => {
     const m = new Map<string, WinDetail>();
     for (const d of deals) {
@@ -759,9 +830,20 @@ export default function RepsPage() {
 
       {/* THE EXECUTIVE SUMMARY on top (meeting of 2026-10-30: one atop every
           page), in the shape João asked for. */}
+      <RepWorkBoard
+        period={workPeriod}
+        onPeriod={setWorkPeriod}
+        worked={workedIn}
+        dealerCount={at ? myGates.length : gates.length}
+        keeping={keeping}
+        quiet={quiet}
+        quietNote={quietNote}
+        who={chosen?.rep_name ?? null}
+        span="full"
+      />
+
       <QuoteScoreboard
         summary={summary}
-        worked={worked}
         details={winDetails}
         who={chosen?.rep_name ?? null}
         span="full"

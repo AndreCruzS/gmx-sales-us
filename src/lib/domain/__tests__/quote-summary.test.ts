@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountsWorked, quoteProduct, quoteSummary, type SummaryEvent, type SummaryOpp } from "../quote-summary";
+import { quoteProduct, quoteSummary, type SummaryEvent, type SummaryOpp } from "../quote-summary";
 
 const opp = (id: string, stage: string, v: number | null, owner = "r1"): SummaryOpp => ({
   id,
@@ -68,20 +68,6 @@ describe("quoteSummary", () => {
     expect(s.avgTicket).toBeNull();
     expect(s.curve).toEqual([]);
     expect(s.quotesSent).toBe(0);
-  });
-});
-
-describe("accountsWorked", () => {
-  it("counts distinct accounts per rep since a date", () => {
-    const effort = [
-      { account_id: "x", membership_id: "r1", happened_at: "2026-11-10" },
-      { account_id: "x", membership_id: "r1", happened_at: "2026-11-11" },
-      { account_id: "y", membership_id: "r2", happened_at: "2026-11-11" },
-      { account_id: "z", membership_id: "r1", happened_at: "2026-01-01" },
-    ];
-    expect(accountsWorked(effort, null, "2026-11-01")).toBe(2);
-    expect(accountsWorked(effort, "r1", "2026-11-01")).toBe(1);
-    expect(accountsWorked(effort, "r1", null)).toBe(2);
   });
 });
 

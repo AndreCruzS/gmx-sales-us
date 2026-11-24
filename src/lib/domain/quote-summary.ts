@@ -159,22 +159,6 @@ export function quoteSummary(
   };
 }
 
-/** Accounts with work on the record by this rep (or anyone) since `fromIso`. */
-export function accountsWorked(
-  effort: readonly { account_id: string | null; membership_id: string | null; happened_at: string | null }[],
-  owner: string | null,
-  fromIso: string | null,
-): number {
-  const set = new Set<string>();
-  for (const e of effort) {
-    if (!e.account_id || !e.happened_at) continue;
-    if (owner && e.membership_id !== owner) continue;
-    if (fromIso && e.happened_at < fromIso) continue;
-    set.add(e.account_id);
-  }
-  return set.size;
-}
-
 /** A line of a quote's survey (quote_items), as far as naming it goes. */
 export interface QuoteLine {
   description: string;

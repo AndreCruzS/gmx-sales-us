@@ -8522,7 +8522,60 @@ textarea.pkd-select {
     grid-column: 1 / -1;
   }
   .qs-tiles {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .reps-board > [data-desk="work"] {
+    grid-column: 1 / -1;
+  }
+}
+/* THE WORK AT THE DEALERS — the effort layer above the quote scoreboard
+   (Bianca's spec, 2026-11-24). Same card grammar as the scoreboard. */
+.rw-head {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.rw-head .chip-row {
+  margin: 0;
+}
+@media (min-width: 900px) {
+  .rw-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.rw-quiet {
+  margin: 0 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+.rw-list {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.rw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+.rw-row:first-child {
+  border-top: 0;
+}
+@media (min-width: 900px) {
+  .rw-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 32px;
+  }
+  .rw-row:nth-child(2) {
+    border-top: 0;
   }
 }
 .qs-quote-line {

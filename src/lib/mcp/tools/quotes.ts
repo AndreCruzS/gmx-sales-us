@@ -17,7 +17,6 @@ import { defaultDeadline, todayIn } from "@/lib/domain/deadline";
 import { isQuoteStage } from "@/lib/domain/enums";
 import { quoteStageLabel } from "@/lib/domain/quotes";
 import {
-  accountsWorked,
   quoteProduct,
   quoteSummary,
   type QuoteLine,
@@ -598,7 +597,7 @@ type DealRow = {
 
 export async function quoteSummaryTool(ctx: AgentContext, args: QuoteSummaryArgs): Promise<CallToolResult> {
   const db = ctx.db;
-  const [deals, events, items, effort, people] = await Promise.all([
+  const [deals, events, items, people] = await Promise.all([
     fetchAllPages<DealRow>((from, to) =>
       db
         .from("opportunities")
@@ -614,9 +613,6 @@ export async function quoteSummaryTool(ctx: AgentContext, args: QuoteSummaryArgs
     fetchAllPages<QuoteLine & { opportunity_id: string }>((from, to) =>
       db.from("quote_items").select("opportunity_id, description, species, nominal_size, lf").order("created_at").range(from, to),
     ),
-    fetchAllPages<{ account_id: string | null; membership_id: string | null; happened_at: string | null }>((from, to) =>
-      db.from("rep_effort").select("account_id, membership_id, happened_at").order("happened_at").range(from, to),
-    ),
     db.from("memberships").select("id, users!inner(full_name, email)").eq("status", "active").limit(500),
   ]);
   if (people.error) throw people.error;
@@ -631,7 +627,6 @@ export async function quoteSummaryTool(ctx: AgentContext, args: QuoteSummaryArgs
   if (owner && !names.has(owner)) return fail("I can't read that person's quotes — look them up with find.");
   const today = todayIn();
   const s = quoteSummary(deals, events, owner, today);
-  const worked = accountsWorked(effort, owner, s.curve[0]?.week ?? null);
 
   const lines = new Map<string, QuoteLine[]>();
   for (const l of items) lines.set(l.opportunity_id, [...(lines.get(l.opportunity_id) ?? []), l]);
@@ -654,7 +649,6 @@ export async function quoteSummaryTool(ctx: AgentContext, args: QuoteSummaryArgs
     out.push(`- Closed revenue: ${s.wonCount > 0 ? `${money(s.closed)} (${s.wonCount} ${s.wonCount === 1 ? "sale" : "sales"} won)` : "none won yet"}`);
     out.push(`- Active pipeline: ${s.openCount > 0 ? `${money(s.pipeline)} (${s.openCount} waiting on an answer)` : "nothing waiting on an answer"}`);
     out.push(`- Win rate: ${s.winRate !== null ? `${Math.round(s.winRate * 100)}% (${s.wonCount} won of ${s.decided} decided)` : "nothing won or lost yet"}`);
-    out.push(`- Accounts worked since the first quote: ${worked}`);
     out.push(`- Quotes sent: ${s.quotesSent}`);
     out.push(`- Average ticket: ${s.avgTicket !== null ? money(s.avgTicket) : "needs a won quote"}`);
     if (s.topWins.length > 0) {
@@ -685,7 +679,6 @@ export async function quoteSummaryTool(ctx: AgentContext, args: QuoteSummaryArgs
     open: s.openCount,
     win_rate: s.winRate,
     decided: s.decided,
-    accounts_worked: worked,
     quotes_sent: s.quotesSent,
     average_ticket: s.avgTicket,
     curve: s.curve,
@@ -796,7 +789,7 @@ export function registerQuoteTools(server: McpServer, getCtx: GetCtx) {
     {
       title: "Quotes on the platform",
       description:
-        "The Reps board's quote scoreboard, for the whole team or one rep (owner_id, a person's membership id from find): closed revenue, active pipeline, win rate, accounts worked, quotes sent, average ticket, the biggest wins, the weekly cumulative curve, and the open quotes with their id and updated_at (for update_quote). A rep sees only their own quotes; an admin sees everyone's. Read-only.",
+        "The Reps board's quote scoreboard, for the whole team or one rep (owner_id, a person's membership id from find): closed revenue, active pipeline, win rate, quotes sent, average ticket, the biggest wins, the weekly cumulative curve, and the open quotes with their id and updated_at (for update_quote). A rep sees only their own quotes; an admin sees everyone's. Read-only.",
       inputSchema: z.object({
         owner_id: dbId().optional().describe("A rep's membership id from find; default the whole team you can see"),
       }),
